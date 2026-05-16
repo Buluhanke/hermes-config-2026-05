@@ -126,7 +126,8 @@ def smart_click(target_desc, use_vlm_fallback=True, region=None):
     target_desc: 目标文字或图标描述
     region: (x,y,w,h) 可选，限制扫描区域加速
     """
-    import os, time, pyautogui
+    import os, time
+    # human_click 从 humanization_engine 引入，不在此文件导入避免循环依赖
     
     # 截图
     before_path = "/tmp/hermes_click_before.png"
@@ -137,7 +138,7 @@ def smart_click(target_desc, use_vlm_fallback=True, region=None):
     pos = fast_ocr(target_desc, before_path)
     
     if pos:
-        pyautogui.click(pos[0], pos[1])
+        human_click(pos[0], pos[1])  # 用 humanization_engine 的拟真点击，不上高级模型
         time.sleep(0.5)
         screenshot(after_path, region)
         hb = visual_heartbeat(before_path, after_path)
@@ -146,7 +147,7 @@ def smart_click(target_desc, use_vlm_fallback=True, region=None):
     # 第二层: VLM (由调用方实现)
     if use_vlm_fallback:
         # vlm_pos = vlm_locate(target_desc)  # 外部VLM能力
-        # pyautogui.click(vlm_pos)
+        # human_click(vlm_pos)  # VLM返回坐标后也走拟真点击
         pass
     
     return None
@@ -160,6 +161,8 @@ def smart_click(target_desc, use_vlm_fallback=True, region=None):
 | Vision OCR全屏 | 233ms | Fast级别，92文本块 |
 | Vision OCR局部 | 60ms | 180px高度区域，3-4x加速 |
 | SSIM对比 | 5ms | 1920x1080灰度 |
+
+> ⚠️ 用户文档常引用"20~50ms"，该数字仅指 Vision 框架识别耗时（不含截图）。全链路（截图+OCR）实际 100-300ms，局部区域可压到 60-80ms。
 
 ## 关键坑
 
