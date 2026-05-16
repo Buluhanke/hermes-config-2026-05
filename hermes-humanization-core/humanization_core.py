@@ -139,25 +139,47 @@ def capture_region(x: int, y: int, w: int, h: int) -> str:
 # ─────────────────────────────────────────
 # 6. 本地 VLM（默认 qwen2.5vl:7b，备选 smolvlm2）
 # ─────────────────────────────────────────
-VLM_MODEL_DEFAULT = "qwen2.5vl:7b"
-VLM_MODEL_FALLBACK = "ahmadwaqar/smolvlm2-agentic-gui:latest"
+VLM_MODEL_DEFAULT = "ahmadwaqar/smolvlm2-agentic-gui:latest"
+VLM_MODEL_FALLBACK = "qwen2.5vl:7b"
 
 def ask_vlm(image_path: str, question: str, model: str = VLM_MODEL_DEFAULT,
             num_ctx: int = 4096, timeout: int = 90) -> str:
-    """将截图发给本地 VLM 模型，返回回答"""
+    """将截图发给本地 VLM 模型，返回回答
+    
+    smolvlm2 专用 /api/chat 接口（才能触发 action 输出）
+    其他模型用 /api/generate 接口
+    """
     with open(image_path, "rb") as f:
         img_b64 = base64.b64encode(f.read()).decode('utf-8')
 
-    payload = {
-        "model": model,
-        "prompt": question,
-        "images": [img_b64],
-        "stream": False,
-        "options": {"num_ctx": num_ctx}
-    }
+    # smolvlm2 必须走 /api/chat 才能输出 click/scroll 等 action
+    if "smolvlm" in model.lower() or "ahmadwaqar" in model.lower():
+        try:
+            payload = {
+                "model": model,
+                "messages": [{"role": "user", "content": question, "images": [img_b64]}],
+                "stream": False,
+                "options": {"num_ctx": num_ctx, "temperature": 0.1}
+            }
+            r = requests.post("http://127.0.0.1:11434/api/chat", json=payload, timeout=timeout)
+            d = r.json()
+            if "error" in d:
+                return f"[VLM错误] {d['error']}"
+            return d.get("message", {}).get("content", "")
+        except requests.exceptions.Timeout:
+            return "[VLM超时]"
+        except Exception as e:
+            return f"[VLM异常] {e}"
 
+    # 其他模型走 /api/generate
     try:
-        r = requests.post(OLLAMA_URL, json=payload, timeout=timeout)
+        r = requests.post(OLLAMA_URL, json={
+            "model": model,
+            "prompt": question,
+            "images": [img_b64],
+            "stream": False,
+            "options": {"num_ctx": num_ctx}
+        }, timeout=timeout)
         d = r.json()
         if "error" in d:
             return f"[VLM错误] {d['error']}"
@@ -174,34 +196,95 @@ def ask_vlm_fast(image_path: str, question: str) -> str:
                    model=VLM_MODEL_FALLBACK, num_ctx=2048, timeout=30)
 
 
-def find_element_by_vision(description: str) -> tuple:
-    """视觉找坐标：如果找到返回 (x, y)，找不到返回 None"""
+def _parse_smolVLM_coords(raw: str, sw: int = 1920, sh: int = 1080) -> tuple:
+    """从 smolvlm2 输出中解析坐标，返回 (x, y) 像素坐标，失败返回 (-1, -1)"""
+    import re
+    raw = raw.strip()
+    
+    # 方法1: 正则提取 <code>click(x=0.5, y=0.5)</code>
+    code_match = re.search(r'click\(x=([0-9.]+),\s*y=([0-9.]+)\)', raw)
+    if code_match:
+        nx, ny = float(code_match.group(1)), float(code_match.group(2))
+        if 0 <= nx <= 1 and 0 <= ny <= 1:
+            return int(nx * sw), int(ny * sh)
+        elif nx > 1:
+            return int(nx), int(ny)
+    
+    # 方法2: 正则提取 <code>{...}</code> 中的数字对
+    code_json = re.search(r'<code>\s*\{[^}]+\}\s*</code>', raw, re.DOTALL)
+    if code_json:
+        inner = code_json.group()
+        nums = re.findall(r'[0-9.]+', inner)
+        if len(nums) >= 2:
+            nx, ny = float(nums[-2]), float(nums[-1])
+            if 0 <= nx <= 1 and 0 <= ny <= 1:
+                return int(nx * sw), int(ny * sh)
+            elif nx > 1:
+                return int(nx), int(ny)
+    
+    # 方法3: x= y= 格式
+    x_matches = re.findall(r'x\s*=\s*([0-9.]+)', raw)
+    y_matches = re.findall(r'y\s*=\s*([0-9.]+)', raw)
+    if x_matches and y_matches:
+        nx, ny = float(x_matches[-1]), float(y_matches[-1])
+        if 0 <= nx <= 1 and 0 <= ny <= 1:
+            return int(nx * sw), int(ny * sh)
+        elif nx > 1:
+            return int(nx), int(ny)
+    
+    # 方法4: 括号计数解析JSON
+    try:
+        if '{' not in raw:
+            return -1, -1
+        start = raw.index('{')
+        depth = 0
+        for i, c in enumerate(raw[start:], start):
+            depth += 1 if c == '{' else -1 if c == '}' else 0
+            if depth == 0:
+                json_str = raw[start:i+1].replace("'", '"')
+                parsed = json.loads(json_str)
+                if isinstance(parsed, list):
+                    parsed = parsed[0] if parsed else {}
+                rx = parsed.get('x', -1)
+                ry = parsed.get('y', -1)
+                if isinstance(rx, (int, float)) and isinstance(ry, (int, float)):
+                    if 0 <= rx <= 1 and 0 <= ry <= 1:
+                        return int(rx * sw), int(ry * sh)
+                    elif rx > 1:
+                        return int(rx), int(ry)
+                return -1, -1
+    except Exception:
+        pass
+    
+    return -1, -1
+
+
+def find_element_by_vision(description: str, screen_size: tuple = None) -> tuple:
+    """视觉找坐标：如果找到返回 (x, y) 像素坐标，找不到返回 None
+    
+    smolvlm2 输出归一化坐标(0-1)，智能解析并转换为像素坐标
+    """
+    if screen_size is None:
+        import pyautogui
+        screen_size = pyautogui.size()  # (宽, 高)
+    sw, sh = screen_size
+    
     img = capture_screen()
     prompt = (
         f"DIRECT指令：找到屏幕截图中「{description}」的位置。\n"
         f"不要解释，不要思考过程。\n"
-        f"只返回一行JSON：{{\"x\": 中心点X坐标整数, \"y\": 中心点Y坐标整数}}\n"
+        f"返回归一化坐标(0-1范围)：{{\"x\": 中心点X/屏幕宽度, \"y\": 中心点Y/屏幕高度}}\n"
         f"如果找不到，返回：{{\"x\": -1, \"y\": -1}}\n"
         f"只返回JSON，不要其他文字。"
     )
-    result = ask_vlm(img, prompt)
+    result = ask_vlm(img, prompt, model=VLM_MODEL_DEFAULT, timeout=30)
 
     try:
-        # 清理 JSON：去代码块标记、去多余换行、单引号转双引号
-        clean = result.strip()
-        clean = clean.replace("```json", "").replace("```", "").strip()
-        clean = clean.replace("'", '"')
-
-        # 尝试解析（可能返回数组 [{...}] 或单对象 {...}）
-        parsed = json.loads(clean)
-        if isinstance(parsed, list):
-            parsed = parsed[0] if parsed else {}
-
-        x, y = int(parsed.get('x', -1)), int(parsed.get('y', -1))
+        x, y = _parse_smolVLM_coords(result, sw, sh)
         if x < 0 or y < 0:
             return None
         return (x, y)
-    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+    except Exception:
         return None
 
 

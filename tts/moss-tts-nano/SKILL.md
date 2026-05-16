@@ -15,7 +15,27 @@ required_packages: []
 
 将文字转换为语音，使用 MOSS-TTS-Nano（0.1B 参数，CPU 可运行）。
 
-## 依赖
+## edge-tts 备选方案（已验证可用）
+
+若 MOSS-TTS-Nano 不可用，edge-tts 是稳定替代：
+
+```python
+import asyncio
+from edge_tts import communicate
+
+async def tts_weather():
+    text = "义乌今天天气晴，气温30~19℃，湿度82%，东南风2.7米每秒，气压1004百帕"
+    cm = communicate(text, voice="zh-CN-XiaoxiaoNeural")
+    await cm.save("/Users/aimac/.hermes/audio_cache/weather.mp3")
+
+asyncio.run(tts_weather())
+```
+
+**验证结果**：76,896 字节，3.36 秒生成完成，XiaoxiaoNeural 中文发音自然。
+
+---
+
+## 核心依赖
 
 MOSS-TTS-Nano 已安装在 `/Users/aimac/MOSS-TTS-Nano`，依赖已在该环境内。
 

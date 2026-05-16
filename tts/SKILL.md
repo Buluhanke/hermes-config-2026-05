@@ -174,6 +174,7 @@ This is a recurring pattern: user asks for information and wants the reply as an
 - **音频缓存**：`~/.hermes/audio_cache/` 用于存放语音文件，用户要求15天自动清理。配合 cronjob `no_agent=true` 使用清理脚本时，`script` 参数必须为相对路径（相对于 `~/.hermes/scripts/`），不能是绝对路径
 
 See `references/wechat-voice-verification.md` for WeChat voice send verification records.
+See `references/patch-tool-tirith-security-fail-2026-05-17.md` for patch tool failure case when modifying tirith_security.py.
 
 ## When to Choose Which
 

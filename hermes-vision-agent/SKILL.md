@@ -64,6 +64,81 @@ from vision_agent import find_and_open_app
 find_and_open_app("Safari")
 ```
 
+## smolvlm2 致命陷阱：必须用 /api/chat 接口
+
+smolvlm2 在 `/api/chat` 接口下才能输出 click 坐标，在 `/api/generate` 接口下**永远只输出 scroll**。
+
+**原因**：smolvlm2 是用 message-format 数据微调的，只有 chat 格式才触发 action 输出。
+
+**错误用法（无效）**：
+```bash
+curl http://localhost:11434/api/generate -d '{"model":"smolvlm2","images":["$B64"],"prompt":"..."}'
+# 永远只返回 scroll，不返回 click 坐标
+```
+
+**正确用法**：
+```bash
+curl http://localhost:11434/api/chat -d '{"model":"smolvlm2","messages":[{"role":"user","content":"...","images":["$B64"]}]}'
+# 返回格式: </code>\n<code>\nclick(x=0.493, y=0.967)\n</code>
+```
+
+**坐标解析**（smolvlm2 输出混合格式，需4路径解析）：
+```python
+import re
+
+def parse_smolVLM_coords(text: str):
+    # 路径1: click(x,y) 裸格式
+    m = re.search(r'click\(\s*([\d.]+)\s*,\s*([\d.]+)\s*\)', text)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+    # 路径2: <code>click(x=0.493, y=0.967)</code>
+    m = re.search(r'<code>\s*click\(\s*x\s*=\s*([\d.]+)\s*,\s*y\s*=\s*([\d.]+)\s*\)\s*</code>', text)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+    # 路径3: x= y= 格式
+    m = re.search(r'x\s*=\s*([\d.]+)\s*,\s*y\s*=\s*([\d.]+)', text)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+    # 路径4: JSON 数组
+    m = re.search(r'\[\s*([\d.]+)\s*,\s*([\d.]+)\s*\]', text)
+    if m:
+        return float(m.group(1)), float(m.group(2))
+    return None
+```
+
+**其他模型（llava、qwen2.5）继续用 `/api/generate`**，只有 smolvlm2 特殊。
+
+---
+
+## 纯 VLM 视觉定位准确率上限：61%
+
+smolvlm2 屏幕定位准确率约 61%，意味着 **39% 的点击会猜错位置**。对于 1688 采购自动化，这个失败率不可接受。
+
+**正确路线：CUA/AX-tree 做主感知（结构100%准确）+ VLM 做视觉推理**
+
+三层感知架构：
+```
+smart_click("发送")
+    │
+    ├─ 1. 局部截图 -> Vision OCR (60-240ms)
+    │       找到了 -> human_click + SSIM 心跳验证
+    │
+    ├─ 2. 找不到 -> Qwen2.5-VL 视觉 (1-2s)
+    │       找到了 -> human_click + SSIM 心跳验证
+    │
+    └─ 3. VLM 也找不到 -> 打印警告，人工介入
+```
+
+**反馈循环**（关键！点击后必须验证）：
+```python
+# 点击 -> 截图 -> SSIM 对比
+# SSIM > 0.98 → 失败，提取CUA元素表 -> VLM重新定位候选池 -> 重试
+# SSIM < 0.92 → 成功
+# 0.92-0.98 → 不确定，人工介入
+```
+
+---
+
 ## 已知局限
 
 - qwen2.5vl:7b 响应约 1-2s（比 smolvlm2 快且准，6GB，M4 24GB 实测可用）
