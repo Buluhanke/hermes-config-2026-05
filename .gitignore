@@ -1,3 +1,10 @@
 __pycache__/
 *.pyc
 .DS_Store
+.curator_backups/
+.hub/
+.archive/
+.bundled_manifest
+.usage.json
+.usage.json.lock
+.curator_state/
