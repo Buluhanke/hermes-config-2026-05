@@ -177,6 +177,7 @@ CDP 命令和响应通过 `id` 字段匹配：
 
 ## 已知限制
 
+- `websockets` 库会自动检测并使用系统 SOCKS 代理（即使连接 localhost），导致 `python-socks` 缺失报错。**用原生 `socket` 手写帧编码绕过**，不要用 `websockets` 库
 - `Runtime.evaluate` 执行 JS 可能有权限限制（Chrome 安全设置）
 - 某些页面（如 chrome:// 内部页）CDP 无法注入脚本
 - 不支持 `Input.dispatchMouseEvent` 以外的事件类型（如拖拽）

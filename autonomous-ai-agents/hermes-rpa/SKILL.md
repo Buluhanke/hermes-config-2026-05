@@ -1222,10 +1222,137 @@ with sync_playwright() as p:
 | 两者都要 | CDP（登录态）+ AppleScript（执行） | CDP 保证登录，AppleScript 保证前台操作 |
 | 需要 Playwright 能力（DOM/JS执行） | CDP (`connect_over_cdp`) | 可用 `page.evaluate()` 等全部 Playwright API |
 
-**分层回退策略（最终版）：**
-1. 有 CDP 调试端口 → `connect_over_cdp`（登录态 + Playwright API）
-2. 无 CDP 但有前台 Chrome → AppleScript AXUI + OCR + cliclick
-3. 都没有 → 本 skill 的标准 pipeline
+### Chrome MCP Bridge 故障的 Fallback（2026-05-16 实测更新）
+
+**症状**：`mcp_chrome_*` 工具全部报 `ClosedResourceError` 或 `Failed to connect to MCP server`，但 Chrome 本身运行正常（`lsof -i :9333` 能看到端口）。
+
+**根因**：`mcp-chrome-stdio` 作为 Hermes 子进程，Hermes 被 kill 时 bridge 随之退出。MCP bridge 和 Chrome 是独立的两个进程。
+
+**分层处理（实测结论）**：
+
+| 操作 | 需要的通道 | 状态 |
+|------|----------|------|
+| 枚举 tabs / 获取 URL | CDP HTTP 端点 | ✅ 不依赖 bridge |
+| 截图 | Raw Python WebSocket + CDP | ✅ 不依赖 bridge |
+| 执行 JS / 滚动 / 找元素 | Raw Python WebSocket + CDP | ✅ 不依赖 bridge |
+| 导航到 URL | AppleScript | ✅ 不依赖 bridge |
+| 点击屏幕坐标 | `cliclick` | ✅ 不依赖 bridge |
+
+**❌ 旧观念（已纠正）**：认为"WebSocket CDP 必须依赖 MCP bridge"。实际上：
+- MCP bridge 是 Hermes 和 Chrome 之间的通信协议层
+- Chrome 的 CDP WebSocket 端点（`ws://localhost:9333/devtools/page/xxx`）是独立开放的
+- 只要 Chrome 在跑，Python 就能直连 CDP WebSocket
+
+**实战代码模板**（execute_code 中运行，不依赖 MCP）：
+
+```python
+import socket, struct, json, time, urllib.request, base64, os
+
+# 1. 枚举 tabs（CDP HTTP）
+tabs = json.loads(urllib.request.urlopen('http://localhost:9333/json').read())
+gh_tab = next((t for t in tabs if 'github.com' in t.get('url', '')), tabs[-1])
+
+# 2. WebSocket 直连
+ws_url = gh_tab['webSocketDebuggerUrl']
+path = ws_url.replace('ws://localhost:9333', '')
+sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+sock.settimeout(20)
+sock.connect(("localhost", 9333))
+key = base64.b64encode(os.urandom(16)).decode()
+sock.send(f"GET {path} HTTP/1.1\r\nHost: localhost:9333\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Key: {key}\r\nSec-WebSocket-Version: 13\r\n\r\n".encode())
+resp = b""
+while b"\r\n\r\n" not in resp: resp += sock.recv(4096)
+# verify b"101" in resp[:20]
+
+# 3. 发帧（masked）
+def send_frame(sock, data):
+    payload = json.dumps(data).encode()
+    blen = len(payload)
+    if blen < 126: hdr = bytes([0x81, 0x80 | blen])
+    elif blen < 65536: hdr = bytes([0x81, 0x80 | 126]) + struct.pack('>H', blen)
+    else: hdr = bytes([0x81, 0x80 | 127]) + struct.pack('>Q', blen)
+    mask = os.urandom(4)
+    m = bytearray(payload)
+    for i in range(len(m)): m[i] ^= mask[i % 4]
+    sock.send(hdr + mask + bytes(m))
+
+# 4. 收帧（unmasked）
+def recv_frame(sock):
+    hdr = b""
+    while len(hdr) < 2: hdr += sock.recv(2 - len(hdr))
+    length = hdr[1] & 0x7F
+    if length == 126:
+        ext = b""
+        while len(ext) < 2: ext += sock.recv(2)
+        length = struct.unpack('>H', bytes(ext))[0]
+    elif length == 127:
+        ext = b""
+        while len(ext) < 8: ext += sock.recv(8)
+        length = struct.unpack('>Q', bytes(ext))[0]
+    masked = hdr[1] & 0x80
+    mbytes = b""
+    if masked:
+        while len(mbytes) < 4: mbytes += sock.recv(4)
+    payload = b""
+    while len(payload) < length:
+        chunk = sock.recv(length - len(payload))
+        if not chunk: break
+        payload += chunk
+    if masked:
+        m = bytearray(payload)
+        for i in range(len(m)): m[i] ^= mbytes[i % 4]
+        return m.decode()
+    return payload.decode()
+
+# 5. 截图
+send_frame(sock, {"id": 1, "method": "Page.captureScreenshot", "params": {"format": "png", "quality": 50}})
+resp = recv_frame(sock)
+if resp:
+    d = json.loads(resp)
+    img_data = d.get('result', {}).get('data', '')
+    with open('/tmp/screenshot.png', 'wb') as f:
+        f.write(base64.b64decode(img_data))
+
+# 6. 滚动 + 找按钮
+send_frame(sock, {"id": 2, "method": "Runtime.evaluate", "params": {
+    "expression": "window.scrollTo(0, document.body.scrollHeight)",
+    "returnByValue": True
+}})
+time.sleep(2)
+
+send_frame(sock, {"id": 3, "method": "Runtime.evaluate", "params": {
+    "expression": "(function(){var btns=document.querySelectorAll('button');for(var i=0;i<btns.length;i++){var t=btns[i].textContent.trim();if(t.includes('Delete')){var r=btns[i].getBoundingClientRect();return JSON.stringify({x:Math.round(r.x+r.width/2),y:Math.round(r.y+r.height/2)})}}return 'null'})()",
+    "returnByValue": True
+}})
+resp = recv_frame(sock)
+d = json.loads(resp)
+pos = json.loads(d.get('result', {}).get('result', {}).get('value', 'null'))
+
+# 7. 点击
+if pos and pos != 'null':
+    send_frame(sock, {"id": 4, "method": "Input.dispatchMouseEvent", "params": {
+        "type": "mousePressed", "x": pos['x'], "y": pos['y'], "button": "left", "clickCount": 1
+    }})
+    send_frame(sock, {"id": 5, "method": "Input.dispatchMouseEvent", "params": {
+        "type": "mouseReleased", "x": pos['x'], "y": pos['y'], "button": "left", "clickCount": 1
+    }})
+```
+
+**AppleScript 导航 fallback**（不依赖 MCP）：
+
+```python
+import subprocess
+subprocess.run([
+    "osascript", "-e",
+    'tell application "Google Chrome" to open location "https://example.com"'
+], timeout=15)
+```
+
+**关键教训**：
+- MCP bridge 死了 ≠ Chrome 不可控
+- 不要花时间重启 bridge，用原生 Python WebSocket 直连 CDP
+- `websockets` 库会被系统代理干扰（SOCKS proxy 检测），用原生 `socket` 手写帧编码
+- mask key 必须是 4 字节，`os.urandom(4)`
 
 > ⚠️ 1688 Open Platform API 企业资质要求，纯买家不可用。详见 `1688-open-platform-api` skill。
 

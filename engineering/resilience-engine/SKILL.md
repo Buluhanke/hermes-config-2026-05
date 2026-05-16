@@ -366,6 +366,83 @@ class FailurePattern:
 - 页面白屏但继续等待
 - 网络错误但无限重试
 
+## MCP Server失联检测与恢复（2026-05-16 新增）
+
+### 问题描述
+
+`mcp-chrome-stdio` 作为 Hermes 进程的子进程运行。当 Hermes 被 kill（signal 15）或意外崩溃时，Chrome MCP bridge 随 Hermes 一起终止。即使 Chrome 调试端口（9333）本身仍在监听，MCP 工具也会报 `ClosedResourceError` 或 `Failed to connect to MCP server`。
+
+### 症状识别
+
+```
+ClosedResourceError: ClosedResourceError()
+Failed to connect to MCP server
+[MCP call failed] 短时间内反复出现
+```
+
+### 诊断流程
+
+```
+① 症状：MCP chrome 工具全部报错
+       ↓
+② 检查 Chrome 调试端口是否存活
+   lsof -i :9333 | grep Chrome
+       ↓
+   端口存活但 MCP 不通
+       → Chrome 进程正常，bridge 死了
+   端口也不通
+       → Chrome 整个挂了，需要重启 Chrome
+```
+
+### 分层恢复策略
+
+**第一层：MCP bridge 自动重连**
+- MCP SDK 有内置重连机制，等待 10-15 秒自动恢复
+
+**第二层：CDP HTTP 降级（Chrome 活着但 bridge 死的 fallback）**
+
+```python
+# 检测 Chrome 端口是否活着
+import urllib.request
+req = urllib.request.Request("http://127.0.0.1:9333/json", method="GET")
+with urllib.request.urlopen(req, timeout=5) as resp:
+    tabs = json.loads(resp.read())
+    print(f"Chrome OK: {len(tabs)} tabs")
+```
+
+⚠️ **CDP HTTP 端点限制**：不能截图（需要 WebSocket）、不能导航（PUT /json/new 无效），仅能枚举 tabs。
+
+**第三层：Chrome 进程完全重启**
+
+Chrome 调试端口也不通时：
+```bash
+pkill -f "Chrome.*remote-debugging-port=9333"
+sleep 2
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9333 \
+  --remote-allow-origins=* \
+  --user-data-dir="$HOME/.hermes/chrome-debug" \
+  --no-first-run --no-default-browser-check &
+```
+
+**第四层：需要导航/点击操作但 bridge 死的判断**
+
+Chrome 端口活着 + bridge 死 + 需要操作 → 告知用户需重启 Hermes（目前 bridge 必须由 Hermes 进程拉起，无法独立存活）。
+
+### 决策树
+
+```
+MCP chrome 工具报错
+    ↓
+Chrome 端口活着？(lsof -i :9333)
+    ├─ NO → 重启 Chrome（第四层）
+    └─ YES → bridge 死了
+            ↓
+        需要导航/点击操作？
+            ├─ NO（只读操作）→ 用 CDP HTTP 凑合
+            └─ YES → 告知用户需重启 Hermes
+```
+
 ## Verification
 
 验证清单：
