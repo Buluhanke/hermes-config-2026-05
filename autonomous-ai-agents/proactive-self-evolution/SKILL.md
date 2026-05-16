@@ -21,7 +21,7 @@ triggers:
 - 单次不超过5分钟，只记不做深度研究
 - 重大突破立即QQ通知，普通发现静默存档
 
-### 第二层：深度学习（每天凌晨2点，满血跑）
+## 第二层：深度学习（每天凌晨2点，满血跑）
 - cronjob `0 2 * * *` 触发
 - **必须走全网搜索**，不依赖模型知识
 - **搜索方向（锚定真人化路线）**：
@@ -30,6 +30,9 @@ triggers:
   - 类人操作节奏：humanization browser automation / behavioral simulation
   - 1688采购闭环：1688 API / procurement automation
 - **直接对话浏览器AI**：打开ChatGPT/Claude讨论（仅第二层）
+  - ⚠️ **已知障碍**：沙盒环境下CDP WebSocket隔离，execute_code中WebSocket握手必然失败
+  - 绕过：用 `terminal()` 在host执行Python，或在host环境手动开Qwen/ChatGPT页面
+  - 替代：web_search + web_extract 可覆盖大部分研究问题，浏览器AI对话仅作为深度验证
   - "桌面AI Agent目前最强的屏幕感知方案是什么？"
   - "如何让AI操作浏览器看起来像真人？"
   - "AI采购 Agent最难的环节是什么？"
@@ -37,7 +40,7 @@ triggers:
   - 现有能力 + 新发现 = 什么新可能性？
 - 评估能否缝进Hermes，存入 ~/Vision_Lab/ 和 ~/Brain_Lab/
 - 存疑：搜索和对话都找不到答案的 → 标记需用户确认
-
+- **2026-05-17发现**：Patchright CLI已装(1.58.2)、smolvlm2已装Ollama、CapSolver为验证码首选方案、browser-use 78k stars
 ### 第三层：每周汇报（周五18:00）
 - cronjob `0 18 * * 5` 触发
 - 汇总一周发现，简报发 QQ
@@ -52,11 +55,34 @@ triggers:
 6. **EvoMap evolver** — GEP (Genome Evolution Protocol)，基因式能力演进，83k star工程技能库（mattpocock/skills）可适配
 
 ## 存储路径
+## 已知执行障碍（实测确认，勿重复踩坑）
 
-- ~/Vision_Lab/ — 工具/技能方向发现
-- ~/Brain_Lab/ — 思路/方法论方向发现
+### CDP WebSocket沙盒隔离（2026-05-17确认）
+execute_code 沙盒环境内无法连接CDP WebSocket（`ws://localhost:9333`），原因是沙盒网络隔离。
+- **现象**：`WebSocket handshake failed` — 即使端口9333在host可通
+- **绕过方案**：用 `terminal()` 执行Python脚本（不走沙盒），或用 `mcp_cua_*` 工具
+- **浏览器AI对话步骤受影响**：无法通过CDP WebSocket向Qwen/ChatGPT发消息
 
-## 判断标准：能否缝进Hermes（按真人化优先级）
+### Chrome MCP Bridge状态检测（2026-05-16确认）
+MCP bridge（`mcp-chrome-stdio`）与Chrome进程独立，bridge挂了≠Chrome不可控。
+- **fallback**：CDP HTTP端点 `http://127.0.0.1:9333/json` 始终独立可用
+- **验证命令**：`lsof -i :9333 | grep Chrome`
+
+### browser_navigate登录态（2026-05-16确认）
+未配置CDP时，`browser_navigate` 每次开独立实例无登录态。配置 `browser.cdp_url: 'http://127.0.0.1:9333'` 后走 `connect_over_cdp`，自动复用Chrome cookies。
+
+## 进化存储路径
+- ~/Vision_Lab/ — 工具/技能方向
+- ~/Brain_Lab/ — 思路/方法论方向
+
+## 已验证可用的工具（避免重复调研）
+
+### 2026-05-17实测确认
+- **Patchright CLI**: `/Library/Frameworks/Python.framework/Versions/3.14/bin/patchright` (v1.58.2)，Playwright反检测fork
+- **smolvlm2**: `ahmadwaqar/smolvlm2-agentic-gui` 已装Ollama，本地VL模型(2GB)，直接输出归一化坐标
+- **Playwright**: hermes venv中可用 `from playwright.sync_api import sync_playwright`
+
+## 真人化目标锚定（2026-05-15确立）
 
 1. 屏幕全域感知（95%差距）→ 最高优先
 2. 验证码对抗（100%差距）

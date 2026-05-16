@@ -1009,6 +1009,8 @@ subprocess.run(["screencapture", "-x", "-R0,30,1920,960", "/tmp/1688_results.png
 - `screencapture` — macOS内置截图
 - `convert` (ImageMagick) — 图片裁剪/缩放（已安装）
 - `curl` + Baidu OCR API — 文字识别
+- `patchright` — Playwright反检测fork，CLI在 `/Library/Frameworks/Python.framework/Versions/3.14/bin/patchright`（v1.58.2）
+- `playwright` — hermes venv中已装（1.59.0），`from playwright.sync_api import sync_playwright` 可用
 
 ## 限制与坑
 
@@ -1490,7 +1492,6 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 ---
 
 ## 参考文档
-
 - `references/deepseek-v4-flash-nous-portal-2026-05-16.md` — **新增：Nous Portal + DeepSeek V4 Flash 配置 + macOS Terminal 自动化限制 + OpenHuman 非 API 服务**
 - `references/deepseek-expert-mode-self-diagnosis-2026-05-16.md` — **DeepSeek 专家模式自诊断工作流**
 - `references/omniparser-seeclick-agenttars-install-2026-05-15.md` — **OmniParser+SeeClick+Agent TARS 实际安装步骤**（conda env路径、paddleocr版本兼容性、npx安装命令、ollama升级注意）
@@ -1512,3 +1513,4 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 - `references/world-state-v0-2026-05-14.md` — **WorldState v0 实现笔记**（最小闭环架构+tesseract路径坑+Baidu OCR token问题）
 - `references/peekaboo-macos-desktop-automation.md` — Peekaboo macOS 桌面自动化工具（vision/voice Agent，可选替代方案）
 - `references/alternative-desktop-automation-tools.md` — 替代方案（Mano-P / UI-TARS）评估框架
+- `references/2026-05-17-deep-evolution-research.md` — **2026-05-17深度进化研究**：Patchright已装、smolvlm2已装、CapSolver验证码方案、browser-use 78k stars分析、1688采购闭环卡点
