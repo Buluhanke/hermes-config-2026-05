@@ -20,7 +20,32 @@
 
 ## n8n 备份细节
 
-**备份内容**：config + database.sqlite + nodes/（不含 crash.journal / sqlite-shm/wal / storage / n8nEventLog.log）
+**⚠️ 关键陷阱：SQLite WAL 模式**
+
+n8n 使用 SQLite WAL 模式，运行时 `database.sqlite` 只有 ~600KB，真实数据在 `database.sqlite-wal`（可达 4MB+）。直接备份 sqlite 文件会丢失未合并的 WAL 数据。
+
+**✅ 正确流程：先做 Checkpoint，再备份**
+
+n8n 运行中时，执行 WAL checkpoint 将数据合并到主数据库：
+```python
+import sqlite3
+conn = sqlite3.connect('/Users/aimac/n8n_data/database.sqlite')
+conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')  # 合并WAL并截断
+conn.execute('VACUUM')  # 压缩数据库
+conn.close()
+```
+checkpoint 后 WAL 文件消失，sqlite 膨胀到完整大小（1MB+），此时备份才完整。
+
+**⚠️ Gitignore 陷阱**
+
+`.hermes/.gitignore` 包含 `*.sqlite` 规则，会导致 `database.sqlite` 被忽略。必须用 `git add -f` 强制添加：
+```bash
+git add -f .n8n_backup/database.sqlite .n8n_backup/config .n8n_backup/nodes
+```
+
+**备份内容**：config + database.sqlite（已checkpoint） + nodes/（不含 crash.journal / sqlite-shm/wal / storage / n8nEventLog.log）
+
+**备份脚本**：`~/.hermes/scripts/backup_n8n.sh`（已内置 checkpoint 逻辑）
 
 **恢复步骤**：
 ```bash
