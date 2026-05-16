@@ -480,6 +480,7 @@ fallback_providers:
 **效果**：简单查询走本地 Ollama（0 网络延迟），复杂任务 fallback 到云端。如果本地服务不可用，自动切换到下一个 provider。
 
 > ⚠️ 注册细节见 `references/ollama-available-models-registration.md`。
+> ⚠️ Nous Portal OAuth 授权（hermes model TTY 限制）见 `references/nous-portal-oauth.md`。
 
 **验证 Ollama 可用性**：
 ```bash

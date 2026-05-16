@@ -69,7 +69,37 @@ metadata:
 - 补充缺失的交叉引用
 - 发现可 web 搜索填补的空白
 
-## 索引与日志
+### Two-Step Ingest（两段式摄入）— 来自 nashsu/llm_wiki
+
+**Step 1 分析**：LLM 读取来源 → 结构化分析
+- 关键实体、概念、论点
+- 与现有 wiki 内容的关联
+- 与现有知识的矛盾/张力
+
+**Step 2 生成**：LLM 基于分析 → 生成 wiki 文件
+- 来源摘要页（含 frontmatter）
+- 实体页、概念页（带交叉引用）
+- 更新 index.md、log.md
+
+**增强机制**：
+- SHA256 增量缓存（未变更文件自动跳过）
+- 来源文件夹自动监控（检测外部变更）
+- 支持多格式：PDF/DOCX/PPTX/XLSX/图片
+
+### 知识图谱评分（4-Signal Relevance Model）— 来自 nashsu/llm_wiki
+
+Wiki 页面交叉引用优先级评分：
+
+| 信号 | 权重 | 说明 |
+|------|------|------|
+| 直接链接 | ×3.0 | 通过 [[wikilinks]] 连接 |
+| 来源重叠 | ×4.0 | 共享同一原始来源 |
+| Adamic-Adar | ×1.5 | 共享共同邻居（度数加权） |
+| 类型亲和 | ×1.0 | 同类型页面加成 |
+
+**应用**：当多个页面都与查询相关时，用此模型排序优先级。
+
+## 适不适合存入 wiki
 
 ### `index.md`
 内容导向，每个页面一条记录，含链接、一句话摘要、元数据。
@@ -100,3 +130,7 @@ metadata:
 
 - Obsidian 是 IDE，Hermes 是程序员，wiki 是代码库
 - Graph View 是检查 wiki 健康度的最佳工具
+
+## 参考资料
+
+- `references/llm-wiki-research.md` — Karpathy LLM Wiki 原文摘要、nashsu/llm_wiki 架构解析、OpenHuman Auto-fetch 设计思路、VoxCPM2 升级路径

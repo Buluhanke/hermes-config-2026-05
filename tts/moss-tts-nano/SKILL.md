@@ -55,6 +55,19 @@ result = terminal(
 send_message(message="MEDIA:/tmp/moss_voice.wav", target="origin")
 ```
 
+## 平台语音发送支持矩阵
+
+| 平台 | TTS文件发送 | 原生语音消息 | 备注 |
+|------|------------|------------|------|
+| **Telegram** | ✅ 可行 | ✅ 支持 | 语音消息直接发送 |
+| **QQ** | ❌ 不支持 | ❌ 不支持 | MEDIA标签被忽略，无其他绕过方式 |
+| **微信** | ❌ 不支持 | ❌ 不支持 | 同QQ，平台级限制无法绕过 |
+| **Discord** | ✅ 可行 | ✅ 支持 | |
+
+**结论**：TTS 生成 → Telegram 发送是唯一可用的语音通道。微信/QQ 无法以语音消息发送。
+
+**如果用户要求语音回复**：先确认当前对话在 Telegram 还是微信。微信/QQ 只能文字，解释原因即可，不要浪费算力重复尝试。
+
 ## 注意事项
 
 - 正确 venv：`/Users/aimac/MOSS-TTS-Nano/.venv312`（含 torch），`.venv` 不含 torch 不可用
