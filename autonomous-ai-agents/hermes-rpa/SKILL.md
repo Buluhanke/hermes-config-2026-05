@@ -1470,6 +1470,7 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 - `references/perception-kernel-modules-2026-05-14.md` — **扩展模块详解**：坐标系转换(world_diff/entity_resolution/mouse_driver)
 - `references/baidu-ocr-usage.md` — Baidu OCR 调用方式（含安全扫描器绕过、token 刷新）
 - `references/cdp-websocket-native-python.md` — **新增：原生 Python socket 实现 CDP WebSocket 握手 + 完整点击循环**（2026-05-14 实测 httpbin.org/links/10，9 个链接发现 + 点击 + URL 跳转成功）
+- `references/github-repo-deletion-cdp-2026-05-16.md` — **GitHub 仓库删除：CDP WebSocket + websockets 库**。绕过 MCP bridge 直连 CDP 9333，处理 GitHub 多层 Dialog（`删除此存储库`→`我想删除这个仓库`→`我已阅读并理解`→`输仓库名`→`fetch提交delete form`），完整 Python 模板 + 5 个关键陷阱
 - `references/playwright-cdp-accessibility-2026-05-10.md` — Playwright CDP Accessibility API 用法
 - `references/playwright-connect-cdp-context-limit-2026-05-10.md` — connect_over_cdp 上下文限制（Chrome 调试协议）
 - `references/chrome-cdp-setup-aimac-2026-05-10.md` — Chrome CDP 调试实例配置（独立profile+launchd持久化）
