@@ -104,3 +104,22 @@ time.sleep(3)
 ## Tab ID会过期
 
 浏览器重启后，之前保存的tab ID全部失效。重新枚举tabs获取新ID。
+
+## 新建Tab的正确方式（AppleScript，非PUT）
+
+`/json/new` PUT 在 aimac 上返回 **405 Method Not Allowed**，必须用 AppleScript：
+
+```python
+import subprocess
+
+script = '''
+tell application "Google Chrome"
+    activate
+    delay 0.3
+    tell window 1
+        make new tab with properties {URL:"https://kimi.moonshot.cn"}
+    end tell
+end tell
+'''
+subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=10)
+```

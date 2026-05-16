@@ -75,6 +75,34 @@ new_tab_id = resp["id"]
 new_ws_url = resp["webSocketDebuggerUrl"]
 ```
 
+## 创建新标签页（AppleScript，不是PUT）
+
+`/json/new` PUT 方法在 aimac 上返回 **405 Method Not Allowed**。正确方式用 AppleScript：
+
+```python
+import subprocess
+
+script = '''
+tell application "Google Chrome"
+    activate
+    delay 0.3
+    tell window 1
+        make new tab with properties {URL:"https://kimi.moonshot.cn"}
+    end tell
+end tell
+'''
+subprocess.run(['osascript', '-e', script], capture_output=True, text=True, timeout=10)
+```
+
+## Chrome SPA 页面的CDP陷阱（重要）
+
+Chrome SPA 页面（Qwen.ai 等）渲染在 JavaScript 里，`Page.navigate` 导航后：
+- `document.contentType` 返回 `"application/json"` 而不是 `"text/html"`
+- `document.body.innerText` 返回 `{"detail":"未找到"}`
+- 页面内容需要通过 `Runtime.evaluate` 注入 JS 后读取，或用截图
+
+**正确做法**：导航后等 2-3 秒，直接用 `Page.captureScreenshot` 截图，然后用 VLM 分析截图内容。
+
 ## 已知限制
 
 1. **React组件的click事件**：CDP `Input.dispatchMouseEvent` 点击React按钮时，React Fiber的内部状态可能不同步导致点击无效（如DeepSeek专家模式按钮）。`Runtime.evaluate` 的 JS `click()` 也无效。需要尝试：

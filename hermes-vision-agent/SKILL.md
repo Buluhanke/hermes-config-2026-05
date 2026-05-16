@@ -66,8 +66,8 @@ find_and_open_app("Safari")
 
 ## 已知局限
 
-- smolvlm2 响应约 2-5s（比 qwen2.5vl:7b 快，但准确度中）
-- qwen2.5vl:7b 在 M4 24GB 上会 OOM，只能用 smolvlm2
+- qwen2.5vl:7b 响应约 1-2s（比 smolvlm2 快且准，6GB，M4 24GB 实测可用）
+- smolvlm2 约 2-5s（1.8B 太小，准确度一般，可作备用）
 - 找元素需要描述尽量具体："发送按钮" 比 "按钮" 效果好
 - 文件对话框目前需要手动介入（VLM无法操作 macOS 原生文件选择器）
 - mss.mss() 已废弃，新版用 mss.MSS()
@@ -168,4 +168,5 @@ smart_click("发送")
 ## 实现参考
 
 详细的落地数据、代码示例、卡点记录见：
-- `references/vision-connect-implementation-2026-05-16.md` — vision_connect.py 实现笔记（含 smolvlm2 vs qwen2.5vl 实测对比、SSIM 阈值校准、cua-driver 安装卡点）
+- `../hermes-vision-connect/references/ollama-models-status.md` — Ollama 模型状态实测（smolvlm2 vs qwen2.5vl OOM 问题、响应格式解析、curl 测试命令）
+- `../hermes-vision-connect/SKILL.md` — vision-connect 完整实现（含 smolvlm2 优先策略、SSIM 验证、Gemini Flash 兜底、cua-driver 手动安装）

@@ -1,69 +1,136 @@
 #!/usr/bin/env python3
 """
-Hermes vision-connect: 截屏 → VLM分析 → 拟真执行
-免费优先：本地Ollama Qwen2.5-VL > OpenRouter Gemini Flash
+Hermes vision-connect: 三层感知视觉闭环
+Layer 1: Apple Vision OCR（60-240ms，极速文字定位）
+Layer 2: smolvlm2 本地VLM（2-5s，兜底语义理解）
+Layer 3: OpenRouter Gemini Flash（云端兜底，$0.001/M）
 
-流程：
-1. capture_screen() 截屏
-2. send_to_vlm() 发给视觉模型
-3. parse_response() 解析坐标和动作
-4. execute_action() 用human-rpa执行
-5. capture_verify() SSIM验证
+执行：human-rpa 贝塞尔曲线拟真点击
+验证：SSIM截图对比
 """
 
-import random
 import os
 import sys
 import json
 import time
 import base64
+import random
 import mss
 import numpy as np
 import requests
 import subprocess
+import Vision
+import AppKit
 
 SCREENSHOT_PATH = "/tmp/hermes_screen.png"
+SCREENSHOT_AFTER = "/tmp/hermes_screen_after.png"
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # ─────────────────────────────────────────
-# 1. 截屏
+# Layer 1: Apple Vision OCR（极速）
 # ─────────────────────────────────────────
-def capture_screen(path: str = SCREENSHOT_PATH) -> str:
-    """截屏保存到指定路径，返回路径"""
-    with mss.mss() as s:
-        s.shot(output=path)
-    return path
-
-# ─────────────────────────────────────────
-# 2. 发给VLM分析
-# ─────────────────────────────────────────
-def ask_screen(question: str, timeout: int = 60) -> str:
+def vision_ocr(query: str, region=None) -> list:
     """
-    看屏幕，问问题，返回回答。
-    优先 Ollama Qwen2.5-VL，失败则用 OpenRouter Gemini Flash。
+    用 Apple Vision 做极速文字识别。
+    返回：[(text, x, y, width, height), ...]
+    坐标是归一化的（0-1），需要乘以屏幕宽高转换。
     """
-    img_path = capture_screen()
+    img = AppKit.NSImage.alloc().initWithContentsOfFile_(SCREENSHOT_PATH)
+    if not img:
+        return []
     
-    # 优先 Ollama
-    try:
-        return ask_ollama_vlm(img_path, question, timeout=timeout)
-    except Exception as e:
-        print(f"[vision] Ollama不可用: {e}, 切换OpenRouter")
-        try:
-            return ask_openrouter_vlm(img_path, question, timeout=timeout)
-        except Exception as e2:
-            print(f"[vision] OpenRouter也失败: {e2}")
-            return ""
+    cg_image = img.CGImageForProposedRect_context_hints_(None, None, None)[0]
+    handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(cg_image, None)
+    
+    req = Vision.VNRecognizeTextRequest.alloc().init()
+    req.setRecognitionLevel_(1)  # 1=fast, 2=accurate
+    
+    # 可选：限定区域加速
+    if region:
+        req.setRegionOfInterest_(region)
+    
+    handler.performRequests_error_([req], None)
+    results = req.results()
+    
+    if not results:
+        return []
+    
+    w, h = img.size().width, img.size().height
+    texts = []
+    for r in results:
+        bbox = r.boundingBox()
+        # Vision坐标是左下角原点，转成左上角
+        x = bbox.origin.x * w
+        y = (1 - bbox.origin.y - bbox.size.height) * h
+        texts.append({
+            "text": r.text(),
+            "x": x,
+            "y": y,
+            "w": bbox.size.width * w,
+            "h": bbox.size.height * h,
+            "confidence": r.confidence()
+        })
+    
+    return texts
 
+def ocr_find_coordinates(query: str, screen_w=None, screen_h=None) -> tuple:
+    """
+    用 OCR 找文字的像素坐标。
+    模糊匹配：query 是目标文字的部分匹配即可。
+    返回：(x, y) 或 (None, None)
+    """
+    texts = vision_ocr(query)
+    if not texts:
+        return None, None
+    
+    query_lower = query.lower()
+    
+    # 模糊匹配：找包含query或者query包含它的
+    for t in texts:
+        t_text = t["text"].lower().strip()
+        if not t_text:
+            continue
+        
+        # 完全包含
+        if query_lower in t_text or t_text in query_lower:
+            cx = t["x"] + t["w"] / 2
+            cy = t["y"] + t["h"] / 2
+            return int(cx), int(cy)
+        
+        # 编辑距离小于3（打字错误容错）
+        if levenshtein_distance(query_lower, t_text) <= 3:
+            cx = t["x"] + t["w"] / 2
+            cy = t["y"] + t["h"] / 2
+            return int(cx), int(cy)
+    
+    return None, None
+
+def levenshtein_distance(s1: str, s2: str) -> int:
+    """简单编辑距离"""
+    if len(s1) < len(s2):
+        return levenshtein_distance(s2, s1)
+    if len(s2) == 0:
+        return len(s1)
+    
+    prev = list(range(len(s2) + 1))
+    for i, c1 in enumerate(s1):
+        curr = [i + 1]
+        for j, c2 in enumerate(s2):
+            curr.append(min(prev[j + 1] + 1, prev[j] + (c1 != c2), curr[-1] + 1))
+        prev = curr
+    return prev[-1]
+
+# ─────────────────────────────────────────
+# Layer 2: Ollama smolvlm2 视觉
+# ─────────────────────────────────────────
 def ask_ollama_vlm(img_path: str, question: str, timeout: int = 60) -> str:
-    """调用本地 Ollama Qwen2.5-VL / smolvlm2（优先smolvlm2，备选qwen2.5vl）"""
+    """调用本地 Ollama smolvlm2"""
     with open(img_path, "rb") as f:
         img_b64 = base64.b64encode(f.read()).decode()
     
     prompt = f"你是一个屏幕理解助手。用户问：{question}\n请仔细看图，直接回答。"
     
-    # 优先 smolvlm2（轻量，2GB，24GB可用）
     models_to_try = [
         ("ahmadwaqar/smolvlm2-agentic-gui:latest", 60),
         ("qwen2.5vl:7b", 90),
@@ -71,33 +138,27 @@ def ask_ollama_vlm(img_path: str, question: str, timeout: int = 60) -> str:
     
     for model, tout in models_to_try:
         try:
-            payload = {
-                "model": model,
-                "prompt": prompt,
-                "images": [img_b64],
-                "stream": False
-            }
+            payload = {"model": model, "prompt": prompt, "images": [img_b64], "stream": False}
             resp = requests.post(OLLAMA_URL, json=payload, timeout=tout)
             resp.raise_for_status()
             result = resp.json().get("response", "").strip()
             if result:
-                print(f"[vision] Ollama {model} 成功")
                 return result
         except Exception as e:
-            print(f"[vision] Ollama {model} 失败: {e}")
             continue
     
-    raise RuntimeError("所有Ollama模型都不可用")
+    raise RuntimeError("Ollama不可用")
 
+# ─────────────────────────────────────────
+# Layer 3: OpenRouter Gemini Flash
+# ─────────────────────────────────────────
 def ask_openrouter_vlm(img_path: str, question: str, timeout: int = 60) -> str:
-    """调用 OpenRouter Gemini Flash（兜底方案）"""
+    """调用 OpenRouter Gemini Flash"""
     with open(img_path, "rb") as f:
         img_b64 = base64.b64encode(f.read()).decode()
     
-    # 读取 OpenRouter API key
     api_key = os.environ.get("OPENROUTER_API_KEY", "")
     if not api_key:
-        # 尝试从 ~/.hermes/.env 读
         env_path = os.path.expanduser("~/.hermes/.env")
         if os.path.exists(env_path):
             with open(env_path) as f:
@@ -120,123 +181,51 @@ def ask_openrouter_vlm(img_path: str, question: str, timeout: int = 60) -> str:
         }]
     }
     
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json"
-    }
-    
+    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}
     resp = requests.post(OPENROUTER_URL, json=payload, headers=headers, timeout=timeout)
     resp.raise_for_status()
-    data = resp.json()
-    return data["choices"][0]["message"]["content"].strip()
+    return resp.json()["choices"][0]["message"]["content"].strip()
 
 # ─────────────────────────────────────────
-# 3. 解析坐标
+# 截屏
+# ─────────────────────────────────────────
+def capture_screen(path: str = SCREENSHOT_PATH) -> str:
+    with mss.mss() as s:
+        s.shot(output=path)
+    return path
+
+# ─────────────────────────────────────────
+# 解析 VLM 坐标响应
 # ─────────────────────────────────────────
 def parse_click_instruction(response: str) -> tuple:
-    """
-    从VLM响应中解析出坐标。
-    期望格式：坐标或"未找到"
-    """
     import re
-    
-    # 尝试找坐标格式 (x, y) 或 x,y
     patterns = [
         r'\((\d+),\s*(\d+)\)',
         r'坐标[：:]\s*(\d+)[,，]\s*(\d+)',
         r'x[=：]\s*(\d+)[,，]\s*y[=：]\s*(\d+)',
     ]
-    
     for pattern in patterns:
         match = re.search(pattern, response)
         if match:
             return int(match.group(1)), int(match.group(2))
     
-    # 尝试从文字描述中提取
     numbers = re.findall(r'\b(\d{2,4})\b', response)
     if len(numbers) >= 2:
-        # 取最后两个（通常是坐标）
         return int(numbers[-2]), int(numbers[-1])
     
     return None, None
 
 # ─────────────────────────────────────────
-# 4. 找元素并点击
-# ─────────────────────────────────────────
-def find_and_click(description: str, retry: int = 2) -> dict:
-    """
-    主流程：截屏 → VLM找坐标 → 拟真点击 → SSIM验证
-    
-    返回：{"success": bool, "coords": (x,y), "ssim": float, "retry_count": int}
-    """
-    for attempt in range(retry + 1):
-        # 截屏
-        img_path = capture_screen()
-        
-        # 构造提示
-        prompt = (
-            f'你是一个屏幕理解助手。用户在屏幕上找"{description}"。'
-            f'如果找到了，返回格式：坐标(x, y) = 具体像素坐标，x是列（从左到右），y是行（从上到下）。'
-            f'如果没找到，直接说"未找到"。'
-            f'只返回一个坐标，不要多余文字。'
-        )
-        
-        # 发给VLM
-        try:
-            response = ask_ollama_vlm(img_path, prompt, timeout=90)
-        except:
-            try:
-                response = ask_openrouter_vlm(img_path, prompt, timeout=60)
-            except Exception as e:
-                print(f"[vision] VLM调用失败: {e}")
-                continue
-        
-        # 解析坐标
-        x, y = parse_click_instruction(response)
-        if x is None or y is None:
-            print(f"[vision] 第{attempt+1}次：VLM未返回坐标，响应: {response[:100]}")
-            time.sleep(1)
-            continue
-        
-        print(f"[vision] 第{attempt+1}次：找到{description}坐标({x}, {y})")
-        
-        # 执行拟真点击（用human-rpa插件）
-        success = execute_human_click(x, y)
-        
-        if not success:
-            print(f"[vision] 点击执行失败")
-            continue
-        
-        # SSIM验证
-        time.sleep(0.5)
-        ssim_val = capture_verify(img_path)
-        print(f"[vision] SSIM验证: {ssim_val:.3f}")
-        
-        if ssim_val < 0.95:
-            print(f"[vision] 点击成功，页面有变化 (SSIM={ssim_val:.3f})")
-            return {"success": True, "coords": (x, y), "ssim": ssim_val, "retry_count": attempt}
-        else:
-            print(f"[vision] 页面无变化，重新尝试")
-            time.sleep(1)
-    
-    return {"success": False, "coords": None, "ssim": None, "retry_count": retry}
-
-# ─────────────────────────────────────────
-# 5. 拟真点击执行
+# 执行：human-rpa 拟真点击
 # ─────────────────────────────────────────
 def execute_human_click(x: int, y: int) -> bool:
-    """
-    调用human-rpa插件执行拟真点击。
-    优先用cliclick（已安装），备选pyautogui。
-    """
+    """贝塞尔曲线移动 + 点击"""
     try:
-        # 曲线移动 + 点击
         out = subprocess.check_output(["cliclick", "p"], text=True, timeout=2)
         cur_x, cur_y = map(float, out.strip().split(","))
     except:
         cur_x, cur_y = 640, 400
     
-    # 贝塞尔曲线移动
     path = generate_bezier_path((cur_x, cur_y), (x, y), roughness=0.8)
     for px, py in path:
         try:
@@ -247,8 +236,6 @@ def execute_human_click(x: int, y: int) -> bool:
             pass
     
     time.sleep(random.uniform(0.05, 0.15))
-    
-    # 点击
     try:
         subprocess.run(["cliclick", f"c:{x:.0f},{y:.0f}"],
                      check=True, capture_output=True, timeout=1)
@@ -257,8 +244,6 @@ def execute_human_click(x: int, y: int) -> bool:
         return False
 
 def generate_bezier_path(start: tuple, end: tuple, roughness: float = 0.8) -> list:
-    """生成贝塞尔曲线路径"""
-    import random
     sx, sy = start
     ex, ey = end
     dx = ex - sx
@@ -279,79 +264,126 @@ def generate_bezier_path(start: tuple, end: tuple, roughness: float = 0.8) -> li
         bx = one_minus_t**2 * sx + 2*one_minus_t*t*cx1 + t**2*ex
         by = one_minus_t**2 * sy + 2*one_minus_t*t*cy1 + t**2*ey
         path.append((bx, by))
-    
     return path
 
 # ─────────────────────────────────────────
-# 6. SSIM验证
+# SSIM 验证
 # ─────────────────────────────────────────
 def capture_verify(before_path: str) -> float:
-    """
-    截图对比，SSIM验证。
-    返回SSIM值：<0.92表示显著变化（成功），>0.98表示几乎无变化（失败）
-    """
-    after_path = "/tmp/hermes_screen_after.png"
-    capture_screen(after_path)
-    
+    capture_screen(SCREENSHOT_AFTER)
     try:
         from PIL import Image
-        import math
-        
         img1 = Image.open(before_path).convert("RGB")
-        img2 = Image.open(after_path).convert("RGB")
-        
-        # 缩放到小图加速
-        w1, h1 = img1.size
+        img2 = Image.open(SCREENSHOT_AFTER).convert("RGB")
         img1_small = img1.resize((128, 72))
         img2_small = img2.resize((128, 72))
-        
         arr1 = np.array(img1_small, dtype=np.float64)
         arr2 = np.array(img2_small, dtype=np.float64)
-        
-        # SSIM
-        mu1 = arr1.mean()
-        mu2 = arr2.mean()
-        sigma1 = arr1.std()
-        sigma2 = arr2.std()
+        mu1 = arr1.mean(); mu2 = arr2.mean()
+        sigma1 = arr1.std(); sigma2 = arr2.std()
         sigma12 = ((arr1 - mu1) * (arr2 - mu2)).mean()
-        
-        c1 = (0.01 * 255) ** 2
-        c2 = (0.03 * 255) ** 2
-        
+        c1 = (0.01 * 255) ** 2; c2 = (0.03 * 255) ** 2
         ssim = ((2*mu1*mu2 + c1) * (2*sigma12 + c2)) / \
                ((mu1**2 + mu2**2 + c1) * (sigma1**2 + sigma2**2 + c2))
-        
         return float(ssim)
-    except Exception as e:
-        print(f"[vision] SSIM计算失败: {e}")
-        return 0.95  # 不确定的情况
+    except:
+        return 0.95
 
 # ─────────────────────────────────────────
-# 7. 入口函数
+# 三层感知主函数：smart_click
+# ─────────────────────────────────────────
+def smart_click(description: str, retry: int = 2) -> dict:
+    """
+    三层感知找元素并点击：
+    1. Vision OCR（60-240ms）→ 快速文字定位
+    2. smolvlm2 VLM（2-5s）→ 兜底语义理解
+    3. Gemini Flash → 云端兜底
+    
+    返回：{"success": bool, "coords": (x,y), "layer": str, "ssim": float}
+    """
+    for attempt in range(retry + 1):
+        # Layer 1: Vision OCR
+        x, y = ocr_find_coordinates(description)
+        if x is not None and y is not None:
+            print(f"[vision] L1 Vision OCR找到 {description} @ ({x}, {y})")
+            execute_human_click(x, y)
+            time.sleep(0.5)
+            ssim = capture_verify(SCREENSHOT_PATH)
+            if ssim < 0.95:
+                return {"success": True, "coords": (x, y), "layer": "vision_ocr", "ssim": ssim}
+            else:
+                print(f"[vision] L1 OCR命中但页面无变化，继续...")
+        
+        # Layer 2: smolvlm2 VLM
+        img_path = capture_screen()
+        try:
+            response = ask_ollama_vlm(img_path, 
+                f'用户要找"{description}"。如果找到了，返回坐标格式：(x, y)。没找到说"未找到"。')
+            x, y = parse_click_instruction(response)
+            if x is not None and y is not None:
+                print(f"[vision] L2 smolvlm2找到 {description} @ ({x}, {y})")
+                execute_human_click(x, y)
+                time.sleep(0.5)
+                ssim = capture_verify(img_path)
+                return {"success": True, "coords": (x, y), "layer": "smolvlm2", "ssim": ssim}
+        except Exception as e:
+            print(f"[vision] L2 smolvlm2失败: {e}")
+        
+        # Layer 3: Gemini Flash
+        try:
+            response = ask_openrouter_vlm(img_path,
+                f'用户要找"{description}"。如果找到了，返回坐标(x, y)。没找到说"未找到"。')
+            x, y = parse_click_instruction(response)
+            if x is not None and y is not None:
+                print(f"[vision] L3 Gemini找到 {description} @ ({x}, {y})")
+                execute_human_click(x, y)
+                time.sleep(0.5)
+                ssim = capture_verify(img_path)
+                return {"success": True, "coords": (x, y), "layer": "gemini_flash", "ssim": ssim}
+        except Exception as e:
+            print(f"[vision] L3 Gemini失败: {e}")
+        
+        time.sleep(1)
+    
+    return {"success": False, "coords": None, "layer": "exhausted", "ssim": None}
+
+# ─────────────────────────────────────────
+# 入口函数
 # ─────────────────────────────────────────
 def vlm_click(description: str, retry: int = 2) -> dict:
-    """对外接口：vlm_click("按钮描述") → 自动完成找+点+验证"""
-    return find_and_click(description, retry=retry)
+    """对外接口：smart_click 的别名"""
+    return smart_click(description, retry=retry)
+
+def ask_screen(question: str) -> str:
+    """看屏幕，问问题"""
+    img_path = capture_screen()
+    try:
+        return ask_ollama_vlm(img_path, question)
+    except:
+        return ask_openrouter_vlm(img_path, question)
 
 # ─────────────────────────────────────────
 # 自检
 # ─────────────────────────────────────────
 if __name__ == "__main__":
-    print("=== Hermes vision-connect 自检 ===")
+    print("=== Hermes vision-connect 三层感知自检 ===")
     
-    # 测试截屏
-    path = capture_screen()
-    print(f"截屏: {path}, 大小: {os.path.getsize(path)} bytes")
+    # L1: OCR 测试
+    print("\n[L1] Vision OCR 测试...")
+    texts = vision_ocr("")
+    print(f"  识别到 {len(texts)} 个文本块")
+    for t in texts[:3]:
+        print(f'  "{t["text"][:30]}" @ ({t["x"]:.0f}, {t["y"]:.0f})')
     
-    # 测试VLM（优先smolvlm2）
-    print("\n测试VLM（问屏幕内容）...")
+    # L2: VLM 测试
+    print("\n[L2] smolvlm2 测试...")
     try:
-        result = ask_ollama_vlm(path, "当前屏幕是什么内容？用一句话描述。", timeout=60)
-        print(f"屏幕内容: {result[:200]}")
+        result = ask_ollama_vlm(capture_screen(), "当前屏幕是什么？一句话描述。")
+        print(f"  屏幕内容: {result[:100]}")
     except Exception as e:
-        print(f"VLM失败: {e}")
+        print(f"  L2失败: {e}")
     
-    # 测试找元素（用"访达图标"这种明确描述）
-    print("\n测试find_and_click（找Safari图标）...")
-    coords = find_and_click("Safari图标", retry=1)
-    print(f"结果: {coords}")
+    # 全流程测试
+    print("\n[全流程] smart_click 测试...")
+    result = smart_click("Safari", retry=1)
+    print(f"  结果: {result}")

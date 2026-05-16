@@ -14,8 +14,10 @@ metadata:
 **目标**：截屏 → VLM分析 → 返回可执行指令 → 拟真执行
 
 **免费优先原则**：
-1. 优先本地Ollama + Qwen2.5-VL（零Token消耗）
-2. 兜底OpenRouter + Gemini Flash（$0.001/M视觉Token）
+1. 优先本地Ollama + smolvlm2-agentic-gui（零Token，2GB，M4 24GB实测可用）
+2. 兜底硅基流动 + Qwen2.5-VL（国内直连，有免费额度）
+3. 兜底 Cloudflare Workers AI（10k神经元/天免费）
+4. 最后才考虑 OpenRouter（需API Key，不是真免费）
 
 ## 核心流程
 
@@ -98,6 +100,28 @@ with mss.MSS() as s:
     s.shot(output=path)
 ```
 
+### smolvlm2 响应格式（实测）
+
+smolvlm2 返回的内容包含 `<code>` 标签包裹的 action 指令，例如：
+
+```
+The image shows a web page with various links...
+<code>
+scroll(direction='up', amount=10)
+</code>
+```
+
+找坐标时，VLM 可能说"未找到"但同时返回 action 指令（如 scroll）。需要：
+1. 优先解析坐标格式 `(x, y)` / `坐标(x, y)`
+2. 如果没有坐标但有 action 指令，先执行 action 再重试找坐标
+3. 不要把 `<code>` 里的内容当作最终回答
+
+**完整解析优先级**：
+1. 找 `(数字, 数字)` 格式 → 返回坐标
+2. 次找 `坐标：数字,数字` / `x=数字 y=数字`
+3. 只有 `<code>` 标签 → 元素不在当前屏，先执行 action 再重试
+4. "未找到" 不一定是失败，可能是元素真不在当前屏幕
+
 ### SSIM 阈值实测校准
 
 | SSIM | 实际状态 |
@@ -106,14 +130,111 @@ with mss.MSS() as s:
 | > 0.98 | 几乎无变化，失败 |
 | < 0.92 | 显著跳转，成功 |
 
-0.962 处于不确定区间，说明 SSIM 阈值需要调整或与 VLM 确认结合使用。
+0.962 处于不确定区间，说明 SSIM 阈值需要调整或与 VLM 确认结合使用。建议：
+- 阈值放宽到 < 0.96 即认为成功（对人类操作的容忍度）
+- 或者用 VLM 再确认一次（"页面上是否出现了 X？"）
+
+### smolvlm2 vs qwen2.5vl 选择策略
+
+| 模型 | 内存 | 速度 | 准确度 | 推荐度 |
+|------|------|------|--------|--------|
+| **qwen2.5vl:7b** | ~6GB | 加载后1-2s | **高** | ⭐⭐⭐⭐⭐ 主力 |
+| smolvlm2-agentic-gui | ~2GB | 2-5s | 中（1.8B太小） | ⭐⭐ 仅备用 |
+
+Ollama 命令（注意后缀）：
+```bash
+ollama run qwen2.5vl:7b                    # 正确，要加 :7b
+ollama run ahmadwaqar/smolvlm2-agentic-gui  # GUI专用微调版
+```
+
+**注意**：qwen2.5vl 模型名在 Ollama 里必须带 `:7b` 后缀，否则报 "model not found"。
+
+### CogAgent-9B 评估（2026-05-16）
+
+智谱 CogAgent-9B 是全球最强的开源屏幕理解 Agent，但 BF16 需要 ≥29GB 显存，Mac M4 24GB 跑不了。
+
+**当前真人化最佳路径**：qwen2.5vl:7b + Hermes CDP 控制，不需要 CogAgent。
+
+### smolvlm2 响应格式（实测）
+
+官方安装脚本在 M4 上超时，需要手动下载：
+
+```bash
+# 1. 下载（手动curl，不走脚本）
+cd /tmp/cua-install
+curl -L -o cua-driver.tar.gz "https://github.com/trycua/cua/releases/download/cua-driver-v0.1.9/cua-driver-0.1.9-darwin-arm64.tar.gz"
+
+# 2. 解压
+tar -xzf cua-driver.tar.gz
+
+# 3. 修复启动脚本（tar解压出来的wrapper路径不对）
+cat > /usr/local/bin/cua-driver << 'EOF'
+#!/bin/sh
+exec "/Applications/CuaDriver.app/Contents/MacOS/cua-driver" "$@"
+EOF
+chmod +x /usr/local/bin/cua-driver
+
+# 4. 移动到 Applications
+cp -r CuaDriver.app /Applications/
+
+# 5. 启动 MCP 模式
+cua-driver mcp &
+```
+
+### human-rpa 插件（已安装）
+
+位置：`~/.hermes/plugins/human-rpa/__init__.py`
+
+提供的函数（可直接导入使用）：
+- `human_mouse_move(x, y, roughness)` — 贝塞尔曲线移动
+- `human_click(x, y, hold_ms, jitter_px)` — 移动→悬停→抖动→点击
+- `human_drag(start_x, start_y, end_x, end_y, 回退校准)` — 滑动条专用
+- `human_type(text, base_delay)` — 异步打字（80-300ms随机间隔）
+- `human_scroll(pixels, steps)` — 分段滚轮
+
+依赖 `cliclick`（已安装：`brew install cliclick`）
+
+## L3 免费视觉API备选
+
+OpenRouter 的 Gemini Flash 不是真免费（需要API Key）。以下是真免费选项：
+
+### 硅基流动 SiliconFlow（推荐，国内直连）
+
+- 注册：siliconflow.cn
+- 模型：Qwen/Qwen2.5-VL-7B-Instruct（视觉，支持看图问答）
+- 地址：`https://api.siliconflow.cn/v1/chat/completions`
+- API格式：OpenAI兼容，零配置切换
+- 配置示例：
+  ```yaml
+  auxiliary:
+    vision:
+      provider: siliconflow
+      model: Qwen/Qwen2.5-VL-7B-Instruct
+      base_url: https://api.siliconflow.cn/v1
+      api_key: YOUR_SILICONFLOW_KEY
+  ```
+
+### Cloudflare Workers AI（10k神经元/天免费）
+
+- 模型：`@cf/qwen/qwen2.5-vl-7b-instruct`
+- 地址：`https://api.cloudflare.com/client/v4/accounts/{ACCOUNT_ID}/ai/run/@cf/qwen/qwen2.5-vl-7b-instruct`
+- 需要 Cloudflare 账号（免费注册）
+
+### 最终优先级（2026-05-16实测）
+
+| 优先级 | 模型 | 类型 | Token费用 | 备注 |
+|--------|------|------|---------|------|
+| 1 | smolvlm2-agentic-gui | 本地Ollama | 0 | ✅ M4 24GB实测可用 |
+| 2 | Qwen2.5-VL | 硅基流动 | 免费 | ✅ 国内直连，推荐 |
+| 3 | qwen2.5-vl-7b | Cloudflare | 免费10k/天 | 需CF账号 |
+| 4 | Gemini Flash | OpenRouter | $0.001/M | ❌ 需API Key |
 
 ## 依赖
 
 - mss（截屏）：`pip install mss`
 - pyautogui（备选）：`pip install pyautogui`
 - human-rpa（已装在 ~/.hermes/plugins/human-rpa/）
-- Ollama Qwen2.5-VL（已有）
+- Ollama 本地模型（已有 smolvlm2 运行）
 
 ## 验证方式
 

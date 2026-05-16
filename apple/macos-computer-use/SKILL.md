@@ -174,11 +174,41 @@ your conversation context.
 - Don't interact with the user's browser tabs that are clearly personal
   (email, banking, Messages) unless that's the actual task.
 
+## cua-driver 安装（M4/M4 Pro 手动安装）
+
+官方脚本 `curl ... | bash` 在 Apple Silicon Mac 上会超时（构建卡住）。需要手动：
+
+```bash
+# 1. 下载（手动curl，不走脚本）
+mkdir -p /tmp/cua-install
+cd /tmp/cua-install
+curl -L -o cua-driver.tar.gz "https://github.com/trycua/cua/releases/download/cua-driver-v0.1.9/cua-driver-0.1.9-darwin-arm64.tar.gz"
+
+# 2. 解压
+tar -xzf cua-driver.tar.gz
+
+# 3. 修复wrapper脚本（解压出来的路径指向相对路径，不对）
+cat > /usr/local/bin/cua-driver << 'EOF'
+#!/bin/sh
+exec "/Applications/CuaDriver.app/Contents/MacOS/cua-driver" "$@"
+EOF
+chmod +x /usr/local/bin/cua-driver
+
+# 4. 移动.app到Applications
+cp -r CuaDriver.app /Applications/
+
+# 5. 验证
+cua-driver --version  # 应返回 0.1.9
+
+# 6. 启动 MCP（后台运行）
+cua-driver mcp &
+```
+
+启动后确认端口：lsof -i :9333 或检查 Chrome Remote Debugging 是否被占用。
+
 ## Failure modes
 
-- **"cua-driver not installed"** — Run `hermes tools` and enable Computer
-  Use; the setup will install cua-driver via its upstream script. Requires
-  macOS + Accessibility + Screen Recording permissions.
+- **"cua-driver not installed"** — Run the manual install above. The automatic script times out on Apple Silicon.
 - **Element index stale** — SOM indices come from the last `capture` call.
   If the UI shifted (new tab opened, dialog appeared), re-capture before
   clicking.

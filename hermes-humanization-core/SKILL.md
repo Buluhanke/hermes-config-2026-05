@@ -71,11 +71,11 @@ from humanization_core import (
 
 | 模型 | 函数 | 加载速度 | 准确度 | 内存占用 | 备注 |
 |------|------|---------|--------|---------|------|
-| smolvlm2（当前默认） | `ask_vlm_fast()` | 2-5s | 中 | ~2GB | M4 24GB 可跑，qwen2.5vl:7b 会 OOM |
-| qwen2.5vl:7b（备选） | `ask_vlm()` | 首次 12s，后续 1-2s | 高 | ~9GB | 仅在内存充裕时可用 |
+| smolvlm2（当前默认） | `ask_vlm_fast()` | 2-5s | 中 | ~2GB | M4 24GB 可跑，零Token消耗 |
+| qwen2.5vl:7b | `ask_vlm()` | 首次12s | 高 | ~6GB | M4 24GB 上加载失败（OOM），避免使用 |
 | qwen3:8b（文本） | `analyze_emotion()` | 3-5s | 高 | ~5GB | 情绪分析专用 |
 
-**重要（2026-05-16更新）**：M4 24GB 实测 qwen2.5vl:7b 加载失败（OOM），smolvlm2 可正常运行。优先使用 smolvlm2 做视觉感知。
+**重要（2026-05-16更新）**：实测 qwen2.5vl:7b 在 M4 24GB 上加载失败（"model failed to load, resource limitations"）。**smolvlm2 是当前唯一可用的本地视觉模型**，优先使用。
 
 ## 典型工作流
 

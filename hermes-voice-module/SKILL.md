@@ -13,6 +13,22 @@ description: "Phase 4 核心：语音合成（TTS）+ 语音识别（ASR），�
 pip3 install edge-tts faster-whisper -i https://pypi.tuna.tsinghua.edu.cn/simple --break-system-packages
 ```
 
+## 语音回复工作流（2026-05-16更新）
+
+**首选方式：Hermes 内置 text_to_speech 工具**
+```
+用户请求语音回复
+  → 执行 text_to_speech(text="内容", output_path="/tmp/xxx.ogg")
+  → MEDIA:<file_path> 发送给用户
+```
+这是标准方式，Telegram 收到音频文件自动播放。无需写 Python 代码。
+
+**备选方式：Python 模块（用于需要情绪自适应等高级场景）**
+```python
+from voice_module import speak_to_file, emotion_speak
+speak_to_file("内容", "/tmp/hermes_ready.mp3")
+```
+
 ## 文字 -> 语音（TTS，Edge-TTS 微软免费接口）
 
 ```python
