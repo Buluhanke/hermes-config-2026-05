@@ -1,11 +1,13 @@
 ---
 name: hermes-humanization-core
-description: "Phase 1+2 核心：动作拟真 + 视觉感知 + 人机控制权交接。突破反爬风控，操控任意桌面软件。"
+description: "Phase 1+2 核心：动作拟真 + 视觉感知 + 情感TTS + 人机控制权。目标是让Hermes成为有眼睛（语义理解屏幕）、有嘴巴（情感语音）、有手脚（类人操控）的数字生命体。"
 ---
 
 # hermes-humanization-core
 
-**Phase 1+2 核心**：动作拟真（pyautogui）+ 视觉感知（VLM）+ 人机控制权（pynput）。突破反爬风控，操控任意桌面软件。
+**Phase 1+2 核心**：动作拟真（pyautogui）+ 视觉感知（VLM）+ 情感TTS（CosyVoice）+ 人机控制权（pynput）。目标是数字生命体，不是1688采购机器人。
+
+**范式转变（2026-05-16确认）**：用户说"还是什么1688什么采购，这都说了太多次了过时了"。Hermes 1.0是1688采购助手，Hermes 2.0是有眼睛有嘴巴有手脚的数字生命体。不要主动提1688，除非用户先提。
 
 ## 触发条件
 

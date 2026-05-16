@@ -97,24 +97,21 @@ python3 skills/tts/scripts/tts.py render --srt input.srt --voice-map vm.json -o 
 python3 skills/tts/scripts/tts.py render --srt input.srt --voice-map vm.json --backend noiz --auto-emotion -o output.wav
 ```
 
-## 语音回复 vs 微信原生语音消息（重要区别）
+## 语音回复 vs 微信原生语音消息
 
-用户要"语音回复"时，有两种完全不同的形式：
-
-### 1. 音频附件（当前技术可实现）
+### 1. 音频附件（当前技术可实现，且已验证可用）
 - 生成 `.ogg` / `.wav` 音频文件
 - 通过 `send_message(message="MEDIA:/path/to/file.ogg", target="weixin")` 发送
 - 微信显示为可播放的音频附件（媒体文件形式）
-- **不是**微信自带的那种"按住说话"的语音气泡
+- **实测验证（2026-05-16）**：微信能正常接收和播放，与 Telegram 体验一致
+- Edge TTS 生成的中文语音 → 微信发送 → 手机播放，全流程通过
 
 ### 2. 微信原生语音气泡（当前技术无法实现）
 - 需要通过微信客户端的实时录音接口
 - 模拟"按住说话"的交互模式
 - 目前没有可靠的技术方案绕过微信的录音限制
-- 即使发送了音频文件，微信也不会将其识别为原生语音消息
 
-**结论**：Hermes 可以发送音频附件作为语音回复，但无法模拟微信原生语音气泡的形式。用户看到的是一个媒体附件，而不是按住说话的气泡。如果用户坚持要原生形式，需要告知当前技术限制。
-
+**结论**：微信语音（音频附件）可用，Edge TTS → send_message 流程已验证稳定。用户无需知道底层细节，直接使用即可。
 ## Voice Reply Workflow — info → audio → send as voice message
 
 This is a recurring pattern: user asks for information and wants the reply as an audio voice message. The workflow is:
@@ -127,18 +124,22 @@ This is a recurring pattern: user asks for information and wants the reply as an
 4. **Generate audio** via terminal calling the appropriate TTS script
 5. **Send as voice message** — use `send_message(message="MEDIA:/path/to/file.wav", target="...")` so QQ/WeChat plays it as audio. Note: this sends as an audio attachment, NOT as WeChat native voice message (see above).
 
-### Edge TTS 推荐参数
+### Edge TTS 推荐参数（首选方案）
+
+`text_to_speech` 工具本身有失败率，推荐直接用终端调用 edge-tts：
 
 ```bash
 ~/.hermes/hermes-agent/venv/bin/edge-tts \
   --text "语音回复的文本内容" \
   --voice "zh-CN-XiaoxiaoNeural" \
-  --write-media /tmp/voice_reply.ogg
+  --write-media ~/.hermes/audio_cache/voice_reply.ogg
 ```
 
-**已验证可用：** Edge TTS 生成 → 微信播放，全程正常（WeChat 发送测试通过）。
+然后通过 send_message 发送（telegram / weixin 均已验证可用）。
 
-**中文音色选择：**
+**流程**：搜索信息 → 组织口语化回复文本 → edge-tts 生成音频 → send_message 发送 → 全程无需调用 text_to_speech 工具。
+
+**已验证可用**：Edge TTS → 微信播放、Telegram 播放，均正常。
 
 | 音色 | 性别/风格 |
 |------|----------|

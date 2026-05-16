@@ -3,18 +3,24 @@ name: hermes-rpa
 description: >-
   Hermes 类人桌面代理核心技能。通过 AXUI 读窗口结构 + 区域截图 + Baidu OCR 感知屏幕内容 +
   cliclick/PyAutoGUI 模拟键鼠，实现"像真人一样操控整台电脑"的通用能力。
-  核心定位：桌面全域 Agent——不限于浏览器，能操控任何应用（Chrome/微信/Excel/飞书/桌面系统）。
-  1688找品只是其中一个应用场景，不是目标本身；类人化控制做到位了，找品自然解决。
-version: 2.1.0
+  核心定位：桌面全域 Agent + 数字生命体——不限于浏览器，能操控任何应用（Chrome/微信/Excel/飞书/桌面系统）。
+  **范式转变**：1688找品只是其中一个应用场景，不是目标本身；类人化控制做到位了，找品自然解决。
+  **进化目标**：有眼睛（屏幕语义理解）、有嘴巴（情感TTS）、有手脚（电脑+手机控制）的数字生命体。
+  **重要**：不要主动提1688，除非用户先提。
+version: 2.2.0
 author: Hermes Agent
 triggers:
   - 拟人控制 / 操控桌面 / 操作电脑 / 点这个 / 去那里
   - 打开Chrome / 截图看看 / 读一下屏幕
   - 帮我点 / 帮我输入 / 帮我滚动
-  - 1688找品 / 去1688搜 / 1688 sourcing
   - 桌面代理 / 数字劳动力 / 全能助手
   - 帮我操作Excel / 操作微信 / 操作飞书 / 操作桌面应用
   - 去ChatGPT问 / 帮我发微信 / 帮我回消息
+  - 眼睛 / 嘴巴 / 嘴巴有情感 / TTS本地 / 语音情感
+  - 屏幕理解 / 页面语义 / 看懂屏幕 / 视觉感知升级
+  - 手机控制 / iPhone控制 / 移动端 / 手机自动化
+  - 反思能力 / 自我判断 / 任务复盘
+  - 长眼睛 / 长嘴巴 / 长手脚 / 数字生命体
 ---
 
 # Hermes RPA — 全栈桌面自动化系统 v2
@@ -1181,7 +1187,28 @@ print(f'截图成功: {len(img)} bytes')
 - `webSocketDebuggerUrl` ✅（正确）
 - `webSocketURL` ❌（不存在，不要用）
 
-**依赖**：`websocket-client` Python 包（CDP WebSocket 通信必需）：
+**创建新标签页**（绕过 MCP bridge 直连 CDP HTTP）：
+```bash
+# 1. 用 HTTP PUT 创建空白新 tab
+curl -s -X PUT http://127.0.0.1:9333/json/new \
+  -H "Content-Type: application/json" \
+  -d '{"url":"about:blank"}'
+
+# 返回: {"id":"TAB_ID","webSocketDebuggerUrl":"ws://127.0.0.1:9333/devtools/page/TAB_ID",...}
+
+# 2. 用 WebSocket 直连该 tab，发送 Page.navigate
+send_frame(sock, {
+    "id": 1,
+    "method": "Page.navigate",
+    "params": {"url": "https://chat.deepseek.com"}
+})
+
+# 3. 等待 Page.navigate 响应后，tab 已加载目标 URL
+```
+
+**注意**：`/json/new` 是 PUT 方法，不是 POST。返回的 `id` 即该 tab 的 `pageId`，拼入 `ws://localhost:9333/devtools/page/{id}` 即为该 tab 的 WebSocket CDP URL。
+
+**依赖**：`websocket-client` Python 包（`pip3 install websocket-client`）。
 ```bash
 pip3 install websocket-client
 ```
@@ -1464,7 +1491,8 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 
 ## 参考文档
 
-- `references/omniparser-seeclick-agenttars-install-2026-05-15.md` — **新增：OmniParser+SeeClick+Agent TARS 实际安装步骤**（conda env路径、paddleocr版本兼容性、npx安装命令、ollama升级注意）
+- `references/deepseek-expert-mode-self-diagnosis-2026-05-16.md` — **新增：DeepSeek 专家模式自诊断工作流**（激活方式、CDP 直连模板、诊断结果摘要）
+- `references/omniparser-seeclick-agenttars-install-2026-05-15.md` — **OmniParser+SeeClick+Agent TARS 实际安装步骤**（conda env路径、paddleocr版本兼容性、npx安装命令、ollama升级注意）
 - `references/screen-understanding-vlm-research-2026-05-14.md` — **Screen Understanding VLM调研**：OmniParser/SeeClick/UI-TARS/CogAgent/Qwen2-VL架构对比，Hermes架构差距矩阵，升级路线图。源自2026-05-14调研任务。
 - `references/screen-understanding-free-local-2026-05-14.md` — **Screen Understanding 免费本地方案**：Qwen3-VL + browser-use + Ollama 组合、Fazm AI、Taskhomie、open-computer-use 等开源免费方案调研结论。用户明确要求免费+本地+不依赖大模型时优先推荐。
 - `references/perception-kernel-modules-2026-05-14.md` — **扩展模块详解**：坐标系转换(world_diff/entity_resolution/mouse_driver)

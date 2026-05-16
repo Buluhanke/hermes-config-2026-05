@@ -1,22 +1,38 @@
 # Hermes 灾难恢复与备份
 
+## GitHub 仓库架构（2026-05-16 更新）
+
+| 仓库 | 可见性 | 内容 | 大小 |
+|------|--------|------|------|
+| `hermes-backup` | **私有** | .env、auth.json、skills、scripts、launchd、perception.py | ~10MB |
+| `hermes-config-2026-05` | 公开 | 配置文件模板 + 文档（已清理大文件） | ~28MB |
+| `hermes-skills` | **私有** | skills 技能库同步镜像 | ~3MB |
+
+**hermes-backup 是主力仓库**，包含所有敏感配置。换电脑只需 `bash ~/hermes-restore.sh`。
+
+**清理记录（2026-05-16）**：`chrome-debug/`（299MB）、`audio_cache/`（492KB）、`config.yaml.bak.*` 已从 hermes-config-2026-05 移除并用 `git filter-branch` 重写历史。本地 pack 从 220MB 缩至 8.8MB，push 后 GitHub 显示大小延迟更新，实际新克隆 ~28MB。
+
 ## 备份策略
 
 ### GitHub 仓库
 | 仓库 | 内容 | 频率 |
 |------|------|------|
-| `hermes-config-2026-05` | 配置文件 + Chrome数据 + n8n工作流 | 自动每60分钟 |
-| `hermes-skills` (main分支) | Skills库（全部技能定义） | 手动 |
-| `hermes-skills` (obsidian-backup分支) | Obsidian笔记库 | 手动 |
+| `hermes-backup` | **完整备份**（.env、auth.json、skills、scripts、launchd） | 手动同步 |
+| `hermes-config-2026-05` | 配置文件模板 + 文档（已清理大文件） | 自动每60分钟 |
+| `hermes-skills` | Skills库 | 自动每60分钟 |
 
 ### 关键数据路径
 ```
-~/.hermes/                    # Hermes配置（GitHub: hermes-config-2026-05）
-~/.hermes/skills/             # Skills库（GitHub: hermes-skills）
-~/Obsidian/迅龙贸易/          # Obsidian笔记（GitHub: hermes-skills#obsidian-backup）
+~/.hermes/                    # Hermes配置（主力：hermes-backup 私有仓库）
+~/.hermes/skills/             # Skills库
+~/Obsidian/迅龙贸易/           # Obsidian笔记（GitHub: hermes-skills#obsidian-backup）
 ~/n8n_data/                   # n8n工作流（GitHub: hermes-config-2026-05/.n8n_backup）
 ~/.hermes/audio_cache/        # 语音缓存（本地，无需备份）
 ```
+
+### 恢复脚本
+- `~/hermes-restore.sh` — 一键恢复（克隆 hermes-backup + hermes-agent + 安装依赖）
+- `~/sync_hermes.sh` — 同步本地修改到 hermes-backup 私有仓库
 
 ## n8n 备份细节
 
@@ -25,8 +41,6 @@
 n8n 使用 SQLite WAL 模式，运行时 `database.sqlite` 只有 ~600KB，真实数据在 `database.sqlite-wal`（可达 4MB+）。直接备份 sqlite 文件会丢失未合并的 WAL 数据。
 
 **✅ 正确流程：先做 Checkpoint，再备份**
-
-n8n 运行中时，执行 WAL checkpoint 将数据合并到主数据库：
 ```python
 import sqlite3
 conn = sqlite3.connect('/Users/aimac/n8n_data/database.sqlite')
@@ -34,56 +48,18 @@ conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')  # 合并WAL并截断
 conn.execute('VACUUM')  # 压缩数据库
 conn.close()
 ```
-checkpoint 后 WAL 文件消失，sqlite 膨胀到完整大小（1MB+），此时备份才完整。
-
-**⚠️ Gitignore 陷阱**
-
-`.hermes/.gitignore` 包含 `*.sqlite` 规则，会导致 `database.sqlite` 被忽略。必须用 `git add -f` 强制添加：
-```bash
-git add -f .n8n_backup/database.sqlite .n8n_backup/config .n8n_backup/nodes
-```
-
-**备份内容**：config + database.sqlite（已checkpoint） + nodes/（不含 crash.journal / sqlite-shm/wal / storage / n8nEventLog.log）
 
 **备份脚本**：`~/.hermes/scripts/backup_n8n.sh`（已内置 checkpoint 逻辑）
 
-**恢复步骤**：
-```bash
-# 克隆配置
-git clone https://github.com/Buluhanke/hermes-config-2026-05.git ~/.hermes
-
-# 恢复n8n
-cp hermes-config-2026-05/.n8n_backup/* ~/n8n_data/
-
-# 重启n8n容器
-docker restart hermes-ai-n8n-1
-```
-
-**n8n 数据卷挂载**（docker inspect 确认）：
-```
-/Users/aimac/n8n_data -> /home/node/.n8n
-```
-
-## 每日自动备份 Cronjob
-
-| Job ID | 名称 | 频率 | 脚本 |
-|--------|------|------|------|
-| b60a398e93fa | hermes-config-backup | 每60分钟 | hermes-git-backup.sh |
-| 008fce294402 | 每日凌晨3点同步配置 | 每天03:00 | sync-hermes-backup.sh |
-| f16b1c636b6c | n8n工作流每日备份 | 每天04:00 | backup_n8n.sh |
-| 46b1467938bd | 语音缓存清理 | 每天03:00 | cleanup_audio_cache.sh |
-
 ## 恢复检查清单
 
-1. 克隆 `hermes-config-2026-05` → `~/.hermes`
+1. `bash ~/hermes-restore.sh`
 2. 克隆 `hermes-skills` → `~/.hermes/skills`（覆盖现有）
 3. 从 `hermes-config-2026-05/.n8n_backup` 恢复 n8n 工作流
-4. 从 `hermes-skills` 的 `obsidian-backup` 分支恢复 Obsidian 笔记
-5. 重启 n8n 容器
-6. 验证 Hermes Agent 可运行
+4. 重启 n8n 容器
 
 ## 注意事项
 
 - Chrome调试实例通过 launchd 自启动，端口9333
 - 1688登录cookies在 `~/.hermes/1688_cookies.json`，已包含在Git备份中
-- Skills库无.gitignore，大量.DS_Store也被提交，不影响恢复
+- **1688 Cookie 无法迁移**：Chrome Cookie 加密存储，换电脑需重新扫码登录1688一次
