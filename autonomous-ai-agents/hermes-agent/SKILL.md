@@ -1,7 +1,7 @@
 ---
 name: hermes-agent
 description: "Configure, extend, or contribute to Hermes Agent."
-version: 2.1.0
+version: 2.1.1
 author: Hermes Agent + Teknium
 license: MIT
 metadata:
@@ -15,7 +15,7 @@ metadata:
 
 Hermes Agent is an open-source AI agent framework by Nous Research that runs in your terminal, messaging platforms, and IDEs. It belongs to the same category as Claude Code (Anthropic), Codex (OpenAI), and OpenClaw — autonomous coding and taYOUR_API_KEY agents that use tool calling to interact with your system. Hermes works with any LLM provider (OpenRouter, Anthropic, OpenAI, DeepSeek, local models, and 15+ others) and runs on Linux, macOS, and WSL.
 
-**`/new` 在 QQ Bot 的行为**：创建新会话，读取的是 `config.yaml` 的全局 `model.default`，**不是**当前会话里临时切换的模型。如果在终端/Dashboard 切换了模型，QQ `/new` 仍然用 `config.yaml` 里的默认值。要让所有渠道统一模型，必须改 `model.default` 并重启 gateway。
+**安全扫描提示必须中文**：command approval/security scan warning 必须用中文显示，不能用英文。所有安全类提示都要本地化。如果在终端/Dashboard 切换了模型，QQ `/new` 仍然用 `config.yaml` 里的默认值。要让所有渠道统一模型，必须改 `model.default` 并重启 gateway。
 
 **Config 变更对当前会话不生效**：修改 `model.provider` / `model.default` / `api_key` 后，当前运行中的会话不会自动切换。必须退出重开或使用 `hermes chat --provider X --model Y` 启动新会话。详见 `references/config-lifecycle.md`。MiniMax 国内直连 endpoint 配置细节见 `references/minimax-cn-provider.md`。
 

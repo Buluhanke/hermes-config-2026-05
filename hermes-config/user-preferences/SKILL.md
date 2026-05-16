@@ -19,6 +19,12 @@ description: 用户偏好和配置记忆
 
 ## 沟通风格
 - 极端简短，积极配合
-- 命令审批提示必须用中文
+- 命令审批提示必须用中文（不能用英文）
 - 不需要请示，直接判断执行
 - 全程中文
+
+## Terminal自动化限制（macOS）
+macOS安全限制：osascript无法自动向Terminal发送命令（do script会超时）。正确做法：
+1. 创建 .command 文件：写入脚本内容 + chmod +x
+2. 手动双击运行，或告知用户手动执行
+3. osascript/automation无法绕过此限制
