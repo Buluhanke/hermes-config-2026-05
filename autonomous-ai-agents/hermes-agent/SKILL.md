@@ -943,6 +943,8 @@ hermes sessions stats       Session store statistics
 
 ### Cron Jobs
 
+**Provider Configuration Reference**: `references/provider-configuration-patterns.md` covers built-in vs custom providers, MiniMax profiles, fallback routing, and API key testing.
+
 **创建 no_agent cron 任务（纯脚本）的正确方式**：
 ```bash
 # 错误示范 — repeat 参数会触发 type error: '<=' not supported between instances of 'str' and 'int'

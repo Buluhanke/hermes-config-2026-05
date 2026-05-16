@@ -3,11 +3,11 @@ name: hermes-rpa
 description: >-
   Hermes 类人桌面代理核心技能。通过 AXUI 读窗口结构 + 区域截图 + Baidu OCR 感知屏幕内容 +
   cliclick/PyAutoGUI 模拟键鼠，实现"像真人一样操控整台电脑"的通用能力。
-  核心定位：桌面全域 Agent + 数字生命体——不限于浏览器，能操控任何应用（Chrome/微信/Excel/飞书/桌面系统）。
-  **范式转变**：1688找品只是其中一个应用场景，不是目标本身；类人化控制做到位了，找品自然解决。
-  **进化目标**：有眼睛（屏幕语义理解）、有嘴巴（情感TTS）、有手脚（电脑+手机控制）的数字生命体。
-  **重要**：不要主动提1688，除非用户先提。
-version: 2.2.0
+  **范式转变（2026-05-16确认）**：1688找品只是其中一个应用场景，Hermes 2.0 的目标是
+  有眼睛（屏幕语义理解）、有嘴巴（情感TTS）、有手脚（电脑+手机控制）的数字生命体。
+  **不要主动提1688，除非用户先提。**
+  **CDP Fallback（重要）**：MCP bridge 挂了不等于 Chrome 不可控——Python 直连 CDP WebSocket 始终可用，详见 references/cdp-fallback-when-mcp-bridge-fails-2026-05-16.md。
+version: 2.3.0
 author: Hermes Agent
 triggers:
   - 拟人控制 / 操控桌面 / 操作电脑 / 点这个 / 去那里
