@@ -341,5 +341,5 @@ curl -X DELETE -H "X-N8N-API-KEY: <key>" \
 
 ## 参考文档
 
-- `references/n8n-sqlite-direct-access.md` — **新增：n8n SQLite 数据库直接操作**（绕过 UI/API 修复 onboarding、提取遮蔽的 API Key、激活 workflow）
+- `references/n8n-sqlite-direct-access.md` — n8n SQLite 数据库直接操作（绕过 UI/API 修复 onboarding、提取遮蔽的 API Key、激活 workflow、**备份与恢复**）
 

@@ -158,3 +158,77 @@ if __name__ == '__main__':
 - **n8n reset 命令**：`docker exec <container> n8n user-management:reset` 会重置 DB，但会清空所有用户和工作流（破坏性）
 - **JWT Token 格式**：n8n API Key 是 JWT（`eyJ...` 开头），包含 `iss: n8n` 和 `aud: public-api`，可用于 Public API 认证
 - **scopes 格式**：数据库里存的是 JSON 数组字符串，不是逗号分隔字符串
+
+---
+
+## n8n 备份到 GitHub（重要！）
+
+### 架构
+
+```
+宿主机 ~/n8n_data/         ← Docker volume mount
+    ├── database.sqlite   ← 主数据库（WAL 模式，checkpoint后~1MB）
+    ├── database.sqlite-wal   ← 未合并写入（4MB+，checkpoint后自动删除）
+    ├── nodes/
+    └── config
+
+GitHub: Buluhanke/hermes-config-2026-05/.n8n_backup/
+```
+
+**当前 Hermes n8n 路径**：`/Users/aimac/n8n_data`
+**Docker 容器名**：`hermes-ai-n8n-1`
+
+### 关键坑：SQLite WAL 模式
+
+n8n 使用 SQLite WAL 模式：
+- `database.sqlite` 主文件（checkpoint后~1MB）不含最新写入
+- `database.sqlite-wal`（可达 4MB+）才是最新数据所在
+- 只备份 sqlite 文件而不 checkpoint，**会丢失最新数据**
+
+### 正确的备份流程
+
+```bash
+# Step 1: WAL checkpoint（合并 WAL 到主数据库）
+python3 -c "
+import sqlite3
+conn = sqlite3.connect('/Users/aimac/n8n_data/database.sqlite')
+conn.execute('PRAGMA wal_checkpoint(TRUNCATE)')  # 删除WAL文件
+conn.execute('VACUUM')
+conn.close()
+"
+
+# Step 2: 复制到 git 目录
+rm -rf ~/.hermes/.n8n_backup
+mkdir -p ~/.hermes/.n8n_backup
+cp ~/n8n_data/config ~/.hermes/.n8n_backup/
+cp ~/n8n_data/database.sqlite ~/.hermes/.n8n_backup/
+cp -r ~/n8n_data/nodes ~/.hermes/.n8n_backup/
+
+# Step 3: 强制添加（绕过 .gitignore 的 *.sqlite 规则）
+git add -f ~/.hermes/.n8n_backup/database.sqlite \
+          ~/.hermes/.n8n_backup/config \
+          ~/.hermes/.n8n_backup/nodes
+git commit -m "n8n backup $(date)"
+git push
+```
+
+### 关键坑2：.gitignore 的 *.sqlite 规则
+
+`~/.hermes/.gitignore` 包含 `*.sqlite`，会导致 `.n8n_backup/database.sqlite` 被静默忽略（不报错，文件就是不上传！）。**必须用 `git add -f` 强制添加**。
+
+### 自动备份 Cronjob
+
+每天凌晨 4 点执行 `backup_n8n.sh`，已内置 checkpoint + force-add 逻辑。
+
+### 从备份恢复
+
+```bash
+# 克隆配置
+git clone https://github.com/Buluhanke/hermes-config-2026-05.git ~/.hermes
+
+# 复制 n8n 数据
+cp ~/.hermes/.n8n_backup/* ~/n8n_data/
+
+# 重启容器
+docker restart hermes-ai-n8n-1
+```
