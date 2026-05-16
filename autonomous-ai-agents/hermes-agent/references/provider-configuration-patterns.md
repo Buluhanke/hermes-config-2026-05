@@ -52,7 +52,7 @@ The chain attempts providers in order. Each must be a valid provider name
 | Provider Name | Endpoint | API Mode | Auth | Best For |
 |---|---|---|---|---|
 | `minimax` | `api.minimax.io/anthropic` | anthropic_messages | `MINIMAX_API_KEY` | International |
-| `minimax-cn` | `api.minimaxi.com/anthropic` | anthropic_messages | `MINIMAX_CN_API_KEY` | China mainland |
+| `minimax-cn` | `api.minimaxi.com/anthropic/v1` | anthropic_messages | `MINIMAX_CN_API_KEY` | China mainland |
 | `minimax-oauth` | `api.minimax.io/` | OAuth flow | No key needed | Browser auth |
 
 **Key quirk:** Base URL ending in `/anthropic` triggers `anthropic_messages` api_mode
@@ -72,7 +72,7 @@ curl -s https://api.minimaxi.com/v1/chat/completions \
   -d '{"model":"MiniMax-M2.7","max_tokens":128,"messages":[{"role":"user","content":"hi"}]}'
 
 # Test Anthropic-format endpoint
-curl -s https://api.minimaxi.com/anthropic/messages \
+curl -s https://api.minimaxi.com/anthropic/v1/messages \\
   -H "x-api-key: <key>" \
   -H "anthropic-version: 2023-06-01" \
   -H "content-type: application/json" \
@@ -82,7 +82,7 @@ curl -s https://api.minimaxi.com/anthropic/messages \
 **HTTP code interpretation:**
 - `401` = key not valid for this endpoint (wrong provider/port)
 - `429` = key valid, rate limited (check error.message for resets_at time)
-- `404` = URL/path wrong
+- `404` = URL/path wrong. For MiniMax CN, likely missing `/v1/` in path (use `/anthropic/v1/messages` not `/anthropic/messages`)
 - `200` = working
 
 ## Common Pitfalls
@@ -93,3 +93,4 @@ curl -s https://api.minimaxi.com/anthropic/messages \
 - Mixing aicodee keys with MiniMax native endpoints → 401.
 - Changing base URL via .env can change api_mode auto-detection behavior.
 - DO NOT modify `model.default` when only adding a fallback provider.
+- **MiniMax CN anthropic endpoint requires `/v1/` path**: The correct path is `/anthropic/v1/messages`, NOT `/anthropic/messages`. The bare `/anthropic/messages` returns 404. This applies to both curl tests and any hardcoded base_url in the built-in provider plugin.

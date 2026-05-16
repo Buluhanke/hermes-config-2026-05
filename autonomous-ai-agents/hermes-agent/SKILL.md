@@ -17,6 +17,20 @@ Hermes Agent is an open-source AI agent framework by Nous Research that runs in 
 
 **`/new` 在 QQ Bot 的行为**：创建新会话，读取的是 `config.yaml` 的全局 `model.default`，**不是**当前会话里临时切换的模型。如果在终端/Dashboard 切换了模型，QQ `/new` 仍然用 `config.yaml` 里的默认值。要让所有渠道统一模型，必须改 `model.default` 并重启 gateway。
 
+**Config 变更对当前会话不生效**：修改 `model.provider` / `model.default` / `api_key` 后，当前运行中的会话不会自动切换。必须退出重开或使用 `hermes chat --provider X --model Y` 启动新会话。详见 `references/config-lifecycle.md`。MiniMax 国内直连 endpoint 配置细节见 `references/minimax-cn-provider.md`。
+
+**PITFALL: 模型切换请求 → 直接执行，不分析**：当用户说"切换到模型 X"时，直接改 config.yaml（和 .env 如果有关联），然后告诉用户 `/new` 或重启。不要：
+- 问"用哪种方式"
+- 查版本号/当前配置后再回复
+- 探索选项或讨论方案
+- 解释架构或底层原理
+
+用户的耐心阈值极低——说过一次"切换到 X"后还没执行就等着被骂。先改配置，后解释，不请示。
+
+> 举例：
+> ✅ 用户说"切换到 MiniMax": 直接 patch config.yaml + .env，告诉用户 `/new` 即可
+> ❌ 用户说"切换到 MiniMax": 查 config、查版本、问走哪种方式、分析网络... 用户已失去耐心
+
 **配置 vs 源码边界（重要）**：用户说"删除/清理配置"时只改 `config.yaml`。`config.yaml` 之外的任何文件（`models.py`、`auth.py`、`provider` 插件目录、`status.py`、`doctor.py` 等）都是 **Hermes 源码**，不可擅自修改。模型选择器里的内置供应商列表（CANONICAL_PROVIDERS）是源码级定义，用户清空了 config 后它们仍会以"未配置"状态显示在列表里——这是正常设计，不是配置残留。
 
 **模型选择器行为**：`hermes model` 或 TUI model picker 展示的是**所有已知供应商**（包括未配置的）。未配置的显示为"未登录"或"粘贴 API Key 激活"。这是 Hermes 的默认行为，通过 `include_unconfigured=True` 控制，不走配置。用户如果问"为什么还有 X"，解释这是内置供应商列表，不是配置残留。
@@ -943,7 +957,7 @@ hermes sessions stats       Session store statistics
 
 ### Cron Jobs
 
-**Provider Configuration Reference**: `references/provider-configuration-patterns.md` covers built-in vs custom providers, MiniMax profiles, fallback routing, and API key testing.
+### Provider Setup\n\n- **Provider Configuration Reference**: `references/provider-configuration-patterns.md` covers built-in vs custom providers, MiniMax profiles (including CN endpoint `/anthropic/v1/messages` — note the required `/v1/` path), fallback routing, and API key testing.\n- **Active Provider Decision**: `references/active-provider-decision.md` documents the user's explicitly chosen provider (minimax-cn/MiniMax-M2.7) vs rejected alternatives. Load this when a session is on the wrong provider or you need to know which MiniMax variant is authorized.
 
 **创建 no_agent cron 任务（纯脚本）的正确方式**：
 ```bash
@@ -1985,6 +1999,22 @@ pkill -f "tui_gateway.slash_worker"
 - **Discord bot silent**: Must enable **Message Content Intent** in Bot → Privileged Gateway Intents.
 - **Slack bot only works in DMs**: Must subscribe to `message.channels` event. Without it, the bot ignores public channels.
 - **Windows HTTP 400 "No models provided"**: Config file encoding issue (BOM). Ensure `config.yaml` is saved as UTF-8 without BOM.
+
+## Provider-Specific Configuration Pitfalls
+
+### MiniMax-CN (China Domestic)
+
+**Endpoint**: `https://api.minimaxi.com/anthropic` (domestic) / `https://api.minimax.io/anthropic` (international)
+**API mode**: `anthropic_messages`
+**API key prefix**: `YOUR_API_KEY-` = domestic key
+
+**Critical: Two places must be updated simultaneously**
+- `config.yaml` → `model.base_url: https://api.minimaxi.com/anthropic`
+- `.env` → `MINIMAX_CN_BASE_URL=https://api.minimaxi.com/anthropic`
+
+The `.env` file **overrides** `config.yaml`. Changing only one will silently fail — the API will 404 against the bare `https://api.minimaxi.com` (returns nginx). Always update both.
+
+**Model switching**: When user says "switch to model X", do it immediately without analysis, options, or asking for confirmation. Config changes do NOT affect running sessions — use `/model <provider> <model>` or `hermes chat --provider <p> --model <m>` for a new session.
 
 ### Maintenance & Cleanup
 

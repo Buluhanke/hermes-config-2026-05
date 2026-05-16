@@ -66,9 +66,11 @@ find_and_open_app("Safari")
 
 ## 已知局限
 
-- smolvlm2 响应约30-60秒，需要耐心等待
+- smolvlm2 响应约 2-5s（比 qwen2.5vl:7b 快，但准确度中）
+- qwen2.5vl:7b 在 M4 24GB 上会 OOM，只能用 smolvlm2
 - 找元素需要描述尽量具体："发送按钮" 比 "按钮" 效果好
 - 文件对话框目前需要手动介入（VLM无法操作 macOS 原生文件选择器）
+- mss.mss() 已废弃，新版用 mss.MSS()
 
 ---
 
@@ -162,3 +164,8 @@ smart_click("发送")
 ```
 
 分层感知原则：能用底层 API 解决的不上高级模型，日常 80% 点击走 OCR 瞬发。定位参考：`hermes-fast-ocr-ssim`
+
+## 实现参考
+
+详细的落地数据、代码示例、卡点记录见：
+- `references/vision-connect-implementation-2026-05-16.md` — vision_connect.py 实现笔记（含 smolvlm2 vs qwen2.5vl 实测对比、SSIM 阈值校准、cua-driver 安装卡点）

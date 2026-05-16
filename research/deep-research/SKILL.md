@@ -71,8 +71,55 @@ metadata:
 [1] [完整引用，可信度说明]
 [2] [完整引用，可信度说明]
 
+## 多AI并行研究模式
+
+当用户有多个模型（MiniMax/deepseek/Claude/Gemini等）且需要跨平台讨论收敛时，使用`delegate_task`并行分发同一份上下文：
+
+```python
+delegate_task(tasks=[
+    {"goal": "把内容转发给ChatGPT/Claude，给出建议", "role": "leaf"},
+    {"goal": "把内容转发给DeepSeek，给出建议", "role": "leaf"},
+    {"goal": "把内容转发给智谱清言GLM，给出建议", "role": "leaf"},
+], toolsets=["web"])
+```
+
+**触发条件**：用户说"发给X和Y讨论"、"多平台验证"、"让几个AI一起想"。
+
+**关键约束**：
+- `max_concurrent_children`默认3，超过需调高config
+- 等待全部完成后汇总各方建议，去重+合并
+- 子agent必须明确"中文回复简短精要"，避免各平台风格不一致
+
+**输出格式**：汇总表格（平台 | 核心建议 | 差异点）
+
+### 快速验证路线
+1. `ollama pull qwen3-vl:7b`
+2. `npx @modelcontextprotocol/server-playwright` 启动MCP
+3. 用Hermes的skill调用截屏→发给qwen3-vl分析→返回action→执行
+
 ## 研究空白
 [仍未解决或需要进一步研究的问题]
+
+## 多AI并行研究模式
+
+当用户有多个模型（MiniMax/deepseek/Claude/Gemini等）且需要跨平台讨论收敛时，使用`delegate_task`并行分发同一份上下文：
+
+```python
+delegate_task(tasks=[
+    {"goal": "把内容转发给ChatGPT/Claude，给出建议", "role": "leaf"},
+    {"goal": "把内容转发给DeepSeek，给出建议", "role": "leaf"},
+    {"goal": "把内容转发给智谱清言GLM，给出建议", "role": "leaf"},
+], toolsets=["web"])
+```
+
+**触发条件**：用户说"发给X和Y讨论"、"多平台验证"、"让几个AI一起想"。
+
+**关键约束**：
+- `max_concurrent_children`默认3，超过需调高config
+- 等待全部完成后汇总各方建议，去重+合并
+- 子agent必须明确"中文回复简短精要"，避免各平台风格不一致
+
+**输出格式**：汇总表格（平台 | 核心建议 | 差异点）
 \`\`\`
 
 ## 来源可信度评级

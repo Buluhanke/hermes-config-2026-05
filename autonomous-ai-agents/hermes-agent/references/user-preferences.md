@@ -11,13 +11,15 @@
 - **配置/删除模型时绝对不能动通讯渠道**（QQ、企业微信等）。通讯渠道独立于模型配置，互不影响。  
 - **不要擅自添加平台监控定时任务**。用户认为正常配置好的 credentials 不会自动丢失或失效，不需要 cron 定时检查。添加 cron 前必须事先询问。
 
-## 模型偏好（2026-05-08 更新）
-- **当前模型顺序**：qwen3-fast（本地 Ollama）→ MiniMax-M2.7-highspeed → deepseek-v4-flash
-- 优先用本地模型（零延迟），主模型切换后同步更新 `delegation.model`
-- deepseek-v4-flash 只在 MiniMax 失败时才触发
-- `/model` 命令无效，必须改 `model.default` 并重启 gateway
-- 检查方式：`git ls-remote origin main` 获取最新 SHA，比对本地 `git rev-parse HEAD`
-- 切换模型用 `/model`，不认识 `/switch_model`
+## 模型偏好（2026-05-16 更新）
+- **当前模型链**：
+  1. 默认 → custom:V2.aicodee.com → MiniMax-M2.7-highspeed（中转）
+  2. 备用 → minimax-cn → MiniMax-M2.7（国内直连）
+  3. 压轴 → deepseek → deepseek-v4-flash
+- `/model` slash command 可用（不再需要重启 gateway 切换）
+- 修改 config 后，当前 session 不生效，需要 `/new` 或重启
+- .env 会覆盖 config.yaml（如 MINIMAX_CN_BASE_URL 覆盖 model.base_url）
+- 修 endpoint 必须同时改 config.yaml 和 .env，单改一个不生效
 
 ## 业务偏好
 - 采购偏好：纸箱等包装材料采购，产地尽量控制在江浙沪地区，候选供应商最少 10 个。
