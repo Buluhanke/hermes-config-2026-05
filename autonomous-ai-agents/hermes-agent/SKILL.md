@@ -17,6 +17,28 @@ Hermes Agent is an open-source AI agent framework by Nous Research that runs in 
 
 **`/new` 在 QQ Bot 的行为**：创建新会话，读取的是 `config.yaml` 的全局 `model.default`，**不是**当前会话里临时切换的模型。如果在终端/Dashboard 切换了模型，QQ `/new` 仍然用 `config.yaml` 里的默认值。要让所有渠道统一模型，必须改 `model.default` 并重启 gateway。
 
+**配置 vs 源码边界（重要）**：用户说"删除/清理配置"时只改 `config.yaml`。`config.yaml` 之外的任何文件（`models.py`、`auth.py`、`provider` 插件目录、`status.py`、`doctor.py` 等）都是 **Hermes 源码**，不可擅自修改。模型选择器里的内置供应商列表（CANONICAL_PROVIDERS）是源码级定义，用户清空了 config 后它们仍会以"未配置"状态显示在列表里——这是正常设计，不是配置残留。
+
+**模型选择器行为**：`hermes model` 或 TUI model picker 展示的是**所有已知供应商**（包括未配置的）。未配置的显示为"未登录"或"粘贴 API Key 激活"。这是 Hermes 的默认行为，通过 `include_unconfigured=True` 控制，不走配置。用户如果问"为什么还有 X"，解释这是内置供应商列表，不是配置残留。
+
+**Model 配置段 patching 注意事项**：`model:` 段在 config.yaml 中是一级 key（不是嵌套子项），patch 时容易留下重复 key。每次编辑后必须 `python3 -c "import yaml; yaml.safe_load(open('config.yaml'))"` 验证 YAML 合法性。重复的 `provider:` / `base_url:` 会导致解析失败。
+
+**MiniMax 直连配置规范**：
+```yaml
+model:
+  default: MiniMax-M2.7-highspeed
+  provider: custom
+  base_url: https://api.minimaxi.com/v1
+  api_key: <key>
+custom_providers:
+- name: minimax-direct
+  base_url: https://api.minimaxi.com/v1
+  api_key: <key>
+  model: MiniMax-M2.7-highspeed
+```
+- 端点必须是 `api.minimaxi.com/v1`（国内直连），不是 `api.minimax.io`
+- M2.7-highspeed 有 5 小时滚动额度限制，北京时间每整点重置
+
 **QQ Bot 掉线诊断与处理**
 
 症状：QQ Bot 每分钟断连一次（`WebSocket closed`），重连成功后能继续收发消息，这是正常心博。但如果日志显示重连成功后没有任何活动，过了若干分钟后彻底静默，说明 Bot 已真正离线。
@@ -37,6 +59,10 @@ Hermes Agent is an open-source AI agent framework by Nous Research that runs in 
 **重启生效后必须验证（必做，不要只说"已重启"）**：
 
 配置模型、修改 config.yaml、或执行 `hermes gateway restart` 后，必须完整验证以下三项再告知用户"好了"：
+
+## Reference: 删除内置 Provider
+
+详见 `references/removing-builtin-providers.md` — 含有 config.yaml + 源码 6 层清理清单，适用于彻底删除任意内置 provider（如 MiniMax）。
 
 ```bash
 # 1. Gateway 进程是否在跑
