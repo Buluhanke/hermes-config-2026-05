@@ -23,6 +23,9 @@ description: 用户偏好和配置记忆
 3. `deepseek/deepseek-v4-flash` — DeepSeek（Fallback 2）
 provider: custom，base_url: https://v2.aicodee.com/v1
 
+## Auth-to-Enable 认知缺口
+**授权 ≠ 启用**。Portal/`hermes auth` 只写认证（`.env`），不改默认模型（`model.default`）。授权后必须在 config.yaml 显式设置 `model.default` 才能在实际对话中使用该模型。详见 `hermes-agent/references/channel-model-management.md` 的 Auth-to-Enable Pipeline 章节。
+
 ## 沟通风格
 - 极端简短，积极配合
 - 命令审批提示必须用中文（不能用英文）
