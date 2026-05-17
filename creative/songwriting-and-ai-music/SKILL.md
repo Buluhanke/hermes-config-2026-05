@@ -11,6 +11,7 @@ triggers:
   - parody song
   - adapting a song
   - AI music generation
+version: 1.0.0
 ---
 
 # Songwriting & AI Music Generation

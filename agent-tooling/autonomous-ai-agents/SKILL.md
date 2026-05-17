@@ -11,6 +11,7 @@ triggers:
   - python 3.13 compatibility issue
   - free claude code proxy
   - NVIDIA NIM free models
+version: 1.0.0
 ---
 
 # Autonomous AI Agents

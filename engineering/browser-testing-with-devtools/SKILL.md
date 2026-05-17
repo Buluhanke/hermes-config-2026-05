@@ -6,7 +6,8 @@ triggers:
   - "需要调试JavaScript"
   - "需要分析网络请求"
   - "需要截取屏幕或DOM快照"
-  - "需要绕过反爬或登录验证"
+  -
+version: 1.0.0 "需要绕过反爬或登录验证"
 ---
 
 # Browser Testing with DevTools

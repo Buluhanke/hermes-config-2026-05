@@ -2,6 +2,7 @@
 name: playwright-mac-setup
 title: Playwright Setup on macOS
 description: Guide to install and configure Playwright browsers on macOS, handle caching, and troubleshoot download timeouts.
+version: 1.0.0
 ---
 ## Purpose
 Automate the installation and provisioning of Playwright browsers for macOS environments, addressing common issues such as long download times, timeouts, and missing cache directories.

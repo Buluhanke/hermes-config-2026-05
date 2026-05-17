@@ -9,6 +9,7 @@ required_paths:
 required_commands:
   - /Users/aimac/MOSS-TTS-Nano/.venv312/bin/python
 required_packages: []
+version: 1.0.0
 ---
 
 # moss-tts-nano

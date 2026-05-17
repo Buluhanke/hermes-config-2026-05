@@ -7,6 +7,7 @@ trigger: >
   用户说"问问各家AI"、"让智谱清言/gpt/deepseek/gemini讨论"、
   "不同AI怎么看"、"从多个角度分析"、或涉及重要决策需要多方验证时。
 domain: research, decision, strategy
+version: 1.0.0
 ---
 
 # Multi-Perspective Consultation

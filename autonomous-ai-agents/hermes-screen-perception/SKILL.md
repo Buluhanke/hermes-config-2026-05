@@ -5,7 +5,8 @@ triggers:
   - 屏幕感知
   - 真人化
   - Dock点击
-  - 视觉理解
+  -
+version: 1.0.0 视觉理解
 ---
 
 # Hermes 屏幕感知真人化技能

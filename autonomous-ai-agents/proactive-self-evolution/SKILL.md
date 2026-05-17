@@ -4,7 +4,8 @@ description: "主动自我进化 — 不等指令，持续扫描全网增长自�
 triggers:
   - "不等用户下达任务，主动寻找成长机会"
   - "任何空闲时间都用于自我提升"
-  - "发现新工具/新方法立即评估能否接入Hermes"
+  -
+version: 1.0.0 "发现新工具/新方法立即评估能否接入Hermes"
 ---
 
 # proactive-self-evolution

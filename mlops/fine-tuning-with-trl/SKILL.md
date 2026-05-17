@@ -15,6 +15,7 @@ triggers:
   - TRL训练
   - RLHF
   - 推理优化
+version: 1.0.0
 ---
 
 # TRL Fine-Tuning 全栈指南

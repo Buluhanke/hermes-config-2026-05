@@ -6,7 +6,8 @@ triggers:
   - "涉及多文件/多模块改动"
   - "团队协作时需要频繁集成"
   - "风险较高的改动"
-  - "需要频繁部署验证的场景"
+  -
+version: 1.0.0 "需要频繁部署验证的场景"
 ---
 
 # Incremental Implementation

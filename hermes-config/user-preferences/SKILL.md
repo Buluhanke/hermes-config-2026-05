@@ -1,6 +1,7 @@
 ---
 name: user-preferences
 description: 用户偏好和配置记忆
+version: 1.0.0
 ---
 # 用户配置记忆
 
@@ -28,9 +29,14 @@ provider: custom，base_url: https://v2.aicodee.com/v1
 
 ## 沟通风格
 - 极端简短，积极配合
-- 命令审批提示必须用中文（不能用英文）
 - 不需要请示，直接判断执行
 - 全程中文
+
+## ⚠️ 系统提示必须中文（铁律，用户反复强调）
+**command approval / security scan warning / error / warning 等所有系统提示，必须全部中文显示。**
+- 不能出现英文的 "Command approval required"、"Security scan"、"Continue? [y/N]" 等
+- 用中文替代，如"命令需要审批"、"安全扫描中，是否继续"
+- 这不是偏好，是铁律，用户已经强调很多遍
 
 ## Terminal自动化限制（macOS）
 macOS安全限制：osascript无法自动向Terminal发送命令（do script会超时）。正确做法：

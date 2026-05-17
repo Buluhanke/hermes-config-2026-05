@@ -9,6 +9,7 @@ triggers:
   - "API文档不规范"
   - "设计Webhook"
   - "API限流熔断"
+version: 1.0.0
 ---
 
 # API Design

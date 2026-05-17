@@ -6,7 +6,8 @@ triggers:
   - "同一个bug反复出现"
   - "修复后引入新的bug"
   - "错误信息无法直接对应到代码位置"
-  - "用户报告的现象和代码对不上"
+  -
+version: 1.0.0 "用户报告的现象和代码对不上"
 ---
 
 # Debugging and Error Recovery

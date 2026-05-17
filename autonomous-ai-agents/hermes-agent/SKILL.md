@@ -17,9 +17,11 @@ Hermes Agent is an open-source AI agent framework by Nous Research that runs in 
 
 **安全扫描提示必须中文**：command approval/security scan warning 必须用中文显示，不能用英文。所有安全类提示都要本地化。如果在终端/Dashboard 切换了模型，QQ `/new` 仍然用 `config.yaml` 里的默认值。要让所有渠道统一模型，必须改 `model.default` 并重启 gateway。
 
-**模型链与 MiniMax provider 真相（2026-05-17）**：详见 `references/model-chain-discovery.md`
+**模型链**：详见 `references/model-chain-discovery.md`
+**aicodee/MiniMax 配置**：详见 `references/aicodee-provider-setup.md`
+**Config 变更**：对当前会话不生效，重开或用 `/model` 运行时切换。
 
-**Config 变更对当前会话不生效**：修改 `model.provider` / `model.default` / `api_key` 后，当前运行中的会话不会自动切换。必须退出重开或使用 `hermes chat --provider X --model Y` 启动新会话。详见 `references/config-lifecycle.md`。MiniMax 国内直连 endpoint 配置细节见 `references/minimax-cn-provider.md`。
+**⚠️ Nous Portal 已下线（2026-05-16）**：`inference-api.nousresearch.com` 返回404，deepseek-v4-flash 已不可用。当前主用模型为 MiniMax-M2.7（aicodee provider）。
 
 **PITFALL: 模型切换请求 → 直接执行，不分析**：当用户说"切换到模型 X"时，直接改 config.yaml（和 .env 如果有关联），然后告诉用户 `/new` 或重启。不要：
 - 问"用哪种方式"
@@ -125,18 +127,26 @@ People use Hermes for software development, research, system administration, dat
 
 Hermes Agent is an open-source AI agent framework by Nous Research that runs in your terminal, messaging platforms, and IDEs. It belongs to the same category as Claude Code (Anthropic), Codex (OpenAI), and OpenClaw — autonomous coding and taYOUR_API_KEY agents that use tool calling to interact with your system. Hermes works with any LLM provider (OpenRouter, Anthropic, OpenAI, DeepSeek, local models, and 15+ others) and runs on Linux, macOS, and WSL.
 
-**当前模型配置（2026-05-08，统一 deepseek-v4-flash）**：
-- 主模型：deepseek-v4-flash（deepseek provider，api.deepseek.com）
-- Fallback：deepseek-v4-flash（单一）
-- Auxiliary：vision / web_extract / compression / session_search 全部 → deepseek-v4-flash
-- Delegation：deepseek-v4-flash
+**当前模型配置（2026-05-17，统一 MiniMax-M2.7-highspeed via aicodee）**：
+- 主模型：MiniMax-M2.7-highspeed（aicodee provider，v2.aicodee.com）
+- Fallback：deepseek-v4-flash（deepseek provider，api.deepseek.com，付费兜底）
+- Auxiliary：vision → openrouter/google/gemini-2.0-flash；其余 → auto（继承主模型）
+- Delegation：MiniMax-M2.7-highspeed
 
 ```yaml
 model:
-  default: deepseek-v4-flash
-  provider: deepseek
-  context_length: 131072
+  default: MiniMax-M2.7-highspeed
+  provider: aicodee
+  base_url: https://v2.aicodee.com/v1
 providers:
+  aicodee:
+    name: V2.aicodee.com
+    base_url: https://v2.aicodee.com/v1
+    api_key_env_var: AICODEE_API_KEY
+    available_models:
+      - MiniMax-M2.7-highspeed
+      - MiniMax-M2.7
+      - MiniMax-M2.5
   deepseek:
     api_key_env_var: DEEPSEEK_API_KEY
     base_url: https://api.deepseek.com/v1
@@ -145,21 +155,18 @@ fallback_providers:
   model: deepseek-v4-flash
 auxiliary:
   vision:
-    provider: deepseek
-    model: deepseek-v4-flash
+    provider: openrouter
+    model: google/gemini-2.0-flash
   web_extract:
-    provider: deepseek
-    model: deepseek-v4-flash
+    provider: auto
   compression:
-    provider: deepseek
-    model: deepseek-v4-flash
+    provider: auto
   session_search:
-    provider: deepseek
-    model: deepseek-v4-flash
+    provider: auto
 delegation:
-  model: deepseek-v4-flash
-  provider: deepseek
-  base_url: https://api.deepseek.com/v1
+  model: MiniMax-M2.7-highspeed
+  provider: aicodee
+  base_url: https://v2.aicodee.com/v1
 ```
 
 验证连通性（每次改配置前必做）：
@@ -192,7 +199,7 @@ print('OK')
 - `display.language: zh-cn` — 界面必须中文
 - `session_reset.idle_minutes: 4320` — 72小时才自动重置（原来1440太频繁）
 - `model_catalog.enabled: false` — 不需要远程模型目录
-- `compression.threshold: 0.13` — 配合 deepseek-v4-flash 131K context
+- `compression.threshold: 0.13` — 配合 MiniMax-M2.7 context
 - `auxiliary.*.context_length: 131072` — 必须匹配实际模型 context，不得超过
 
 **关键铁律**：
@@ -482,7 +489,7 @@ fallback_providers:
 **效果**：简单查询走本地 Ollama（0 网络延迟），复杂任务 fallback 到云端。如果本地服务不可用，自动切换到下一个 provider。
 
 > ⚠️ 注册细节见 `references/ollama-available-models-registration.md`。
-> ⚠️ Nous Portal OAuth 授权（hermes model TTY 限制）见 `references/nous-portal-oauth.md`。
+> ⚠️ Nous Portal 已下线（2026-05-16，deepseek-v4-flash 返回404）。改用 aicodee/MiniMax 或 deepseek 直连。
 
 **验证 Ollama 可用性**：
 ```bash
@@ -1191,7 +1198,7 @@ Full config reference: https://hermes-agent.nousresearch.com/docs/user-guide/con
 | Anthropic | API key | `ANTHROPIC_API_KEY` |
 | Groq | API key | `GROQ_API_KEY` — **注意：Groq key 可能突然返回 403 Forbidden（密钥失效/被吊销），即使格式正确。遇到 403 时需要重新获取 key。** |
 | NVIDIA | API key | `NVIDIA_API_KEY` — 通过 `https://integrate.api.nvidia.com/v1` 接入，支持 mixtral-8x7b 等模型 |
-| Nous Portal | OAuth | `hermes auth` |
+| Nous Portal | ~~OAuth~~ 已下线 | ~~`hermes auth`~~ 改用 aicodee |
 | OpenAI Codex | OAuth | `hermes auth` |
 | GitHub Copilot | Token | `COPILOT_GITHUB_TOKEN` |
 | Google Gemini | API key | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |

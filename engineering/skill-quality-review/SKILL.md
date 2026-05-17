@@ -9,7 +9,8 @@ triggers:
   - "某个skill表现不如预期"
   - "用户提到darwin-skill、达尔文、skill评分"
   - "需要给skill写测试用例"
-category: engineering
+cat
+version: 1.0.0egory: engineering
 ---
 
 # Skill Quality Review

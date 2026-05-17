@@ -1,6 +1,7 @@
 ---
 name: hermes-digital-body
-description: Hermes真人化技能 Phase 1+2+3 — 嘴巴(TTS)+眼睛(屏幕感知)+手(电脑控制)+反思+情绪感知+操作节奏+拟真缺陷
+des
+version: 1.0.0cription: Hermes真人化技能 Phase 1+2+3 — 嘴巴(TTS)+眼睛(屏幕感知)+手(电脑控制)+反思+情绪感知+操作节奏+拟真缺陷
 ---
 
 # Hermes 真人化技能

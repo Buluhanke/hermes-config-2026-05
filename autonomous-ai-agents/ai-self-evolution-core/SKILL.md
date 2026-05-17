@@ -1,7 +1,8 @@
 ---
 name: ai-self-evolution-core
 description: AI桌面代理自我进化的核心能力框架（感知/决策/执行三层）
-trigger: 思考AI agent自我进化、能力提升相关问题
+tri
+version: 1.0.0gger: 思考AI agent自我进化、能力提升相关问题
 ---
 # AI桌面代理自我进化核心能力框架
 

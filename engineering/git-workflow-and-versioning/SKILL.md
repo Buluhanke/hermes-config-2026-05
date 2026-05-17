@@ -12,7 +12,8 @@ triggers:
   - "创建Issue或管理Issue"
   - "需要cherry-pick特定提交"
   - "需要用bisect定位问题提交"
-  - "项目中包含git子模块"
+  -
+version: 1.0.0 "项目中包含git子模块"
 ---
 
 # Git Workflow and Versioning

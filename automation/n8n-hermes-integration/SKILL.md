@@ -12,6 +12,7 @@ triggers:
   - 1688 采购自动化
   - n8n Cronjob 协同
   - n8n JWT 安全配置
+version: 1.0.0
 ---
 
 # n8n-Hermes 集成架构

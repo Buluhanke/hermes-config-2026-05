@@ -6,7 +6,8 @@ triggers:
   - "现有skill行为不符合预期"
   - "需要多个skill协作"
   - "需要给skill写测试"
-  - "skill之间有冲突或重复"
+  -
+version: 1.0.0 "skill之间有冲突或重复"
 ---
 
 # Skill Protocol

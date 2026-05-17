@@ -7,6 +7,7 @@ triggers:
   - "需要组合多个skill完成复杂任务"
   - "想确认是否有更合适的skill可用"
   - "某个skill不work，想找替代方案"
+version: 1.0.0
 ---
 
 # Using Agent Skills

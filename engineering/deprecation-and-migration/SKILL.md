@@ -6,7 +6,8 @@ triggers:
   - "需要升级到新版本"
   - "需要迁移到新技术栈"
   - "发现某个依赖有严重安全问题"
-  - "需要清理技术债"
+  -
+version: 1.0.0 "需要清理技术债"
 ---
 
 # Deprecation and Migration

@@ -6,7 +6,8 @@ triggers:
   - "CPU/内存占用过高"
   - "用户反馈系统卡顿"
   - "大数据量处理慢"
-  - "需要优化以支持更大规模"
+  -
+version: 1.0.0 "需要优化以支持更大规模"
 ---
 
 # Performance Optimization

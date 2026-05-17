@@ -1,7 +1,8 @@
 ---
 name: ascii-video
 description: "ASCII video: convert video/audio to colored ASCII MP4/GIF."
-platforms: [linux, macos, windows]
+pla
+version: 1.0.0tforms: [linux, macos, windows]
 ---
 
 # ASCII Video Production Pipeline

@@ -11,6 +11,7 @@ triggers:
   - 1688 open platform API
   - e-commerce product data sourcing
   - supply chain product detail fetching
+version: 1.0.0
 ---
 
 # 1688 Open Platform API — Product & Specification Data

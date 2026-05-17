@@ -3,6 +3,7 @@ name: data-analyzer
 description: 数据分析与可视化 — 读取CSV/Excel文件，生成图表（折线图、柱状图、饼图、散点图、热力图等），支持matplotlib/plotly/seaborn。触发：数据分析、可视化、画图、生成图表。
 triggers:
   - 数据分析
+version: 1.0.0
 ---
 name: data-analyzer
 description: 数据分析与可视化 — 读取CSV/Excel文件，生成图表（折线图、柱状图、饼图、散点图、热力图等），支持matplotlib/plotly/seaborn。触发：数据分析、可视化、画图、生成图表。

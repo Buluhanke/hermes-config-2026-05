@@ -1,6 +1,7 @@
 ---
 name: hermes-fast-ocr-ssim
-description: Hermes 快眼(Apple Vision OCR) + 视觉心跳(SSIM) — 分层感知体系，60-240ms文字定位，5ms点击验证
+des
+version: 1.0.0cription: Hermes 快眼(Apple Vision OCR) + 视觉心跳(SSIM) — 分层感知体系，60-240ms文字定位，5ms点击验证
 ---
 
 # Hermes 快眼 + 视觉心跳

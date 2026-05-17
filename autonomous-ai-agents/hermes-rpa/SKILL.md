@@ -1591,7 +1591,7 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 ---
 
 ## 参考文档
-- `references/deepseek-v4-flash-nous-portal-2026-05-16.md` — **新增：Nous Portal + DeepSeek V4 Flash 配置 + macOS Terminal 自动化限制 + OpenHuman 非 API 服务**
+- `references/deepseek-v4-flash-nous-portal-2026-05-16.md` — **历史研究：Nous Portal（已下线）+ DeepSeek V4 Flash 配置。仅供参考，Nous Portal 已于2026-05-16下线。**
 - `references/deepseek-expert-mode-self-diagnosis-2026-05-16.md` — **DeepSeek 专家模式自诊断工作流**
 - `references/omniparser-seeclick-agenttars-install-2026-05-15.md` — **OmniParser+SeeClick+Agent TARS 实际安装步骤**（conda env路径、paddleocr版本兼容性、npx安装命令、ollama升级注意）
 - `references/screen-understanding-vlm-research-2026-05-14.md` — **Screen Understanding VLM调研**：OmniParser/SeeClick/UI-TARS/CogAgent/Qwen2-VL架构对比，Hermes架构差距矩阵，升级路线图。源自2026-05-14调研任务。
