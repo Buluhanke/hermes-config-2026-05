@@ -191,3 +191,90 @@ curl -s "RELAY_URL/v1/models" -H "Authorization: Bearer $KEY" | python3 -m json.
 **关键**：`hermes auth list` 看到的是**凭据池**（credential pool），不是 provider 列表。一个 provider 可以有多条凭据（env key + manual key）。`model.default` 指定的模型路径才是实际走哪条路。
 
 **参见**：`references/channel-model-management.md` — 渠道模型配置约束（无 per-channel 模型）
+
+---
+
+## Provider 模型命名惯例：`prefix/model-name`
+
+**现象**：`/model` picker 里看到 `deepseek/deepseek-v4-flash` 和 `nous/deepseek-v4-pro`，两个都是 deepseek 模型但前缀不同。
+
+**命名规则**：`provider/模型名`
+- `deepseek/xxx` = 走内置 `deepseek` provider（`api.deepseek.com` 直连）
+- `nous/xxx` = 走 `nous` provider（Nous Portal，OAuth 网页授权）
+- `minimax-cn/xxx` = 走 `minimax-cn` provider（minimaxi.com 国内）
+- `openrouter/xxx` = 走 OpenRouter 中转
+
+**三种 provider 类型在 `/model` picker 里的表现**：
+
+| Provider 类型 | 配置方式 | `/model` picker 是谁的列表？ | 价格来源 |
+|---|---|---|---|
+| 内置 API-key provider（`deepseek`, `minimax-cn` 等） | `.env` → `XXX_API_KEY` | `_PROVIDER_MODELS` 静态列表 | DeepSeek / MiniMax 官方定价 |
+| OAuth 网页授权 provider（`nous`） | `hermes auth` → 浏览器 OAuth | Nous Portal 动态/静态混合列表 | Nous Portal 定价（有免费档） |
+| 自定义 provider（`custom:xxx`） | `config.yaml` → `custom_providers` | 调用 `/v1/models` 动态拉取 | 无价格信息 |
+
+**如何区分同一个模型的两个路径**：
+
+以 `deepseek-v4-flash` 为例：
+- `deepseek/deepseek-v4-flash` = 直连付费，走 `api.deepseek.com`
+- `nous/deepseek-v4-flash` = Nous Portal 网页授权，走 Nous Portal 的推理端点
+
+**注意**：同一个模型名（如 `deepseek-v4-flash`）在不同 provider 下可能是**不同的定价策略**。Nous Portal 上有免费额度，而 DeepSeek 官方直连是按量付费。
+
+**诊断：当前 `/model` picker 显示的是哪个 provider 的列表？**
+
+看 picker 顶部的 `Active provider:` 行：
+```
+Current model:    nous/deepseek-v4-flash
+Active provider:  Nous Portal
+```
+
+这意味着你当前正在浏览 **Nous Portal 的模型列表**，而不是 `deepseek` 直连的列表。要看到直连的列表，需要：
+1. `hermes config set model.provider deepseek`
+2. 重启会话后再 `hermes model`
+
+**一句话**：`/model` picker 显示的模型列表 = 当前 `model.provider` 的列表。不同 provider 的模型列表完全独立。
+
+**二、Model Picker UX 行为详解（2026-05-17 实测）**：
+
+`hermes model` 现在是一个**两层选择器**：
+
+1. **第一层：Provider 选择**
+   ```
+   ╭─ ⚙ Model Picker — Select Provider ─────╮
+   │ Current: deepseek/deepseek-v4-flash on Nous Portal
+   │ ❯ Nous Portal (24 models)  ← current
+   │   DeepSeek (4 models)
+   │   ...
+   ```
+   顶部显示当前生效的模型和 provider。列表是**所有可用的 provider**。
+
+2. **第二层：模型选择（以 Nous Portal 为例）**
+   ```
+   ╭─ ⚙ Model Picker — Nous Portal ────────╮
+   │ Select a model (24 available)
+   │   ...
+   │   deepseek/deepseek-v4-pro       $0.43  $0.87  $0.00
+   │   ← Back
+   │ ❯ Cancel
+   ```
+   上方 24 个是**收费模型**（标价）。往下翻到底，有独立的 **"Available free models"** 区域：
+   ```
+   Available free models:
+   ->   deepseek/deepseek-v4-flash  free  free  free
+        stepfun/step-3.5-flash      free  free  free
+        Enter custom model name
+        Skip (keep current)
+   ```
+
+**关键发现**：
+- Nous Portal 的免费模型（`deepseek-v4-flash`, `stepfun-3.5-flash`）**不在那 24 个列表里**，需要往下翻到底才能看到
+- `deepseek/deepseek-v4-pro` 在收费列表里（$0.43/$0.87），`deepseek/deepseek-v4-flash` 在免费区
+- **同一个模型名在不同 provider 下对应完全不同的定价策略**
+
+**回答用户关于 provider 识别问题的正确方式**：
+当用户问 `/model` 选择器里哪个是哪个时，直接回答：**左边的前缀就是 provider 名**。`deepseek/xxx` = 直连付费，`nous/xxx` = 网页授权免费。不要解释架构、不要绕弯子。
+
+**用户沟通铁律（针对模型/provider 问题）**：
+- 用户问"哪个是哪个" → **直接说前缀区分**，不要说架构背景
+- 用户已经打开 picker 了 → **告诉他在当前界面怎么操作**，不要让他退出重进
+- 用户说"这里面没有" → **确认是否在底部/滚动区域外**，不要质疑用户看错了
