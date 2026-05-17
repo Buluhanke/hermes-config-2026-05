@@ -1,4 +1,43 @@
+---
+name: taYOUR_API_KEY
+description: 复杂任务分解为原子步骤，含 Hermes Loop 规划阶段嵌入方案（2026-05-17 审计补充）
+triggers:
+  - 复杂任务需要拆解
+  - 1688采购流程
+  - 任务卡死需要断点续传
+  - 需要在Hermes主循环中嵌入Planning阶段
+---
+
 # Task Decomposition Skill
+
+## 0. Hermes Loop 规划阶段（新增 · 2026-05-17）
+
+**现状**: Hermes `conversation_loop.py` 的主循环是纯反应式的——收到消息 → 调用 API → 执行工具 → 返回。没有内置的 Planning 阶段。
+
+**差距**: Claude Code 有 Plan mode（`/plan` 命令 + TodoWriteTool），复杂任务执行前会先让模型拆解步骤。
+
+**嵌入位置**: `agent/conversation_loop.py` 的主循环，在 API 调用前插入一个轻量 Planning 步骤：
+```python
+# 在 run_conversation() 的 while 循环内，api_call 前加：
+if should_planning_turn(args):
+    plan_steps = invoke_planning(model, messages)
+    messages.append(plan_steps)
+    continue  # 不计为 tool call iteration
+```
+
+**何时触发**: 任务包含以下关键词时自动触发——
+- "调研"、"分析"、"对比"
+- "帮我找"、"列出"
+- "完整流程"、"从头到尾"
+- 用户消息超过 100 字且包含多个意图
+
+**触发判断函数**: `should_planning_turn(user_message) -> bool`
+
+**文件位置**:
+- 工具：`tools/daemon_tool.py`
+- 调度：`cron/daemon_scheduler.py`（已集成至 gateway 每 60s tick）
+
+---
 
 ## 1. 为什么分解是核心能力
 
@@ -242,12 +281,9 @@ n8n Error Trigger ──▶ 错误分类 Node
 ### 6.4 子工作流复用
 
 将通用原子步骤封装为独立 n8n Subworkflow：
-
 - `subworkflow-sku-extract`: 提取SKU
 - `subworkflow-session-login`: 登录维护session
 - `subworkflow-form-submit`: 通用表单提交
-
-主工作流通过 `Execute Workflow` 节点调用子工作流，实现步骤级复用。
 
 ---
 

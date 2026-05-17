@@ -106,7 +106,7 @@ const tool = buildTool({
 - 20+ 功能开关（KAIROS, VOICE_MODE, WEB_BROWSER_TOOL, COORDINATOR_MODE 等）
 - 远程控制：每小时轮询 `/api/claude_code/settings`
 
-## Hermes Agent 差距分析
+## Hermes Agent 差距分析（2026-05-17 实地验证）
 
 ### 已有（✅）
 - 主 Agent 循环
@@ -115,15 +115,20 @@ const tool = buildTool({
 - delegate_task 子 Agent
 - 状态存储
 - 基础 MCP 支持
+- **错误自动恢复（凭证池）** ✅ 比 Claude Code 更强
 
 ### 缺失/需要加强（🔴）
 1. **标准化 buildTool 工厂** — 工具注册不规范
-2. **上下文压缩** — 长对话无压缩机制
-3. **后台任务/Daemon** — 无法常驻任务
+2. **上下文压缩** — 有基础 preflight 压缩，但无语义分块+重要性权重
+3. **后台任务/Daemon** — ✅ 今日已实现（daemon_scheduler.py + daemon_tool.py）
 4. **多 Agent 团队协作** — 无异步邮箱/共享任务板
 5. **Agent 间通信协议** — SendMessageTool 缺失
 6. **自主决策模式（Coordinator）** — 全部任务依赖用户触发
 7. **多工作区隔离** — git worktree 级别隔离
+
+### 今日已落地（✅ 2026-05-17）
+1. **Daemon 后台任务系统** — cron/daemon_scheduler.py (630行) + tools/daemon_tool.py (539行)
+2. **Loop 内置 Planning** — conversation_loop.py 两处 patch，复杂任务自动拆解
 
 ### 待观察（⚠️）
 - 远程控制/遥测开关
@@ -135,6 +140,8 @@ const tool = buildTool({
 ```
 /tmp/claude-code-study/          # 克隆的 Claude Code 源码
 /tmp/learn-coding-agent-study/   # 克隆的学习资料
+~/.hermes/hermes-agent/cron/daemon_scheduler.py  # 今日实现
+~/.hermes/hermes-agent/tools/daemon_tool.py      # 今日实现
 ```
 
 ## 参考文档
