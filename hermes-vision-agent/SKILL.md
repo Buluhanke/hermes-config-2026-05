@@ -270,5 +270,30 @@ smart_click("发送")
 ## 实现参考
 
 详细的落地数据、代码示例、卡点记录见：
-- `../hermes-vision-connect/references/ollama-models-status.md` — Ollama 模型状态实测（smolvlm2 vs qwen2.5vl OOM 问题、响应格式解析、curl 测试命令）
-- `../hermes-vision-connect/SKILL.md` — vision-connect 完整实现（含 smolvlm2 优先策略、SSIM 验证、Gemini Flash 兜底、cua-driver 手动安装）
+- `../hermes-vision-connect/references/ollama-models-status.md` — Ollama 模型状态实测
+- `../hermes-vision-connect/SKILL.md` — vision-connect 完整实现
+
+## 新增感知模块（2026-05-17）
+
+### 视觉环形缓冲区 `visual_buffer.py`
+
+位于 `hermes-humanization-core/visual_buffer.py`。后台每 2 秒截一帧，保留最近 5 帧。
+
+```python
+from visual_buffer import get_buffer
+buffer = get_buffer()           # 启动后台截屏
+paths = buffer.get_frame_paths()  # ['/tmp/hermes_rb/frame_0001.png', ...]
+```
+
+使用场景：操作失败时，把最近 5 帧串联发给 VLM 分析"刚才发生了什么"。
+
+### 滑动验证码闭环 `slider_captcha.py`
+
+位于 `hermes-humanization-core/slider_captcha.py`。
+
+```python
+from slider_captcha import auto_solve_if_present
+ok = auto_solve_if_present()  # 自动检测+解题，返回False表示无验证码
+```
+
+流程：VLM 识别缺口 → 贝塞尔轨迹拖动 → 截图验证结果。

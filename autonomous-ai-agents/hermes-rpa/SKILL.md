@@ -1513,4 +1513,6 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 - `references/world-state-v0-2026-05-14.md` — **WorldState v0 实现笔记**（最小闭环架构+tesseract路径坑+Baidu OCR token问题）
 - `references/peekaboo-macos-desktop-automation.md` — Peekaboo macOS 桌面自动化工具（vision/voice Agent，可选替代方案）
 - `references/alternative-desktop-automation-tools.md` — 替代方案（Mano-P / UI-TARS）评估框架
-- `references/2026-05-17-deep-evolution-research.md` — **2026-05-17深度进化研究**：Patchright已装、smolvlm2已装、CapSolver验证码方案、browser-use 78k stars分析、1688采购闭环卡点
+- `references/2026-05-17-deep-evolution-research.md` — **2026-05-17深度进化研究**：Patchright已装、smolvlm2已装、CapSolver验证码方案、browser-use 78k stars分析、1688采购闭环卡点、**visual_buffer环形缓冲区**（后台每2秒截一帧保留最近5帧）、**slider_captcha自动解题**（auto_solve_if_present + overshoot回退校准）、**连续视觉流**（失败时串联历史帧给VLM分析）
+- `references/hermes_body.py-2026-05-16.md` — **新增模块（2026-05-17确认已实现）**：`visual_buffer.py`（VisualRingBuffer后台截屏+get_recent_frames）、`slider_captcha.py`（solve_slider_captcha overshoot机制）、连续视觉流（get_buffer→get_frame_paths串联历史帧）
+- `references/screen-understanding-vlm-research-2026-05-14.md` — **Screen Understanding VLM调研**：OmniParser/SeeClick/UI-TARS/CogAgent/Qwen2-VL架构对比，Hermes架构差距矩阵，升级路线图。源自2026-05-14调研任务。

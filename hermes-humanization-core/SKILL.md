@@ -44,8 +44,8 @@ vlm_click("发送按钮")
 ```python
 from humanization_core import (
     # 动作拟真
-    human_type,         # 模拟打字（错字回退 1% 概率 + 随机延迟）
-    human_move,         # 贝塞尔曲线鼠标移动（动态速度：远则慢近则快）
+    human_type,         # 模拟打字（5% 错字回退 + 非线性延迟）
+    human_move,         # 贝塞尔曲线+过冲回拉+发呆机制（每40次停3-8秒）
     human_click,        # 移动 → 悬停 → 按下 → 抬起
     human_scroll,       # 分段滚轮（分 3-5 次，间隔随机）
     
@@ -65,6 +65,24 @@ from humanization_core import (
     is_human_takeover_active,  # 检查人类是否在操作
     wait_for_human_release,    # 等待人类交还控制权
 )
+```
+
+## 新增模块（2026-05-17）
+
+```python
+# 视觉环形缓冲区（后台每2秒截一帧，保留最近5帧）
+from visual_buffer import VisualRingBuffer, get_buffer
+buffer = get_buffer()       # 启动后台截屏
+frames = buffer.get_recent_frames(3)  # 获取最近3帧
+
+# 1688滑动验证码闭环
+from slider_captcha import auto_solve_if_present, solve_slider_captcha
+ok = auto_solve_if_present()  # 自动检测+解题，False=无验证码
+
+# 连续视觉流：操作失败时串联历史帧给VLM分析
+from visual_buffer import get_buffer
+buffer = get_buffer()
+paths = buffer.get_frame_paths()  # ['/tmp/hermes_rb/frame_0001.png', ...]
 ```
 
 ## 默认 VLM 模型
@@ -117,6 +135,22 @@ else:
   - 不支持 `flash_attn=True`（Ollama 的 qwen2.5vl 实现有兼容问题）
 - **pynput 需要 macOS 辅助功能权限**：系统设置 → 隐私与安全性 → 辅助功能 → 勾选终端/Python
 - **视觉找坐标成功率依赖屏幕分辨率稳定性**：分辨率变化后 VLM 需要重新适应
+
+## 开发原则（2026-05-17 确认）
+
+**不要重写，只补GAP。**
+
+用户每次给出详细方案时，第一反应必须是：检查现有代码的实际状态（而非假设它不存在），再识别真正的缺口。只改需要改的部分，不重构已有功能。
+
+典型错误：用户给了"贝塞尔曲线鼠标"的方案 → 立刻重写 → 发现 Hermes 已经有贝塞尔，只是缺过冲机制。白做了 80% 的无用功。
+
+正确流程：
+```
+1. 检查现有模块实际代码（读文件，不是读 SKILL.md 描述）
+2. 对照用户方案，找出真正的 GAP
+3. 只对 GAP 打补丁
+4. 验证导入无报错
+```
 
 ## ⚠️ 已验证的坑点
 

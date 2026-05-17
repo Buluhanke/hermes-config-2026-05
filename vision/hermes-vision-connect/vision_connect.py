@@ -19,8 +19,12 @@ import mss
 import numpy as np
 import requests
 import subprocess
-import Vision
-import AppKit
+try:
+    import Vision
+    import AppKit
+    HAS_VISION = True
+except ImportError:
+    HAS_VISION = False
 
 SCREENSHOT_PATH = "/tmp/hermes_screen.png"
 SCREENSHOT_AFTER = "/tmp/hermes_screen_after.png"
@@ -35,7 +39,26 @@ def vision_ocr(query: str, region=None) -> list:
     用 Apple Vision 做极速文字识别。
     返回：[(text, x, y, width, height), ...]
     坐标是归一化的（0-1），需要乘以屏幕宽高转换。
+    如果 Vision 不可用，fallback 到 tesseract OCR。
     """
+    if not HAS_VISION:
+        # Fallback: 用 tesseract（需 brew install tesseract tesseract-lang）
+        try:
+            out_path = SCREENSHOT_PATH.replace(".png", "_ocr.txt")
+            r = subprocess.run(
+                ["tesseract", SCREENSHOT_PATH, out_path.replace(".txt", ""),
+                 "-l", "eng+chi_sim", "--psm", "6"],
+                capture_output=True, timeout=15
+            )
+            if r.returncode == 0 and os.path.exists(out_path):
+                with open(out_path) as f:
+                    text = f.read().strip()
+                # 简单返回：整页文字，坐标未知
+                return [{"text": text, "x": 0, "y": 0, "w": 0, "h": 0, "confidence": 0.5}]
+        except Exception as e:
+            print(f"[vision] tesseract fallback失败: {e}")
+        return []
+
     img = AppKit.NSImage.alloc().initWithContentsOfFile_(SCREENSHOT_PATH)
     if not img:
         return []
@@ -350,8 +373,8 @@ def smart_click(description: str, retry: int = 2) -> dict:
 # ─────────────────────────────────────────
 # 入口函数
 # ─────────────────────────────────────────
-def vlm_click(description: str, retry: int = 2) -> dict:
-    """对外接口：smart_click 的别名"""
+def find_and_click(description: str, retry: int = 2) -> dict:
+    """find_and_click = smart_click（别名，方便记忆）"""
     return smart_click(description, retry=retry)
 
 def ask_screen(question: str) -> str:

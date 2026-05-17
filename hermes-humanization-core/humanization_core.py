@@ -30,57 +30,99 @@ pyautogui.PAUSE = 0.05
 SCREENSHOT_PATH = "/tmp/hermes_screen.png"
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
 
+# 发呆机制计数器（每 N 次操作随机停 3-8 秒）
+_action_counter = 0
+
 # ─────────────────────────────────────────
 # 1. 打字拟真
 # ─────────────────────────────────────────
 def human_type(text: str, speed: float = 0.1):
-    """模拟人类打字：随机延迟 + 1% 概率错字回退"""
+    """模拟人类打字：随机延迟 + 5% 概率错字回退（非线性节奏）"""
     for char in text:
-        pyautogui.write(char, interval=random.uniform(0.03, speed))
-        if random.random() < 0.01:
+        pyautogui.write(char, interval=random.uniform(0.02, speed))
+        if random.random() < 0.05:
             # 打错一个字符
             wrong_char = random.choice('abcdefghijklmnopqrstuvwxyz0123456789')
-            pyautogui.write(wrong_char, interval=random.uniform(0.03, 0.08))
-            time.sleep(random.uniform(0.1, 0.25))
+            pyautogui.write(wrong_char, interval=random.uniform(0.04, 0.1))
+            time.sleep(random.uniform(0.08, 0.2))
             # 回退修正
             pyautogui.press('backspace')
-            time.sleep(random.uniform(0.08, 0.15))
+            time.sleep(random.uniform(0.06, 0.12))
 
 
 # ─────────────────────────────────────────
 # 2. 鼠标移动（贝塞尔曲线）
 # ─────────────────────────────────────────
 def human_move(x: int, y: int, duration: float = None):
-    """模拟人类鼠标移动：贝塞尔曲线轨迹 + 随机弧度"""
+    """模拟人类鼠标移动：贝塞尔曲线轨迹 + 过冲回拉 + 随机发呆
+
+    真人鼠标的核心特征：
+    1. 不会走直线（弧形控制点）
+    2. 会先越过目标 5-15px，再缓慢回拉（overshoot）
+    3. 偶尔会停下来"想一下"（发呆机制）
+    """
+    current_x, current_y = pyautogui.position()
+    distance = ((x - current_x)**2 + (y - current_y)**2) ** 0.5
+
+    # ── 发呆机制：每约 40 次操作随机停 3-8 秒 ──
+    global _action_counter
+    try:
+        _action_counter += 1
+    except NameError:
+        _action_counter = 1
+
+    if _action_counter % random.randint(35, 55) == 0:
+        # 停止移动，单纯发呆
+        time.sleep(random.uniform(3.0, 8.0))
+
+    if distance < 15:
+        # 超短距离：直接到位，不走过冲（反而更像人）
+        pyautogui.moveTo(x, y, _pause=False)
+        return
+
     if duration is None:
-        # 根据距离动态决定速度（越远越慢，模拟人类抬手移动的习惯）
-        current_x, current_y = pyautogui.position()
-        distance = ((x - current_x)**2 + (y - current_y)**2) ** 0.5
-        duration = max(0.3, min(distance / 400, 1.5))  # 距离400px时约1秒
+        duration = max(0.4, min(distance / 350, 2.0))
 
-    start_x, start_y = pyautogui.position()
+    start_x, start_y = current_x, current_y
 
-    # 生成有弧度的控制点（避免直线）
-    mid_x = (start_x + x) // 2 + random.randint(-80, 80)
-    mid_y = (start_y + y) // 2 + random.randint(-60, 60)
+    # ── 第一段：从起点到过冲点（超越目标） ──
+    overshoot_dist = random.uniform(6, 16)  # 过冲距离
+    direction_x = (x - start_x) / distance if distance > 0 else 0
+    direction_y = (y - start_y) / distance if distance > 0 else 0
 
-    # 二阶贝塞尔曲线
-    points = []
-    steps = max(int(duration * 120), 20)  # 至少20步
+    overshoot_x = int(x + direction_x * overshoot_dist)
+    overshoot_y = int(y + direction_y * overshoot_dist)
+
+    # 控制点：弧形偏移，避免直线
+    ctrl_x = int((start_x + overshoot_x) / 2 + random.randint(-90, 90))
+    ctrl_y = int((start_y + overshoot_y) / 2 + random.randint(-70, 70))
+
+    steps = max(int(duration * 110), 25)
+    path = []
     for t in np.linspace(0, 1, steps):
-        bx = (1-t)**2 * start_x + 2*(1-t)*t * mid_x + t**2 * x
-        by = (1-t)**2 * start_y + 2*(1-t)*t * mid_y + t**2 * y
-        points.append((int(bx), int(by)))
+        bx = (1-t)**2 * start_x + 2*(1-t)*t * ctrl_x + t**2 * overshoot_x
+        by = (1-t)**2 * start_y + 2*(1-t)*t * ctrl_y + t**2 * overshoot_y
+        path.append((int(bx), int(by)))
 
-    # 移动（带微小随机扰动）
-    for i, (px, py) in enumerate(points):
-        # 末尾几帧稍微减速（模拟人类接近目标时的犹豫）
-        if i > len(points) * 0.8:
-            delay = duration / steps * 1.5
+    # 执行第一段移动
+    for i, (px, py) in enumerate(path):
+        if i > len(path) * 0.75:
+            delay = duration / steps * 1.8  # 接近过冲点时减速
         else:
-            delay = duration / steps * random.uniform(0.8, 1.2)
+            delay = duration / steps * random.uniform(0.7, 1.3)
         pyautogui.moveTo(px, py, _pause=False)
         time.sleep(delay)
+
+    # ── 第二段：从过冲点缓慢回拉到真实目标（真人核心特征） ──
+    return_steps = random.randint(5, 9)
+    for i in range(return_steps):
+        t = i / return_steps
+        # 缓入：起步慢，接近目标更慢
+        ease = t * t  # 二次缓入
+        rx = int(overshoot_x + (x - overshoot_x) * ease)
+        ry = int(overshoot_y + (y - overshoot_y) * ease)
+        pyautogui.moveTo(rx, ry, _pause=False)
+        time.sleep(random.uniform(0.025, 0.07))
 
 
 # ─────────────────────────────────────────
