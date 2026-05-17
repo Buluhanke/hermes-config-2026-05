@@ -1,6 +1,6 @@
 ---
 name: hermes-vision-connect
-description: Hermes 三层视觉感知连接器 — 截屏->OCR/VLM->SSIM验证完整链路
+description: "Hermes 三层视觉感知连接器 — 截屏->OCR/VLM->SSIM验证完整链路，含smart_click.py三层感知系统。核心文件: smart_click.py（三层感知+两阶段zoom-in）；技术发现: references/smart-click-key-findings-2026-05-17.md"
 ---
 
 # hermes-vision-connect

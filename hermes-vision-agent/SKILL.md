@@ -13,56 +13,18 @@ description: "Phase 2 核心：视觉全域感知，看见桌面、控制一切�
 See(截屏) -> Think(VLM分析) -> Act(拟真点击)
 ```
 
-## 依赖
+**当前可用工具（非 vision_agent 模块）：**
+- 截屏：`mcp_cua_screenshot`, `peekaboo` CLI, `terminal` → `screencapture`
+- 窗口枚举：`mcp_cua_list_windows`, `mcp_cua_get_window_state`
+- VLM 分析：`screen_vision`（本地 smolvlm2）, `vision_analyze`（需外部模型）
+- 视觉心跳：`execute_code` → 自己实现 SSIM（见 SSIM 章节）
+- 通知检查：`osascript`（见通知检查章节）
 
-- `hermes-humanization-core`（必须先安装）
-- smolvlm2-agentic-gui（Ollama，本地视觉模型）
-- pyautogui + mss（系统控制）
-
-## 典型用法
-
-```python
-from vision_agent import vlm_click, ask_screen, find_element_by_vision
-
-# 1. 直接找按钮并点击（最常用）
-vlm_click("加入进货单")
-
-# 2. 问当前屏幕一个问题
-answer = ask_screen("这个1688商家评分是多少？")
-print(answer)
-
-# 3. 先找坐标，确认后再点
-coords = find_element_by_vision("确认付款按钮")
-if coords:
-    human_click(*coords)
-```
-
-## 1688 场景
-
-```python
-from vision_agent import search_1688, add_1688_to_cart
-
-search_1688("纸箱 50*40*30")
-add_1688_to_cart()
-```
-
-## 微信场景
-
-```python
-from vision_agent import wechat_send_image
-
-# 发送图片给老板
-wechat_send_image("/tmp/报价单.png", contact_name="老板")
-```
-
-## 桌面应用
-
-```python
-from vision_agent import find_and_open_app
-
-# 打开 Safari
-find_and_open_app("Safari")
-```
+**不再可用（模块未安装）：**
+- ❌ `from vision_agent import vlm_click, ask_screen, find_element_by_vision`
+- ❌ `from vision_agent import search_1688, add_1688_to_cart`
+- ❌ `from vision_agent import wechat_send_image`
+- ❌ `from vision_agent import find_and_open_app`
 
 ## smolvlm2 致命陷阱：必须用 /api/chat 接口
 
@@ -141,11 +103,68 @@ smart_click("发送")
 
 ## 已知局限
 
+- `vision_agent` Python module **不存在** — 不要用 `from vision_agent import ...`。当前可用的截屏/感知工具见下方"桌面感知工具链"。
 - qwen2.5vl:7b 响应约 1-2s（比 smolvlm2 快且准，6GB，M4 24GB 实测可用）
 - smolvlm2 约 2-5s（1.8B 太小，准确度一般，可作备用）
 - 找元素需要描述尽量具体："发送按钮" 比 "按钮" 效果好
 - 文件对话框目前需要手动介入（VLM无法操作 macOS 原生文件选择器）
 - mss.mss() 已废弃，新版用 mss.MSS()
+
+---
+
+## 桌面感知工具链
+
+### 截屏（CUA 驱动，稳定）
+
+```bash
+# peekaboo CLI 在 cron 环境中可能失效，改用 mcp_cua_screenshot
+mcp_cua_screenshot(window_id=N)  # → 返回截图路径
+mcp_cua_list_windows()           # → 获取所有窗口及 window_id
+mcp_cua_get_window_state(pid, window_id)  # → AX 树 + 截图
+```
+
+**典型流程（桌面巡查/值班主任）：**
+1. `mcp_cua_list_windows()` — 枚举所有窗口，过滤 `is_on_screen=true`
+2. 对每个 on-screen 窗口调用 `mcp_cua_screenshot(window_id)` — 获取截图
+3. 用 `vision_analyze` 或 `screen_vision` 分析截图内容
+4. 若只需要检查"有没有弹窗/通知"，可跳过截图，直接用 AppleScript（更快）
+
+### 通知检查（AppleScript，无依赖）
+
+```bash
+# 1. 检查运行中的通讯应用（QQ/微信/钉钉/飞书）
+osascript -e 'tell application "System Events" to name of every process' \
+  | tr ',' '\n' | grep -iE "qq|wechat|微信|dingtalk|钉钉|feishu|旺旺"
+
+# 2. 检查通知中心是否有内容
+osascript -e '
+tell application "System Events"
+    try
+        tell process "NotificationCenter"
+            if exists (every row of list 1 of window 1) then
+                return "Notifications present"
+            end if
+        end tell
+    end try
+    return "No notifications found"
+end tell
+'
+```
+
+### Vision 分析（需 VLM）
+
+```bash
+# 本地 Ollama（推荐 qwen2.5vl）
+curl http://localhost:11434/api/chat -d '{"model":"qwen2.5vl",...}'
+
+# Apple Vision OCR（仅文字，无坐标）
+/Users/aimac/.hermes/hermes-agent/venv/bin/python -c "
+import Vision, Quartz, Cocoa
+# 见下方快眼 OCR 章节
+"
+```
+
+**注意：** `vision_analyze` 从 `hermes_tools` 不可用。若需 VLM 分析，用 `screen_vision` 工具（本地 smolvlm2）或 `execute_code` 中调用 Ollama API。
 
 ---
 
@@ -209,17 +228,25 @@ cy = (1 - bbox.origin.y - bbox.size.height / 2) * screen_height
 
 ### execute_code 沙箱注意
 
-`execute_code` 使用的 venv 没有 pyobjc 模块。运行 Vision OCR 必须用：
+`execute_code` 使用的 venv **没有 pyobjc 模块**。运行 Vision OCR 必须用：
 
 ```bash
 /Users/aimac/.hermes/hermes-agent/venv/bin/python /tmp/your_script.py
 ```
 
-或在脚本开头加 PATH 修复：
+正确的 import 写法（objc module 需要分离导入）：
 
 ```python
-import sys
-venv_python = "/Users/aimac/.hermes/hermes-agent/venv/bin/python"
+# ❌ 错误 — import 语句中不能有空格分隔的模块名链
+# import Vision, Quartz, Cocoa   # 语法错误
+
+# ✅ 正确 — 每行一个独立 import
+import Vision
+import Quartz
+import Cocoa
+
+img = Cocoa.NSImage(contentsOfFile="/path/to/screenshot.png")
+```
 ```
 
 ---

@@ -6,7 +6,7 @@ description: >-
   **范式转变（2026-05-16确认）**：1688找品只是其中一个应用场景，Hermes 2.0 的目标是
   有眼睛（屏幕语义理解）、有嘴巴（情感TTS）、有手脚（电脑+手机控制）的数字生命体。
   **不要主动提1688，除非用户先提。**
-  **CDP Fallback（重要）**：MCP bridge 挂了不等于 Chrome 不可控——Python 直连 CDP WebSocket 始终可用，详见 references/cdp-fallback-when-mcp-bridge-fails-2026-05-16.md。
+  **CUA截图（重大发现）**：`mcp_cua_screenshot(window_id=N)` 可后台捕获任意窗口，不抢焦点。替代 `screencapture -x`。详见 hermes-vision-connect/references/smart-click-key-findings-2026-05-17.md。
 version: 2.3.0
 author: Hermes Agent
 triggers:
