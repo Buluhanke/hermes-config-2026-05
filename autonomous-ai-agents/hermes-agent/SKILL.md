@@ -17,6 +17,8 @@ Hermes Agent is an open-source AI agent framework by Nous Research that runs in 
 
 **安全扫描提示必须中文**：command approval/security scan warning 必须用中文显示，不能用英文。所有安全类提示都要本地化。如果在终端/Dashboard 切换了模型，QQ `/new` 仍然用 `config.yaml` 里的默认值。要让所有渠道统一模型，必须改 `model.default` 并重启 gateway。
 
+**模型链与 MiniMax provider 真相（2026-05-17）**：详见 `references/model-chain-discovery.md`
+
 **Config 变更对当前会话不生效**：修改 `model.provider` / `model.default` / `api_key` 后，当前运行中的会话不会自动切换。必须退出重开或使用 `hermes chat --provider X --model Y` 启动新会话。详见 `references/config-lifecycle.md`。MiniMax 国内直连 endpoint 配置细节见 `references/minimax-cn-provider.md`。
 
 **PITFALL: 模型切换请求 → 直接执行，不分析**：当用户说"切换到模型 X"时，直接改 config.yaml（和 .env 如果有关联），然后告诉用户 `/new` 或重启。不要：

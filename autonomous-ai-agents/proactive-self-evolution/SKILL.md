@@ -234,7 +234,13 @@ phases:
 - cronjob `0 18 * * 5` 触发
 - 汇总一周发现，简报发 QQ
 
-## 知识源优先级
+## 汇报渠道（2026-05-17实测）
+
+- **QQ**：`qqbot:EC16BFF09280BE2186FA33BB7432BCCA` — ✅ 可用
+- **Telegram**：超时，不可用
+- **微信/企业微信**：备用
+
+优先 QQ 汇报。Telegram 作为备用，但已知会超时。
 
 1. **GitHub** — `gh search repos` + `site:github.com` + trending
 2. **arXiv** — 论文预印本
