@@ -373,3 +373,530 @@ Trigger the handler. `nc 127.0.0.1 4444`, then `w` to see the suspended frame, `
 PYTHONFAULTHANDLER=1 python -m pdb -c continue path/to/entrypoint.py
 # On crash, pdb lands at the frame of the exception with full locals
 ```
+
+---
+
+## Recipe 6: Remote Debugging — Complete Configuration
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│  debugpy server (Python process)                            │
+│  listen("0.0.0.0", 5678)  ←─── TCP DAP connection ──────  │
+│  wait_for_client()                                          │
+└─────────────────────────────────────────────────────────────┘
+                              │
+                    network (TCP port 5678)
+                              │
+┌─────────────────────────────────────────────────────────────┐
+│  DAP client (VS Code / Zed / JetBrains / debugpy CLI)     │
+│  initialize → attach → setBreakpoints → configurationDone │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Server Patterns
+
+**Pattern A: Launch-and-wait (blocking)**
+
+```python
+import debugpy
+
+# Listen on all interfaces — allows remote connections
+debugpy.listen(("0.0.0.0", 5678))
+print("Waiting for debugger attach...", flush=True)
+debugpy.wait_for_client()  # Blocks until client connects
+print("Debugger attached!", flush=True)
+```
+
+**Pattern B: Listen-only (non-blocking)**
+
+```python
+import debugpy
+
+debugpy.listen(("0.0.0.0", 5678))
+# Execution continues immediately — breakpoints will queue events
+```
+
+**Pattern C: Launch with module**
+
+```bash
+python -m debugpy \
+  --listen 0.0.0.0:5678 \
+  --wait-for-client \
+  --log-to /tmp/debugpy.log \
+  -m your_module arg1 arg2
+```
+
+**Pattern D: Attach to running process by PID**
+
+```bash
+python -m debugpy --attach 5678 --pid $(pgrep -f "your_script.py")
+```
+
+### Remote Host Configuration (SSH tunnel)
+
+If the target runs on a remote server, tunnel the port:
+
+```bash
+# From LOCAL machine
+ssh -L 5678:127.0.0.1:5678 user@remote-host
+# Then connect your local IDE to 127.0.0.1:5678
+```
+
+Or reverse:
+
+```bash
+# From REMOTE machine
+ssh -R 5678:127.0.0.1:5678 user@local-machine
+```
+
+### Security Considerations
+
+- **Never** expose debugpy port to the public internet
+- Use `127.0.0.1` for same-machine, `0.0.0.0` only on trusted networks
+- Consider firewall rules: `iptables -A INPUT -p tcp --dport 5678 -j DROP`
+- For production, prefer `remote-pdb` with `hn-TERM` secret:
+
+```python
+from remote_pdb import set_trace
+set_trace(host="127.0.0.1", port=4444, secret="your-secret-token")
+# Client connects with:
+# nc host 4444
+# (remote-pdb will ask for secret if set)
+```
+
+---
+
+## Recipe 7: VS Code Integration
+
+### launch.json Configuration
+
+Create `.vscode/launch.json` in the workspace root:
+
+```json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Python: Attach to debugpy",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": {
+        "host": "127.0.0.1",
+        "port": 5678
+      },
+      "justMyCode": false,
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "/path/on/remote/server"
+        }
+      ],
+      "redirectOutput": true,
+      "showReturnValue": true
+    },
+    {
+      "name": "Python: Remote Attach (SSH tunnel)",
+      "type": "debugpy",
+      "request": "attach",
+      "connect": {
+        "host": "localhost",
+        "port": 5678
+      },
+      "justMyCode": false,
+      "pathMappings": [
+        {
+          "localRoot": "${workspaceFolder}",
+          "remoteRoot": "/home/deploy/hermes-agent"
+        }
+      ]
+    },
+    {
+      "name": "Python: Launch Module",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "your_module",
+      "args": ["arg1", "arg2"],
+      "justMyCode": false,
+      "subProcess": true
+    },
+    {
+      "name": "Python: Current File",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${file}",
+      "justMyCode": false
+    }
+  ]
+}
+```
+
+### VS Code Settings (settings.json)
+
+```json
+{
+  "python.defaultInterpreterPath": "/home/deploy/hermes-agent/.venv/bin/python",
+  "python.debugJustMyCode": false,
+  "debug.console": {
+    "inheritEnvironment": true
+  },
+  "remote.containers": {
+    "debuggerPath": "/workspace"
+  }
+}
+```
+
+### Step-by-Step Attach Flow
+
+1. **Server side** — add to entry point:
+
+```python
+import debugpy
+debugpy.listen(("127.0.0.1", 5678))
+debugpy.wait_for_client()
+```
+
+2. **Start the process:**
+
+```bash
+python your_server.py
+# Output: Waiting for debugger attach...
+```
+
+3. **VS Code** — set breakpoint in source file
+
+4. **VS Code** — press F5, select "Python: Attach to debugpy"
+
+5. Execution pauses at first breakpoint
+
+### Remote SSH debugging with VS Code
+
+If the target is on a remote server via SSH:
+
+```json
+{
+  "name": "Remote SSH",
+  "type": "debugpy",
+  "request": "attach",
+  "connect": {
+    "host": "remote-server",
+    "port": 5678
+  },
+  "pathMappings": [
+    {
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/home/user/project"
+    }
+  ]
+}
+```
+
+Install the **"Remote - SSH"** extension in VS Code, connect to the remote host, then attach.
+
+---
+
+## Recipe 8: Docker Container Debugging
+
+### Dockerfile Setup
+
+Add debugpy to your container:
+
+```dockerfile
+FROM python:3.11-slim
+
+# Install debugpy for debugging
+RUN pip install debugpy
+
+# For remote debugging, expose the debug port
+EXPOSE 5678
+
+# For local development with docker-compose, map the port
+# ports:
+#   - "5678:5678"
+```
+
+### Option A: Debug a new container (listen mode)
+
+```bash
+# Start container with debugpy waiting for attach
+docker run --rm \
+  -p 5678:5678 \
+  -v $(pwd):/app \
+  python:3.11-slim \
+  python -m debugpy --listen 0.0.0.0:5678 --wait-for-client /app/your_script.py
+```
+
+### Option B: Attach to running container
+
+```bash
+# Get the container's PID
+CONTAINER_PID=$(docker inspect --format '{{.State.Pid}}' container_name)
+
+# Use nsenter to enter the container's namespace and run debugpy
+docker exec container_name python -m debugpy --attach 5678 --pid 1
+```
+
+Or more directly:
+
+```bash
+# Install debugpy in the running container and attach
+docker exec container_name pip install debugpy
+docker exec container_name python -m debugpy --listen 127.0.0.1:5678 --pid $(docker inspect --format '{{.State.Pid}}' container_name)
+```
+
+### Option C: docker-compose integration
+
+```yaml
+version: "3.8"
+services:
+  app:
+    build: .
+    ports:
+      - "5678:5678"
+    command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m your_module
+    # Or for development:
+    # command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client your_script.py
+```
+
+### Container-to-Host path mapping
+
+When attaching from host to container, map paths:
+
+```json
+{
+  "pathMappings": [
+    {
+      "localRoot": "${workspaceFolder}",
+      "remoteRoot": "/app"
+    }
+  ]
+}
+```
+
+### docker-compose with volume mounts (development)
+
+```yaml
+services:
+  app:
+    build: .
+    ports:
+      - "5678:5678"
+    volumes:
+      - .:/app
+    command: >
+      python -m debugpy
+      --listen 0.0.0.0:5678
+      --wait-for-client
+      --log-to /tmp/debugpy.log
+      your_script.py
+    environment:
+      - DEBUG=1
+```
+
+### Verify container has debugpy
+
+```bash
+docker exec container_name python -c "import debugpy; print(debugpy.__version__)"
+```
+
+### Multi-container debugging
+
+If your app spans multiple containers, each needs its own debugpy port:
+
+```yaml
+services:
+  api:
+    ports:
+      - "5678:5678"
+    command: python -m debugpy --listen 0.0.0.0:5678 --wait-for-client -m api
+  worker:
+    ports:
+      - "5679:5679"
+    command: python -m debugpy --listen 0.0.0.0:5679 --wait-for-client -m worker
+```
+
+Attach to each separately with different ports.
+
+---
+
+## Recipe 9: Common Troubleshooting
+
+### Issue: "Connection refused" or debugger never attaches
+
+**Diagnosis checklist:**
+
+```bash
+# 1. Is the port actually listening?
+ss -tlnp | grep 5678
+# or on macOS:
+lsof -i :5678
+
+# 2. Is the process still running?
+ps aux | grep debugpy | grep -v grep
+
+# 3. Is there a firewall?
+sudo iptables -L -n | grep 5678
+
+# 4. Is debugpy installed in the right environment?
+python -c "import debugpy; print(debugpy.__version__)"
+
+# 5. Can you reach it locally?
+curl -v telnet://127.0.0.1:5678
+```
+
+**Fixes:**
+
+- If using SSH tunnel, verify tunnel is active: `ssh -O check user@host`
+- If connecting remotely, ensure `0.0.0.0` not `127.0.0.1` on the server
+- Check if process started but already finished: add `print("started")` before `wait_for_client()`
+
+### Issue: Breakpoints not hitting
+
+**Common causes:**
+
+1. **File path mismatch** — pathMappings must match exact paths
+
+```json
+// Wrong:
+"localRoot": "${workspaceFolder}"
+// Right — must match the path debugpy sees:
+"localRoot": "/Users/you/project",
+"remoteRoot": "/app"
+```
+
+2. **Source file differs** — container may have old code
+
+```bash
+# Verify the source file contains your breakpoint
+docker exec container_name grep -n breakpoint /app/your_script.py
+```
+
+3. **Optimized bytecode** — Python may be running `.pyc` only
+
+```bash
+# Ensure PYTHONDONTWRITEBYTECODE is NOT set
+echo $PYTHONDONTWRITEBYTECODE
+# Should be empty or "0"
+```
+
+4. **Breakpoint set before initialization**
+
+Add `debugpy.wait_for_client()` before your first breakpoint, then set breakpoints after attach.
+
+### Issue: "ptrace_scope" prevents attach by PID
+
+```bash
+# Check current value
+cat /proc/sys/kernel/yama/ptrace_scope
+
+# Temporary fix (needs root):
+echo 0 | sudo tee /proc/sys/kernel/yama/ptrace_scope
+
+# Permanent fix — edit /etc/sysctl.d/10-ptrace.conf:
+kernel.yama.ptrace_scope = 0
+```
+
+### Issue: Debugger attaches but immediately exits
+
+The client sent `disconnect` or `shutdown` request. Check:
+- VS Code's "disconnect" button was pressed
+- Client timeout settings
+- The process exited naturally after startup
+
+### Issue: debugpy hangs on import
+
+```bash
+# Check for circular imports or slow imports
+python -c "import debugpy; print('imported')"
+# If this hangs, something in the environment is blocking
+```
+
+### Issue: Permission denied in Docker
+
+```bash
+# Container user may not match host user
+docker exec -u root container_name tee /proc/sys/kernel/yama/ptrace_scope <<< 0
+```
+
+Or run container as privileged (not for production):
+
+```bash
+docker run --privileged ...
+```
+
+### Issue: VS Code "Cannot debug" — no module named debugpy
+
+```bash
+# Install debugpy in the Python environment VS Code is using
+pip install debugpy
+# Or in the selected interpreter:
+/path/to/venv/bin/python -m pip install debugpy
+```
+
+### Issue: async/await not stepping correctly
+
+For asyncio code in debugpy, set `justMyCode: false` and enable:
+
+```json
+{
+  "python.experimental.debugger": {
+    "defaultInterface": "async"
+  }
+}
+```
+
+Or use Python 3.13+ which has improved async debugging in pdb.
+
+### Issue: subprocess debugging
+
+When forking a child process, attach to each by name:
+
+```python
+import debugpy
+debugpy.listen(("127.0.0.1", 5678))
+debugpy.wait_for_client()
+```
+
+Add this before fork, and each child will inherit the listener.
+
+### Issue: Debugpy log analysis
+
+Enable verbose logging:
+
+```python
+import debugpy
+debugpy.listen(("127.0.0.1", 5678), log_to=10)  # log_to=10 = STDOUT
+# or:
+debugpy.listen(("127.0.0.1", 5678), log_dir="/tmp")
+```
+
+Logs go to `/tmp/debugpy.log` or stdout. Look for:
+- `DAP <-- initialize` — client connected
+- `DAP <-- setBreakpoints` — breakpoints registered
+- `DAP <-- configurationDone` — execution started
+
+### Quick Reference: Debugpy Log Levels
+
+| Level | Value | Output |
+|-------|-------|--------|
+| `None` | 0 | No debug output |
+| `10` | 10 | STDOUT (simplest) |
+| `debugpy.LOG_ALL` | 9 | All events + DAP messages |
+| Path string | — | Log to file |
+
+---
+
+## Quick Reference Cheatsheet
+
+| Scenario | Tool | Command |
+|----------|------|---------|
+| Local breakpoint | `breakpoint()` | Run normally |
+| Local script debugging | `python -m pdb` | `python -m pdb script.py` |
+| Attach to running process | debugpy | `python -m debugpy --listen 5678 --pid <PID>` |
+| Wait for debugger on launch | debugpy | `python -m debugpy --listen 5678 --wait-for-client -m module` |
+| Terminal DAP client | debugpy CLI | `python -m debugpy --connect 5678` |
+| nc-style REPL (simplest) | remote-pdb | `from remote_pdb import set_trace; set_trace(port=4444)` |
+| Docker container | debugpy | `docker run -p 5678:5678 ... python -m debugpy --listen 5678 ...` |
+| VS Code attach | launch.json | Select "Attach to debugpy", F5 |
+| Post-mortem | pdb | `python -m pdb -c continue script.py` |

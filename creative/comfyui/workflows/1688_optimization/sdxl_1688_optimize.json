@@ -1,0 +1,92 @@
+{
+  "workflow_version": "1.0",
+  "name": "1688 Product Main Image Optimizer",
+  "description": "Optimize 1688 product images: background removal, white/neutral background, aspect ratio adjustment, quality enhancement for 1688/AliExpress/Alibaba listings",
+  "category": "product-image-1688",
+  "config": {
+    "platform": "1688",
+    "target_aspect_ratios": ["1:1", "3:4", "4:3"],
+    "min_resolution": [800, 800],
+    "max_resolution": [2000, 2000],
+    "background": "white"
+  },
+  "nodes": {
+    "1": {
+      "class_type": "LoadImage",
+      "inputs": {
+        "image": "{input_image}"
+      }
+    },
+    "2": {
+      "class_type": "ImageScale",
+      "inputs": {
+        "crop": "center",
+        "height": { "default": 1024, "min": 800, "max": 2000 },
+        "method": "lanczos",
+        "width": { "default": 1024, "min": 800, "max": 2000 },
+        "image": ["1", 0]
+      }
+    },
+    "3": {
+      "class_type": "ImageQuantize",
+      "inputs": {
+        "colors": 256,
+        "image": ["2", 0]
+      }
+    },
+    "4": {
+      "class_type": "Rembg",
+      "inputs": {
+        "alpha_matting": true,
+        "alpha_matting_background_color": 255,
+        "model": "u2net",
+        "image": ["3", 0]
+      }
+    },
+    "5": {
+      "class_type": "ImageScale",
+      "inputs": {
+        "crop": "center",
+        "height": 1024,
+        "method": "lanczos",
+        "width": 1024,
+        "image": ["4", 0]
+      }
+    },
+    "6": {
+      "class_type": "ImagePadForOutpaint",
+      "inputs": {
+        "bottom_padding": 0,
+        "left_padding": 0,
+        "right_padding": 0,
+        "top_padding": 0,
+        "feathering": 0,
+        "image": ["5", 0]
+      }
+    },
+    "7": {
+      "class_type": "ImageFlip",
+      "inputs": {
+        "mode": "none",
+        "image": ["6", 0]
+      }
+    },
+    "8": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "1688_optimized",
+        "images": ["7", 0]
+      }
+    }
+  },
+  "links": [
+    [1, 2, 0, 2, 0, "IMAGE"],
+    [2, 3, 0, 3, 0, "IMAGE"],
+    [3, 4, 0, 4, 0, "IMAGE"],
+    [4, 5, 0, 5, 0, "IMAGE"],
+    [5, 6, 0, 6, 0, "IMAGE"],
+    [6, 7, 0, 7, 0, "IMAGE"],
+    [7, 8, 0, 8, 0, "IMAGE"]
+  ],
+  "version": "1.0"
+}

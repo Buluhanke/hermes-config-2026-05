@@ -262,12 +262,18 @@ python3 $MAPS delivery-heatmap --file suppliers.csv --dest "成都" --format svg
 ## Pitfalls
 
 - Nominatim ToS: max 1 req/s (handled automatically by the script)
+- **macOS machine-specific**: Nominatim blocks direct urllib calls from this host
+  (connection reset). OSRM routing works fine. Use `--coords` / `--suppliers`
+  with pre-geocoded lat/lon to bypass. Full diagnosis in `references/network-notes.md`.
 - `nearby` requires lat/lon OR `--near "<address>"` — one of the two is needed
 - OSRM routing coverage is best for Europe and North America
 - Overpass API can be slow during peak hours; the script automatically
   falls back between mirrors (overpass-api.de → overpass.kumi.systems)
 - `distance` and `directions` use `--to` flag for the destination (not positional)
 - If a zip code alone gives ambiguous results globally, include country/state
+- 1688供应商命令（supplier-geo / logistics-cost / delivery-heatmap）：
+  需要Nominatim geocoding的操作在此机器上可能失败，
+  用 `--coords` 传入预计算坐标可绕过 geocoding
 
 ## Verification
 

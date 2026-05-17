@@ -1,13 +1,13 @@
 ---
 name: baoyu-comic
-description: "Knowledge comics (知识漫画): educational, biography, tutorial."
-version: 1.56.1
+description: "Knowledge comics: educational, biography, tutorial, business scenes, 1688 product introductions, supplier cooperation stories, automation pipelines."
+version: 1.58.0
 author: 宝玉 (JimLiu)
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [comic, knowledge-comic, creative, image-generation]
+    tags: [comic, knowledge-comic, creative, image-generation, business-comic, 1688, supplier-story, automation]
     homepage: https://github.com/JimLiu/baoyu-skills#baoyu-comic
 ---
 
@@ -19,7 +19,23 @@ Create original knowledge comics with flexible art style × tone combinations.
 
 ## When to Use
 
-Trigger this skill when the user asks to create a knowledge/educational comic, biography comic, tutorial comic, or uses terms like "知识漫画", "教育漫画", or "Logicomix-style". The user provides content (text, file path, URL, or topic) and optionally specifies art style, tone, layout, aspect ratio, or language.
+Trigger this skill when the user asks to create a knowledge/educational comic, biography comic, tutorial comic, business scene comic, 1688 product introduction comic, supplier cooperation story, automation pipeline comic, business script, or uses terms like "知识漫画", "教育漫画", "商业漫画", "1688产品介绍", "供应商故事", "自动化流程", "商务脚本", "四格漫画", "Logicomix-style". The user provides content (text, file path, URL, or topic) and optionally specifies art style, tone, layout, aspect ratio, or language.
+
+**Content Type Routing**:
+
+| User Request | Content Type | Recommended Preset/Style |
+|---|---|---|
+| 教育科普、知识讲解 | Knowledge comic | ohmsha / manga + neutral |
+| 人物传记、生命故事 | Biography | ligne-claire + neutral |
+| 商业场景、职场故事 | Business scene comic | concept-story / manga + warm |
+| 商务谈判、销售对话 | Business script | concept-story / manga + warm |
+| 1688产品介绍、产品展示 | 1688 product comic | four-panel / minimalist + neutral |
+| 供应商合作、产业链故事 | Supplier story | concept-story / manga + warm |
+| 1688供应商合作、1688找厂、1688合作 | 1688 supplier story | concept-story / manga + warm |
+| 采购流程、采购培训、供应商管理 | Procurement process | concept-story / minimalist + neutral |
+| 自动化流程、CI/CD、DevOps | Automation pipeline comic | ohmsha / manga + neutral |
+| 商业寓言、管理寓言 | Business allegory | four-panel / minimalist |
+| 单页洞察、格言漫画 | Insight strip | four-panel / minimalist |
 
 ## Reference Images
 
@@ -213,6 +229,12 @@ Full step-by-step workflow (analysis, storyboard, review gates, regeneration var
 - [character-template.md](references/character-template.md) - Character definition format
 - [storyboard-template.md](references/storyboard-template.md) - Storyboard structure
 - [ohmsha-guide.md](references/ohmsha-guide.md) - Ohmsha manga specifics
+- [1688-product-guide.md](references/1688-product-guide.md) - 1688 product introduction comics
+- [1688-supplier-story-guide.md](references/1688-supplier-story-guide.md) - 1688 supplier cooperation stories ★ NEW
+- [business-script-guide.md](references/business-script-guide.md) - Business scene scripts
+- [supplier-story-guide.md](references/supplier-story-guide.md) - Supplier cooperation stories
+- [procurement-process-guide.md](references/procurement-process-guide.md) - Procurement process comic templates ★ NEW
+- [automation-pipeline.md](references/automation-pipeline.md) - Automation/technical process comics
 
 **Style Definitions**:
 - `references/art-styles/` - Art styles (ligne-claire, manga, realistic, ink-brush, chalk, minimalist)

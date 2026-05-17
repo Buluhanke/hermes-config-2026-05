@@ -1,0 +1,108 @@
+{
+  "workflow_version": "1.0",
+  "name": "Product Main Image Generator",
+  "description": "Generate professional e-commerce product main images with background removal, enhancement, and styling for marketplace listings",
+  "category": "product-image",
+  "nodes": {
+    "4": {
+      "class_type": "CheckpointLoaderSimple",
+      "inputs": {
+        "ckpt_name": "sd_xl_base_1.0.safetensors"
+      }
+    },
+    "5": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": ["4", 1],
+        "text": "{prompt}"
+      }
+    },
+    "6": {
+      "class_type": "CLIPTextEncode",
+      "inputs": {
+        "clip": ["4", 1],
+        "text": "{negative_prompt}"
+      }
+    },
+    "7": {
+      "class_type": "EmptyLatentImage",
+      "inputs": {
+        "batch_size": 1,
+        "height": 1024,
+        "width": 1024
+      }
+    },
+    "8": {
+      "class_type": "KSampler",
+      "inputs": {
+        "cfg": 7.5,
+        "denoise": 1.0,
+        "extra_generation_params": {},
+        "model": ["4", 0],
+        "negative": ["6", 0],
+        "positive": ["5", 0],
+        "preview_method": "auto",
+        "sampler_name": "euler",
+        "scheduler": "normal",
+        "seed": { "seed": -1, "control_after_generate": "increment" },
+        "steps": 30
+      }
+    },
+    "9": {
+      "class_type": "VAEDecode",
+      "inputs": {
+        "samples": ["8", 0],
+        "vae": ["4", 2]
+      }
+    },
+    "10": {
+      "class_type": "ImageScale",
+      "inputs": {
+        "crop": "disabled",
+        "height": 1024,
+        "method": "lanczos",
+        "width": 1024,
+        "image": ["9", 0]
+      }
+    },
+    "11": {
+      "class_type": "ImageBlur",
+      "inputs": {
+        "blur_radius": 3,
+        "image": ["10", 0]
+      }
+    },
+    "12": {
+      "class_type": "ImageComposite",
+      "inputs": {
+        "destination": ["11", 0],
+        "source": ["10", 0],
+        "x": 0,
+        "y": 0
+      }
+    },
+    "13": {
+      "class_type": "SaveImage",
+      "inputs": {
+        "filename_prefix": "product_main",
+        "images": ["12", 0]
+      }
+    }
+  },
+  "links": [
+    [4, 5, 0, 5, 0, "CLIP"],
+    [4, 6, 0, 6, 0, "CLIP"],
+    [4, 8, 0, 8, 1, "MODEL"],
+    [5, 8, 0, 8, 3, "CONDITIONING"],
+    [6, 8, 0, 8, 2, "CONDITIONING"],
+    [7, 8, 0, 8, 0, "LATENT"],
+    [8, 9, 0, 9, 0, "LATENT"],
+    [4, 9, 0, 9, 1, "VAE"],
+    [9, 10, 0, 10, 0, "IMAGE"],
+    [10, 11, 0, 11, 0, "IMAGE"],
+    [11, 12, 0, 12, 0, "IMAGE"],
+    [10, 12, 0, 12, 1, "IMAGE"],
+    [12, 13, 0, 13, 0, "IMAGE"]
+  ],
+  "version": "1.0"
+}
