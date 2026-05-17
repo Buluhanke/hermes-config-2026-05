@@ -120,9 +120,9 @@ version: 1.0.0 "上下文窗口快用完了"
 - 任务交接后接手的人需要从头问很多问题
 
 ## Verification
+## Verification
 
 验证清单：
-
 - [ ] 任务目标在当前上下文中明确可见
 - [ ] 已识别并记录所有关键假设
 - [ ] 当前步骤和整体目标的关系清晰
@@ -130,3 +130,7 @@ version: 1.0.0 "上下文窗口快用完了"
 - [ ] 不需要的信息已从上下文中清除
 - [ ] 重要决策和其理由已记录
 - [ ] 任务完成后有完整的归档记录
+
+## 参考资料
+
+- `references/tencentdb-memory-architecture.md` — TencentDB Agent Memory 的 L0→L3 分层记忆 + Mermaid 符号化架构，33-61% token 节省验证

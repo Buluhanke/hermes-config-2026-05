@@ -127,8 +127,19 @@ const tool = buildTool({
 7. **多工作区隔离** — git worktree 级别隔离
 
 ### 今日已落地（✅ 2026-05-17）
-1. **Daemon 后台任务系统** — cron/daemon_scheduler.py (630行) + tools/daemon_tool.py (539行)
-2. **Loop 内置 Planning** — conversation_loop.py 两处 patch，复杂任务自动拆解
+1. **Daemon 后台任务系统** — `cron/daemon_scheduler.py` (630行) + `tools/daemon_tool.py` (539行)
+   - 接入 gateway tick 循环（`gateway/run.py`）
+   - Agent 可用 `daemon(...)` 工具注册/启停/查看后台任务
+   - 持久化到 `~/.hermes/daemons/daemons.json`
+2. **Loop 内置 Planning** — `agent/conversation_loop.py` 两处 patch
+   - 复杂任务启发式检测（100字符 + 关键词匹配）
+   - 自动注入 `**计划已制定** + 步骤列表` 提示
+   - 撤销：`cron/__init__.py`（如有修改则还原）
+
+### awesome-selfhosted 元信息（2026-05-17）
+- **两仓库架构**：`awesome-selfhosted-data` (YAML) → bot → `awesome-selfhosted` (README.md)
+- **不接受直接 PR**：编辑须提交到 `awesome-selfhosted-data`
+- **结论**：对 Hermes 无直接可用项目（Tier1: Ollama/LocalAI/Khoj 已研究，Tier2: Langfuse/Opik 可用但非紧急，Tier3: sish 最实用）
 
 ### 待观察（⚠️）
 - 远程控制/遥测开关

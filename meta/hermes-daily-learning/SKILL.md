@@ -61,3 +61,28 @@ version: 2026-05-17
 2. 检查是否有新技能/新版本
 3. 实践1个小任务
 4. 记录学到的新知识点到Obsidian
+
+## 六、GitHub 优质项目研究法
+
+研究新项目时的标准流程：
+
+```
+1. git clone --depth=1 <repo> 到 /tmp
+2. ls 查看结构，找 SKILL.md / README.md / scripts/
+3. 读 SKILL.md（描述核心价值）+ README（前100行了解能力）
+4. 扫关键脚本（cdp-proxy.mjs 等核心实现）
+5. 识别：对 Hermes 的价值（直接可用 / 思路借鉴 / 架构参考 / 存档）
+6. 判断优先级：Tier1（直接可用）/ Tier2（思路借鉴）/ Tier3（存档）
+```
+
+**"对我们有什么用处？"** 这个问题是过滤标准——不是所有项目都要深究。
+
+### 本次研究存档
+
+| 仓库 | 价值 | Tier |
+|------|------|------|
+| claude-code (freestylefly) | 架构参考：12阶段渐进式构建 | Tier1 |
+| awesome-selfhosted | 榜单设计思路可用 | Tier2 |
+| agent-browser-runtime | Docker 架构不适用，思路存档 | Tier2 |
+| eze-is/web-access | 浏览器 Skill，CDP Proxy，本地书签/历史检索，站点经验积累 | Tier2 |
+| Tencent/TencentDB-Agent-Memory | 记忆分层架构（L0→L1→L2→L3），Mermaid符号化压缩，33-61% token节省 | Tier1 |

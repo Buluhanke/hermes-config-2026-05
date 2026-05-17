@@ -46,6 +46,8 @@ This skill governs: agent frameworks, tool integrations that extend agent capabi
 
 ## References
 - `references/browser-use.md` — Local browser automation for AI agents (91K Stars, uv install, Ollama compatible)
+- `references/agent-browser-runtime.md` — Anti-bot browser runtime: fingerprint consistency, Bezier mouse curves, platform cooldowns, Canvas/Audio noise injection (analyzed 2026-05-17)
+- `references/web-access.md` — eze-is web-access Skill 分析存档：CDP Proxy 架构、浏览哲学（目标驱动）、find-url 思路、URL POST body 传输方式、站点经验积累机制。与 Hermes 内置实现的架构对比。
 - `references/cdp-raw-websocket.md` — Raw Python WebSocket + CDP control of local Chrome (fallback when MCP bridge is down, tab discovery, scroll/click/screenshot, frame encoding, pitfall: SOCKS proxy + websockets library)
 
 ---

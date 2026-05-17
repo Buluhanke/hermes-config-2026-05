@@ -16,24 +16,55 @@ triggers:
 
 **差距**: Claude Code 有 Plan mode（`/plan` 命令 + TodoWriteTool），复杂任务执行前会先让模型拆解步骤。
 
-**嵌入位置**: `agent/conversation_loop.py` 的主循环，在 API 调用前插入一个轻量 Planning 步骤：
+**嵌入位置**: `agent/conversation_loop.py` line 466-496（Planning检测）+ line 731-732（注入）
+
+**已落地实现（2026-05-17）**:
 ```python
-# 在 run_conversation() 的 while 循环内，api_call 前加：
-if should_planning_turn(args):
-    plan_steps = invoke_planning(model, messages)
-    messages.append(plan_steps)
-    continue  # 不计为 tool call iteration
+# conversation_loop.py line 466-496
+_COMPLEX_TASK_KEYWORDS = [
+    "研究", "调研", "分析", "比较", "调查",
+    "实现", "开发", "构建", "找出", "评估", "审核",
+    "写一个", "做一个", "帮我做", "帮我", "全面", "系统",
+    "写出来", "帮我写", "帮我实现", "帮我开发",
+    "review", "implement", "build", "create", "design",
+    "research", "investigate", "compare", "evaluate",
+]
+_PLANNING_SYSTEM_ADDITION = (
+    "\n\n[Planning instruction]: This appears to be a complex, multi-step "
+    "task. Please formulate a structured execution plan before taking any "
+    "action. Respond with a numbered list of steps you will take, prefixed "
+    "by the line **计划已制定** (meaning \"Plan established\"), then proceed "
+    "with execution. Example format:\n"
+    "**计划已制定**\n"
+    "1. 步骤一：[具体操作]\n"
+    "2. 步骤二：[具体操作]\n"
+    "3. 步骤三：[具体操作]\n..."
+)
+
+_planning_context = ""
+_user_text = original_user_message if isinstance(original_user_message, str) else str(original_user_message or "")
+_sys_text = active_system_prompt if isinstance(active_system_prompt, str) else ""
+_combined = _user_text + _sys_text
+if len(_combined) > 100 and any(kw in _combined for kw in _COMPLEX_TASK_KEYWORDS):
+    _planning_context = _PLANNING_SYSTEM_ADDITION
+    logger.debug("Complex task detected — planning prompt injected")
 ```
 
-**何时触发**: 任务包含以下关键词时自动触发——
-- "调研"、"分析"、"对比"
-- "帮我找"、"列出"
-- "完整流程"、"从头到尾"
-- 用户消息超过 100 字且包含多个意图
+注入位置（line 731-732）:
+```python
+if _planning_context:
+    _injections.append(_planning_context)
+```
 
-**触发判断函数**: `should_planning_turn(user_message) -> bool`
+**效果**: 触发后模型第一轮输出 `**计划已制定** + 步骤列表`，再执行。
 
-**文件位置**:
+**触发判断函数**: `len(combined) > 100 AND any(keyword in combined)`
+
+**撤销方法**: 删除 `agent/conversation_loop.py` 中以下两处：
+- line 466-496：整个 `# ── Built-in Planning stage` 块
+- line 731-732：`if _planning_context:` + `_injections.append(_planning_context)`
+
+**Daemon系统**（独立系统，见 `references/daemon-system.md`）:
 - 工具：`tools/daemon_tool.py`
 - 调度：`cron/daemon_scheduler.py`（已集成至 gateway 每 60s tick）
 

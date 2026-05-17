@@ -161,10 +161,10 @@ triggers:
 | 上下文溢出 | 触发 `context_compressor` 压缩 |
 | 图片过大 | 自动压缩图片并重试 |
 
-**真正的 gap（2026-05-17 审计结果）**:
-1. **Loop 内任务分解** — 没有 Planning 阶段 ← 当前最需补的
-2. **后台常驻任务** — 已有 `daemon_tool.py` + `daemon_scheduler.py`（刚完成）
-3. **上下文压缩增强** — 已有但简单，缺语义分块 + 重要性权重
+**真正的 gap（2026-05-17 审计 → 2026-05-18 已全部修复）**:
+1. ~~Loop 内任务分解~~ — ✅ 已修复（`conversation_loop.py` line 466-496，启发式检测+Planning提示注入）
+2. ~~后台常驻任务~~ — ✅ 已修复（`cron/daemon_scheduler.py` + `tools/daemon_tool.py`，已集成至 gateway tick）
+3. **上下文压缩增强** — 已有但简单，缺语义分块 + 重要性权重（未修复）
 
 ---
 
