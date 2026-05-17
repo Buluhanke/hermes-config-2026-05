@@ -278,3 +278,491 @@ All calls need: `access_token`, `_aop_signature` (HMAC-SHA256), `_aop_timestamp`
 - Spec `webSite=1688` — response structures differ from alibaba.com
 - "在线测试工具" needs valid APP_KEY after login
 - **纯买家无法入驻** — 企业支付宝 + 营业执照是硬性要求
+
+---
+
+## 身份认证流程 (Authentication)
+
+1688 Open Platform 采用 **OAuth2.0 + RSA/SHA256签名** 双重验证。每次 API 请求必须在 HTTP header 或 URL 参数中携带：
+
+### 认证三要素
+
+| 参数 | 位置 | 说明 |
+|------|------|------|
+| `access_token` | Header `Authorization: Bearer {token}` 或 URL参数 | 用户授权令牌 |
+| `_aop_signature` | URL 参数 | HMAC-SHA256 签名 |
+| `_aop_timestamp` | URL 参数 | 请求时间戳（毫秒） |
+
+### 签名计算公式
+
+```
+StringToSign = HTTP_METHOD + "\n"
+            + gw.open.1688.com + "\n"
+            + /openapi/param2/1/{namespace}/{api_name}/{appkey} + "\n"
+            + access_token={token}&
+            + categoryID={catID}&
+            + webSite={site}
+            + &_aop_timestamp={timestamp}
+
+Signature = Base64(HMAC-SHA256(AppSecret, StringToSign))
+```
+
+> **注意**：参数必须按 **字母顺序** 排列后签名，漏参或顺序错乱会导致 `42` 签名错误。
+
+### 获取 Access Token — 授权码模式
+
+适用于有后端服务器的 ISV。
+
+```
+Step 1: 引导用户授权
+GET https://oauth.1688.com/authorize?response_type=code&client_id={APPKEY}&redirect_uri={回调地址}&state=random
+
+Step 2: 用户同意后回调带 code
+redirect_uri?code=XXXXX&state=random
+
+Step 3: 用 code 换 token
+POST https://gw.open.1688.com/openapi/token/{APPKEY}
+Content-Type: application/x-www-form-urlencoded
+
+grant_type=authorization_code&code=XXXXX&redirect_uri={回调地址}&client_id={APPKEY}&client_secret={APPSECRET}
+
+Step 4: 响应
+{
+  "access_token": "...",
+  "refresh_token": "...",
+  "expires_in": 36000,
+  "memberId": "..."
+}
+```
+
+### 获取 Access Token — 在线测试工具（简化）
+
+在开放平台的 **在线测试工具** 页面：
+1. 填入 `appkey` + `signkey`（AppSecret）
+2. 点击 **"获取 Token"** 按钮 → 自动弹出授权确认页
+3. 用户在 iframe 内完成授权
+4. Token 自动回填到表单
+
+### Token 刷新
+
+```
+POST https://gw.open.1688.com/openapi/token/{APPKEY}
+grant_type=refresh_token&refresh_token={refresh_token}&client_id={APPKEY}&client_secret={APPSECRET}
+```
+
+### 签名工具
+
+开放平台提供在线签名工具（在线测试工具 iframe 内 "签名工具" 按钮），也可用 Python 本地计算：
+
+```python
+import hmac
+import hashlib
+import base64
+import time
+
+def sign_1688_request(app_key, app_secret, method, api_path, params):
+    """
+    method: GET 或 POST
+    api_path: e.g. /openapi/param2/1/com.alibaba.product/alibaba.category.attribute.get/{appkey}
+    params: dict of all parameters (including access_token, categoryID, webSite...)
+    """
+    timestamp = str(int(time.time() * 1000))
+    
+    # 按字母顺序排列参数
+    sorted_keys = sorted(params.keys())
+    param_str = "&".join(f"{k}={params[k]}" for k in sorted_keys)
+    
+    string_to_sign = (
+        f"POST\n"
+        f"gw.open.1688.com\n"
+        f"{api_path}\n"
+        f"{param_str}"
+    )
+    
+    signature = base64.b64encode(
+        hmac.new(
+            app_secret.encode("utf-8"),
+            string_to_sign.encode("utf-8"),
+            hashlib.sha256
+        ).digest()
+    ).decode("utf-8")
+    
+    return signature, timestamp
+
+# 使用示例
+params = {
+    "access_token": "YOUR_ACCESS_TOKEN",
+    "categoryID": "1048182",
+    "webSite": "1688",
+}
+api_path = f"/openapi/param2/1/com.alibaba.product/alibaba.category.attribute.get/{app_key}"
+sig, ts = sign_1688_request(app_key, app_secret, "POST", api_path, params)
+```
+
+---
+
+## 秘钥管理 (Key Management)
+
+### AppKey / AppSecret 的生命周期
+
+| 阶段 | 操作 | 风险 |
+|------|------|------|
+| 创建 | 控制中心 → 应用管理 → 创建应用 | — |
+| 使用 | 嵌入代码 / 环境变量 | **禁止硬编码** |
+| 轮换 | AppSecret 支持重新生成（最多保留2个） | 旧Secret失效需同步更新 |
+| 废弃 | 删除应用或停用 | 及时清除代码中的凭证 |
+
+### 安全最佳实践
+
+```
+✅ DO:
+   - 将 AppKey/AppSecret 存入环境变量或密钥管理服务（AWS Secrets Manager / 阿里云 KMS）
+   - 为不同环境（开发/测试/生产）创建独立应用
+   - 定期轮换 AppSecret（建议每90天）
+   - 使用最小权限：仅申请业务必需的 API 权限范围
+
+❌ DON'T:
+   - 硬编码在源代码（Git 历史永久保留）
+   - 提交到 GitHub / GitLab
+   - 在客户端（浏览器 JS）直接暴露 AppSecret
+   - 在日志中打印签名结果或完整请求 URL（含 token）
+```
+
+### 多应用隔离策略
+
+```bash
+# 环境变量示例
+export ALIBABA_APP_KEY_DEV="mock_app_key_for_dev"
+export ALIBABA_APP_SECRET_DEV="mock_app_secret_for_dev"
+export ALIBABA_APP_KEY_PROD="real_app_key"
+export ALIBABA_APP_SECRET_PROD="real_app_secret"
+
+# 代码中读取
+import os
+APP_KEY = os.environ["ALIBABA_APP_KEY_PROD"]
+APP_SECRET = os.environ["ALIBABA_APP_SECRET_PROD"]
+```
+
+### AppSecret 重新生成流程
+
+1. 控制中心 → 应用管理 → 选择应用
+2. 基本信息 → **重新生成密钥**
+3. 系统生成新 Secret（**旧 Secret 仍有24小时缓冲期**）
+4. 更新所有使用旧 Secret 的系统
+5. 确认新 Secret 正常工作后，旧 Secret 自动失效
+
+> ⚠️ 重新生成后**无法找回**旧 Secret，请确保一次性完成所有系统迁移。
+
+---
+
+## 沙箱测试 (Sandbox)
+
+### 1688 沙箱环境
+
+1688 Open Platform **没有独立的公开沙箱域名**。沙箱测试有以下几种方式：
+
+#### 方式1：在线测试工具（推荐）
+
+在 API 文档页面点击 **"在线测试工具"**，打开带完整表单的 iframe：
+- 无需写代码，直接填参数、点调用
+- 使用 **真实 AppKey** 但消耗实际配额
+- 测试数据：建议用小众类目 ID（如 `1048182`）或明确的测试商品 ID
+
+#### 方式2：构造 Mock 响应
+
+```python
+# 用 responses 库拦截 requests，模拟 1688 返回
+import responses
+import json
+
+@responses.activate
+def test_category_attribute():
+    mock_response = {
+        "success": True,
+        "attributes": [
+            {
+                "attrID": 2489638,
+                "name": "风格类型",
+                "required": True,
+                "fieldType": "enum",
+                "isSKUAttribute": False,
+                "attrValues": [
+                    {"attrValueID": 91043051, "name": "气质通勤"},
+                    {"attrValueID": 91043052, "name": "简约休闲"}
+                ],
+                "inputType": "1",
+                "aspect": "0;",
+                "isSpecPicAttr": False
+            }
+        ],
+        "attributeLevelMapStr": {}
+    }
+    
+    responses.add(
+        responses.POST,
+        "https://gw.open.1688.com/openapi/param2/1/com.alibaba.product/alibaba.category.attribute.get/YOUR_APPKEY",
+        json=mock_response,
+        status=200
+    )
+    
+    # 实际调用代码（会被 responses 拦截）
+    result = call_1688_api(...)
+    assert result["success"] is True
+    assert result["attributes"][0]["name"] == "风格类型"
+```
+
+#### 方式3：测试店铺商品
+
+- 用 `alibaba.product.get` 查询**自有店铺**的商品（API 只能查自己店铺）
+- 或在开放平台申请**测试账号**（部分 ISV 方案提供）
+
+### 测试数据建议
+
+| 测试场景 | 建议参数 |
+|---------|---------|
+| 类目属性 | categoryID=`1048182`（女装），webSite=`1688` |
+| 商品详情 | productID=`584051070147`（示例商品） |
+| SKU 结构 | 找有多个 SKU 变体的商品测试 |
+| 签名验证 | 用已知的 appKey/secret 先验证签名算法 |
+
+---
+
+## 真实API调用示例 (Working Examples)
+
+### Python — 完整的签名 + 请求流程
+
+```python
+import requests
+import hmac
+import hashlib
+import base64
+import time
+import json
+
+APP_KEY = "your_app_key"
+APP_SECRET = "your_app_secret"
+ACCESS_TOKEN = "your_access_token"
+
+def sign_request(app_key, app_secret, api_path, params):
+    """计算 1688 HMAC-SHA256 签名"""
+    timestamp = str(int(time.time() * 1000))
+    sorted_keys = sorted(params.keys())
+    param_str = "&".join(f"{k}={params[k]}" for k in sorted_keys)
+    
+    string_to_sign = (
+        f"POST\n"
+        f"gw.open.1688.com\n"
+        f"{api_path}\n"
+        f"{param_str}"
+    )
+    
+    signature = base64.b64encode(
+        hmac.new(
+            app_secret.encode("utf-8"),
+            string_to_sign.encode("utf-8"),
+            hashlib.sha256
+        ).digest()
+    ).decode("utf-8")
+    
+    return signature, timestamp
+
+def call_1688_api(api_name, namespace, params):
+    """通用 1688 API 调用"""
+    api_path = f"/openapi/param2/1/{namespace}/{api_name}/{APP_KEY}"
+    
+    # 合并系统级参数
+    full_params = {
+        "access_token": ACCESS_TOKEN,
+        **params
+    }
+    
+    signature, timestamp = sign_request(APP_KEY, APP_SECRET, api_path, full_params)
+    full_params["_aop_signature"] = signature
+    full_params["_aop_timestamp"] = timestamp
+    
+    url = f"https://gw.open.1688.com{api_path}"
+    resp = requests.post(url, data=full_params)
+    
+    return resp.json()
+
+# 示例1: 获取类目属性
+result = call_1688_api(
+    "alibaba.category.attribute.get",
+    "com.alibaba.product",
+    {"categoryID": "1048182", "webSite": "1688"}
+)
+print(json.dumps(result, ensure_ascii=False, indent=2))
+
+# 示例2: 获取商品详情
+result = call_1688_api(
+    "alibaba.product.get",
+    "com.alibaba.product",
+    {"productID": "584051070147", "webSite": "1688"}
+)
+print(json.dumps(result, ensure_ascii=False, indent=2))
+```
+
+### cURL — 快速调试
+
+```bash
+#!/bin/bash
+# 1688 API 调用示例 (bash)
+APP_KEY="your_app_key"
+APP_SECRET="your_app_secret"
+ACCESS_TOKEN="your_access_token"
+TIMESTAMP=$(date +%s%3N)
+
+# 构造参数（按字母顺序）
+PARAMS="access_token=${ACCESS_TOKEN}&categoryID=1048182&webSite=1688"
+
+# 计算签名 (macOS 上使用 gnu-sed 的 -E 支持)
+STRING_TO_SIGN="POST
+gw.open.1688.com
+/openapi/param2/1/com.alibaba.product/alibaba.category.attribute.get/${APP_KEY}
+${PARAMS}"
+
+SIGNATURE=$(echo -n "$STRING_TO_SIGN" | openssl dgst -sha256 -hmac "$APP_SECRET" -binary | base64)
+
+# 发送请求
+curl -X POST "https://gw.open.1688.com/openapi/param2/1/com.alibaba.product/alibaba.category.attribute.get/${APP_KEY}" \
+  -d "${PARAMS}&_aop_signature=${SIGNATURE}&_aop_timestamp=${TIMESTAMP}" \
+  -H "Content-Type: application/x-www-form-urlencoded"
+```
+
+### 响应解析示例
+
+```python
+# 解析类目属性 → 找出所有 SKU 规格属性
+def parse_sku_attributes(api_response):
+    if not api_response.get("success"):
+        return {"error": api_response.get("errorMsg"), "code": api_response.get("errorCode")}
+    
+    sku_attrs = []
+    for attr in api_response.get("attributes", []):
+        if attr.get("isSKUAttribute") is True:
+            sku_attrs.append({
+                "id": attr["attrID"],
+                "name": attr["name"],
+                "values": [v["name"] for v in attr.get("attrValues", [])],
+                "required": attr.get("required", False),
+                "inputType": attr.get("inputType"),  # "1"=下拉, "2"=文本
+            })
+    
+    return {"sku_attributes": sku_attrs}
+
+# 使用
+result = call_1688_api("alibaba.category.attribute.get", "com.alibaba.product",
+                       {"categoryID": "1048182", "webSite": "1688"})
+parsed = parse_sku_attributes(result)
+for attr in parsed["sku_attributes"]:
+    print(f"SKU属性: {attr['name']} | 可选值: {attr['values']}")
+```
+
+---
+
+## 错误码排查 (Error Code Reference)
+
+### 系统级错误码（所有API通用）
+
+| 错误码 | 含义 | 原因 | 解决方案 |
+|--------|------|------|---------|
+| `12` | 无权限访问 | access_token 未授权该 API | 检查应用是否订阅了对应解决方案 |
+| `28` | 签名不匹配 | 签名计算错误 | 确认参数顺序、编码、AppSecret 是否正确 |
+| `42` | 签名校验失败 | 参数缺失或格式错误 | 确认所有必填参数都参与了签名计算 |
+| `88` | token 过期 | access_token 失效 | 用 refresh_token 刷新，或重新授权 |
+| `100` | 参数错误 | 传入参数值不合法 | 检查 categoryID 是否为 Long 类型、webSite 是否为 `1688` |
+| `200` | 系统错误 | 1688 服务端异常 | 稍后重试，间隔 1-3 秒 |
+
+### 应用级错误码（alibaba.category.attribute.get）
+
+| 错误码 | 含义 | 解决方案 |
+|--------|------|---------|
+| `500_2` | 数据准备中，请稍后重试 | 数据正在后台加载，间隔 1-3 秒后重试 |
+| `500_3` | 类目不存在 | 确认 categoryID 是叶子类目 ID，非父级类目 |
+| `500_4` | 属性模板不存在 | 该类目可能没有发布过商品，属性模板未生成 |
+
+### 商品级错误码（alibaba.product.get）
+
+| 错误码 | 含义 | 解决方案 |
+|--------|------|---------|
+| `101` | 商品不存在 | productID 有误或商品已下架 |
+| `102` | 商品不属于该用户 | `alibaba.product.get` 仅能查询自己店铺商品 |
+| `103` | 商品未发布 | 商品状态不是 published |
+
+### 排查流程
+
+```
+❓ 拿到错误响应
+  ↓
+是 success=false 还是 HTTP 状态码非 200？
+  ├─ HTTP 4xx/5xx → 网络层问题 → 检查 VPN/代理/请求超时
+  ├─ success=false + errorCode → 查上表
+  └─ 签名错误 (28/42) → 优先检查签名计算逻辑
+  ↓
+确认 access_token 是否有效
+  ├─ 在 https://open.1688.com 控制台验证 token
+  └─ 尝试刷新 token
+  ↓
+确认 API 参数是否完整
+  ├─ 必填参数：categoryID, webSite, access_token, _aop_signature, _aop_timestamp
+  └─ 可选但影响结果：scene（加工定制品场景）
+  ↓
+用在线测试工具复现
+  └─ 在 iframe 内填入相同参数，点"调用API"对比结果
+```
+
+### 签名错误（28/42）的 Debug 技巧
+
+```python
+import logging
+logging.basicConfig(level=logging.DEBUG)
+
+# 打印签名计算中间值
+def sign_request_debug(app_key, app_secret, api_path, params):
+    timestamp = str(int(time.time() * 1000))
+    sorted_keys = sorted(params.keys())
+    param_str = "&".join(f"{k}={params[k]}" for k in sorted_keys)
+    
+    string_to_sign = f"POST\ngw.open.1688.com\n{api_path}\n{param_str}"
+    
+    print("=== 签名调试 ===")
+    print(f"StringToSign (原始):\n{string_to_sign}")
+    print(f"AppSecret: {app_secret}")
+    print(f"参数排序后: {param_str}")
+    
+    signature = base64.b64encode(
+        hmac.new(
+            app_secret.encode("utf-8"),
+            string_to_sign.encode("utf-8"),
+            hashlib.sha256
+        ).digest()
+    ).decode("utf-8")
+    print(f"计算签名: {signature}")
+    return signature, timestamp
+
+# 用在线测试工具的"签名工具"按钮校验中间值
+```
+
+### Token 失效的判断
+
+```python
+def is_token_expired(response):
+    """判断 token 是否过期"""
+    if isinstance(response, dict):
+        # 1688 错误响应格式
+        if response.get("errorCode") == "88":
+            return True
+        if not response.get("success") and "token" in str(response.get("errorMsg", "")).lower():
+            return True
+    return False
+
+# 自动刷新 token
+def safe_call_with_refresh(api_func, *args, **kwargs):
+    result = api_func(*args, **kwargs)
+    if is_token_expired(result):
+        print("Token 过期，刷新中...")
+        new_token = refresh_access_token(REFRESH_TOKEN)
+        set_access_token(new_token)  # 更新全局 token
+        result = api_func(*args, **kwargs)
+    return result
+```

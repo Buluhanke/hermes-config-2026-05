@@ -442,3 +442,10 @@ update_boss_model(
 - 当前用 `where={"supplier": name}` 精确过滤 + 向量语义搜索。不支持跨供应商语义搜索
 - ChromaDB 数据持久在 `~/.hermes/supplier_memory/`，不会随聊天 session 消失，但不会自动清理旧数据
 - **新增**：Obsidian 集成依赖本地 vault 路径，需确保 `~/Obsidian/hermes-memory/` 存在
+
+## Related Skills
+
+- `n8n-hermes-integration` — n8n + ChromaDB Docker deployment (automation orchestration layer)
+- `rag-knowledge-base` — RAG knowledge base: chunking strategies, embedding model selection, retrieval optimization, and 1688 supplier KB pipeline. Overlaps with this skill on ChromaDB supplier storage, but covers the broader RAG ingestion/retrieval pipeline
+- `llm-wiki` — Markdown knowledge base alternative (long-term compounding knowledge, not vector-based)
+- `dspy` — DSPy declarative RAG pipeline optimization (formal RAG program construction)

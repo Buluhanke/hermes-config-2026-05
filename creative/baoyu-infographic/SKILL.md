@@ -55,6 +55,8 @@ Trigger this skill when the user asks to create an infographic, visual summary, 
 | `winding-roadmap` | Journey, milestones |
 | `circular-flow` | Cycles, recurring processes |
 | `dense-modules` | High-density modules, data-rich guides |
+| `supplier-comparison` | Supplier evaluation matrix, vendor scoring |
+| `price-trend` | Time-series price history, market analysis |
 
 Full definitions: `references/layouts/<layout>.md`
 
@@ -107,6 +109,10 @@ Full definitions: `references/styles/<style>.md`
 | Trendy Guide | `dense-modules` + `retro-pop-grid` |
 | Educational Diagram | `hub-spoke` + `hand-drawn-edu` |
 | Process Tutorial | `linear-progression` + `hand-drawn-edu` |
+| **1688 Procurement Dashboard** | `dashboard` + `corporate-memphis` |
+| **1688 Supplier Comparison** | `supplier-comparison` + `corporate-memphis` |
+| **1688 Price Trend** | `price-trend` + `technical-schematic` |
+| **1688 Category Analysis** | `bento-grid` + `morandi-journal` |
 
 Default: `bento-grid` + `craft-handmade`
 
@@ -120,6 +126,10 @@ If a shortcut has **Prompt Notes**, append them to the generated prompt (Step 5)
 |--------------|--------|--------------------|----------------|--------------|
 | 高密度信息大图 / high-density-info | `dense-modules` | `morandi-journal`, `pop-laboratory`, `retro-pop-grid` | portrait | — |
 | 信息图 / infographic | `bento-grid` | `craft-handmade` | landscape | Minimalist: clean canvas, ample whitespace, no complex background textures. Simple cartoon elements and icons only. |
+| 1688采购数据 / 1688 procurement | `dashboard` | `corporate-memphis`, `morandi-journal`, `pop-laboratory` | landscape | Alibaba Orange (#FF5000) accents. Professional B2B style. Include data labels on all charts. |
+| 供应商对比 / supplier comparison | `supplier-comparison` | `corporate-memphis`, `technical-schematic` | landscape | Side-by-side or radar chart. Score 1-5 scale. Include supplier logos if available. |
+| 价格趋势 / price trend | `price-trend` | `technical-schematic`, `corporate-memphis` | landscape | Line chart with area fill. Show min/max/avg. Date range in subtitle. |
+| 采购报表 / procurement report | `dashboard` | `corporate-memphis` | landscape | Multi-section dashboard: KPIs, supplier table, category bars, alerts. |
 
 ## Output Structure
 
@@ -220,13 +230,69 @@ Use the `image_generate` tool with the assembled prompt from Step 5.
 
 Report: topic, layout, style, aspect, language, output path, files created.
 
+## 1688 Procurement Content — Special Workflow
+
+For 1688 (Alibaba.cn) procurement data, use this specialized workflow:
+
+### Step 1: Choose Content Type
+
+| Data Type | Layout | Script Command |
+|-----------|--------|----------------|
+| KPI summary only | `dashboard` | `python scripts/generate_1688_infographic.py --type kpi --input kpis.csv` |
+| Supplier scores | `supplier-comparison` | `python scripts/generate_1688_infographic.py --type supplier-compare --input suppliers.csv` |
+| Price history | `price-trend` | `python scripts/generate_1688_infographic.py --type price-trend --input prices.csv` |
+| Category breakdown | `bento-grid` | `python scripts/generate_1688_infographic.py --type category --input categories.csv` |
+| Full procurement report | `dashboard` | `python scripts/generate_1688_infographic.py --type full-report --input combined.csv` |
+
+### Step 2: Prepare CSV Data
+
+Use the example CSVs in `scripts/examples/` as templates. Required columns:
+
+**suppliers.csv**: `supplier_name, overall_score, price_score, quality_score, lead_time_score, service_score, monthly_orders, cooperation_months`
+
+**prices.csv**: `date, sku, price, category`
+
+**categories.csv**: `category_name, spend, order_count, period`
+
+**kpis.csv**: `total_spend, order_count, supplier_count, avg_lead_time, completion_rate`
+
+### Step 3: Generate Structured Content
+
+```bash
+# Generate supplier comparison
+python scripts/generate_1688_infographic.py --type supplier-compare --input data/suppliers.csv --output ./output --lang zh
+
+# Generate full report (all sections)
+python scripts/generate_1688_infographic.py --type full-report --input data/all.csv --output ./output --lang zh
+```
+
+### Step 4: Review and Refine
+
+The script outputs markdown to `structured-content.md`. Review for:
+- All supplier names spelled correctly
+- Scores within 1-5 range
+- Price trends make sense (no negative values)
+- Category totals add up
+
+### Step 5: Generate Infographic
+
+Follow the standard workflow (Steps 3-7) using the generated structured content as input.
+
+### 1688 Keyword Shortcuts
+
+When user mentions **1688采购**, **1688 procurement**, **供应商对比**, **价格趋势**, or **采购报表**, auto-detect and pre-select the appropriate layout and styles.
+
 ## References
 
 - `references/analysis-framework.md` — Analysis methodology
 - `references/structured-content-template.md` — Content format
 - `references/base-prompt.md` — Prompt template
-- `references/layouts/<layout>.md` — 21 layout definitions
+- `references/layouts/<layout>.md` — 21 layout definitions (+2 new: supplier-comparison, price-trend)
 - `references/styles/<style>.md` — 21 style definitions
+- `references/templates/1688-procurement-template.md` — 1688-specific structured content template
+- `references/templates/1688-procurement-dashboard.md` — 1688 dashboard layout reference
+- `scripts/generate_1688_infographic.py` — CLI tool for auto-generating structured content from CSV
+- `scripts/examples/` — Sample CSV files for testing
 
 ## Pitfalls
 

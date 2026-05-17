@@ -150,7 +150,8 @@ Pick the closest existing category. Don't invent new top-level categories casual
 
 6. **Expecting the current session to see the new skill.** It won't. The skill loader is initialized at session start. Verify in a fresh session or via `skill_view` using the exact path.
 
-7. **Linking to skills that don't exist in-repo.** `related_skills: [some-user-local-skill]` works for you but breaks for other clones. Prefer only in-repo links.
+8. **Reading a large existing file before patching it.** When updating an existing SKILL.md > 10KB via a subagent, reading the entire file first repeatedly causes `max_iterations`. 正确做法：`read_file` 先看开头确认结构 → 直接 `patch` 增量修改目标段落 → 避免在 subagent 里 `read_file` 全量内容再重写。文件过大时用多次小 `patch` 替代一次大 `write_file`。
+9. **用 subagent 并行扩展多个技能时，预估 token 消耗。** 每个 subagent 有独立 context，累计上下文会快速超过 500K token 触发 `max_iterations`。超过 300K token 的任务应拆成更小的独立任务，避免中途截断。
 
 ## Verification Checklist
 

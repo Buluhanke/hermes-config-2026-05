@@ -54,7 +54,7 @@ Hermes拥有74+技能，覆盖不同任务类型。本skill帮助你快速定位
 | 任务 | 推荐Skill |
 |------|----------|
 | 需要操作浏览器（登录态重要）| hermes-rpa（用已有Chrome）|
-| 通用浏览器自动化 | browser-use |
+| 通用浏览器自动化 | browser-use（独立skill）|
 | 截图+OCR+键盘鼠标操控 | desktop-control |
 | 需要视觉理解页面 | vision + hermes-rpa |
 
@@ -131,7 +131,7 @@ code-review-and-quality → security-hardening → git-workflow-and-versioning
 │
 ├── 自动化操作
 │   ├── 浏览器（需登录） → hermes-rpa
-│   ├── 浏览器（无需登录） → browser-use
+│   ├── 浏览器（无需登录） → browser-use（独立skill）|
 │   ├── 桌面GUI → desktop-control / macos-computer-use
 │   └── 跨平台 → hermes-rpa
 │

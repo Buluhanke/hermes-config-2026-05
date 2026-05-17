@@ -18,6 +18,68 @@ Use this skill any time a .pptx file is involved in any way — as input, output
 | Read/analyze content | `python -m markitdown presentation.pptx` |
 | Edit or create from template | Read [editing.md](editing.md) |
 | Create from scratch | Read [pptxgenjs.md](pptxgenjs.md) |
+| 1688供应商汇报PPT | `templates/1688_supplier_report/README.md` |
+| 采购订单确认PPT | `templates/purchase_order_confirmation/README.md` |
+| 供应商比价PPT | `templates/supplier_comparison/README.md` |
+| 自动化批量生成 | `scripts/generate_ppt.py` |
+
+## 1688 采购 PPT 模板
+
+三个内置模板均使用 pptxgenjs 生成，支持通过 JSON 数据文件批量自动化生成。
+
+### 1. 1688 供应商汇报 PPT
+`templates/1688_supplier_report/`
+
+汇报供应商企业资质、产品范围、价格条款、质量认证、合作历史。
+
+**快速使用：**
+```bash
+node templates/1688_supplier_report/render.js data.json output.pptx
+```
+
+### 2. 采购订单确认 PPT
+`templates/purchase_order_confirmation/`
+
+包含订单信息、采购明细表（含税率/税额汇总）、条款与备注、甲乙双方签章区域。
+
+**快速使用：**
+```bash
+node templates/purchase_order_confirmation/render.js data.json output.pptx
+```
+
+### 3. 供应商比价 PPT
+`templates/supplier_comparison/`
+
+多供应商横向比价：价格、MOQ、交期、评分、资质认证对比表，综合排名 + 推荐结论。
+
+**快速使用：**
+```bash
+node templates/supplier_comparison/render.js data.json output.pptx
+```
+
+### 自动化批量生成脚本
+`scripts/generate_ppt.py`
+
+一键从 JSON 数据生成任意模板的 PPT，支持 CLI 参数覆盖字段。
+
+```bash
+# 1688供应商汇报
+python scripts/generate_ppt.py 1688_supplier_report --data data.json --output out.pptx
+
+# 采购订单确认
+python scripts/generate_ppt.py purchase_order --data data.json --output out.pptx
+
+# 供应商比价
+python scripts/generate_ppt.py supplier_comparison --data data.json --output out.pptx
+
+# CLI覆盖字段
+python scripts/generate_ppt.py 1688_supplier_report --data data.json --output out.pptx --title "新标题" --date "2025-06-01"
+
+# XML模式（需要base.pptx，无base.pptx时自动降级到pptxgenjs）
+python scripts/generate_ppt.py 1688_supplier_report --data data.json --output out.pptx --mode xml
+```
+
+每个模板的 README.md 中有完整的 `spec.json` 字段说明。
 
 ---
 

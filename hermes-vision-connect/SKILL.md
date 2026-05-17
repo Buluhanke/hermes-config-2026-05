@@ -466,6 +466,21 @@ x, y = float(coords[-2]), float(coords[-1])
 - Ollama 本地服务（`brew install ollama`）
 - `cliclick` — 拟真点击（`brew install cliclick`）
 
+### ⚠️ Pillow LANCZOS 兼容性坑
+
+**问题**：Pillow 10+ 将 `Image.LANCZOS` 改为 `Image.Resampling.LANCZOS`，旧代码会报 `AttributeError`。
+
+**兼容写法**：
+```python
+from PIL import Image
+try:
+    resample = Image.Resampling.LANCZOS
+except AttributeError:
+    resample = Image.LANCZOS  # Pillow < 10
+img.resize((800, 600), resample)
+```
+`vision_connect.py` 中已内置兼容处理。
+
 ---
 
 ## 验证方式
@@ -504,11 +519,13 @@ print(vc.find_and_click('Safari', max_retries=1))
 ```
 hermes-vision-connect/
 ├── SKILL.md              # 本文件
-├── smart_click.py        # 原有三层感知（保留兼容）
-├── vision_connect.py     # v2新实现（VisionConnect类）
+├── smart_click.py        # v1 legacy API（L1 OCR + L2 smolvlm2 + SSIM固定阈值）
+├── vision_connect.py     # v2新实现（VisionConnect类 + 心跳 + 降级 + SSIM动态阈值）
 └── references/
     ├── ollama-models-status.md           # Ollama模型状态
     ├── vision-qwen25vl-2026-05-17.md    # Qwen2.5VL实测记录
     ├── smart-click-key-findings-2026-05-17.md  # 关键发现
-    └── screen-understanding-research-2026-05-17.md  # 研究记录
+    ├── see-understand-act-workflow.md     # 看见→看懂→动手流程
+    ├── screen-understanding-research-2026-05-17.md  # 研究记录
+    └── vlm-screen-understanding-2026-05-17.md  # VLM屏幕理解
 ```

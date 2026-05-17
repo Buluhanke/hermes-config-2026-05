@@ -228,9 +228,9 @@ def smolvlm_locate(description: str, image_path: str = None) -> tuple:
         print(f"  [smolvlm2] 异常: {e}")
         return -1, -1
 
-# ─── 层级3: SSIM 像素验证 ───
+# ─── 层级3a: SSIM 固定阈值（原始）───
 def compute_ssim(img1_path: str, img2_path: str) -> float:
-    """计算SSIM相似度"""
+    """计算SSIM相似度（固定阈值版，内部用）"""
     try:
         import cv2
         from PIL import Image
@@ -256,6 +256,123 @@ def compute_ssim(img1_path: str, img2_path: str) -> float:
     except Exception as e:
         print(f"  [SSIM] 异常: {e}")
         return 0.96
+
+
+# ─── 层级3b: SSIM 动态阈值 v2 ───
+_baseline_frames = []          # 历史帧栈（最多3帧）
+_baseline_screenshots = []     # 对应截图路径
+_MAX_BASELINE = 3
+
+
+def _ssim_fast(img1_np: np.ndarray, img2_np: np.ndarray) -> float:
+    """两张numpy数组间的快速SSIM"""
+    C1 = (0.01 * 255) ** 2
+    C2 = (0.03 * 255) ** 2
+    mu1, mu2 = img1_np.mean(), img2_np.mean()
+    sigma1_sq = ((img1_np - mu1) ** 2).mean()
+    sigma2_sq = ((img2_np - mu2) ** 2).mean()
+    sigma12 = ((img1_np - mu1) * (img2_np - mu2)).mean()
+    num = (2 * mu1 * mu2 + C1) * (2 * sigma12 + C2)
+    den = (mu1**2 + mu2**2 + C1) * (sigma1_sq + sigma2_sq + C2)
+    return float(num / den) if den > 0 else 1.0
+
+
+def compute_dynamic_threshold(img_path: str) -> float:
+    """
+    基于画面复杂度自适应SSIM阈值。
+    复杂度越高（边缘多），阈值越低。
+    """
+    try:
+        import cv2
+        img = cv2.imread(img_path)
+        if img is None:
+            return 0.93
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        edges = cv2.Canny(gray, 50, 150)
+        edge_ratio = edges.sum() / (edges.size + 1e-9)
+        # 边缘少 → 简单画面 → 阈值高；边缘多 → 复杂画面 → 阈值低
+        base = 0.93
+        complexity_factor = edge_ratio * 0.05  # 最多降低0.05
+        return max(0.90, base - complexity_factor)
+    except Exception:
+        return 0.93
+
+
+def ssim_with_baseline(img_current_path: str) -> dict:
+    """
+    变化率检测（非单帧对比）。
+    对比历史帧栈，计算变化率。
+    返回: {ssim, avg_ssim, change_rate, changed, threshold_applied}
+    """
+    from PIL import Image
+    curr = np.array(Image.open(img_current_path).convert("RGB"), dtype=np.float64)
+    ssims = []
+    for bf_path in _baseline_screenshots[-_MAX_BASELINE:]:
+        try:
+            baseline = np.array(Image.open(bf_path).convert("RGB"), dtype=np.float64)
+            s = _ssim_fast(curr, baseline)
+            ssims.append(s)
+        except Exception:
+            pass
+
+    if not ssims:
+        # 无历史帧，用固定阈值
+        dyn_thresh = compute_dynamic_threshold(img_current_path)
+        return {"ssim": 1.0, "avg_ssim": 1.0, "change_rate": 0.0,
+                "changed": False, "threshold_applied": dyn_thresh}
+
+    avg_ssim = float(np.mean(ssims))
+    latest_ssim = ssims[-1]
+    change_rate = abs(latest_ssim - avg_ssim) / avg_ssim if avg_ssim > 0 else 0
+
+    dyn_thresh = compute_dynamic_threshold(img_current_path)
+
+    return {
+        "ssim": latest_ssim,
+        "avg_ssim": avg_ssim,
+        "change_rate": change_rate,
+        "changed": change_rate > 0.05,   # 5%变化率阈值
+        "threshold_applied": dyn_thresh  # 动态SSIM阈值
+    }
+
+
+def update_baseline(img_path: str):
+    """将截图加入历史帧栈"""
+    global _baseline_frames, _baseline_screenshots
+    _baseline_screenshots.append(img_path)
+    if len(_baseline_screenshots) > _MAX_BASELINE:
+        _baseline_screenshots = _baseline_screenshots[-_MAX_BASELINE:]
+
+
+def ssim_verify_dynamic(img_before: str, img_after: str) -> dict:
+    """
+    增强版SSIM验证：变化率 + 动态阈值双重判断。
+    返回: {success, ssim, change_rate, threshold, reason}
+    """
+    from PIL import Image
+    try:
+        b = np.array(Image.open(img_before).convert("RGB"), dtype=np.float64)
+        a = np.array(Image.open(img_after).convert("RGB"), dtype=np.float64)
+        ssim_val = _ssim_fast(b, a)
+        dyn_thresh = compute_dynamic_threshold(img_after)
+
+        # 策略1：SSIM绝对值
+        if ssim_val < dyn_thresh:
+            return {"success": True, "ssim": ssim_val, "change_rate": 0,
+                    "threshold": dyn_thresh, "reason": "ssim_abs_below_dynamic"}
+
+        # 策略2：变化率检测
+        change_rate = abs(ssim_val - 1.0)  # 相对于"无变化"的偏差
+        if change_rate > 0.05:
+            return {"success": True, "ssim": ssim_val, "change_rate": change_rate,
+                    "threshold": dyn_thresh, "reason": "change_rate_exceeded"}
+
+        # 不确定区间：返回需VLM二次确认
+        return {"success": None, "ssim": ssim_val, "change_rate": change_rate,
+                "threshold": dyn_thresh, "reason": "uncertain_requires_vlm_confirm"}
+    except Exception as e:
+        return {"success": None, "ssim": 1.0, "change_rate": 0,
+                "threshold": 0.93, "reason": f"ssim_error:{e}"}
 
 # ─── 核心: smart_click ───
 def smart_click(description: str, verbose: bool = True) -> bool:

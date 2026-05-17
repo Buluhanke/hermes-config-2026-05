@@ -20,7 +20,7 @@ Skills for building, deploying, and orchestrating autonomous AI agents — frame
 ## Tools & Integrations
 
 ### Browser Automation
-- **browser-use** — Local browser automation for AI agents (91K Stars). No API key needed for local use. Install via `uv add browser-use`, browser driver via `uvx browser-use install`. Works with Ollama (local qwen2.5). → `references/browser-use.md`
+- **browser-use** — Local browser automation for AI agents (91K Stars). No API key needed for local use. Install via `uv add browser-use`, browser driver via `uvx browser-use install`. Works with Ollama (local qwen2.5). → 独立 skill `browser-use`
 - **CDP direct control** — When `mcp-chrome-stdio` bridge is down, control local Chrome directly via raw Python WebSocket + CDP. Bypasses the MCP bridge entirely. Includes tab discovery, masked frame encoding, scroll/click/screenshot patterns. → `references/cdp-raw-websocket.md`
 
 ### CLI Delegation

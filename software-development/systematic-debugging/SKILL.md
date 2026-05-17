@@ -1,7 +1,7 @@
 ---
 name: systematic-debugging
 description: "4-phase root cause debugging: understand bugs before fixing."
-version: 1.1.0
+version: 1.2.0
 author: Hermes Agent (adapted from obra/superpowers)
 license: MIT
 metadata:
@@ -53,6 +53,73 @@ Use for ANY technical issue:
 ## The Four Phases
 
 You MUST complete each phase before proceeding to the next.
+
+---
+
+## Phase 0: Binary Search Localization
+
+**Before diving deep, narrow the problem space with binary search.**
+
+### When to Use
+
+- Error occurs in a large codebase or complex pipeline
+- Problem is reproducible but location is unknown
+- Multiple possible failure points in a chain (e.g., build pipeline, service mesh)
+- Log/output is too large to scan manually
+
+### Techniques
+
+#### 1. Codebase Binary Search
+
+```bash
+# Halve the codebase — comment out or temporarily revert half the changes
+git bisect start
+git bisect bad HEAD
+git bisect good <last-known-good-commit>
+# Git automatically tests the midpoint — narrow until root commit found
+```
+
+#### 2. Input/Environment Binary Search
+
+- Take the failing input, split it in half
+- Does it still fail with half the input? → Problem is in that half
+- Narrow until you isolate the exact triggering condition
+
+#### 3. Pipeline Binary Search
+
+For chains like `build → test → deploy`:
+```
+Isolate Stage 1?     → Run Stage 1 alone, mock others
+Isolate Stage 2?     → Run Stage 2 with known-good Stage 1 output
+...
+```
+Each stage being independently runnable is the key. If a stage is opaque, inject diagnostic output at its boundaries.
+
+#### 4. Log/Binary Search on Output
+
+For verbose or binary output:
+```bash
+# Find the exact line/byte range where behavior changes
+head -n N file.log | tail -n M   # inspect middle section
+sed -n '50p,100p' file.log        # inspect rows 50-100
+dd if=binary bs=1 skip=500 count=100 2>/dev/null | hexdump -C
+```
+
+#### 5. Divide and Recombine
+
+1. Comment out half the code → still fails? → root cause in the other half
+2. Comment out quarter → still fails? → root cause in the remaining three quarters
+3. Repeat until isolated
+
+### Binary Search vs. Full Trace
+
+| Scenario | Approach |
+|----------|----------|
+| Narrow range, known component | Trace data flow (Phase 1) |
+| Wide codebase, unknown location | Binary search first (Phase 0) |
+| Complex pipeline | Binary search on stages, then trace |
+
+**Phase 0 is a preamble to Phase 1 — use it to narrow before you deep-dive.**
 
 ---
 
@@ -150,6 +217,103 @@ search_files("variable_name\\s*=", path="src/", file_glob="*.py")
 - [ ] Root cause hypothesis formed
 
 **STOP:** Do not proceed to Phase 2 until you understand WHY it's happening.
+
+---
+
+## Log Mining Techniques
+
+### Reading Logs Strategically
+
+**Never scan logs top-to-bottom blindly.** Know what you're looking for:
+
+1. **Locate the error entry first** — search for `ERROR`, `FATAL`, `Exception`, `Traceback`
+2. **Extract the stack trace** — the deepest frame is usually the root cause
+3. **Read the causal chain** — lines above the error explain what led to it
+4. **Identify the process/thread ID** — isolate logs belonging to the failing unit
+
+```bash
+# Find error lines with context (3 lines before/after)
+grep -B 3 -A 3 "ERROR" app.log
+
+# Find entries by timestamp range
+sed -n '/2026-05-17 14:30:00/,/2026-05-17 14:35:00/p' app.log
+
+# Extract stack traces
+grep -A 20 "Traceback" app.log | head -60
+
+# Filter by process ID (useful for multi-process apps)
+grep "\[PID:12345\]" app.log
+```
+
+### Log Level Filtering
+
+| Level | Meaning | Action |
+|-------|---------|--------|
+| `FATAL` / `CRITICAL` | System unusable | Immediate attention |
+| `ERROR` | Operation failed | Investigate root cause |
+| `WARN` | Unexpected but recoverable | Review impact |
+| `INFO` | Normal operations | Context only |
+| `DEBUG` / `TRACE` | Detailed flow | Deep investigation |
+
+```bash
+# Show only ERROR and FATAL
+grep -E "ERROR|FATAL" app.log
+
+# Remove noise — hide DEBUG/TRACE/INFO
+grep -vE "DEBUG|TRACE|INFO" app.log | less
+```
+
+### Structured Log Extraction
+
+For JSON logs (common in containerized apps):
+```bash
+# Extract error messages from JSON logs
+cat app.json.log | jq 'select(.level=="ERROR") | .message'
+
+# Extract field across all entries
+cat app.json.log | jq '.level, .timestamp, .msg' | paste - - -
+
+# Find entries with specific correlation ID
+cat app.json.log | jq 'select(.correlation_id=="abc-123")'
+```
+
+### Time-Based Correlation
+
+1. Find the timestamp of the error
+2. Look backward 30-60 seconds for earlier anomalies (warnings, retries)
+3. Look forward to see cleanup behavior or cascading failures
+
+```bash
+# Find timestamps around an error
+awk '/ERROR/ {found=1; print} found && /^[0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2}:[0-9]{2}/ && !/ERROR/ {if (++cnt > 10) exit}' app.log
+```
+
+### Log Deduplication
+
+Repeated identical errors → find unique root cause, not every occurrence:
+```bash
+# Show unique error messages with counts
+grep "ERROR" app.log | cut -d'|' -f4 | sort | uniq -c | sort -rn | head -20
+```
+
+### When Logs Are Missing
+
+- **No logs at all** → Check if logging is actually enabled (config, env vars)
+- **Logs truncated** → Log rotation config (`logrotate`), disk full
+- **Old logs only** → Process may be writing to a different file/path
+- **No timestamps** → Add timestamps if missing; clock skew in distributed systems
+
+### Log Enrichment
+
+If logs are insufficient, inject temporary diagnostic logging:
+
+```python
+import logging
+logging.debug(f"Variable state: x={x}, y={y}, z={z}")
+# Or use structlog for structured output
+```
+
+Then re-run with `DEBUG` level enabled.
 
 ---
 
@@ -370,3 +534,273 @@ From debugging sessions:
 - New bugs introduced: Near zero vs common
 
 **No shortcuts. No guessing. Systematic always wins.**
+
+---
+
+## Tool Disconnection Troubleshooting
+
+### Symptoms
+
+- Tool call returns error like "Connection refused", "Connection reset", "EOF"
+- Tool hangs indefinitely with no response
+- Tool returns partial result then times out
+- Error: "MCP server crashed" or "stderr: ..."
+
+### Diagnostic Sequence
+
+#### 1. Identify Which Tool Is Affected
+
+- One specific tool fails → problem with that tool
+- ALL tools from a server fail → problem with the server
+- Tools fail intermittently → resource contention or timeout issue
+
+#### 2. Check Tool Server Status
+
+```bash
+# List running MCP servers (if hermes command available)
+hermes tools list
+
+# Check server health/ping
+hermes tools ping <server-name>
+
+# View server logs (if accessible)
+cat ~/.hermes/logs/*.log
+```
+
+#### 3. Network/Connection Checks (for HTTP-based tools)
+
+```bash
+# Can we reach the service?
+curl -v http://localhost:PORT/health
+
+# Is something listening?
+lsof -i :PORT
+
+# Firewall or permission issue?
+sudo lsof -i :PORT -P
+```
+
+#### 4. Process-Level Diagnosis
+
+```bash
+# Is the process running?
+ps aux | grep <process-name>
+
+# Has it crashed? Check exit code
+# 0 = clean exit, 1-255 = error, -9 = SIGKILL (OOM killer or manual)
+
+# Memory exhaustion?
+top -pid <PID>
+dmesg | grep -i "kill" | tail -5  # OOM killer evidence
+```
+
+#### 5. Restart the Tool/Server
+
+```bash
+# Restart the specific tool's server
+kill -9 <PID> && <start-command> &
+
+# Or restart the entire Hermes gateway
+hermes restart
+```
+
+#### 6. Configuration Check
+
+```bash
+# Verify tool config in config.yaml
+cat ~/.hermes/config.yaml | grep -A 10 "<tool-name>"
+
+# Check env vars the tool depends on
+env | grep -E "TOOL_|MCP_|API_"
+```
+
+### Common Root Causes
+
+| Symptom | Likely Cause | Fix |
+|---------|-------------|-----|
+| "Connection refused" | Service not running | Restart service |
+| "EOF" after initial success | Server crashed (OOM) | Increase memory, check logs |
+| Hangs indefinitely | Deadlock or infinite loop | Send SIGINT, attach debugger |
+| Intermittent failures | Resource contention | Queue requests, add backpressure |
+| "Permission denied" | Wrong user/group | `chmod`/`chown` or check sandbox |
+
+### Recovery Verification
+
+After restarting:
+1. Run a simple tool call to confirm it works
+2. Re-run the operation that failed
+3. Check server logs for recurring errors
+
+---
+
+## Memory Store Corruption Repair
+
+### Symptoms
+
+- Agent loses context mid-session
+- "Memory read failed" or "Corrupt index" errors
+- Persistent data missing or garbled
+- `skill_view` returns stale or wrong content
+- Historical context reset unexpectedly
+
+### Diagnostic Steps
+
+#### 1. Identify Which Memory Store Is Affected
+
+- **Skills** → `~/.hermes/skills/`
+- **Memory/HPC** → `~/.hermes/memory/` or configured store path
+- **Session state** → `~/.hermes/sessions/`
+- **Config** → `~/.hermes/config.yaml`
+
+#### 2. Check File Integrity
+
+```bash
+# List skill directories with timestamps
+ls -la ~/.hermes/skills/
+
+# Find recently modified files
+find ~/.hermes -type f -mtime -1 | head -20
+
+# Check for zero-length files (truncation)
+find ~/.hermes -size 0 -ls
+
+# Check for unusually large files
+find ~/.hermes -type f -size +100M -ls
+```
+
+#### 3. Detect JSON/Markdown Corruption
+
+```bash
+# Validate JSON files
+python3 -c "import json; json.load(open('file.json'))"
+
+# Validate YAML
+python3 -c "import yaml; yaml.safe_load(open('config.yaml'))"
+
+# Find non-UTF8 bytes
+grep -P '[\x80-\xff]' ~/.hermes/skills/*/SKILL.md | head -5
+```
+
+#### 4. Check for Split/Partial Writes
+
+```bash
+# Look for duplicate frontmatter (indicates concatenated write)
+grep -c "^---$" ~/.hermes/skills/*/SKILL.md
+# Should be exactly 2 per file (frontmatter open + close)
+# More than 2 = partial write concatenation
+```
+
+#### 5. Repair Strategies
+
+**For corrupted skill files:**
+```bash
+# Restore from git if tracked
+cd ~/.hermes/skills && git checkout -- <corrupted-skill>/
+
+# Or re-create from known-good source
+```
+
+**For corrupted JSON memory store:**
+```bash
+# Backup corrupted file
+cp corrupted.json corrupted.json.bak
+
+# Try to parse and salvage what we can
+python3 -c "
+import json
+with open('corrupted.json') as f:
+    content = f.read()
+idx = content.rfind('}')
+if idx != -1:
+    valid = content[:idx+1]
+    data = json.loads(valid)
+    with open('repaired.json', 'w') as f:
+        json.dump(data, f, indent=2)
+    print('Salvaged', len(data), 'entries')
+"
+```
+
+**For corrupted SQLite-based memory (Hermes HPC):**
+```bash
+# Check SQLite integrity
+sqlite3 memory.db "PRAGMA integrity_check;"
+
+# If errors found, dump and rebuild
+sqlite3 memory.db ".dump" > memory.sql
+sqlite3 memory.db < memory.sql
+```
+
+#### 6. Prevention
+
+- Always `kill` processes gracefully (no `kill -9` during writes)
+- Keep memory stores on local filesystem (not network mounts)
+- Use atomic writes: write to `.tmp`, then `mv .tmp target`
+- Schedule periodic integrity checks in cron
+
+---
+
+## Debug Logging Standards
+
+### Why Standards Matter
+
+Undisciplined logging creates noise that hides real errors. Standards ensure logs are **searchable**, **parsable**, and **actionable**.
+
+### Log Level Standards
+
+| Level | When to Use | Example |
+|-------|-------------|---------|
+| `DEBUG` | Flow details, variable values, branch decisions | `DEBUG: Entering function foo(x={x})` |
+| `INFO` | Normal operation milestones | `INFO: User authenticated, session=abc` |
+| `WARN` | Unexpected but recoverable condition | `WARN: Retry attempt 2/3 for API call` |
+| `ERROR` | Operation failed, needs attention | `ERROR: DB connection timeout after 30s` |
+| `FATAL` | Process cannot continue | `FATAL: Out of memory, shutting down` |
+
+**Rule:** In production, `DEBUG` should be off. `INFO` should be the minimum.
+
+### Structured Log Format
+
+Use machine-parseable format in production:
+
+```
+timestamp | level | component | message | context (key=value,...)
+```
+
+Example:
+```
+2026-05-17T14:23:01.003Z | ERROR | auth | Login failed | user=user@example.com, attempt=3, reason=invalid_password
+```
+
+### What to Log
+
+**Always log:**
+- Entry and exit of significant operations (with duration)
+- External service calls (request/response summary, latency)
+- Authentication/authorization decisions
+- Data transformations (input → output summary)
+- Error conditions (full stack trace)
+
+**Never log:**
+- Secrets, passwords, API keys, tokens
+- Full PII (log ID instead)
+- Large binary blobs
+- DEBUG-level in production (performance impact)
+
+### Anti-Patterns
+
+| Anti-Pattern | Problem | Fix |
+|-------------|---------|-----|
+| `print("got here")` | No context, no level | Use `logging.debug()` with state |
+| `log.info("result=" + str(r))` | String concat slow | Use f-string or format params |
+| `log.error(e)` with no message | No context | `log.error("Operation X failed", exc_info=True)` |
+| Logging every loop iteration | Log flood | Log summary after loop |
+| No timestamps | Can't correlate events | Always include ISO-8601 timestamp |
+
+### Debug Logging Checklist
+
+- [ ] All external calls are logged (endpoint, latency, result summary)
+- [ ] Errors include `exc_info=True` (full stack trace)
+- [ ] Timestamps are ISO-8601 and timezone-aware
+- [ ] Sensitive data is NOT logged
+- [ ] Logs are parseable (JSON or `|`-delimited in production)
+- [ ] DEBUG logs are off in production
+- [ ] Each log entry contains enough context without reading other entries

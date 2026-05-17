@@ -90,41 +90,96 @@ wait_for_stable(screenshot_func=lambda: cdp.screenshot(), region=(100,200,300,35
 
 ## 核心算法
 
-### 1. 贝塞尔鼠标轨迹
+### 1. 贝塞尔鼠标轨迹（增强版）
 
 ```python
 import random
 import math
 
-def bezier_mouse_trace(start: tuple, end: tuple, duration: float = 0.5) -> list:
+def normalvariate_float(mu: float, sigma: float) -> float:
+    """Box-Muller变换：从均匀分布生成正态分布随机数"""
+    u1 = random.random()
+    u2 = random.random()
+    z = math.sqrt(-2.0 * math.log(u1)) * math.cos(2.0 * math.pi * u2)
+    return mu + sigma * z
+
+def bezier_mouse_trace(start: tuple, end: tuple, duration: float = 0.5,
+                       curve_intensity: float = 1.0) -> list:
     """
-    生成贝塞尔曲线鼠标轨迹
-    从起点到终点，经过随机控制点，模拟人类手部移动
+    生成贝塞尔曲线鼠标轨迹（增强版）
+
+    人类移动特征：
+    - 移动时间服从正态分布（μ=目标时间，σ=50ms）
+    - 速度曲线：启动慢 → 加速 → 接近目标时减速（手腕在目标前减速）
+    - 路径有轻微抖动（人手不是完全稳定的）
+    - 方向改变时有圆弧过渡（不是尖角）
+
+    Args:
+        start: (x, y) 起点
+        end: (x, y) 终点
+        duration: 基础移动时间（秒），实际时间从正态分布采样
+        curve_intensity: 0-1，曲线强度（0=直线，1=大弧度）
     """
-    # 控制点：在起点和终点之间随机偏移
-    mid_x = (start[0] + end[0]) / 2 + random.uniform(-100, 100)
-    mid_y = (start[1] + end[1]) / 2 + random.uniform(-100, 100)
-    
-    # 第二控制点：偏上或偏下
-    cp2_x = start[0] + random.uniform(0.3, 0.7) * (end[0] - start[0])
-    cp2_y = end[1] + random.uniform(-80, -20)
-    
-    # 生成轨迹点
+    # 正态分布采样实际移动时间（人类移动时间有随机性）
+    actual_duration = max(0.15, normalvariate_float(duration, 0.05))
+    steps = max(8, int(actual_duration * 60))  # 60fps
+
+    # 控制点：用正态分布生成偏移，而非均匀分布
+    dx = end[0] - start[0]
+    dy = end[1] - start[1]
+    distance = math.hypot(dx, dy)
+
+    # 主控制点：在路径中点附近，正态分布偏移
+    mid_x = start[0] + dx * 0.5 + normalvariate_float(0, distance * 0.25 * curve_intensity)
+    mid_y = start[1] + dy * 0.5 + normalvariate_float(0, distance * 0.25 * curve_intensity)
+
+    # 第二控制点：控制弧度方向
+    # 人类移动倾向于在运动方向上产生弧度，而不是垂直偏离
+    perp_x = -dy / distance if distance > 0 else 0
+    perp_y = dx / distance if distance > 0 else 0
+    perp_offset = normalvariate_float(0, distance * 0.2 * curve_intensity)
+    cp2_x = start[0] + dx * random.uniform(0.3, 0.7) + perp_x * perp_offset
+    cp2_y = start[1] + dy * random.uniform(0.3, 0.7) + perp_y * perp_offset
+
+    # 人类速度曲线：启动加速 → 峰值 → 接近目标减速
+    def human_speed_curve(t: float) -> float:
+        """返回0-1之间的速度因子，人类在t=0.5时最快"""
+        # 用正弦函数模拟：v = sin(t * π)，启动和结束慢
+        raw = math.sin(t * math.pi)
+        # 加一点随机性（不是完美对称）
+        jitter = normalvariate_float(1.0, 0.1)
+        return max(0.1, min(1.5, raw * jitter))
+
     points = []
-    steps = int(duration * 60)  # 60fps
-    for t in [i / steps for i in range(steps + 1)]:
+    accumulated_distance = 0.0
+
+    for i in range(steps + 1):
+        t = i / steps
+
         # 三次贝塞尔公式
-        t2 = t * t
-        t3 = t2 * t
         mt = 1 - t
         mt2 = mt * mt
         mt3 = mt2 * mt
-        
+        t2 = t * t
+        t3 = t2 * t
+
         x = mt3 * start[0] + 3 * mt2 * t * mid_x + 3 * mt * t2 * cp2_x + t3 * end[0]
         y = mt3 * start[1] + 3 * mt2 * t * mid_y + 3 * mt * t2 * cp2_y + t3 * end[1]
-        
-        points.append((round(x), round(y)))
-    
+
+        # 添加微小抖动（人手不稳定）
+        jitter_x = normalvariate_float(0, 1.5) if i > 0 else 0
+        jitter_y = normalvariate_float(0, 1.5) if i > 0 else 0
+
+        px = round(x + jitter_x)
+        py = round(y + jitter_y)
+
+        if i > 0:
+            # 累积距离用于速度控制（实际速度由帧间隔控制）
+            prev = points[-1]
+            accumulated_distance += math.hypot(px - prev[0], py - prev[1])
+
+        points.append((px, py))
+
     return points
 ```
 
@@ -262,6 +317,314 @@ def human_scroll(start_y: int, end_y: int, page_height: int) -> list:
             scroll_events.append(('scroll_to', 0))
     
     return scroll_events
+```
+
+### 6. 打字节奏正态分布
+
+```python
+import random
+import math
+
+def normalvariate_float(mu: float, sigma: float) -> float:
+    """Box-Muller变换：从均匀分布生成正态分布随机数"""
+    u1 = random.random()
+    u2 = random.random()
+    z = math.sqrt(-2.0 * math.log(u1)) * math.cos(2.0 * math.pi * u2)
+    return mu + sigma * z
+
+class HumanTypingRhythm:
+    """
+    人类打字节奏 — 基于正态分布
+    真人打字不是均匀的，有快有慢，符合正态分布：
+    - 大部分字符在"平均速度"附近（68%概率在μ±σ内）
+    - 偶尔极快（手指惯性），偶尔极慢（思考或按错）
+    - 手腕/手指移动有惯性，打完一串后会加速
+    """
+
+    def __init__(self, base_delay: float = 0.09, sigma: float = 0.035):
+        self.base_delay = base_delay      # 均值 ms
+        self.sigma = sigma                 # 标准差 — 越大越不规律
+        # 按键特征：不同键有不同的"手感"延迟
+        self.key_ease = {
+            'a': 0.85, 's': 0.88, 'd': 0.90, 'f': 0.92, 'g': 0.93,
+            'h': 0.93, 'j': 0.92, 'k': 0.88, 'l': 0.85,
+            'q': 0.75, 'w': 0.80, 'e': 0.85, 'r': 0.88, 't': 0.82,
+            'y': 0.82, 'u': 0.88, 'i': 0.90, 'o': 0.85, 'p': 0.78,
+            ' ': 0.55,  # 空格明显更快
+        }
+
+    def get_char_delay(self, char: str, prev_char: str = None) -> float:
+        """计算单个字符的击键延迟（秒）"""
+        # 正态分布采样
+        delay = normalvariate_float(self.base_delay, self.sigma)
+        delay = max(0.02, min(0.25, delay))  # 裁剪到合理范围
+
+        # 键位难度系数
+        ease = self.key_ease.get(char.lower(), 1.0)
+        delay /= ease
+
+        # 连击加速：连续相同手指/动作后加速（惯性效应）
+        if prev_char and char.lower() == prev_char.lower():
+            delay *= random.uniform(0.6, 0.8)  # 快约20-40%
+
+        # 换行/回车有额外停顿
+        if char in '\n\r':
+            delay += normalvariate_float(0.15, 0.05)
+
+        # 大写字母（需要Shift）明显更慢
+        if char.isupper() and char.isalpha():
+            delay += normalvariate_float(0.08, 0.03)
+
+        return delay
+
+    def generate_typing_events(self, text: str) -> list:
+        """
+        生成完整打字序列：[(time_offset, action, char_or_key), ...]
+        action: 'type' | 'backspace' | 'pause'
+        """
+        events = []
+        current_time = 0.0
+        prev_char = None
+
+        for i, char in enumerate(text):
+            # 随机回退（打错）— 概率与内容无关，纯拟人
+            if random.random() < 0.015:  # 1.5% 打错率
+                # 回退前停顿（发现自己打错了）
+                events.append((current_time, 'pause', normalvariate_float(0.08, 0.03)))
+                current_time += normalvariate_float(0.08, 0.03)
+                events.append((current_time, 'backspace', None))
+                current_time += normalvariate_float(0.06, 0.02)
+                prev_char = None  # 重置
+
+            delay = self.get_char_delay(char, prev_char)
+            events.append((current_time, 'type', char))
+            current_time += delay
+            prev_char = char
+
+            # 词间停顿（换词时多一点点延迟）
+            if char in ' \t' and i < len(text) - 1:
+                next_char = text[i + 1]
+                if next_char not in ' \t\n\r':
+                    current_time += normalvariate_float(0.03, 0.015)
+
+        return events
+```
+
+### 7. 视觉焦点模拟
+
+```python
+import random
+import math
+
+class VisualFocusSimulator:
+    """
+    模拟人类视觉焦点行为：
+    - 眼睛不会一直盯着鼠标，有自己的移动路径
+    - 视线在"感兴趣区域"停留
+    - 鼠标移动通常滞后于视线（先看后点）
+    - 偶尔鼠标突然移向视线焦点（协调动作）
+    """
+
+    def __init__(self):
+        self.gaze_pos = (0, 0)          # 当前视线位置
+        self.mouse_pos = (0, 0)          # 当前鼠标位置
+        self.focus_targets = []          # 当前页面上的焦点区域列表
+        self.last_coordination = 0       # 上次视线-鼠标协调时间
+
+    def set_page_focus_regions(self, regions: list):
+        """
+        设置页面焦点区域 [(x1, y1, x2, y2, weight), ...]
+        weight越高，越容易被注视
+        """
+        self.focus_targets = regions
+
+    def select_next_gaze_target(self) -> tuple:
+        """根据权重随机选择一个视线目标区域中心"""
+        if not self.focus_targets:
+            return self.mouse_pos  # 回退到鼠标位置
+        # 加权随机选择
+        total_weight = sum(r[4] for r in self.focus_targets)
+        r = random.uniform(0, total_weight)
+        cumsum = 0
+        for x1, y1, x2, y2, w in self.focus_targets:
+            cumsum += w
+            if r <= cumsum:
+                cx = (x1 + x2) / 2 + random.uniform(-(x2-x1)*0.2, (x2-x1)*0.2)
+                cy = (y1 + y2) / 2 + random.uniform(-(y2-y1)*0.2, (y2-y1)*0.2)
+                return (round(cx), round(cy))
+        return self.focus_targets[-1][:2]
+
+    def gaze_dwell(self) -> float:
+        """视线停留在当前焦点的时长（秒）"""
+        return normalvariate_float(1.2, 0.6)  # μ=1.2s, σ=0.6s
+
+    def move_gaze_to(self, target: tuple, duration: float = None):
+        """移动视线，带有平滑的眼动轨迹"""
+        if duration is None:
+            duration = math.hypot(target[0]-self.gaze_pos[0], target[1]-self.gaze_pos[1]) / 150
+            duration = max(0.05, min(0.3, duration))
+
+        steps = max(3, int(duration * 60))
+        for t in range(steps + 1):
+            progress = t / steps
+            # 眼动有"saccade"特征：开始快，接近目标时减速
+            eased = math.sin(progress * math.pi / 2)
+            gx = self.gaze_pos[0] + (target[0] - self.gaze_pos[0]) * eased
+            gy = self.gaze_pos[1] + (target[1] - self.gaze_pos[1]) * eased
+            yield (round(gx), round(gy))
+        self.gaze_pos = target
+
+    def sync_mouse_to_gaze(self, intensity: float = 0.3):
+        """
+        鼠标向视线方向轻微移动（协调性）
+        intensity: 0-1，越高鼠标越贴近视线
+        """
+        dx = (self.gaze_pos[0] - self.mouse_pos[0]) * intensity
+        dy = (self.gaze_pos[1] - self.mouse_pos[1]) * intensity
+        # 加一点随机偏移，不要100%协调
+        dx += random.uniform(-20, 20)
+        dy += random.uniform(-20, 20)
+        new_x = round(self.mouse_pos[0] + dx)
+        new_y = round(self.mouse_pos[1] + dy)
+        self.mouse_pos = (new_x, new_y)
+        return self.mouse_pos
+```
+
+### 8. 操作犹豫与自我纠正机制
+
+```python
+import random
+import time
+
+class HesitationAndCorrection:
+    """
+    模拟人类的"犹豫-决策-执行-纠正"行为链：
+
+    犹豫阶段：人类在点击/操作前会有停顿，长短不一
+    决策时间：取决于操作的重要性（重要=更长犹豫）
+    自我纠正：人类犯错后会停顿、再纠正，而不是立刻重做
+
+    核心行为：
+    - Hover停留（犹豫要点击哪里）
+    - 点击前犹豫（最后关头取消或改变目标）
+    - 点击后微调（点了后发现不对，短暂停顿后纠正）
+    - 滚回重新看（纠正策略前先回顾）
+    """
+
+    def __init__(self):
+        self.last_action_was_error = False  # 标记上次操作是否出错
+        self.hover_start_time = None
+        self.hover_target = None
+
+    def pre_click_hesitation(self, element_importance: str = 'normal') -> float:
+        """
+        点击前的犹豫时间
+        element_importance: 'low' | 'normal' | 'high' | 'critical'
+        """
+        hesitation_map = {
+            'low':      (0.05, 0.20),   # 不重要，随便点
+            'normal':   (0.15, 0.50),   # 普通操作
+            'high':     (0.40, 1.20),   # 重要按钮
+            'critical': (0.80, 2.50),   # 危险操作（删除、支付）
+        }
+        mn, mx = hesitation_map[element_importance]
+        return random.uniform(mn, mx)
+
+    def hover_then_move(self, from_pos: tuple, to_pos: tuple) -> list:
+        """
+        鼠标悬停后移动：先hover到元素边缘，犹豫，再移动到目标
+        返回事件序列
+        """
+        events = []
+
+        # 悬停开始：在起点稍作停留
+        events.append(('hover_start', from_pos, random.uniform(0.1, 0.3)))
+
+        # 悬停期间的微小抖动（模拟人类手的不稳定）
+        hover_during = random.uniform(0.3, 1.2)
+        jitter_count = int(hover_during / 0.05)
+        for _ in range(jitter_count):
+            jitter = (random.uniform(-3, 3), random.uniform(-3, 3))
+            pos = (from_pos[0] + jitter[0], from_pos[1] + jitter[1])
+            events.append(('jitter', pos, 0.05))
+            # 视线跟随
+            events.append(('gaze_follow', pos, 0))
+
+        # 犹豫：是否继续移动？
+        if random.random() < 0.15:  # 15%概率"犹豫后放弃"
+            events.append(('abort', None, random.uniform(0.5, 1.5)))
+            return events
+
+        # 视线提前移到目标（眼睛先到）
+        events.append(('gaze_advance', to_pos, random.uniform(0.1, 0.25)))
+
+        # 最后关头改变目标（5%概率）
+        if random.random() < 0.05:
+            # 随机轻微偏移目标
+            offset = (random.uniform(-15, 15), random.uniform(-15, 15))
+            to_pos = (to_pos[0] + offset[0], to_pos[1] + offset[1])
+            events.append(('target_adjusted', to_pos, 0))
+
+        # 犹豫后执行
+        hesitation = self.pre_click_hesitation()
+        events.append(('move_to', to_pos, hesitation))
+
+        return events
+
+    def post_click_microcorrection(self, click_pos: tuple, element_bounds: tuple) -> tuple:
+        """
+        点击后发现不对，需要微调/纠正
+        人类不会立刻"撤销"，而是停顿后用小动作修正
+        返回修正后的目标位置
+        """
+        if not self.last_action_was_error:
+            return None  # 无需纠正
+
+        # 停顿（发现错了）
+        correction_pause = random.uniform(0.3, 1.0)
+
+        # 微调：从错误位置到正确位置的短距离移动
+        x1, y1, x2, y2 = element_bounds
+        cx = (x1 + x2) / 2
+        cy = (y1 + y2) / 2
+
+        # 移动方向：从click_pos向center的向量
+        dx = cx - click_pos[0]
+        dy = cy - click_pos[1]
+        dist = math.hypot(dx, dy)
+
+        if dist < 5:
+            return None  # 已经足够近，无需纠正
+
+        # 只纠正一部分（不会100%精准）
+        correction_ratio = random.uniform(0.5, 0.9)
+        new_x = round(click_pos[0] + dx * correction_ratio)
+        new_y = round(click_pos[1] + dy * correction_ratio)
+
+        return (correction_pause, (new_x, new_y))
+
+    def strategy_reconsideration(self, context: dict) -> float:
+        """
+        操作失败后的"重新思考"停顿
+        人类犯错后会停下来想一想，而不是立即重试
+        """
+        # 停顿时间与失败次数正相关
+        fail_count = context.get('consecutive_fails', 1)
+        base = normalvariate_float(1.5, 0.8)
+        return min(base * math.sqrt(fail_count), 5.0)  # 最多5秒
+
+    def should_abort_and_retry(self, fail_count: int) -> bool:
+        """
+        判断是否应该放弃当前策略（换一种方式）
+        连续失败3+次后，人类会怀疑"方法错了"
+        """
+        if fail_count < 2:
+            return False
+        # 2次失败：20%概率换策略
+        # 3次失败：50%概率换策略
+        # 4次+：80%概率换策略
+        prob_switch = min(0.2 * fail_count, 0.9)
+        return random.random() < prob_switch
 ```
 
 ## Process
@@ -452,6 +815,83 @@ Beyond behavioral simulation (mouse curves, typing rhythm), two categories of **
 - 总是精准点击元素中心
 - 操作时间完全可预测
 
+## Human vs Machine Behavior Comparison
+
+| 维度 | 机器/脚本特征 | 真人特征 | 对应拟真机制 |
+|------|------------|---------|------------|
+| **鼠标轨迹** | | | |
+| 移动方式 | 直线、瞬间到达 | 曲线、有加速减速 | 贝塞尔曲线轨迹 |
+| 速度 | 匀速 | 先快后慢，接近目标时减速 | 速度曲线（非线性插值） |
+| 路径 | 最短直线 | 绕远、有弧度 | 控制点随机偏移 |
+| **点击行为** | | | |
+| 点击位置 | 精准中心 | 随机偏移（中心+边缘） | `human_click_point()` 高斯偏移 |
+| 点击前 | 无犹豫、直接点击 | 犹豫 0.1-2.5s | `pre_click_hesitation()` |
+| 点击后 | 立刻下一步 | 偶尔停顿、可能纠正 | 微调机制 |
+| **打字节奏** | | | |
+| 速度 | 固定 WPM | 波动±30%，正态分布 | `HumanTypingRhythm` |
+| 按键间隔 | 几乎相同 | 元音慢、辅音快、空格极快 | 键位难度系数 |
+| 错误率 | 0% | ~1.5% 自然打错 | 随机 backspace |
+| **视线/鼠标协调** | | | |
+| 鼠标与视线 | 无关 | 视线先于鼠标 100-300ms | `VisualFocusSimulator` |
+| 视线停留 | 无规律 | 焦点区域停留 0.5-2s | `gaze_dwell()` |
+| 协调性 | 0% | 30-50% 协调 | `sync_mouse_to_gaze()` |
+| **操作节奏** | | | |
+| 间隔 | 固定、极短 | 随机 0.2-3s | `HumanRhythm` |
+| 连续操作 | 无限制 | 3-5次后必停 | `max_consecutive_fast_actions` |
+| 阅读停顿 | 0 | 30-50% 概率滚动停顿 | `scroll_pause()` |
+| **操作决策** | | | |
+| 失败后 | 立刻重试 | 停顿思考、可能换策略 | `strategy_reconsideration()` |
+| 放弃概率 | 0 | 随失败次数增加 | `should_abort_and_retry()` |
+| 悬停 | 无 | 0.3-1.2s 悬停后移动 | `hover_then_move()` |
+| **滚动行为** | | | |
+| 滚动量 | 固定 | 随机 200-400px | `human_scroll()` |
+| 回滚 | 从不 | 5% 概率偶发回滚 | `random.choice()` |
+| 匀速 | 是 | 分段+停顿 | 分段滚动+随机停顿 |
+
+### 时序对比示例
+
+**机器操作时序（反检测特征）：**
+```
+t=0.000: mouseMove(100,100) → (500,300)  [直线，瞬间]
+t=0.000: mousePressed @ (500,300)
+t=0.000: mouseReleased @ (500,300)
+t=0.050: keyDown 'a'
+t=0.050: keyUp 'a'
+t=0.100: keyDown 'b'
+t=0.100: keyUp 'b'
+t=0.150: keyDown 'c'
+t=0.150: keyUp 'c'
+```
+
+**真人操作时序（拟真输出）：**
+```
+t=0.000: mouseMove(100,100) → curve through (250,180) → (490,285) [贝塞尔, 620ms]
+t=0.620: pause (hesitation) 0.38s  [犹豫是否点击]
+t=0.998: mousePressed @ (487,291)   [偏移，非中心]
+t=1.050: mouseReleased @ (487,291)
+t=1.200: pause 0.2s
+t=1.400: keyDown 'a' [~95ms，实际节奏]
+t=1.495: keyUp 'a'
+t=1.560: pause 0.065s
+t=1.625: keyDown 'b'
+t=1.718: keyUp 'b'
+t=1.850: pause (word transition) 0.03s
+t=1.880: keyDown 'c'
+t=1.965: keyUp 'c'
+t=2.100: scroll [-300px] + pause 0.8s  [阅读停顿]
+t=2.900: scroll [-200px]
+```
+
+### 检测阈值参考
+
+| 检测维度 | 机器阈值（会触发） | 安全范围 |
+|---------|-----------------|---------|
+| 鼠标速度 | < 50px/s 或 > 3000px/s | 200-1500px/s |
+| 轨迹曲率 | < 5° 偏离直线 | > 15° 偏离 |
+| 点击间隔标准差 | < 50ms | > 100ms |
+| 连续操作上限 | 10+ 次无缝操作 | 3-5 次后停 |
+| 滚动停顿率 | < 10% | > 30% |
+
 ## Integration Path (CDP Execution Layer)
 
 ### 目标文件
@@ -489,10 +929,16 @@ def adapt_trajectory_to_cdp(bezier_points):
 
 验证清单：
 
-- [ ] 鼠标轨迹是曲线而非直线
+- [ ] 鼠标轨迹是曲线而非直线（贝塞尔，有速度曲线）
+- [ ] 鼠标轨迹时间正态分布（非固定duration）
 - [ ] 点击间隔有随机变化
 - [ ] 滚动有停顿模拟阅读
-- [ ] 打字速度有变化
+- [ ] 打字速度是正态分布（不均匀，有快有慢）
+- [ ] 打字有1.5%自然打错率（backspace）
 - [ ] 点击位置有随机偏移
+- [ ] 视觉焦点模拟：视线先于鼠标移动
+- [ ] 操作犹豫：点击前有0.1-2.5s停顿
+- [ ] 操作纠正：失败后有停顿思考，不会立刻重试
 - [ ] 行为序列不可预测
 - [ ] 平台检测不触发captcha
+- [ ] Human vs Machine对比：机器特征（直线/均匀间隔/无犹豫）全部消除

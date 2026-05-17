@@ -1,7 +1,7 @@
 ---
 name: maps
 description: "Geocode, POIs, routes, timezones via OpenStreetMap/OSRM."
-version: 1.2.0
+version: 1.3.0
 author: Mibayy
 license: MIT
 platforms: [linux, macos, windows]
@@ -173,6 +173,91 @@ current.
 **"What restaurants are in downtown Seattle?":**
 1. `area "Downtown Seattle"` → get bounding box
 2. `bbox S W N E restaurant --limit 30`
+
+---
+
+## 1688 Supplier Intelligence Commands
+
+Four commands purpose-built for 1688 wholesale supplier analysis and procurement
+logistics. All use Nominatim/OSRM with no API key required.
+
+### supplier-geo — 供应商地理位置分析
+
+解析供应商列表（名称/地址/城市），批量获取GPS坐标，进行地理分布统计分析。
+
+```bash
+# 从CSV文件读取供应商（格式：名称,地址 或 名称,城市）
+python3 $MAPS supplier-geo --file suppliers.csv
+# 文件格式：每行一条记录，支持以下格式
+#   深圳市龙华区XXX工业园  （纯地址）
+#   广州白云区XXX公司,广州  （名称,城市）
+
+# 纯坐标列表（JSON数组，每项包含 name + address/city）
+python3 $MAPS supplier-geo --json '[{"name":"A工厂","city":"深圳"},{"name":"B公司","city":"广州"}]'
+
+# 指定输出文件保存结果
+python3 $MAPS supplier-geo --file suppliers.csv --output supplier_locations.json
+```
+
+返回：供应商坐标表、省/城市分布直方图、地理边界外接矩形（convex hull近似）、总覆盖面积。
+
+### logistics-cost — 物流成本估算
+
+基于距离和运输模式估算物流成本。模型：快递(首重+续重)、陆运(吨公里计价)、空运(急件)。
+
+```bash
+# 单供应商→目的港估算
+python3 $MAPS logistics-cost --from "深圳" --to "北京" --weight 500 --mode express
+# weight: 公斤 | mode: express(快递)/truck(陆运)/air(空运)
+
+# 多供应商到同一目的港（批量）
+python3 $MAPS logistics-cost --from "广州,深圳,东莞" --to "上海" --weight 200 --mode truck
+
+# 带体积重估算（长×宽×高 cm，体积重=体积/6000）
+python3 $MAPS logistics-cost --from "义乌" --to "乌鲁木齐" --weight 100 --mode truck \
+  --volume "60,40,30"
+```
+
+返回：各路线距离(km)、估算时效(天)、费用(元)、总成本。模型参数内置（快递首重1kg约8元+5元/续重kg；陆运0.35元/吨公里；空运18元/kg）。
+
+### supplier-clusters — 供应商集群可视化
+
+对供应商坐标进行聚类分析（KMeans），识别地理集群，生成可视化地图。
+
+```bash
+# 从坐标列表识别3个集群
+python3 $MAPS supplier-clusters \
+  --coords '[{"name":"A厂","lat":22.5,"lon":113.9},{"name":"B厂","lat":22.6,"lon":113.8},...]' \
+  --k 3
+
+# 从CSV读取坐标，自动选择最优K（轮廓系数）
+python3 $MAPS supplier-clusters --file suppliers.csv --auto-k
+
+# 保存聚类结果为GeoJSON
+python3 $MAPS supplier-clusters --file suppliers.csv --k 4 --output clusters.json
+```
+
+返回：每个簇的中心坐标、成员列表、簇半径(km)、簇内平均间距。生成GeoJSON含颜色标记的供应商点，可在 geojson.io 查看。
+
+### delivery-heatmap — 交货距离热力图
+
+以目的地为中心，计算各供应商到目的地的距离，生成距离分级表和SVG热力图。
+
+```bash
+# 单一目的港
+python3 $MAPS delivery-heatmap \
+  --suppliers '[{"name":"A厂","lat":22.5,"lon":113.9},{"name":"B厂","lat":23.1,"lon":113.3}]' \
+  --dest "广州" \
+  --output heatmap.json
+
+# 从CSV读取供应商
+python3 $MAPS delivery-heatmap --file suppliers.csv --dest "上海" --mode driving
+
+# 生成SVG热力图（ASCII热力图+距离分级表）
+python3 $MAPS delivery-heatmap --file suppliers.csv --dest "成都" --format svg
+```
+
+返回：距离分级（<100km绿/100-300km黄/>300km红）、各供应商距离排序表、SVG热力图文件路径。可选OSRM道路距离（--mode driving）或直线距离（默认）。
 
 ## Pitfalls
 

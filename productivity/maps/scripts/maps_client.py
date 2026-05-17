@@ -5,14 +5,18 @@ Uses only Python stdlib. Data from OpenStreetMap/Nominatim, Overpass API, OSRM,
 and TimeAPI.io.
 
 Commands:
-  search     - Geocode a place name to coordinates
-  reverse    - Reverse geocode coordinates to an address
-  nearby     - Find nearby POIs by category
-  distance   - Road distance and travel time between two places
-  directions - Turn-by-turn directions between two places
-  timezone   - Timezone info for coordinates
-  bbox       - Find POIs within a bounding box
-  area       - Get bounding box and area info for a named place
+  search          - Geocode a place name to coordinates
+  reverse         - Reverse geocode coordinates to an address
+  nearby          - Find nearby POIs by category
+  distance        - Road distance and travel time between two places
+  directions      - Turn-by-turn directions between two places
+  timezone        - Timezone info for coordinates
+  bbox            - Find POIs within a bounding box
+  area            - Get bounding box and area info for a named place
+  supplier-geo    - 1688供应商地理位置分析（批量解析+geocode）
+  logistics-cost  - 物流成本估算（距离+重量+运输模式）
+  supplier-clusters - 供应商聚类分析+GeoJSON可视化
+  delivery-heatmap  - 交货距离热力图+SVG渲染
 """
 
 import argparse
