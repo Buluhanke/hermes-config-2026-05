@@ -1419,13 +1419,43 @@ CDP 截图要求：
 
 ```python
 import random, pyautogui
-# 在元素中心点加随机偏移（±5px）
 offset_x = random.randint(-5, 5)
 offset_y = random.randint(-5, 5)
 pyautogui.click(center_x + offset_x, center_y + offset_y)
 ```
 
-**调用方式（关键！不是 /api/chat，是 /api/generate）**：
+## vision_connect.py 接口（2026-05-17 确认可用）
+
+**venv路径**：`~/.hermes/hermes-agent/venv/bin/python3`（Vision/AppKit 框架在此 Python 中有，Homebrew Python 3.14 无）
+
+**截图路径**：`/Users/aimac/hermes-v3/hermes_screen.png`（不用 /tmp/，tesseract 沙盒隔离无法访问）
+
+**已验证可导入函数**：
+```python
+from vision_connect import (
+    capture_screen,   # → str (截图路径)
+    smart_click,     # Ollama smolvlm2 找元素 + CUA 点击
+    find_and_click,   # smart_click 的别名
+    ask_screen,      # Ollama 截图理解（返回文字描述）
+    ask_ollama_vlm,  # 直接调 Ollama generate
+    vision_ocr,      # Apple Vision → tesseract fallback
+)
+```
+
+**调用示例**：
+```python
+import sys
+sys.path.insert(0, '/Users/aimac/.hermes/skills/vision/hermes-vision-connect')
+from vision_connect import capture_screen, smart_click, ask_screen
+
+path = capture_screen()
+result = smart_click("登录按钮")
+desc = ask_screen("页面上有什么按钮？")
+```
+
+**已知限制**：
+- smolvlm2 响应 3-6 秒，不适合高频调用
+- 坐标需手动从归一化 (0-1) 转为实际像素：`(int(x * screen_width), int(y * screen_height))`
 ```python
 import requests, base64
 

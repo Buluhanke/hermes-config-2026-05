@@ -26,8 +26,8 @@ try:
 except ImportError:
     HAS_VISION = False
 
-SCREENSHOT_PATH = "/tmp/hermes_screen.png"
-SCREENSHOT_AFTER = "/tmp/hermes_screen_after.png"
+SCREENSHOT_PATH = "/Users/aimac/hermes-v3/hermes_screen.png"
+SCREENSHOT_AFTER = "/Users/aimac/hermes-v3/hermes_screen_after.png"
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
@@ -213,7 +213,7 @@ def ask_openrouter_vlm(img_path: str, question: str, timeout: int = 60) -> str:
 # 截屏
 # ─────────────────────────────────────────
 def capture_screen(path: str = SCREENSHOT_PATH) -> str:
-    with mss.mss() as s:
+    with mss.MSS() as s:
         s.shot(output=path)
     return path
 

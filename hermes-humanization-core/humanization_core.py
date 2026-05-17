@@ -27,7 +27,7 @@ import requests
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.05
 
-SCREENSHOT_PATH = "/tmp/hermes_screen.png"
+SCREENSHOT_PATH = "/Users/aimac/hermes-v3/hermes_screen.png"
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
 
 # 发呆机制计数器（每 N 次操作随机停 3-8 秒）
