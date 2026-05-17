@@ -17,6 +17,12 @@ description: 用户偏好和配置记忆
 - 可通过Chrome导航到这些网站获取实时知识
 - 优先用浏览器直接查，而非依赖模型记忆
 
+## 模型链顺序（2026-05-17确认）
+1. `V2.aicodee.com/MiniMax-M2.7-highspeed` — 中转MiniMax（主模型）
+2. `minimax-cn/MiniMax-M2.7` — 直连MiniMax（Fallback 1）
+3. `deepseek/deepseek-v4-flash` — DeepSeek（Fallback 2）
+provider: custom，base_url: https://v2.aicodee.com/v1
+
 ## 沟通风格
 - 极端简短，积极配合
 - 命令审批提示必须用中文（不能用英文）
