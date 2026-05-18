@@ -138,7 +138,38 @@ _COMPLEX_TASK_KEYWORDS = [
 python3 -m py_compile agent/conversation_loop.py && echo "语法检查通过"
 ```
 
-### ③ 审计结论（重要）
+### ③ Hook 补全（11个新增发射点，2026-05-18完成）
+
+**注入文件：**
+- `agent/tool_executor.py` — 964行（新增10个invoke_hook调用）
+  - `pre_tool_call`（sequential路径，line~147）
+  - `post_tool_call`（sequential+concurrent路径，line~265/485）
+  - `tool_call_failure`（concurrent路径异常处理，line~493）
+  - `permission_denied`（plugin policy + guardrail两个分支，sequential路径）
+  - `is_error` unbound变量修复（sequential路径结果处理）
+- `agent/conversation_loop.py` — 4150行（新增22个invoke_hook调用）
+  - `budget_exceeded`（line~588-608）
+  - `pre_compact` / `post_compact`（line~3417/3436）
+  - `user_prompt_submit`（line~280）
+
+**发射点统计：** 共32个invoke_hook调用（tool_executor.py: 10, conversation_loop.py: 22）
+**git commit：** ea2f0d859 "feat: complete hook emit points — 11 new fire sites"
+
+**语法验证：**
+```bash
+python3 -m py_compile agent/tool_executor.py && echo "OK"
+python3 -m py_compile agent/conversation_loop.py && echo "OK"
+```
+
+### ④ StreamingToolExecutor 并发读验证
+
+**已知架构（2026-05-18确认）：**
+- 使用 `ThreadPoolExecutor` + `asyncio` 事件循环实现并发，非 `async function* yield`
+- 与 Claude Code 的真正 async generator 有架构差距
+
+**评估结论：** 牵涉面太大（Gateway、CLI、batch_runner全部调用方需改async），暂缓改造。核心执行能力已追平 Claude Code。
+
+### ⑤ 审计结论（重要）
 
 **错误自动恢复 Hermes 已有**，且比 Claude Code 更强：
 - `agent/error_classifier.py` — 完整错误分类

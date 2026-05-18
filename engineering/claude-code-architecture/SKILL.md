@@ -199,18 +199,20 @@ Tool/ Session/ Agent/ Task/ Compact/ 权限/ 其他
 ## Hermes对齐状态（截至2026-05-18）
 
 ✅ 已完成：
-- StreamingToolExecutor（写读互斥+sibling abort）
-- Hook扩展（18→36个事件）
-- Task系统（文件锁+原子claim+级联清理）
-- delegate_tool接入Task System
+- StreamingToolExecutor（335行，ThreadPoolExecutor+asyncio并发模式，写读互斥+sibling abort）
+- Hook扩展（36个定义 → 32个实装发射点，11个新增：pre/post_tool_call、tool_call_failure、permission_denied、budget_exceeded、pre/post_compact、user_prompt_submit）
+- Task系统（637行，文件锁+原子claim+级联清理）
+- 4种上下文压缩（summerize/sink/first-N-last-N/prune）
 - chat_completion_helpers.py已注入streaming_tool_callback
+- conversation_loop.py已集成流结束后的get_results()+去重drain逻辑
 
-📋 进行中：
-- 流式工具执行端到端集成
-- conversation_loop的async generator改造
+⚠️ 差距缩小（约15%）：
+- async generator架构：streaming_tool_executor使用ThreadPoolExecutor+asyncio，非async function* yield。评估后认为牵涉面太大（Gateway/CLI/batch_runner全部调用方），暂缓
+- 内置MCP原生支持：目前通过mcp-chrome-stdio桥接
+- TUI内核：使用Ink React TUI，与Claude Code非同一实现
 
 📋 待办：
-- MCP工具自动注册为Hermes skill
-- Session Storage透明化设计
+- transform_terminal_output/transform_tool_result发射点（工具输出返回路径）
+- Session Storage append-only JSONL设计
 - 权限链强化（deny规则+auto-allow）
 - Feature Flag架构
