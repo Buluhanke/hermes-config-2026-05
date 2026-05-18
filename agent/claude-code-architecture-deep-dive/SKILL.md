@@ -141,6 +141,212 @@ const tool = buildTool({
 - **不接受直接 PR**：编辑须提交到 `awesome-selfhosted-data`
 - **结论**：对 Hermes 无直接可用项目（Tier1: Ollama/LocalAI/Khoj 已研究，Tier2: Langfuse/Opik 可用但非紧急，Tier3: sish 最实用）
 
+---
+
+## 2026-05-18 新增：源码快照深度解析
+
+来源：Anthropic 通过一次源码快照泄漏的 Claude Code 完整代码（2026-03-31）。比之前来源更完整、更准确。
+
+### 规模指标
+
+| 指标 | 数值 |
+|------|------|
+| TypeScript/TSX 文件数 | 1,884 个 |
+| 总行数 | ~512,685 行 |
+| 源码目录大小 | 35 MB |
+| 主入口 src/main.tsx | 786 KB / 4,683 行 |
+
+### 技术栈全景（补充）
+
+| 类别 | 技术 | 说明 |
+|------|------|------|
+| 运行时 | Bun | 替代 Node.js，启动更快，内置 bundler 和测试框架 |
+| 终端 UI | React + Ink | 在终端中跑 React 组件树 |
+| CLI 解析 | Commander.js | 附带 extra-typings 的类型安全 CLI |
+| 外部协议 | MCP SDK + LSP | 工具扩展协议 + 语言服务器协议 |
+| Feature Flag | GrowthBook + **bun:bundle** | 运行时灰度 + **构建时死代码消除** |
+| 代码搜索 | ripgrep | GrepTool 内部调用 |
+
+**最重要的技术决策：Bun 死代码消除**
+Claude Code 大量使用 `bun:bundle` 做构建时 feature flag 死代码消除。flag 在打包时就被判断并剔除，而不是运行时的 if/else 分支：
+
+```typescript
+// src/tools.ts（节选）
+import { feature } from 'bun:bundle'
+
+const SleepTool = feature('PROACTIVE') || feature('KAIROS')
+  ? require('./tools/SleepTool/SleepTool.js').SleepTool
+  : null
+```
+
+这意味着内部开发版和对外发布版是完全不同的二进制，对外版本里根本不含某些实验性功能的代码。
+
+### 核心：StreamingToolExecutor（流式工具执行引擎）
+
+**文件：** `src/services/tools/StreamingToolExecutor.ts`（~300行）
+
+这是 Claude Code 最精妙的工程设计——在 LLM 流式输出的同时，就开始并发执行工具，不等全部 tool_use block 到齐。
+
+```typescript
+export class StreamingToolExecutor {
+  private tools: TrackedTool[] = []   // 工具执行队列
+  private toolUseContext: ToolUseContext
+  private siblingAbortController: AbortController  // 兄弟工具出错时中止其他工具
+}
+
+type TrackedTool = {
+  id: string
+  block: ToolUseBlock
+  status: 'queued' | 'executing' | 'completed' | 'yielded'
+  isConcurrencySafe: boolean
+  promise?: Promise<void>
+  results?: Message[]
+  pendingProgress: Message[]
+}
+```
+
+**并发控制逻辑：**
+```typescript
+private canExecuteTool(isConcurrencySafe: boolean): boolean {
+  const executingTools = this.tools.filter(t => t.status === 'executing')
+  return (
+    executingTools.length === 0 ||
+    (isConcurrencySafe && executingTools.every(t => t.isConcurrencySafe))
+  )
+}
+```
+
+**核心规则：**
+- 只读（并发安全）工具：只要当前正在执行的全是只读工具，就可以立即加入并发执行
+- 写入（非并发安全）工具：必须等所有在执行的工具完成，才能独占执行
+- 错误传播：兄弟工具联动取消——当一个 BashTool 执行出错时，会通过 `siblingAbortController` 立即取消所有正在并发执行的兄弟工具进程
+
+**结果顺序保证：** `getRemainingResults()` 按工具接收顺序（而非完成顺序）yield 结果。保证了 LLM 下一轮收到的 tool_result 对应关系是确定的。
+
+**对比 Hermes：** Hermes 的 `tool_executor.py` 是"等 LLM 完全输出后，再用 ThreadPoolExecutor 并发执行"。Claude Code 是"看到 tool_use block 就开始执行"，不需要等 LLM 全部输出完毕。这是感知延迟上的关键差距。
+
+### 核心：ReAct Loop（Agent 循环）
+
+**文件：** `src/query.ts:241`（async generator）
+
+Claude Code 的 Agent Loop 实现了经典的 ReAct 模式（Reasoning + Acting）：
+
+```
+用户输入 → 调用 LLM，流式获取响应
+  ↓
+响应中有 tool_use？
+  ├─ 是 → 执行工具 → 将结果追加到对话 → 回到"调用 LLM"
+  └─ 否 → 结束，将最终文本响应展示给用户
+```
+
+**入口：** `QueryEngine.submitMessage()` → `query()` → `queryLoop()`
+
+**状态机设计：** 每次迭代开始时解构 state 拿到只读引用，迭代内不修改 state；只在"continue sites"（循环末尾）通过 `state = { ...newState }` 整体替换。这保证了每次迭代的状态是清晰快照，避免了跨迭代的意外修改。
+
+**Token Budget 跟踪：** budgetTracker 贯穿全程，配合 taskBudgetRemaining 在跨 compact 边界后也能准确统计总消耗。
+
+### 核心：工具调用权限链
+
+**文件：** `src/services/tools/toolExecution.ts:1,745`
+
+每次工具调用都经过完整权限检查链：
+
+```
+runToolUse(block)
+  ├─ 1. Zod schema 校验输入参数
+  ├─ 2. tool.validateInput()（工具自定义校验）
+  ├─ 3. runPreToolUseHooks()     ← 前置 hooks
+  ├─ 4. canUseTool() 权限决策
+  │       ├─ deny 规则匹配 → 拒绝
+  │       ├─ ask 规则匹配  → 弹出用户确认对话框（阻塞）
+  │       └─ allow         → 通过
+  ├─ 5. tool.call(input, context, ...)
+  ├─ 6. runPostToolUseHooks()    ← 后置 hooks
+  └─ 7. 格式化为 tool_result 消息块
+```
+
+权限规则支持针对特定工具、特定参数模式的细粒度配置，例如：
+- `Bash(git *)` — 自动允许所有 git 命令
+- `Bash(rm *)` — 所有删除命令必须询问
+
+**对比 Hermes：** Hermes 有 `tool_guardrails.py` + `shell_hooks.py` + 插件 hook，但没有 Zod schema 校验层。权限链深度不如 Claude Code。
+
+### 核心：Compact 对话压缩四种策略
+
+**文件：** `src/services/compact/compact.ts`
+
+| 策略 | 触发场景 | 特点 |
+|------|----------|------|
+| Session Memory Compaction | 首选 | 不调用 LLM，直接存入 session memory 文件，最快 |
+| Microcompaction | 含大量图片/文档时 | 先剥离图片（替换为 [image]），再做轻量压缩 |
+| Traditional Compaction | 需高质量摘要 | fork 独立子 agent 做全量摘要，支持自定义指令 |
+| Reactive Compaction | 收到 prompt_too_long 错误 | 响应式触发，自动压缩后重试 |
+
+关键常量：
+- `COMPACT_MAX_OUTPUT_TOKENS = 20,000` — 摘要最大输出 token
+- `POST_COMPACT_TOKEN_BUDGET = 50,000` — 压缩后可用 token 预算
+
+**对比 Hermes：** Hermes 的 `context_compressor.py` (1699行) 已有类似 4 种策略，实现上相当。
+
+### 核心：Hook 生命周期（30+ 事件）
+
+**文件：** `src/utils/hooks/`（多文件）
+
+覆盖 30+ 生命周期事件：PreToolUse / PostToolUse / PostToolUseFailure / SessionStart / SessionEnd / Setup / Stop / SubagentStart / SubagentStop / TaskCreated / TaskCompleted / PreCompact / PostCompact / UserPromptSubmit / PermissionDenied / PermissionRequest / InstructionsLoaded / CwdChanged / FileChanged / TeammateIdle …
+
+Hook 配置支持四种执行类型：Shell 命令 / HTTP 请求 / Agent 委托 / Prompt Hook。
+
+Exit code 语义：0=成功，2=阻塞错误（影响模型下一步行为），其他非零=报告给用户。
+
+**对比 Hermes：** Hermes 的 `shell_hooks.py` (836行) + 插件系统有类似能力，但事件点数量和粒度不如 Claude Code。
+
+### 核心：Task 系统（多 Agent 协作基础设施）
+
+**文件：** `src/utils/tasks.ts:862`
+
+Task 以 JSON 文件形式存储于 `~/.claude/config/tasks/{taskListId}/` 目录，包含：id / subject / status / blocks / blockedBy / owner 等字段。
+
+**并发安全：** 所有修改操作都在 proper-lockfile 的文件锁保护下执行，最多重试 30 次，重试间隔指数退避。
+
+**原子 Claim：** `claimTask()` 实现原子性的任务认领——多个 agent 竞争同一 task 时，只有一个能成功。
+
+**级联清理：** 删除 task 时自动清理所有其他任务中对该 task 的 blocks/blockedBy 引用。
+
+### 关键文件速查表
+
+| 文件 | 行数 | 职责 |
+|------|------|------|
+| src/main.tsx | 4,683 | CLI 入口、React/Ink 渲染、并行预取 |
+| src/query.ts | 1,729 | Agent Loop 核心（queryLoop） |
+| src/Tool.ts | 792 | Tool 类型定义与工具查找 |
+| src/tools.ts | 390 | 工具注册、池化、feature gate |
+| src/services/tools/toolExecution.ts | 1,745 | 工具权限检查、hooks、实际执行 |
+| src/services/tools/StreamingToolExecutor.ts | ~300 | 流式并发工具执行引擎 |
+| src/utils/tasks.ts | 862 | Task 系统（文件锁 + 原子 claim） |
+| src/services/compact/compact.ts | 200+ | 对话压缩服务（四种策略） |
+| src/utils/thinking.ts | ~200 | Thinking 模式配置与 ultrathink 触发 |
+
+### Hermes vs Claude Code 关键差距速查
+
+| 优先级 | 差距 | Claude Code 方案 | Hermes 当前 |
+|--------|------|-----------------|------------|
+| **P0** | 流式工具执行 | LLM边输出token边启动工具 | 等LLM完全输出才开始 |
+| **P0** | 权限模型深度 | Zod校验→tool自检→pre hooks→canUseTool→post hooks | Guardrails + invoke_tool |
+| **P1** | Async Generator架构 | `async function* yield` 驱动全链路 | 回调(callback)驱动 |
+| **P1** | 多Agent Task系统 | 文件锁+原子claim+级联清理 | 无（只有delegate_task） |
+| **P2** | Hook生命周期 | 30+ 事件点 | ~10 个主要事件 |
+| **P2** | Skill MCP自动化 | MCP工具自动注册为skill | 无 |
+| **P3** | 构建时Feature Flag | bun:bundle 死代码消除 | 无（运行时判断） |
+
+### 架构亮点总结（可借鉴的设计哲学）
+
+1. **Async Generator 驱动整个架构** — yield 事件给 UI 层，return 终止状态，线性可读性 + 真正流式处理
+2. **流式工具执行** — 看到 tool_use block 就开始执行，不等 LLM 全部输出完毕
+3. **权限模型是硬编码的必经路径** — 安全是设计出发点，不是事后补丁
+4. **构建时特性隔离** — bun:bundle 让实验代码在发布版中完全消失
+5. **多 Agent 是一等公民** — Task 系统的文件锁、原子 claim、兄弟 abort 机制
+6. **扩展性贯穿始终** — MCP / Hooks / Skill / Plugin 四层扩展
+
 ### 待观察（⚠️）
 - 远程控制/遥测开关
 - Undercover 模式（公开仓库自动隐藏 AI 身份）
@@ -159,3 +365,4 @@ const tool = buildTool({
 
 - `/tmp/learn-coding-agent-study/README_CN.md` — 中文完整分析
 - `/tmp/learn-coding-agent-study/docs/zh/` — 5份专题报告（遥测/代号/卧底/远程/路线图）
+- `references/hermes-agent-source-data-2026-05-18.md` — Hermes 源码关键数据实地读取（2026-05-18 本次分析）

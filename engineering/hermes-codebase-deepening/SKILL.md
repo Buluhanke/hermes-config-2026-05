@@ -151,19 +151,97 @@ python3 -m py_compile agent/conversation_loop.py && echo "语法检查通过"
 
 ---
 
-## 常见源码位置速查
+## Hermes vs Claude Code 关键架构对比（2026-05-18）
 
-| 功能 | 文件 | 关键行 |
-|------|------|--------|
-| 主循环入口 | agent/conversation_loop.py | 532 |
+### 规模对比
+
+| 指标 | Claude Code | Hermes |
+|---|---|---|
+| 语言 | TypeScript (Bun) | Python |
+| 入口文件 | main.tsx 4,683行 | cli.py 14,379行 / run_agent.py 4,094行 |
+| 核心循环 | query.ts 1,729行 (async generator) | conversation_loop.py 4,058行 (同步while) |
+| 工具执行 | StreamingToolExecutor ~300行 | tool_executor.py 920行 (ThreadPool) |
+| 对话压缩 | compact.ts 200+行 | context_compressor.py 1,699行 |
+| Hooks | hooks.ts 200+行 | shell_hooks.py 836行 |
+| 代码总量 | ~512K 行 | ~50K 行 |
+
+### Hermes 已经做得更好的
+
+| 功能 | Hermes 实现 | Claude Code 对应 |
+|---|---|---|
+| **错误自动恢复** | 完整错误分类 + 凭证池 + 降级 | 基础重试 |
+| **Checkpoint** | 文件修改前快照 | 无 |
+| **Daemon系统** | daemon_scheduler + daemon_tool | 无（Claude Code 只有 cron） |
+| **Loop内置Planning** | conversation_loop 两处注入 | Claude Code 需要手动 /plan |
+
+### P0 差距（需要优先补齐）
+
+**1. 流式工具执行**
+- Claude Code: `StreamingToolExecutor`，LLM边输出token边启动工具
+- Hermes: `tool_executor.py`，等LLM完全输出才开始
+- 改动：`tool_executor.py` 改为流式消费模式
+
+**2. 权限模型深度**
+- Claude Code: Zod校验→tool自检→pre hooks→canUseTool→post hooks（6层）
+- Hermes: Guardrails + PreToolHooks + 插件（3层）
+- 改动：`agent/tool_guardrails.py` 扩展为完整权限链
+
+### P1 差距（中期目标）
+
+**3. Async Generator 架构**
+- Claude Code: `async function* yield` 驱动全链路
+- Hermes: 回调(callback)驱动
+- 改动：`run_conversation()` 改为 async generator
+
+**4. 多Agent Task系统**
+- Claude Code: 文件锁+原子claim+级联清理
+- Hermes: 只有 delegate_task，无持久化任务
+- 改动：新建 `agent/task_system.py`
+
+### 源码规模参考（用于评估改动成本）
+
+```
+Hermes 核心文件：
+  cli.py                          14,379 行
+  run_agent.py                     4,094 行
+  agent/conversation_loop.py        4,058 行
+  agent/tool_executor.py             920 行
+  agent/context_compressor.py        1,699 行
+  agent/shell_hooks.py                836 行
+  model_tools.py                      899 行
+  toolsets.py                         866 行
+
+Claude Code 对应：
+  src/main.tsx                      4,683 行
+  src/query.ts                      1,729 行
+  src/services/tools/toolExecution.ts 1,745 行
+  src/services/tools/StreamingToolExecutor.ts ~300 行
+  src/services/compact/compact.ts    200+ 行
+  src/utils/tasks.ts                  862 行
+```
+
+---
+
+## 常见源码位置速查（更新）
+
+| 功能 | 文件 | 关键行/备注 |
+|------|------|-------------|
+| 主循环入口 | agent/conversation_loop.py | 532, while 主循环 |
 | Preflight压缩 | agent/conversation_loop.py | 356-424 |
 | API调用+错误恢复 | agent/conversation_loop.py | ~1880-1930 |
+| 工具执行引擎 | agent/tool_executor.py | 920行，ThreadPoolExecutor，8 workers |
 | 工具注册 | tools/registry.py | 42-70 |
+| 工具定义 | model_tools.py | 899行，discover_builtin_tools() |
+| 对话压缩 | agent/context_compressor.py | 1699行，4种策略 |
+| Hooks | agent/shell_hooks.py | 836行，JSON协议 |
+| Skill加载 | agent/skill_commands.py | 斜杠命令解析 |
 | Cron调度 | gateway/run.py | ~16600 |
 | Daemon调度 | cron/daemon_scheduler.py | 630行 |
-| 错误分类 | agent/error_classifier.py | 345 |
-| 凭证池恢复 | agent/agent_runtime_helpers.py | 537 |
-| 状态存储 | agent/state/ | AppState.tsx |
+| 错误分类 | agent/error_classifier.py | 345行 |
+| 凭证池恢复 | agent/agent_runtime_helpers.py | 537行 |
+| Checkpoint | agent/checkpoint.py | 文件快照管理 |
+| CLI入口 | cli.py | 14379行 |
+| Agent入口 | run_agent.py | 4094行 |
 
 ## 重要原则
 
