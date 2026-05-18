@@ -157,6 +157,16 @@ code-review-and-quality → security-hardening → git-workflow-and-versioning
 | 大任务不分解直接开始 | 容易迷失方向，返工多 | 先planning-and-taYOUR_API_KEY |
 | 用pro-buyer搜索时规格不清晰 | 搜索结果不符合需求 | 先spec-driven-sourcing |
 
+## Skill库精简原则
+
+当118个skills中出现同类重叠时，**同类剔除最差最旧版本**：
+
+1. **保留市场占有最高/功能最完整/社区最活跃的**
+2. **归档到 `~/.hermes/optional-skills/` 而非直接删除**（可恢复）
+3. **优先合并描述重复的**（如 Git工作流 × 2 → 合并成 1）
+
+已归档的重叠组参考：`references/skill-deduplication.md`
+
 ## Verification
 
 验证清单：
