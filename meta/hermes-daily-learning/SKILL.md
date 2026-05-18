@@ -33,9 +33,11 @@ version: 2026-05-17
 
 | 平台 | 网址 |
 |------|------|
-| AgentSkills.io | agentskills.io（500+社区技能） |
-| 虾评 | xiaping.coze.com（470+精品Skill） |
+| AgentSkills.io | agentskills.io（500+社区技能，可直接导入） |
+| 虾评 | xiaping.coze.com（470+精品Skill，有排行榜和评测） |
 | SkillHub | skillhub.cn（Top 50） |
+
+导入社区技能：`hermes skills import <name>`，观察 Hermes 如何在使用中自动优化。
 
 ## 四、学习阶段
 

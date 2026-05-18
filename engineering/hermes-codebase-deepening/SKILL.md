@@ -172,3 +172,69 @@ python3 -m py_compile agent/conversation_loop.py && echo "语法检查通过"
 3. **语法验证**：每次 patch 后立刻 py_compile
 4. **循环导入检查**：gateway/cron/agent 三者之间的导入关系要清晰
 5. **自注册优先**：新工具尽量用 `registry.register()` 自注册，避免改 registry.py
+
+---
+
+## cc-haha 架构精髓（可迁移到 Hermes）
+
+> 来源：NanmiCoder/cc-haha (11k stars, Claude Code 泄露源码修复版)
+
+### 核心思想：分层解耦
+
+cc-haha 实现 Computer Use 的方式：**不改原始接口和安全机制，只换底层实现**。
+
+```
+Layer 1 — MCP 工具定义（24个schema）← 不改
+Layer 2 — 安全关卡（9层）← 不改
+Layer 3 — 会话上下文 ← 不改
+Layer 4 — CLI集成 ← 不改
+Layer 5 — Python桥接 ← 替换底层
+Layer 6 — 执行层（pyautogui/mss）← 替换底层
+```
+
+**对应 Hermes 的思路**：换 skill 执行层不换 skill 协议，换 model provider 不换调用接口。
+
+### Python Bridge 跨语言通信
+
+cc-haha 用 JSON RPC 连接 TypeScript (Bun) 和 Python (pyautogui/mss)：
+- venv 隔离管理，带引导流程（检查/创建venv → 检查pip → 安装依赖）
+- 所有屏幕控制指令走这个桥
+
+**对 Hermes 的意义**：Hermes 的 computer use 也可以这样解耦——Python 执行控制，TS 只做调度。
+
+### 9层安全关卡体系（可直接复用思路）
+
+| 关卡 | 作用 |
+|------|------|
+| Kill Switch | 硬编码 `return true` 绕过灰度 |
+| TCC权限 | Accessibility + Screen Recording |
+| 全局互斥锁 | 文件锁防止并发 |
+| 前台应用检查 | 当前应用必须在白名单 |
+| 权限等级 | read < click < full 三级 |
+| 像素验证 | 对比截图防变化 |
+| 系统快捷键拦截 | 阻止⌘Q等 |
+
+### 应用分类系统（191个 Bundle ID）
+
+55个浏览器 / 102个终端 / 34个交易 / 完全禁止类。权限等级和白名单映射可直接迁移到 Hermes computer use 能力中。
+
+---
+
+## Plugin 热重载（待实现）
+
+### 现状
+
+Hermes 已有 `/reload-skills` 和 `/reload-mcp`，但**没有 `/reload-plugins`**。
+
+plugin manager 有 `stop()/start()` 方法（`hermes_cli/plugins.py`），只差 CLI 入口。
+
+### 待加功能
+
+1. **`/reload-plugins` 命令**：仿 `reload-skills`，调用 `get_plugin_manager().stop()` + `start()`
+2. **Plugin 目录文件监控**：仿 `_check_config_mcp_changes()`，监控 `~/.hermes/plugins/` 目录，新加/删除插件时自动重载
+
+### 注入点
+
+- 命令注册：`hermes_cli/commands.py` 的 `COMMAND_REGISTRY`
+- 处理逻辑：`cli.py` 的 `process_command()`，elif 分支加在 `reload-skills` 后面
+- 文件监控：参考 `_check_config_mcp_changes()` (cli.py line 9371)，对 `~/.hermes/plugins/` 做 stat 监控
