@@ -39,8 +39,8 @@ Entry → Query Engine → Tool Dispatch → State → Loop
 | s04 | Sub-Agents（fork 新 messages[]） | ⚠️ 部分：delegate_task |
 | s05 | Knowledge on Demand（懒加载 Skill） | ✅ 已有 skills 系统 |
 | s06 | Context Compaction（3层压缩） | 🔴 需要：实现压缩 |
-| s07 | Persistent Tasks（文件任务图） | ⚠️ 部分：已有 todo |
-| s08 | Background Tasks（Daemon 模式） | 🔴 需要：后台任务 |
+| s07 | Persistent Tasks（文件任务图） | ✅ 已实现（task_system.py） |
+| s08 | Background Tasks（Daemon 模式） | ✅ 已实现（daemon_scheduler.py） |
 | s09 | Agent Teams（异步邮箱） | 🔴 需要：多 Agent 协作 |
 | s10 | Team Protocols（SendMessage 协商） | 🔴 需要：Agent 间通信协议 |
 | s11 | Autonomous Agents（Coordinator 模式） | 🔴 需要：自主决策模式 |
@@ -330,13 +330,15 @@ Task 以 JSON 文件形式存储于 `~/.claude/config/tasks/{taskListId}/` 目�
 
 | 优先级 | 差距 | Claude Code 方案 | Hermes 当前 |
 |--------|------|-----------------|------------|
-| **P0** | 流式工具执行 | LLM边输出token边启动工具 | 等LLM完全输出才开始 |
+| **P0** | 流式工具执行 | LLM边输出token边启动工具 | ✅ 已实现（streaming_tool_executor.py） |
 | **P0** | 权限模型深度 | Zod校验→tool自检→pre hooks→canUseTool→post hooks | Guardrails + invoke_tool |
 | **P1** | Async Generator架构 | `async function* yield` 驱动全链路 | 回调(callback)驱动 |
-| **P1** | 多Agent Task系统 | 文件锁+原子claim+级联清理 | 无（只有delegate_task） |
-| **P2** | Hook生命周期 | 30+ 事件点 | ~10 个主要事件 |
+| **P1** | 多Agent Task系统 | 文件锁+原子claim+级联清理 | ✅ 已实现（task_system.py） |
+| **P2** | Hook生命周期 | 30+ 事件点 | ✅ 已扩展（18→36个事件） |
 | **P2** | Skill MCP自动化 | MCP工具自动注册为skill | 无 |
 | **P3** | 构建时Feature Flag | bun:bundle 死代码消除 | 无（运行时判断） |
+
+> ✅ 标注项：2026-05-18 已提交 commit 5501f5b6b
 
 ### 架构亮点总结（可借鉴的设计哲学）
 
@@ -356,9 +358,11 @@ Task 以 JSON 文件形式存储于 `~/.claude/config/tasks/{taskListId}/` 目�
 
 ```
 /tmp/claude-code-study/          # 克隆的 Claude Code 源码
-/tmp/learn-coding-agent-study/   # 克隆的学习资料
-~/.hermes/hermes-agent/cron/daemon_scheduler.py  # 今日实现
-~/.hermes/hermes-agent/tools/daemon_tool.py      # 今日实现
+```
+~/.hermes/hermes-agent/agent/streaming_tool_executor.py  # 2026-05-18 新建，流式工具执行引擎
+~/.hermes/hermes-agent/agent/task_system.py             # 2026-05-18 新建，Task协作系统
+~/.hermes/hermes-agent/cron/daemon_scheduler.py         # 2026-05-17 新建，Daemon调度
+~/.hermes/hermes-agent/tools/daemon_tool.py             # 2026-05-17 新建，Daemon工具
 ```
 
 ## 参考文档
