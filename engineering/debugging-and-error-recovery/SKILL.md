@@ -195,6 +195,7 @@ version: 1.0.0 "用户报告的现象和代码对不上"
 | 429 | `rate_limit_error` | 请求频率超限 | 等待后指数退避重试 |
 | 429 | `tokens_per_minute_exceeded` | TPM超限 | 减少max_tokens或启用孙歇 |
 | 429 | `context_window_exceeded` | 超出上下文窗口 | 启用truncation或拆分请求 |
+| 403 | `insufficient_user_quota` | **模型提供商额度耗尽** | **立即切换到备用免费模型（如 deepseek/deepseek-v4-flash）；所有渠道同时掉线是典型症状，检查 gateway.error.log 是否有 403 quota 错误** |
 | 500 | `server_error` | OpenAI服务端内部错误 | 等待后重试，不自行修复 |
 | 503 | `service_unavailable` | 服务不可用（维护/过载） | 等待后重试，监控状态页 |
 

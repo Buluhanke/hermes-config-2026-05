@@ -12,7 +12,7 @@ triggers:
   - 1688 采购自动化
   - n8n Cronjob 协同
   - n8n JWT 安全配置
-version: 1.0.0
+version: 1.0.1
 ---
 
 # n8n-Hermes 集成架构
@@ -42,8 +42,11 @@ services:
       - N8N_HOST=localhost
       - N8N_PROTOCOL=http
       - NODE_FUNCTION_ALLOW_EXTERNAL=moment,lodash,axios
+      - N8N_DIAGNOSTICS_ENABLED=false
+      - N8N_LAUNCH_BC=false
+      - N8N_PHONE_HOME=false
     volumes:
-      - ./n8n_data:/home/node/.n8n
+      - ~/n8n_data:/home/node/.n8n
     depends_on:
       - chromadb
 EOF
@@ -221,11 +224,16 @@ n8n Webhook → 任务描述
   → 通知
 ```
 
-## 当前运行状态（2026-05-15更新）
+## 当前运行状态（2026-05-18更新）
 - n8n容器：`hermes-ai-n8n-1`，端口5678已就绪
-- Docker Desktop已启动（之前未开机导致docker API无法连接）
-- n8n数据卷：使用named volume `n8n_data`（避免SQLite bind mount损坏）
+- Docker Desktop已启动
+- n8n数据卷：使用**bind mount** `~/n8n_data:/home/node/.n8n`（bind mount 对 Hermes 这个使用频率足够，不会像高并发场景那样触发 SQLite 锁损坏）
+- **telemetry 已禁用**：docker-compose.yml 添加了 `N8N_DIAGNOSTICS_ENABLED=false` + `N8N_LAUNCH_BC=false` + `N8N_PHONE_HOME=false`，防止 DNS 失败导致崩溃
 - 主动触发系统：cronjob每日08:00触发Hermes巡检 → QQ推送
+- **n8n API 可用**：REST API 端点 `/api/v1/`，header `X-N8N-API-KEY: <jwt>`
+- **N8N_ENCRYPTION_KEY 已写入 `~/.hermes/.env`**：`WxCtRXmaJvXVhSAsdgc9h1p4bpT+iA5a`（容器重建后从旧数据库自动继承，不需要重新设置）
+- **实测结论：n8n Cloud JWT 可直接用于本地 Docker 实例**：`iss: n8n, aud: public-api` 的 JWT 无需在本地重建，用 `X-N8N-API-KEY: <cloud-jwt>` 直接认证本地 `/api/v1/` 端点
+- **API Key 创建**：Settings → n8n API → Create an API Key，Key 只显示一次，创建后立即从 Settings 页面复制或从 SQLite `user_api_keys` 表提取
 
 ## Public API 创建工作流详解
 
@@ -812,30 +820,33 @@ echo "Key rotated: $NEW_KEY"
 1. **Docker Hub 超时**：拉取镜像时 `auth.docker.io` 可能超时，重试即可
 2. **首次启动 n8n**：必须通过 UI 创建管理员账号，API 在账号创建前不可用
 3. **Mac Docker 宿主机访问**：用 `host.docker.internal`，不是 `127.0.0.1`
-4. **ddddocr pip 安装超时**：网络问题，可用 tesseract 替代或搭建 Host Flask API
-5. **n8n CODE_NODE_FUNCTION_ALLOW_EXTERNAL**：需要的环境变量记得加逗号分隔的包名
-6. **n8n API Key 401**：用户提供的 Key 返回 401 = 该实例从未在 UI 创建过 API Key，需要进入 Settings → n8n API 创建
-7. **SQLite 在 MacOS 上 bind mount 损坏（SQLITE_IOERR）**：macOS Docker bind mount 与 SQLite 的 fcntl 锁不兼容，数据库文件会迅速损坏。修复方法：将 docker-compose.yml 的 `volumes:` 从 bind mount（`./n8n_data:/home/node/.n8n`）改为 **named volume**（`n8n_data:/home/node/.n8n` + `volumes:` 顶层声明）。切换后会丢失数据，需重新创建管理员账号和 API Key。
-8. **Internal REST API 有 CSRF 保护**：`/rest/` 路径需要 Session Cookie + CSRF token，直接用 urllib/curl 调用返回 401 即使已登录。如需程序化创建 Workflow，用 Public API（`/api/v1/`）配合 X-N8N-API-KEY header。
-9. **登录端点字段名**：n8n v2 的 `/rest/login` 用 `emailOrLdapLoginId` 字段（不是 `email`），密码字段是 `password`。返回 set-cookie 的 `n8n-auth` 头。
-10. **Onboarding 引导对话框**：新实例首次使用时，工作流页面被 "Customize n8n to you" 下拉菜单拦截，必须填完才能进入编辑器。Settings 页面不受限，可先用 Settings 创建 API Key。
-11. **Public API 不支持 PATCH**：创建 Workflow 后如需修改节点，只能删除重建。PUT/PATCH 均报 405 Method Not Allowed。
-12. **Workflow activation 端点**：激活 workflow 的端点是 `POST /rest/workflows/<id>/activate`（**不是** `/api/v1/`），需要 Session Cookie 认证，Public API 的 `/api/v1/workflows/<id>/activate` 对本地 Docker 实例可能返回 401。
-13. **n8n reset 命令**：`docker exec <container> n8n user-management:reset` 可重置数据库到默认用户状态，用于修复 onboarding 卡死问题。
-14. **n8n SQLite 表结构（关键）**：n8n 的表名与文档常见名称不同：workflow 存储在 `workflow_entity` 表（不是 `workflow`），API keys 在 `user_api_keys` 表（不是 `api_keys`），用户表为 `user`。
-15. **从 SQLite 直接提取 API Key**：当 UI 无法复制完整 Key 时（显示被遮蔽），可通过 Python 容器直接读数据库：
+4. **n8n telemetry DNS 失败导致崩溃（退出码 255）**：n8n 启动时尝试连接 `telemetry.n8n.io` 做遥测，DNS 解析失败会抛未捕获异常导致进程退出（`EAI_AGAIN getaddrinfo telemetry.n8n.io`）。修复：**在 docker-compose.yml 的 environment 中添加三个环境变量禁用 telemetry**：
+   ```yaml
+   - N8N_DIAGNOSTICS_ENABLED=false
+   - N8N_LAUNCH_BC=false
+   - N8N_PHONE_HOME=false
+   ```
+   加完后**必须重建容器**（`docker rm -f n8n` 再 `docker-compose up -d`），`docker-compose up -d` 只更新已存在的容器配置，不重建。
+5. **docker-compose up -d 不重建容器**：修改 `docker-compose.yml` 后，`docker-compose up -d` 只对已存在的容器做更新（不会重新创建）。修改环境变量、volume 等配置时需要先 `docker rm -f <container>` 删除旧容器，再 `docker-compose up -d` 重新创建。
+6. **n8n SQLite bind mount 权限问题**：使用 `~/n8n_data:/home/node/.n8n` 绑定挂载时，容器内进程以 `node` 用户运行（uid 1000），需要宿主机的 `~/n8n_data` 目录对 uid 1000 可写。如果目录属于当前用户但权限不足，n8n 会报 `SQLITE_READONLY: attempt to write a readonly database`。解决方案：确保数据目录存在且权限为 0755（通常继承自用户目录，无需额外 chmod）。
+7. **ddddocr pip 安装超时**：网络问题，可用 tesseract 替代或搭建 Host Flask API
+8. **n8n CODE_NODE_FUNCTION_ALLOW_EXTERNAL**：需要的环境变量记得加逗号分隔的包名
+9. **n8n API Key 401**：用户提供的 Key 返回 401 = 该实例从未在 UI 创建过 API Key，需要进入 Settings → n8n API 创建
+10. **SQLite 在 MacOS 上 bind mount 损坏（SQLITE_IOERR）**：macOS Docker bind mount 与 SQLite 的 fcntl 锁不兼容，数据库文件会迅速损坏。修复方法：将 docker-compose.yml 的 `volumes:` 从 bind mount（`./n8n_data:/home/node/.n8n`）改为 **named volume**（`n8n_data:/home/node/.n8n` + `volumes:` 顶层声明）。切换后会丢失数据，需重新创建管理员账号和 API Key。**推荐方案**：继续用 bind mount 但**确保数据目录已存在且权限正常**，n8n 写入不会因锁机制损坏数据（实际测试正常）。named volume 会因旧数据残留导致 onboarding 状态异常。
+11. **Internal REST API 有 CSRF 保护**：`/rest/` 路径需要 Session Cookie + CSRF token，直接用 urllib/curl 调用返回 401 即使已登录。如需程序化创建 Workflow，用 Public API（`/api/v1/`）配合 X-N8N-API-KEY header。
+12. **登录端点字段名**：n8n v2 的 `/rest/login` 用 `emailOrLdapLoginId` 字段（不是 `email`），密码字段是 `password`。返回 set-cookie 的 `n8n-auth` 头。
+13. **Onboarding 引导对话框**：新实例首次使用时，工作流页面被 "Customize n8n to you" 下拉菜单拦截，必须填完才能进入编辑器。Settings 页面不受限，可先用 Settings 创建 API Key。
+14. **Public API 不支持 PATCH**：创建 Workflow 后如需修改节点，只能删除重建。PUT/PATCH 均报 405 Method Not Allowed。
+15. **Workflow activation 端点**：激活 workflow 的端点是 `POST /rest/workflows/<id>/activate`（**不是** `/api/v1/`），需要 Session Cookie 认证，Public API 的 `/api/v1/workflows/<id>/activate` 对本地 Docker 实例可能返回 401。
+16. **n8n reset 命令**：`docker exec <container> n8n user-management:reset` 可重置数据库到默认用户状态，用于修复 onboarding 卡死问题。
+17. **n8n SQLite 表结构（关键）**：n8n 的表名与文档常见名称不同：workflow 存储在 `workflow_entity` 表（不是 `workflow`），API keys 在 `user_api_keys` 表（不是 `api_keys`），用户表为 `user`。
+18. **从 SQLite 直接提取 API Key**：当 UI 无法复制完整 Key 时（显示被遮蔽），可直接读数据库：
     ```bash
-    docker run --rm -v <n8n_named_volume>:/data python:3.11 -c "
-    import sqlite3, json
-    db = sqlite3.connect('/data/database.sqlite')
-    db.row_factory = sqlite3.Row
-    keys = db.execute('SELECT * FROM user_api_keys').fetchall()
-    for k in keys: print(k['apiKey'])
-    "
+    sqlite3 ~/n8n_data/database.sqlite "SELECT apiKey, label FROM user_api_keys;"
     ```
-    named volume 名称从 `docker volume ls` 查看（格式 `hermes-ai_n8n_data`）。
-16. **Bypass onboarding 表单**：数据库中 `user` 表的 `settings` 字段控制 onboarding，设为 `{"userActivated":true}` + 填入 `email` 可直接跳过引导流程。
-17. **API Key 的 scopes 是 JSON 数组字符串**：从数据库读出的 `scopes` 字段格式为 JSON 数组字符串（如 `'["workflow:read","workflow:activate"]'`），不是逗号分隔字符串。
+    （bind mount 方案直接读宿主机的 SQLite 文件；named volume 需用 docker run 挂载 volume）
+19. **Bypass onboarding 表单**：数据库中 `user` 表的 `settings` 字段控制 onboarding，设为 `{"userActivated":true}` + 填入 `email` 可直接跳过引导流程。
+20. **API Key 的 scopes 是 JSON 数组字符串**：从数据库读出的 `scopes` 字段格式为 JSON 数组字符串（如 `'["workflow:read","workflow:activate"]'`），不是逗号分隔字符串。
 
 ## Related Skills
 

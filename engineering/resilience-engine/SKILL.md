@@ -355,6 +355,75 @@ if cp:
 
 ---
 
+## API渠道级联失效检测（2026-05-18 新增）
+
+### 问题描述
+
+当底层模型API额度耗尽时（如 `aicodee` 返回 `403 insufficient_user_quota`），**所有使用该模型的通讯渠道会同时失效**——用户感知是"所有渠道同时掉线"，但实际上是 Gateway 无法处理任何响应导致所有渠道请求堆积超时。
+
+### 症状识别
+
+```
+# gateway.error.log 关键特征
+403 insufficient_user_quota     ← 额度耗尽
+WARN gateway.platforms.telegram: [Telegram] request timeout
+WARN gateway.platforms.weixin: [Weixin] request timeout
+WARN gateway.platforms.qq: [QQ] request timeout
+# 所有渠道同时告警，且时间高度接近（同一分钟内）
+```
+
+### 与普通网络错误的区别
+
+| 特征 | API额度耗尽（级联失效） | 普通网络错误 |
+|------|------------------------|-------------|
+| 影响范围 | 所有渠道同时无响应 | 单个渠道异常 |
+| 错误码 | 403 insufficient_user_quota | 401/503/timeout等 |
+| 根因 | 上游模型提供商账户问题 | 本地网络/代理/DNS |
+| 持续性 | 额度充身前持续 | 临时性，重试可恢复 |
+
+### 诊断流程
+
+```
+① 所有渠道同时掉线
+    ↓
+② 检查 gateway.error.log 是否有 403 insufficient_user_quota
+    ↓
+   找到 → 根因确认：模型提供商额度耗尽
+   未找到 → 检查 N8N/数据库/网络问题
+```
+
+### 恢复策略
+
+**第一层：Gateway 自动切换备用模型**
+- Gateway 检测到 403 + quota 相关错误，自动切换到下一个可用模型
+- 当前配置：minimax-cn/MiniMax-M2.7 作为主渠道，deepseek/deepseek-v4-flash 作为免费备用
+
+**第二层：手动切换到免费模型**
+```bash
+# 检查当前模型
+grep "model" ~/.hermes/config.yaml
+
+# 切换到免费模型（无需重启 Gateway）
+# 编辑 config.yaml 中的 model 字段
+deepseek/deepseek-v4-flash  # 免费，无需 API 费用
+```
+
+**第三层：恢复后确认**
+```bash
+# 确认所有渠道恢复正常
+grep "connected" ~/.hermes/logs/gateway.log | tail -5
+```
+
+### 预防措施
+
+在 `~/.hermes/config.yaml` 中配置多模型降级：
+```yaml
+model: deepseek/deepseek-v4-flash  # 主用免费模型
+fallback_models:
+  - deepseek/deepseek-v4-flash
+  - nous/deepseek-v4-flash  # 如果 deepseek 也耗尽
+```
+
 ## MCP Server失联检测与恢复（2026-05-16 新增）
 
 ### 问题描述
