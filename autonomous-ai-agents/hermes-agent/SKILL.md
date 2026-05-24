@@ -1793,9 +1793,9 @@ cd ~/.hermes/skills && git pull
   - **需要恢复**：见 `references/wecom-platform-setup.md` 灾难恢复步骤，或在 config.yaml 重新添加 wecom 段落
 
 **第三方 API 状态（2026-05-06 实测，已更新 fallback_providers）**：
-- ✅ Groq (GRSK_REDACTED) — **已恢复**，llama-3.1-8b-instant 正常，响应快，中文 ✅
-- ✅ NVIDIA (NVIDAPI_REDACTED-jzqJQ39yolRppWt503ZLDh49gsvEGjPZ50TiA0nwQ3mZeNI) — 可用，中文 ✅，4个模型通过测试（llama-3.3-70b, llama-3.1-70b, llama-3.1-8b, mistral-nemotron）
-- ✅ Google Gemini (GOOGLE_AI_KEY_REDACTED-c_NwtpJxg30znXLoifMM) — **需本地代理** `scripts/gemini-proxy.py`，中文 ✅，6个模型可用
+- ✅ Groq (GRSK_REDACTED***832C) — **已恢复**，llama-3.1-8b-instant 正常，响应快，中文 ✅
+- ✅ NVIDIA (NVIDAPI_REDACTED***) — 可用，中文 ✅，4个模型通过测试（llama-3.3-70b, llama-3.1-70b, llama-3.1-8b, mistral-nemotron）
+- ✅ Google Gemini (***) — **需本地代理** `scripts/gemini-proxy.py`，中文 ✅，6个模型可用
 | ✅ Aicodee/MiniMax (v2.aicodee.com) | ✅ 正常 | Key 有效，配置方式见 `references/custom-provider-config.md` |
 - ❌ OpenRouter (YOUR_API_KEY-v1-1722c1b4530387429eca4a694ef0336d7dd8b1279180bef18a66ef10149fac32) — **"User not found"**，账户可能已删除
 - ❌ Ollama (192.168.0.4:11434) — 连接超时，Mac mini 服务未运行
