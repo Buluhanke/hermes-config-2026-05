@@ -64,7 +64,7 @@ version: 2026-05-17
 3. 实践1个小任务
 4. 记录学到的新知识点到Obsidian
 
-## 六、GitHub 优质项目研究法
+## 七、GitHub 优质项目研究法
 
 研究新项目时的标准流程：
 
@@ -79,12 +79,121 @@ version: 2026-05-17
 
 **"对我们有什么用处？"** 这个问题是过滤标准——不是所有项目都要深究。
 
+### Release Note 考古法（针对已有项目，非新项目）
+
+当检查已经跟踪的项目（如 hermes-agent）的更新时，不要只看最新版：
+
+1. 读当前最新 release + 上一个版本 release notes
+2. 搜索第三方深度解读：`dev.to <项目名> v<版本> review`、`<项目名> v<版本> 深度分析`
+3. 重点找**被官方 notes 一笔带过但架构层面变更较大的**原语类功能（非 UI/表面功能）
+4. 问自己："这个功能改了 agent 做事的方式吗？" — 如果是，优先级提高两级
+5. 将发现写入 Obsidian + 更新价值映射表
+
+**PITFALL：官方 release notes 倾向于突出用户可见的新功能，最有价值的架构变更往往藏在 "Misc" 或 3 行以内。必须读第三方解读补盲。**
+
+### Post-Release 热修复扫描（针对已跟踪项目）
+
+每次巡检时，如果距上次扫描已超过 3 天，额外执行：
+
+```bash
+# 检查最新 release 之后是否有 hotfix merged（一般在 release tag 后 1-2 天内）
+site:github.com/NousResearch/hermes-agent after:2026-05-16 hotfix
+site:github.com/NousResearch/hermes-agent after:2026-05-16 fix
+site:github.com/NousResearch/hermes-agent after:2026-05-16 security
+
+# 搜索关键词：P0/P1 fix, revert, rollback（发现回退的变更）
+```
+
+**典型热修复信号**：
+- release 后 24-48 小时内有 P0/P1 security/bug fix PR merged
+- 有 `fix: ... revert` 模式（说明上一个 fix 有问题）
+- release notes 里有"rolled back"或"reverted"提到
+
+**主动功能分支扫描（补充）**：除热修复外，每次巡检还应检查是否有 force-pushed 的 `feat/*` 或 `codex/*` 分支——force-push 意味着该功能正在活跃开发，可能即将合并。信号：`git fetch` 时看到 ` (forced update)` 标记。
+
+典型案例（2026-05-26）：
+- `feat/whatsapp-cloud-api` 分支 force-pushed → WhatsApp Cloud API 新平台即将合并
+- `codex/fix-*` 系列分支（dingtalk/discord/feishu/qq-group/webhook/websocket/dashboard）→ 多个平台授权漏洞修复正在审查
+
+### Commit级深挖法（已有项目巡检必备）
+
+对已跟踪项目（hermes-agent），**不要只看 release notes**。每次巡检应额外检查：
+
+```bash
+# 1. 查最新 release 之后的 commit 记录（不在 release notes 里的架构变更）
+git log --oneline --since="2026-05-16" origin/main | head -20
+
+# 2. 查特定 commit 改了什么（只看 commit message 不够，要看 diff 规模）
+git log --oneline -30 origin/main
+git show <commit_sha> --stat  # 看文件数和增删行数，+3000 行重构 = 重要架构变更
+
+# 3. 识别高价值 commit 信号
+#    - 大文件数（57文件）+ 大增删量（+3149行）= 架构重构
+#    - 新增工具/技能/平台 = 功能落地
+#    - "refactor"/"rewrite" = 核心逻辑变更
+```
+
+**判断优先级**：
+- 架构重构（大文件数+大diff）> 新功能 > 小修复
+- 问自己："这个变更改了 agent 做事的方式吗？" — 如果是，Tier1
+
+**⚠️ Release notes 的固有局限**：官方 notes 倾向报 UI/用户可见功能，架构性底层变更（如 Provider Modules 重构）经常只出现在 Misc 段 2-3 行。Commit 级深挖才能发现全貌。
+
+**2026-05-28 早巡检结果**：
+```
+### Post-v0.XX.X 热修复（May XX）
+- **#[PR号] 简短描述**：影响说明
+- **回退标记**：`/subgoal` 等功能被回退，实际不可用
+```
+
+**2026-05-26 巡检结果**：
+- v0.14.0（2026-05-16）发布后 **10 天仍无 patch** ✓ 无热修复
+- `feat/whatsapp-cloud-api` 分支 force-pushed → WhatsApp Cloud API 新平台即将合并
+"references/hermes-self-trust-problem.md",
+    "references/hermes-updates-2026-05-28.md",
+    "references/v0.14.0-full-highlights-2026-05-26.md",
+- `/subgoal` 简化版重生，`/goal checklist` 已回退（#23813）
+- Brave Search 免费搜索 provider 已加入
+- Skill Bundles 官方文档已完善（bundle 不安装技能，只是 slash 命令别名）
+
+**2026-05-28 早巡检结果**：
+- v0.14.0（2026-05-16）发布后 **12 天仍无 patch** ✓ 无热修复
+- v0.14.0 完整数据：**808 commits · 633 merged PRs · 165,061 insertions · 215 贡献者**（来源：GitHub release 页面）
+- `codex/fix-*` 授权漏洞修复 **8 个 PR 仍在审查中**（dingtalk、discord、feishu、qq-group、webhook、websocket、dashboard）
+- `feat/whatsapp-cloud-api` 分支 force-pushed → WhatsApp Cloud API 即将合并
+- Node.js 20 EOL 应对：#4876 升级捆绑 Node.js 20→22（Docker 镜像，4月起生效）
+- xAI OAuth (xai-oauth) 对标准 SuperGrok 用户返回 403（#26847，已记录待官方修复）
+
+### Skill Bundles 落地确认
+
+`hermes bundles` 配置目录：`~/.hermes/skill-bundles/.yaml`
+
+**采购一键加载 bundle 示例**（待创建）：
+```yaml
+bundle_name: procurement-1688
+skills:
+  - 1688-automation-flow
+  - 1688-price-negotiation
+  - supplier-relationship
+description: 迅龙贸易 1688 采购全套技能
+```
+使用：`hermes bundles load procurement-1688`
+
+**⚠️ Cron 环境限制**：cron 定时任务环境**无 Memory 写入权限**（`memory` 工具不可用），Obsidian 写入也可能受限。产出只能写文件到本地路径（`~/Obsidian/...`），无法调用 `memory store`。巡检前先确认文件写入路径是否可访问。
+
 ### 本次研究存档
 
-| 仓库 | 价值 | Tier |
+| 仓库/文章 | 价值 | Tier |
 |------|------|------|
-| claude-code (freestylefly) | 架构参考：12阶段渐进式构建 | Tier1 |
-| awesome-selfhosted | 榜单设计思路可用 | Tier2 |
-| agent-browser-runtime | Docker 架构不适用，思路存档 | Tier2 |
-| eze-is/web-access | 浏览器 Skill，CDP Proxy，本地书签/历史检索，站点经验积累 | Tier2 |
-| Tencent/TencentDB-Agent-Memory | 记忆分层架构（L0→L1→L2→L3），Mermaid符号化压缩，33-61% token节省 | Tier1 |
+| dev.to/hermes-under-the-hood | 6层prompt架构、provider transport族系、记忆三层设计 | **Tier1 — 见 `references/hermes-architecture-under-the-hood.md`** |
+| dev.to/context-studios-agent-os | Agent Runtimes→Operating Systems转变分析，Hermes从编码助手转向Agent OS | **Tier1 — 见 `references/2026-05-23-community-findings.md`** |
+| OnlyTerp/hermes-optimization-guide | GitHub 321★，24章节Hermes优化指南 | **Tier2 — 见 `references/2026-05-23-community-findings.md`** |
+| hermesagents.net | 技能深度分析网站，9篇新文覆盖watchers/osint等 | **Tier1 — 见 `references/2026-05-23-community-findings.md`** |
+| BlakeCrosley/hermes-agent-v013-reference | 28章实操配置参考（Tenacity/多Agent/Provider），ls-la风格 | **Tier1 — 见 `references/blakecrosley-v013-reference-guide.md`** |
+| MarkTechPost 2026编码Agent排名 | Hermes #1（224B日Token/114K Stars/4 CVEs），对比OpenClaw #2 | **Tier1 — 见 `references/blakecrosley-v013-reference-guide.md`** |
+
+**2026-05-29 早巡检发现**：
+- v0.14.0（2026-05-16）发布后 **13 天仍无 patch** ✓ 无热修复
+- **ntfy platform adapter 已合并入 main（未 release）**：PR #13866，81 tests，HTTP pub-sub 自托管通知平台，**QQ/微信备用通知通道候选**，需等下一版本发布
+- `feat/whatsapp-cloud-api` 分支持续 force-pushed → WhatsApp Cloud API 即将发布
+- 99 commits ahead of latest tag，建议检查是否有 break-change

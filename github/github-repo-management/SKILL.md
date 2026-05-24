@@ -208,6 +208,29 @@ git push -u origin main
 
 > **Pitfall:** `git push` fails with "could not read Username: Device not configured" — this means no credential helper is configured and no token is embedded. Do NOT keep retrying; offer the user Option A (manual push) or ask for a PAT.
 
+> **Pitfall: GitHub Push Protection — secret/API key detected in history.**
+> GitHub's pre-receive hooks scan ALL history for embedded secrets (Groq token, OpenRouter key, etc.). Even a single old commit containing a secret will block the entire push, with no way to selectively push around it.
+>
+> **Fix: `git reset --hard origin/main`** — discards all local commits, making a clean break from the problematic history. This is what was used in practice (2026-05-24) when 59 local commits carried a hidden Groq API key. Local skills were unaffected; only the public GitHub sync was blocked.
+>
+> ```bash
+> # Nuclear but clean — discard local history, start fresh from remote
+> git reset --hard origin/main
+> git push origin main
+> ```
+>
+> **Alternative: Save local changes first**
+> ```bash
+> git stash push -m "temp" -- <files>   # save uncommitted work
+> git reset --hard origin/main           # nuke local history
+> git stash pop                          # restore uncommitted work
+> git add -A
+> git commit -m "clean restart $(date '+%Y-%m-%d')"
+> git push origin main
+> ```
+>
+> Note: `git rm --cached <file>` on the current commit does NOT remove a secret from history — the blob still exists in `.git/objects/`. GitHub scans the full history, so history rewrite is the only real solution.
+>
 > **Pitfall: Large file in git history (>100MB).** If GitHub rejects the push with `GH001: Large files detected` and the large file is already committed in local history, `git rm --cached <file>` on the current commit does NOT remove it from history — the blob still exists in `.git/objects/`. GitHub runs pre-receive hooks that scan the entire history. **Fix: rebuild a clean history.**
 >
 > ```bash
@@ -622,3 +645,7 @@ Parameters:
 | List workflows | `gh workflow list` | `curl GET /repos/o/r/actions/workflows` |
 | Rerun CI | `gh run rerun ID` | `curl POST /repos/o/r/actions/runs/ID/rerun` |
 | Set secret | `gh secret set KEY` | `curl PUT /repos/o/r/actions/secrets/KEY` (+ encryption) |
+
+## See Also
+- `references/github-push-protection.md` — secret/API key detected in history: clean fix, prevention
+- `references/github-api-cheatsheet.md` — API quick reference
