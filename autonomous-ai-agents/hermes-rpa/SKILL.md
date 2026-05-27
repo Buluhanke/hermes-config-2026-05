@@ -548,6 +548,40 @@ ChatGPT 页面更新或窗口大小变化时，元素坐标会漂移。每次操
 1. `wininfo` 获取当前窗口尺寸
 2. 基于窗口尺寸比例计算坐标（而非硬编码绝对坐标）
 
+### 🎯 精确点击小元素：Window Zoom 技巧
+
+当点击小按钮、密集UI元素、或坐标不确定时，用放大窗口思路提升精度：
+
+**原理**：放大到窗口后截图，坐标变成窗口相对坐标，等效精度大幅提升。
+
+```python
+# 1. 先截全屏判断是否需要放大
+if "目标元素" not in ocr_result["text"]:
+    # 元素可能太小，直接点击会飘
+    # 解决：zoom 到目标窗口 → 坐标变窗口相对 → 精度大幅提升
+
+# 2. 激活目标窗口
+subprocess.run(["osascript", "-e",
+    'tell application "System Events" to set frontmost of process "Google Chrome" to true'])
+time.sleep(0.5)
+
+# 3. 截图（小元素区域放大）
+# 注意：zoom 后坐标是窗口相对坐标，不是全屏坐标
+# 用窗口内相对坐标点击，而非硬编码全屏绝对坐标
+```
+
+**cua repo（17k stars）的实践证明**：Window Zoom 让密集小按钮的点击精度从随机命中提升到稳定命中。
+
+**Look → Act → Verify 循环**（每次UI变化后立即重新截图验证，坐标会过期）：
+```python
+# 操作前：截图确认
+# 操作：click / type / scroll
+# 操作后：立即截图验证是否生效
+#   - 页面内容变化了？→ 成功
+#   - 无变化但无报错 → 重新尝试或报告问题
+#   - 错误弹窗 → 捕获错误信息
+```
+
 ## Baidu OCR集成
 
 已配置的凭据（`~/.hermes/.env`）：
@@ -1481,5 +1515,5 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 - `references/chrome-applescript-patterns.md` — Chrome AppleScript模式
 - `references/desktop-agent-roadmap-2026-05-14.md` — **桌面全域Agent成长路线图**（战略方向+现状+下一步优先级）
 - `references/world-state-v0-2026-05-14.md` — **WorldState v0 实现笔记**（最小闭环架构+tesseract路径坑+Baidu OCR token问题）
-- `references/peekaboo-macos-desktop-automation.md` — Peekaboo macOS 桌面自动化工具（vision/voice Agent，可选替代方案）
+- `references/trycua-cua-research-2026-05-27.md` — **新增：trycua/cua 17k stars 调研**（Window Zoom精确点击技
 - `references/alternative-desktop-automation-tools.md` — 替代方案（Mano-P / UI-TARS）评估框架
