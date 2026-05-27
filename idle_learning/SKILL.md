@@ -43,7 +43,34 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 2. Firecrawl Payment Required → 切换 `duckduckgo-search` 作为搜索降级（同样须在 terminal 里跑 ddgs）
 3. 所有外部网络均失败 → 本次轮次直接标记为"SILENT"，仅更新巡检日志不尝试联网
 
+**Cron 模式特殊注意**：定时任务环境下，web_search 很容易 credits 用尽（Payment Required 频率高）。每次轮次开始时默认走降级路径——先用 ddgs + HN Firebase API，只有在明确有 credits 时才尝试 web_search。
+
+**验证 web_search 可用性**（非必须，每次前3次失败后跳过）：
+```bash
+# 测试 web_search 是否还有额度
+curl -s --max-time 5 "https://api.firecrawl.dev/v0/search?q=test" -o /dev/null -w "%{http_code}"
+# 返回 402 说明 credits 耗尽，切 ddgs
+```
+
+**HN Firebase API 用法**（免费稳定，无需认证）：
+```bash
+# 获取 HN 当日热门故事 IDs
+curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" | python3 -c "
+import sys, json
+ids = json.load(sys.stdin)[:10]
+for i in ids:
+    print(i)
+"
+
+# 获取单条故事详情（title, score, url）
+curl -s "https://hacker-news.firebaseio.com/v0/item/{story_id}.json"
+
+# 高效巡检：取前5个 story ID 后并行抓详情（避免逐个串行请求）
+```
+
 判断今天应该学习哪个方向（轮流覆盖四个层次）。
+
+> ⚠️ GitHub API 可能在 cron 环境被 script-execution 策略拦截（返回 pending_approval）。如遇此情况，跳过 GitHub trending，优先用 HN 和 ddgs。
 
 ---
 
