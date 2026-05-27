@@ -182,8 +182,10 @@ See `references/wechat-voice-verification.md` for WeChat voice send verification
 | EPUB/PDF audiobook with chapters | Kokoro (native support) |
 | Voice blending (`"v1:60,v2:40"`) | Kokoro |
 | Local inference, no API needed | **MOSS-TTS-Nano** |
-| Voice cloning from reference audio | Noiz |
-| Emotion control (`emo` param) | Noiz |
+| Voice cloning from reference audio | Noiz or IndexTTS2 |
+| Emotion control (`emo` param) | Noiz or IndexTTS2 |
+| Precise duration control (video dubbing) | **IndexTTS2** (唯一支持) |
+| Industrial-grade expressive TTS | **IndexTTS2** |
 | Exact server-side duration per segment | Noiz |
 
 ### MOSS-TTS-Nano (local, no API key)

@@ -42,18 +42,28 @@ MOSS-TTS-Nano 已安装在 `/Users/aimac/MOSS-TTS-Nano`，依赖已在该环境�
 
 ## 在 Hermes 中调用
 
-生成音频后用 `MEDIA:/path/to/file.wav` 发送即可：
-
 ```python
-# 1. 生成音频
+# 1. 生成音频（venv路径务必用 .venv312，不是 .venv）
 result = terminal(
     "/Users/aimac/MOSS-TTS-Nano/.venv312/bin/python "
     "/Users/aimac/.hermes/skills/tts/moss-tts-nano/scripts/tts.py "
     "-t '你好，这是语音回复' --voice-name Xiaoyu -o /tmp/moss_voice.wav"
 )
-# 2. 发给用户（QQ/微信会自动作为语音消息播放）
+# 2. 发送给用户
 send_message(message="MEDIA:/tmp/moss_voice.wav", target="origin")
 ```
+
+### 用户语音偏好（重要）
+
+**默认规则：用户发语音 → 优先用语音回复。** 这是用户的明确偏好，触发条件为：
+- 用户发送了语音消息
+- 任何涉及"语音"、"说话"、"声音"相关的请求
+
+生成语音后：
+- Telegram/微信/Discord → 直接发送语音（MEDIA 文件自动作为原生语音）
+- **QQ** → 语音文件会被丢弃，改为在文字消息末尾附上路径，告知用户"语音已生成，请点击播放"
+  - 示例：`好的，我来解释一下这个功能。[语音已生成，可播放] /tmp/moss_voice.wav`
+  - 更好的方案：引导用户切换到 Telegram（支持原生语音）
 
 ## 注意事项
 

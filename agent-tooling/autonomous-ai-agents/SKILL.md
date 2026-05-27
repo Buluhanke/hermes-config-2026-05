@@ -11,6 +11,9 @@ triggers:
   - python 3.13 compatibility issue
   - free claude code proxy
   - NVIDIA NIM free models
+  - faster-whisper local STT
+  - Hermes voice mode configuration
+  - stt.local.model 语音识别模型选择
 ---
 
 # Autonomous AI Agents
@@ -44,7 +47,8 @@ Skills for building, deploying, and orchestrating autonomous AI agents — frame
 This skill governs: agent frameworks, tool integrations that extend agent capabilities (browser, code execution, APIs), multi-agent orchestration patterns, and delegation to external agent processes.
 
 ## References
-- `references/browser-use.md` — Local browser automation for AI agents (91K Stars, uv install, Ollama compatible)
+- `references/browser-use.md` — Local browser automation for AI agents
+- `references/hermes-voice-stt.md` — Hermes语音/STT架构：各平台ASR优先级、stt.local.model配置、faster-whisper模型选择（QQ走腾讯/Telegram走本地）
 - `references/cdp-raw-websocket.md` — Raw Python WebSocket + CDP control of local Chrome (fallback when MCP bridge is down, tab discovery, scroll/click/screenshot, frame encoding, pitfall: SOCKS proxy + websockets library)
 
 ---
