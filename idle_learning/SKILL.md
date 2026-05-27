@@ -23,15 +23,25 @@ description: >
 
 ## 执行流程
 
-### 第一步：评估当前状态
+### 第一步：评估当前状态 + 网络预检
+
+⚠️ **网络预检必须在 `terminal` 里跑，不能在 `execute_code` 沙盒里跑！**
+`execute_code` 运行时是网络隔离的沙盒环境，curl 到外部会超时；
+`terminal` 工具调用真实 shell，网络正常。
 
 ```bash
-# 检查上次学习时间
-cat ~/.hermes/memory/idle_learning_log.md 2>/dev/null | tail -5
+# ✅ 正确：在 terminal 里预检网络
+# ❌ 错误：在 execute_code 里用 curl 测外网（会超时但不是网络问题）
 
-# 检查当前视觉模型配置
-grep -A3 "vision:" ~/.hermes/config.yaml | head -10
+# 网络预检（必须用 terminal）
+curl -s --max-time 5 https://github.com -o /dev/null && echo "github:ok" || echo "github:blocked"
+curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" || echo "hn:blocked"
 ```
+
+**网络异常时的降级策略**（任一情况触发）：
+1. `github:blocked` → 跳过 GitHub Trending，改查本地已缓存的 Brain_Lab 最新巡检记录
+2. Firecrawl Payment Required → 切换 `duckduckgo-search` 作为搜索降级（同样须在 terminal 里跑 ddgs）
+3. 所有外部网络均失败 → 本次轮次直接标记为"SILENT"，仅更新巡检日志不尝试联网
 
 判断今天应该学习哪个方向（轮流覆盖四个层次）。
 
@@ -132,6 +142,10 @@ python3 -c "import yaml; yaml.safe_load(open('/Users/aimac/.hermes/config.yaml')
 1. 备份原文件
 2. 有测试数据支撑
 3. 改完验证 YAML 格式正确
+
+## 支持文件
+
+- [搜索降级方案](./references/search-fallback.md) — 当 web_search 不可用时的 ddgs 降级流程
 
 ---
 

@@ -180,6 +180,12 @@ grep -E "error|ERROR|exception" ~/.hermes/logs/gateway.log | tail -20
 - 异常检测：peekaboo日志、错误日志、进程崩溃
 - 状态保持：Hermes进程、CDP端口、代理状态
 
+**网络异常处理（必须先于联网执行）**：
+1. 先 `curl --max-time 5 https://github.com` 预检连通性
+2. github.com 超时 → cron环境网络受限，改查本地 Brain_Lab 最新存档（`ls -t ~/Brain_Lab/*.md | head -3` 读最新记录）
+3. web_search Payment Required → 切换 `duckduckgo-search` skill 降级搜索
+4. 所有外部网络均失败 → 本次标记为"SILENT"，只写巡检日志后静默退出，不重复尝试
+
 ### 每天（主动学习）
 - 扫描Hermes官方更新
 - 扫描技能市场新技能

@@ -42,6 +42,8 @@ MOSS-TTS-Nano 已安装在 `/Users/aimac/MOSS-TTS-Nano`，依赖已在该环境�
 
 ## 在 Hermes 中调用
 
+### 方式一：手动终端调用（直接，绕过 gateway TTS）
+
 ```python
 # 1. 生成音频（venv路径务必用 .venv312，不是 .venv）
 result = terminal(
@@ -52,6 +54,47 @@ result = terminal(
 # 2. 发送给用户
 send_message(message="MEDIA:/tmp/moss_voice.wav", target="origin")
 ```
+
+### 方式二：通过 gateway text_to_speech_tool（需正确配置）
+
+**⚠️ 配置要求**：如果要让 gateway 的 `text_to_speech_tool(provider="moss", ...)` 自动走 MOSS，
+必须在 `~/.hermes/config.yaml` 里声明 command provider，否则会**静默 fallback 到 Edge TTS**。
+
+config.yaml 需要加入这段：
+
+```yaml
+tts:
+  provider: moss          # 已有
+  providers:
+    moss:
+      type: command
+      command: "/Users/aimac/MOSS-TTS-Nano/.venv312/bin/python /Users/aimac/.hermes/skills/tts/moss-tts-nano/scripts/tts.py -t '{text}' --voice-name Xiaoyu -o {output_path}"
+```
+
+**静默 fallback 症状**（排查用）：
+- 日志出现 `Generating speech with Edge TTS...` 但配置 `provider: moss`
+- 输出文件是 Edge TTS 音色而非 MOSS 音色
+- 原因：MOSS 不在 `BUILTIN_TTS_PROVIDERS`（edge/elevenlabs/openai/minimax/xai/mistral/gemini/neutts/kittentts/piper），且 config 里没有 `tts.providers.moss: type: command`
+
+**验证是否真正使用了 MOSS**：
+```bash
+grep "provider: moss" ~/.hermes/logs/agent.log | tail -5
+# 看是否有 "TTS audio saved (provider: moss)"
+# 如果看到 "provider: edge" 说明是 fallback
+```
+
+## 已知问题
+
+| 问题 | 原因 | 解法 |
+|------|------|------|
+| Edge TTS 报 "No audio was received" | config 里 voice 是英文音色（如 `en-US-AriaNeural`），但说了中文 → Edge TTS 无法合成，直接失败 | 手动改 `~/.hermes/config.yaml` 中 `tts.edge.voice` 为 `zh-CN-XiaoxiaoNeural` |
+| 配置了 `provider: moss` 但实际走 Edge TTS | MOSS 不在内置名单且未在 config 声明 command provider | 在 config.yaml 加 `tts.providers.moss.type: command` 并填入 command |
+| 日志显示 "Generating speech with Edge TTS" 但用了 moss provider | 同上，静默 fallback | 同上 |
+| config.yaml 的 command 被 YAML 多行拆散 | YAML 缩进导致多行 YAML 语法错误，Python 解析时 command 变成两行无法执行 | command 必须写成单行，或用 yaml.dump() 序列化后验证 |
+| 日志显示 "provider: moss" 但实际走 Edge，声音/内容都不对 | 配置有但没生效，排查同第一行 | 用手动测试验证，不依赖日志 |
+| Edge TTS provider 不检查语音-语言匹配 | Edge TTS 收到不匹配语言的文本会静默失败（"No audio was received"）而不是 fallback | 直接调终端 `edge-tts --text "中文" --voice zh-CN-XiaoxiaoNeural --write-media /tmp/test.mp3` 验证，不要依赖 gateway 的 provider 选择逻辑 |
+
+## 注意事项
 
 ### 用户语音偏好（重要）
 
@@ -72,6 +115,26 @@ send_message(message="MEDIA:/tmp/moss_voice.wav", target="origin")
 - 输出格式：48kHz, 立体声 WAV
 - 首次运行下载模型（约数百 MB），之后本地运行
 - 支持参考音频克隆：`--ref-audio /path/to/audio.wav --prompt-text \"音频里说的话\"`
+
+## 语音回复内容匹配规则（重要）
+
+**voice_reply 必须匹配當下對話話題，不能跑題。** 用戶抱怨「語音回覆對不上聊的內容」= 直接質量投訴。
+
+觸發語音回覆時：
+1. 先確認用戶在問什麼 → 用戶語音消息的內容
+2. 回覆的內容必須針對該問題，不能是「今年學了什麼」在語音回覆裡變成「介紹Hermes的學習成果」
+3. 如果對話主題不明確，先用文字確認再語音回覆
+
+## 手动测试 TTS 音色的正确步骤
+
+当需要验证 TTS 是否真正工作时（尤其是修复后验证）：
+
+```bash
+# 1. 手动生成一个测试音频（绕过 gateway，直接调 MOSS）
+# 2. 通过 send_message MEDIA: 发送给用户听
+# 3. 不要依赖 gateway 日志中的 "provider: moss" 判断——日志可能假阳性
+#    必须：用户亲自听 + 对话内容是否相关
+```
 
 ## 平台语音发送支持
 

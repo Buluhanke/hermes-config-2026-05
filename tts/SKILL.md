@@ -121,13 +121,18 @@ This is a recurring pattern: user asks for information and wants the reply as an
 
 1. **Gather the information** (search, extract, compute, etc.)
 2. **Construct natural spoken text** — write for the ear, not the eye. Use conversational Chinese (or the user's language). Break into short sentences. Include key data points (dates, temperatures, numbers). Avoid markdown, formatting, or complex structure.
-3. **Select TTS backend — Edge TTS for Chinese first, MOSS-TTS-Nano as fallback:**
-   - **Edge TTS** (微软, `~/.hermes/hermes-agent/venv/bin/edge-tts`): 稳定可靠，中文效果好，优先使用
-   - **MOSS-TTS-Nano** (本地, 无API key): 对短中文文本经常只生成0.5秒音频（是模型层面的不稳定问题），优先 Edge
-4. **Generate audio** via terminal calling the appropriate TTS script
-5. **Send as voice message** — use `send_message(message="MEDIA:/path/to/file.wav", target="...")` so QQ/WeChat plays it as audio. Note: this sends as an audio attachment, NOT as WeChat native voice message (see above).
+3. **选择 TTS 引擎 — 始终直接调用，不要依赖 tool 的 provider fallback：**
+   - **首选：MOSS-TTS-Nano**（本地，无 API key，中文效果稳定）：
+     ```bash
+     /Users/aimac/MOSS-TTS-Nano/.venv312/bin/python \
+       /Users/aimac/.hermes/skills/tts/moss-tts-nano/scripts/tts.py \
+       -t '语音回复内容' --voice-name Xiaoyu -o /tmp/voice.ogg
+     ```
+   - **备选：Edge TTS**（`~/.hermes/hermes-agent/venv/bin/edge-tts`），当 MOSS 不可用时用
+   - ⚠️ **不要调用 `text_to_speech` 工具**（会自动走 Edge TTS + 错误标注 provider）
+   - ⚠️ **不要信任** `text_to_speech_tool` 日志里的 `provider: moss` 标注 — 实际生成引擎以 "Generating speech with X" 为准
 
-### Edge TTS 推荐参数
+4. **发送语音消息**
 
 ```bash
 ~/.hermes/hermes-agent/venv/bin/edge-tts \
@@ -163,8 +168,17 @@ This is a recurring pattern: user asks for information and wants the reply as an
 
 **Edge TTS 是当前最可靠的中文语音方案（已验证 WeChat 发送成功）。**
 
+**已知问题：Gateway 配置的 `provider: moss` 与实际执行不符**
+
+Gateway 配置 `tts.provider: moss`，但 `text_to_speech_tool` 内部有 fallback 链，实际执行时经常走 Edge TTS 生成，再在日志里标注 `provider: moss`。表面看日志没报错，但：
+- 音色可能不是用户偏好的音色
+- 内容生成可能因为 Edge TTS 和 MOSS 的 token 处理差异而跑偏
+
+**正确做法：不要依赖 `text_to_speech_tool` 的 provider fallback，直接调 MOSS-TTS-Nano wrapper。** 见下方「语音回复工作流」第 3 步。
+
 **Pitfalls:**
 - Edge TTS can fail with "No audio was received" — fall back to MOSS-TTS-Nano (local) or Noiz
+- **不要信任 `text_to_speech_tool` 日志里的 `provider: xxx` 标注** — 实际生成引擎以日志里 "Generating speech with X" 那行为准
 - MOSS-TTS-Nano first run downloads models (~hundreds of MB from HF), subsequent runs are fast
 - Ensure user wants voice before generating — some channels don't support MEDIA or the user may prefer text
 - Voice text should be self-contained: user won't see supporting text/charts with the audio
