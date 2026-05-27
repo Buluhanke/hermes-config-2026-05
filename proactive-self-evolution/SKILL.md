@@ -80,15 +80,10 @@ grep -E "error|ERROR|exception" ~/.hermes/logs/gateway.log | tail -20
 ### 当前状态追踪
 `~/.hermes/current_context.json` — 跨会话JSON追踪文件
 
-## 文件位置
-- LTM框架: `~/.hermes/scripts/ltm.py`
-- Context Loader: `~/.hermes/scripts/evolution_core.py`
-- 性格文件: `~/.hermes/hermes-agent/personality.md`
-- 当前状态: `~/.hermes/current_context.json`
-- 进化日志: `~/.hermes/logs/evolution.log`
-- Screen Handler: `~/.hermes/scripts/screen_trigger_handler.py`
-- Screen Watcher: `~/.hermes/scripts/screen_watcher.py`
-- **实际学习脚本**: `~/.hermes/scripts/self_evolution.sh`（v3版本，见 `references/self-evolution-script.md`）
+## 参考资料
+- [Cron Jobs 配置](./references/cron-jobs-config.md)
+- [Matt Pocock Skills + EvoMap 参考](./references/mattpocock-evomap.md)
+- [深度进化发现(2026-05-28)](./references/deep_evolution_findings_20260528.md) — OmniParser/CloakBrowser/Agent-S/CUA
 
 ## Cron Job 调试（2026-05-27）
 - script字段只写脚本文件名（无路径），scheduler自动从~/.hermes/scripts/查找
@@ -159,6 +154,28 @@ grep -E "error|ERROR|exception" ~/.hermes/logs/gateway.log | tail -20
 ## ⚠️ 历史陷阱（2026-05-26）
 
 框架搭好了但没接入核心 = 白搭。今天建的 `evolution_core.py` 和 `personality.md` Hermes 并不会自动加载。需要找到 Hermes 启动流程的注入点（启动脚本或 system prompt 加载逻辑），把 evolution_core.py 的调用接进去，否则这套框架永远不生效。
+
+## 网络故障应急方案（已实战验证）
+
+### web_search 失败 → GitHub API 替代
+Firecrawl 额度耗尽时，用 execute_code + curl + GitHub API，无需认证：
+
+```python
+import subprocess, json
+cmd = 'curl -s "https://api.github.com/search/repositories?q=omniparser&sort=stars&per_page=5"'
+r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+data = json.loads(r.stdout)
+for item in data['items']:
+    print(f"{item['stargazers_count']}★ {item['full_name']}")
+```
+
+已验证成功获取 OmniParser(24k★)、CloakBrowser(21k★)、Agent-S(11k★)。
+
+### 浏览器AI对话站点全被 Cloudflare 挡
+ChatGPT / Claude.ai / Perplexity 均返回"正在进行安全验证"，**无法使用**，不要重试。
+
+### 1688/目标站点
+直接 browser_navigate 有时比搜索更可靠（已验证 cua.ai 可正常访问）。
 
 ## 核心原则
 
