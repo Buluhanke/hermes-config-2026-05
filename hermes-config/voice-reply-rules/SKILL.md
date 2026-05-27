@@ -5,14 +5,19 @@ version: 1.1.0
 ---
 
 ## 规则
-用户发语音 → 语音回复（text_to_speech, edge, zh-CN-XiaoxiaoNeural）
+用户发语音 → 语音回复（auto_tts=true，Moss-TTS-Nano 本地合成，Xiaoyu音色）
 用户发文字 → 文字回复
 不混用，规则已固化
 
 ## Voice优先原则
 收到语音消息时，直接TTS回复，不做任何前置检查（不查日志/不验证状态/不跑终端命令）。用户要的是响应速度，不是诊断报告。
 
-**平台限制注意**：Edge TTS 在本环境不通（网络限制）。使用 Moss-TTS-Nano 本地生成：
+**当前配置（2026-05-27）**：
+- `tts.provider = moss`（MOSS-TTS-Nano 本地合成）
+- `voice.auto_tts = true`（收到语音自动触发TTS回复）
+- 默认音色：Xiaoyu（中文女声）
+
+**Moss-TTS 调用方式**：
 ```bash
 /Users/aimac/MOSS-TTS-Nano/.venv312/bin/python \
   /Users/aimac/.hermes/skills/tts/moss-tts-nano/scripts/tts.py \

@@ -66,6 +66,60 @@ for seg in segments:
 hermes tools execute --path ~/.hermes/skills/voice/local-stt/references/verify-faster-whisper.py
 ```
 
+## Hermes 集成（语音对话场景）
+
+STT 在 Hermes 中由 `tools.transcription_tools.py` 统一管理，`gateway/run.py` 中的 `_enrich_message_with_transcription()` 负责处理各平台的语音消息。
+
+### 配置路径（~/.hermes/config.yaml）
+
+```yaml
+stt:
+  enabled: true
+  provider: local              # 可选: local, groq, openai, none
+  local:
+    model: small               # tiny/base/small/medium/large-v3
+    language: ''               # 留空自动检测
+  openai:
+    model: whisper-1
+```
+
+修改后用 `grep -A2 "local:" ~/.hermes/config.yaml` 确认生效。
+
+### 平台 ASR 路由
+
+| 平台 | 主ASR | 备选 | 说明 |
+|------|-------|------|------|
+| QQ bot | 腾讯ASR（`asr_refer_text`，免费，平台内置） | local faster-whisper | 腾讯失败才走本地 |
+| Telegram | local faster-whisper（直连） | 无 | 每次语音都用本地模型 |
+| 命令行 | local faster-whisper | 无 | `hermes voice` 模式 |
+
+> 修改 `stt.local.model` 只影响 local ASR 的场景。QQ 主链路走腾讯ASR，仅腾讯失败时 fallback 到 local。
+
+### 内存占用
+
+| 模型 | 加载内存 | 说明 |
+|------|---------|------|
+| tiny | ~500MB | M4 24GB 无忧 |
+| base | ~1GB | 默认值 |
+| small | ~1-2GB | 推荐，中文精度明显优于base/ |
+| medium | ~3-4GB | 更高精度，CPU 较慢 |
+
+模型仅在处理语音时加载进内存，处理完释放，非驻留。
+
+### 验证生效
+
+```bash
+# 确认配置已写入
+grep -A2 "local:" ~/.hermes/config.yaml
+
+# 直测 faster-whisper 加载（带模型下载）
+python3 -c "
+from faster_whisper import WhisperModel
+model = WhisperModel('small', device='cpu', compute_type='int8')
+print('OK')
+"
+```
+
 ## 集成方向
 
 - n8n workflow 调用本地转写服务
