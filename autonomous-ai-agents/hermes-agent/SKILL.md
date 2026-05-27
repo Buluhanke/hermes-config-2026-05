@@ -784,7 +784,7 @@ grep -E "HTTP_PROXY|HTTPS_PROXY|NO_PROXY" ~/.hermes/.env
 netstat -an | grep "LISTEN" | grep -E "1082|7897"
 
 # 验证代理是否影响特定 API（用 curl 走代理测试）
-curl -s --connect-timeout 3 -x http://127.0.0.1:1082 https://api.deepseek.com/v1/models -H "Authorization: Bearer $DEEPSEEK_API_KEY"
+curl -s --connect-timeout 3 -x http://127.0.0.1:1082 https://api.deepseek.com/v1/models -H "Authorization: Bearer $DEEP_PROXY"
 # 如果返回 governor/认证失败，说明 DeepSeek 屏蔽代理
 ```
 
@@ -1479,7 +1479,7 @@ rules:
 **验证方式：**
 ```bash
 # MiniMax 直连延迟
-curl -s -o /dev/null -w "%{time_total}s" https://v2.aicodee.com/v1/models -H "Authorization: Bearer $TOKEN"
+curl -s -o /dev/null -w "%{time_total}s" https://v2.aicodee.com/v1/models -H "Authorization: Bearer $Aicodee_Key"
 
 # DeepSeek 直连 vs 代理对比
 curl -s -o /dev/null -w "直连: %{time_total}s" --max-time 10 https://api.deepseek.com/v1/models

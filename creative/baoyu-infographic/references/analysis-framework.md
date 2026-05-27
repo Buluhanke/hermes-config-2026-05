@@ -39,7 +39,6 @@ Approach content analysis as a **world-class instructional designer**:
 | **System/Structure** | Components, architecture, anatomy | structural-breakdown, bento-grid | technical-schematic, ikea-manual |
 | **Journey/Narrative** | Stories, user flows, milestones | winding-roadmap, story-mountain | storybook-watercolor, comic-strip |
 | **Overview/Summary** | Multiple topics, feature highlights | bento-grid, periodic-table, dense-modules | chalkboard, bold-graphic |
-| **Procurement/1688** | Supplier scores, spend data, KPIs, price trends | dashboard, supplier-comparison, price-trend | corporate-memphis, morandi-journal |
 | **Product/Buying Guide** | Multi-dimension comparisons, specs, pitfalls | dense-modules | morandi-journal, pop-laboratory, retro-pop-grid |
 
 ### 2. Learning Objective Identification

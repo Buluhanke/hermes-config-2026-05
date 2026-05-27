@@ -1,9 +1,9 @@
 {
-  "last_report_path": null,
-  "last_run_at": "2026-05-24T05:31:10.193186+00:00",
-  "last_run_duration_seconds": null,
-  "last_run_summary": "auto: no changes",
-  "last_run_summary_shown_at": "2026-05-16T03:04:02.163333+00:00",
+  "last_report_path": "/Users/aimac/.hermes/logs/curator/20260527-102723",
+  "last_run_at": "2026-05-27T10:27:23.501631+00:00",
+  "last_run_duration_seconds": 2.195688,
+  "last_run_summary": "auto: no changes; llm: skipped (no candidates)",
+  "last_run_summary_shown_at": null,
   "paused": false,
   "run_count": 1
 }

@@ -9,14 +9,10 @@ Content signals determine default art + tone + layout (or preset).
 | Tutorial, how-to, beginner | manga | neutral | webtoon | **ohmsha** |
 | Computing, AI, programming | manga | neutral | dense | **ohmsha** |
 | Technical explanation, educational | manga | neutral | webtoon | **ohmsha** |
-| Automation pipeline, CI/CD, DevOps workflow | manga | neutral | webtoon | **ohmsha** |
 | Pre-1950, classical, ancient | realistic | vintage | cinematic | - |
 | Personal story, mentor | ligne-claire | warm | standard | - |
 | Psychology, motivation, self-help, coaching | manga | warm | standard | **concept-story** |
 | Business narrative, management, leadership | manga | warm | standard | **concept-story** |
-| Business script, sales negotiation, client meeting | manga | warm | standard | **concept-story** |
-| Supplier story, supply chain, manufacturer partnership | manga | warm | standard | **concept-story** |
-| 1688 product introduction, product showcase | minimalist | neutral | four-panel | **four-panel** |
 | Conflict, breakthrough | (inherit) | dramatic | splash | - |
 | Wine, food, lifestyle | realistic | neutral | cinematic | - |
 | Martial arts, wuxia, xianxia | ink-brush | action | splash | **wuxia** |
@@ -29,7 +25,7 @@ Content signals determine default art + tone + layout (or preset).
 **When preset is recommended**: Load `presets/{preset}.md` and apply all special rules.
 
 ### ohmsha
-- **Triggers**: Tutorial, technical, educational, computing, programming, how-to, beginner, automation pipeline, CI/CD, DevOps
+- **Triggers**: Tutorial, technical, educational, computing, programming, how-to, beginner
 - **Special rules**: Visual metaphors, NO talking heads, gadget reveals, Doraemon-style characters
 - **Base**: manga + neutral + webtoon/dense
 
@@ -44,12 +40,12 @@ Content signals determine default art + tone + layout (or preset).
 - **Base**: manga + romantic + standard
 
 ### concept-story
-- **Triggers**: Psychology, motivation, self-help, business narrative, management, leadership, personal growth, coaching, soft skills, abstract concept through story, business script, sales negotiation, supplier story
+- **Triggers**: Psychology, motivation, self-help, business narrative, management, leadership, personal growth, coaching, soft skills, abstract concept through story
 - **Special rules**: Visual symbol system, growth arc, dialogue+action balance, original characters
 - **Base**: manga + warm + standard
 
 ### four-panel
-- **Triggers**: Business allegory, fable, parable, short insight, four-panel, 四格, 四格漫画, single-page comic, minimalist comic strip, 1688 product introduction
+- **Triggers**: Business allegory, fable, parable, short insight, four-panel, 四格, 四格漫画, single-page comic, minimalist comic strip
 - **Special rules**: Strict 起承转合 4-panel structure, B&W + spot color, simplified stick-figure characters, single-page story
 - **Base**: minimalist + neutral + four-panel
 

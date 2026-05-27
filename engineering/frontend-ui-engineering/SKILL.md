@@ -6,8 +6,7 @@ triggers:
   - "需要实现响应式布局"
   - "需要优化前端性能"
   - "发现可访问性问题"
-  -
-version: 1.0.0 "需要统一设计系统"
+  - "需要统一设计系统"
 ---
 
 # Frontend UI Engineering

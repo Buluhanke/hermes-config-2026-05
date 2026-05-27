@@ -6,7 +6,6 @@ triggers:
   - "检查Hermes"
   - "SSH连不上"
   - any IP/hostname like 192.168.0.x, Mac-Pro, aimac
-version: 1.0.0
 ---
 
 # hermes-multi-host-debug

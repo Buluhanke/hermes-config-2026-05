@@ -184,44 +184,11 @@ result = asyncio.run(perceive_url("https://example.com"))
 
 **互补关系**：perception.py 提供"眼睛"，hermes-rpa 提供"手"。Agent 先用 perception 感知，再用 hermes-rpa 执行。
 
-## 文件位置（实际状态 vs 文档描述）
+## 文件位置
 
-**文档描述**：`~/.hermes/hermes-agent/perception.py` (1424行) 作为统一感知核心。
-
-**实际状态**：perception.py 可能存在，但 `perception/` 子目录（含 `browser/screen/desktop/normalizers/fusion/query/actions/verification/diff/transform/drivers/runtime/`）大概率不存在（SKILL.md 中的 Architecture 总览是目标架构，不是当前实现）。
-
-**真正可用的感知入口**：
-- `vision_connect.py` — ✅ 三层感知系统（Vision OCR + smolvlm2 + SSIM），存在于 `~/.hermes/skills/vision/hermes-vision-connect/`
-- `unified-perception` skill 本身 — ✅ 是文档，描述的是目标架构，不是当前实现
-
-**两条架构的关系**：
-- `unified-perception` skill — 架构蓝图（perception.py 目标功能）
-- `vision/hermes-vision-connect` skill — 当前实际落地的三层感知方案
-- 两者互补：vision_connect.py 是当前可用的，unified-perception 是规划方向
-
-**如果 perception.py 存在**，调用方式：
-```python
-import sys
-sys.path.insert(0, '/Users/aimac/.hermes/hermes-agent')
-from perception import perceive_what, ElementRegistry
-
-# 感知浏览器
-result = perceive_what("browser")
-# 感知桌面
-result = perceive_what("desktop:Google Chrome")
-# 感知屏幕
-result = perceive_what("screen")
-```
-
-如果 `perceive_what` 报错 `ModuleNotFoundError`，则 perception.py 不存在，以 vision_connect.py 为准。
-
-## 参考文档（检查完整性）
-
-- `references/agent-browser-cli.md` — ❌ 文件可能不存在（hermes-agent 默认不含 agent-browser）
-- `references/architecture.md` — ❌ 文件可能不存在
-- `references/desktop-agent-roadmap-2026-05-14.md` — 指向 hermes-rpa skill 的引用，无需检查
-
-**如果参考文档缺失**，可忽略或从 SKILL.md 中移除这些引用。
+- 主模块：`~/.hermes/hermes-agent/perception.py` (1424行)
+- 不在 skills 目录下，作为 Hermes Agent 运行时模块使用
+- 本 skill 仅作为文档和用法指南
 
 ## 两条感知架构路线（重要）
 

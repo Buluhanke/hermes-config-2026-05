@@ -7,7 +7,6 @@ triggers:
   - "需要组合多个skill完成复杂任务"
   - "想确认是否有更合适的skill可用"
   - "某个skill不work，想找替代方案"
-version: 1.0.0
 ---
 
 # Using Agent Skills
@@ -55,7 +54,7 @@ Hermes拥有74+技能，覆盖不同任务类型。本skill帮助你快速定位
 | 任务 | 推荐Skill |
 |------|----------|
 | 需要操作浏览器（登录态重要）| hermes-rpa（用已有Chrome）|
-| 通用浏览器自动化 | browser-use（独立skill）|
+| 通用浏览器自动化 | browser-use |
 | 截图+OCR+键盘鼠标操控 | desktop-control |
 | 需要视觉理解页面 | vision + hermes-rpa |
 
@@ -132,7 +131,7 @@ code-review-and-quality → security-hardening → git-workflow-and-versioning
 │
 ├── 自动化操作
 │   ├── 浏览器（需登录） → hermes-rpa
-│   ├── 浏览器（无需登录） → browser-use（独立skill）|
+│   ├── 浏览器（无需登录） → browser-use
 │   ├── 桌面GUI → desktop-control / macos-computer-use
 │   └── 跨平台 → hermes-rpa
 │
@@ -156,16 +155,6 @@ code-review-and-quality → security-hardening → git-workflow-and-versioning
 | 遇到错误直接尝试修复 | 浪费时间在症状而非根因 | 先用debugging-and-error-recovery |
 | 大任务不分解直接开始 | 容易迷失方向，返工多 | 先planning-and-taYOUR_API_KEY |
 | 用pro-buyer搜索时规格不清晰 | 搜索结果不符合需求 | 先spec-driven-sourcing |
-
-## Skill库精简原则
-
-当118个skills中出现同类重叠时，**同类剔除最差最旧版本**：
-
-1. **保留市场占有最高/功能最完整/社区最活跃的**
-2. **归档到 `~/.hermes/optional-skills/` 而非直接删除**（可恢复）
-3. **优先合并描述重复的**（如 Git工作流 × 2 → 合并成 1）
-
-已归档的重叠组参考：`references/skill-deduplication.md`
 
 ## Verification
 

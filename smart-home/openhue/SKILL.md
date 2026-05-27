@@ -1,7 +1,7 @@
 ---
 name: openhue
-description: "Control Philips Hue lights, scenes, rooms via OpenHue CLI — including work automation, 1688 warehouse, sunrise/sunset sync, and procurement workflow integration."
-version: 2.0.0
+description: "Control Philips Hue lights, scenes, rooms via OpenHue CLI."
+version: 1.0.0
 author: community
 license: MIT
 platforms: [linux, macos, windows]
@@ -11,16 +11,6 @@ metadata:
     homepage: https://www.openhue.io/cli
 prerequisites:
   commands: [openhue]
-triggers:
-  - Control Hue lights
-  - Work scene lighting automation
-  - 1688 warehouse lighting
-  - Sunrise/sunset sync
-  - Procurement workflow lighting
-  - 日出日落同步
-  - 仓库灯光
-  - 工作场景灯光
-  - 采购流程联动
 ---
 
 # OpenHue CLI

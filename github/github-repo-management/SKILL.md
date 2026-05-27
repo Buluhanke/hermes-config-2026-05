@@ -208,29 +208,6 @@ git push -u origin main
 
 > **Pitfall:** `git push` fails with "could not read Username: Device not configured" — this means no credential helper is configured and no token is embedded. Do NOT keep retrying; offer the user Option A (manual push) or ask for a PAT.
 
-> **Pitfall: GitHub Push Protection — secret/API key detected in history.**
-> GitHub's pre-receive hooks scan ALL history for embedded secrets (Groq token, OpenRouter key, etc.). Even a single old commit containing a secret will block the entire push, with no way to selectively push around it.
->
-> **Fix: `git reset --hard origin/main`** — discards all local commits, making a clean break from the problematic history. This is what was used in practice (2026-05-24) when 59 local commits carried a hidden Groq API key. Local skills were unaffected; only the public GitHub sync was blocked.
->
-> ```bash
-> # Nuclear but clean — discard local history, start fresh from remote
-> git reset --hard origin/main
-> git push origin main
-> ```
->
-> **Alternative: Save local changes first**
-> ```bash
-> git stash push -m "temp" -- <files>   # save uncommitted work
-> git reset --hard origin/main           # nuke local history
-> git stash pop                          # restore uncommitted work
-> git add -A
-> git commit -m "clean restart $(date '+%Y-%m-%d')"
-> git push origin main
-> ```
->
-> Note: `git rm --cached <file>` on the current commit does NOT remove a secret from history — the blob still exists in `.git/objects/`. GitHub scans the full history, so history rewrite is the only real solution.
->
 > **Pitfall: Large file in git history (>100MB).** If GitHub rejects the push with `GH001: Large files detected` and the large file is already committed in local history, `git rm --cached <file>` on the current commit does NOT remove it from history — the blob still exists in `.git/objects/`. GitHub runs pre-receive hooks that scan the entire history. **Fix: rebuild a clean history.**
 >
 > ```bash
@@ -584,6 +561,13 @@ for g in json.load(sys.stdin):
 
 Set up recurring `git add` + `commit` + `push` using Hermes's cron system so the repository is backed up automatically.
 
+### Hermes 备份脚本（已创建）
+
+两个脚本已保存在 `scripts/hermes-backup.sh` 和 `scripts/hermes-restore.sh`：
+
+- `scripts/hermes-backup.sh` — 备份 .env、auth.json、Chrome Cookie 到本地目录
+- `scripts/hermes-restore.sh` — 从 GitHub 私有仓库 `hermes-backup` 恢复所有配置
+
 ### Create the Script
 
 Write a bash script to `~/.hermes/scripts/`:
@@ -628,6 +612,14 @@ Parameters:
 - **GitHub token expiry**: If the remote URL embeds a PAT, the token may expire. Configure the remote to use a credential helper or embed a long-lived PAT.
 - **Repository must have an upstream set**: If the clone was shallow or has no tracking branch, set it up before scheduling.
 - **gh repo delete requires delete_repo scope**: OAuth tokens (prefix `YOUR_TOKEN`, granted via `gh auth login` device flow) do NOT include `delete_repo` scope — even if `gh api` shows `admin: true` on a repo, the underlying token lacks this scope. Device code refresh (`gh auth refresh -h github.com -s delete_repo`) works but requires completing the browser flow at github.com/login/device within the command timeout. PATs (prefix `ghp_`) include `delete_repo` by default. Workaround when OAuth token lacks the scope: have the user delete manually on GitHub web UI, or request a PAT with `delete_repo` permission. Token type can be identified by running `gh auth status` — it shows scopes like `gist, read:org, repo, workflow` — `delete_repo` will be absent if using OAuth flow.
+- **GitHub 仓库减肥（清除历史垃圾文件）**：当仓库因历史积累变大（如 chrome-debug、缓存文件、备份文件等已删除但仍在历史中），`git filter-branch` + force push 可真正减小仓库体积。步骤：
+  1. `git clone --mirror https://github.com/owner/repo.git /tmp/repo-mirror`（镜像克隆效率更高）
+  2. `git filter-branch --force --index-filter 'git rm -rf --cached --ignore-unmatch <大文件或目录>' --prune-empty --tag-name-filter cat -- --all`
+  3. `git for-each-ref --format='delete %(refname)' refs/original | git update-ref --stdin`（清除备份 refs）
+  4. `git reflog expire --expire=now --all && git prune && git gc --aggressive --prune=now`
+  5. `git push --force --mirror`（推送所有分支和标签）
+  - 注意：`gh api repos/<owner>/<repo>` 返回的 `size` 字段有延迟，可能数小时后才更新；用 `git clone` 新建本地目录验证实际大小更准确
+  - 此操作不可逆，提前告知用户
 - **Merging two unrelated repos**: Use `git fetch <remote>` first, then `git merge <remote>/<branch> --allow-unrelated-histories`. Conflicts in `.gitignore` are common — combine both versions (OR the contents together), then `git add .gitignore` and commit. After merge, push with `--force` if needed.
 - **Extracting a remote branch's files without switching**: Use `git archive <remote>/<branch> --prefix=<dir>/ | tar -xf - -C .` — this pulls files directly from the remote without creating a local branch or worktree. Useful when a branch (e.g., `obsidian-backup`) exists on remote but not locally. After extraction, `git add` the new directory and commit.
 - **Fetching a remote branch that has no local tracking**: `git ls-tree <remote>/<branch>` shows what's in that branch without fetching. Use `git archive <remote>/<branch> --prefix=<dir>/ | tar -xf - -C .` to extract files from a remote branch into a local directory without switching branches.
@@ -645,7 +637,3 @@ Parameters:
 | List workflows | `gh workflow list` | `curl GET /repos/o/r/actions/workflows` |
 | Rerun CI | `gh run rerun ID` | `curl POST /repos/o/r/actions/runs/ID/rerun` |
 | Set secret | `gh secret set KEY` | `curl PUT /repos/o/r/actions/secrets/KEY` (+ encryption) |
-
-## See Also
-- `references/github-push-protection.md` — secret/API key detected in history: clean fix, prevention
-- `references/github-api-cheatsheet.md` — API quick reference

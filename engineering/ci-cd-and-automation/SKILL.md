@@ -6,8 +6,7 @@ triggers:
   - "部署流程混乱或手动操作多"
   - "需要自动化测试"
   - "需要蓝绿部署/金丝雀发布"
-  -
-version: 1.0.0 "CI/CD失败率高"
+  - "CI/CD失败率高"
 ---
 
 # CI/CD and Automation

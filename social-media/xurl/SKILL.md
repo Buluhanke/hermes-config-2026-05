@@ -1,7 +1,7 @@
 ---
 name: xurl
-description: "X/Twitter via xurl CLI: post, search, DM, media, v2 API + e-commerce monitoring, competitor analysis, 1688 supplier intel, automated content collection."
-version: 1.2.0
+description: "X/Twitter via xurl CLI: post, search, DM, media, v2 API."
+version: 1.1.1
 author: xdevplatform + openclaw + Hermes Agent
 license: MIT
 platforms: [linux, macos]
@@ -9,7 +9,7 @@ prerequisites:
   commands: [xurl]
 metadata:
   hermes:
-    tags: [twitter, x, social-media, xurl, official-api, e-commerce, competitor-analysis, 1688, content-collection]
+    tags: [twitter, x, social-media, xurl, official-api]
     homepage: https://github.com/xdevplatform/xurl
     upstream_skill: https://github.com/openclaw/openclaw/blob/main/skills/xurl/SKILL.md
 ---
@@ -27,10 +27,8 @@ Use this skill for:
 - media uploads (images and video)
 - raw access to any X API v2 endpoint
 - multi-app / multi-account workflows
-- **E-commerce keyword monitoring** (track product buzz, brand mentions, shopping signals)
-- **Competitor social media analysis** (track rivals' social footprint, engagement, growth)
-- **1688 supplier sentiment monitoring** (track supplier news, factory reviews, trade risks)
-- **Automated content collection** (stream-filter-collect pipelines for ongoing research)
+
+This skill replaces the older `xitter` skill (which wrapped a third-party Python CLI). `xurl` is maintained by the X developer platform team, supports OAuth 2.0 PKCE with auto-refresh, and covers a substantially larger API surface.
 
 ---
 
@@ -40,7 +38,7 @@ Critical rules when operating inside an agent/LLM session:
 
 - **Never** read, print, parse, summarize, upload, or send `~/.xurl` to LLM context.
 - **Never** ask the user to paste credentials/tokens into chat.
-- The user must fill `~/.xurl` with secrets manually on their own machine.
+- The user must fill `~/.xurl` with secrets manually on their own machine. In Docker, this must be the `~` seen by Hermes tool subprocesses; see the Docker note below.
 - **Never** recommend or execute auth commands with inline secrets in agent sessions.
 - **Never** use `--verbose` / `-v` in agent sessions — it can expose auth headers/tokens.
 - To verify credentials exist, only use: `xurl auth status`.
@@ -116,6 +114,15 @@ These steps must be performed by the user directly, NOT by the agent, because th
 After this, the agent can use any command below without further setup. OAuth 2.0 tokens auto-refresh.
 
 > **Common pitfall:** If you omit `--app my-app` from `xurl auth oauth2`, the OAuth token is saved to the built-in `default` app profile — which has no client-id or client-secret. Commands will fail with auth errors even though the OAuth flow appeared to succeed. If you hit this, re-run `xurl auth oauth2 --app my-app` and `xurl auth default my-app`.
+
+> **Docker HOME pitfall:** In the official Hermes Docker layout, `/opt/data` is `HERMES_HOME`, but Hermes tool subprocesses use `/opt/data/home` as `HOME`. That means `~/.xurl` resolves to `/opt/data/home/.xurl` for Hermes-run `xurl` commands, not `/opt/data/.xurl`. Run the user setup with the same HOME:
+> ```bash
+> HOME=/opt/data/home xurl auth apps add my-app --client-id YOUR_CLIENT_ID --client-secret YOUR_CLIENT_SECRET
+> HOME=/opt/data/home xurl auth oauth2 --app my-app YOUR_USERNAME
+> HOME=/opt/data/home xurl auth default my-app YOUR_USERNAME
+> HOME=/opt/data/home xurl auth status
+> ```
+> If `HOME=/opt/data xurl auth status` succeeds but `HOME=/opt/data/home xurl auth status` shows no apps or tokens, Hermes tool calls will not see the credentials.
 
 ---
 
@@ -394,265 +401,6 @@ xurl --app staging /2/users/me             # one-off against staging
 | `CreditsDepleted` | $0 balance on X API | Buy credits (min $5) in Developer Console → Billing |
 | `media processing failed` on image upload | Default category is `amplify_video` | Add `--category tweet_image --media-type image/png` |
 | Two "Client Secret" values in X dashboard | UI bug — first is actually Client ID | Confirm on the "Keys and tokens" page; ID ends in `MTpjaQ` |
-| Two "Client Secret" values in X dashboard | UI bug — first is actually Client ID | Confirm on the "Keys and tokens" page; ID ends in `MTpjaQ` |
-
----
-
-# Extended Capabilities (v1.2.0)
-
-The sections below cover advanced workflows powered by the raw API: e-commerce keyword monitoring, competitor social media analysis, 1688 supplier sentiment tracking, and automated content collection pipelines.
-
----
-
-## 1. E-Commerce Keyword Monitoring
-
-Track product names, brand mentions, shopping signals, and buying intent on X in real time.
-
-### Basic Keyword Tracking
-
-```bash
-# Single keyword — most recent posts
-xurl search "iPhone 16" -n 20
-
-# Product comparison signals
-xurl search "\"iPhone 16\" vs \"Samsung S25\"" -n 15
-
-# Buying intent — price queries
-xurl search "\"best price\" \"[product]\" lang:en" -n 20
-
-# Hashtag product tags
-xurl search "#newarrival OR #productlaunch lang:en" -n 20
-```
-
-### Multi-Keyword Streams (batch script)
-
-```bash
-# Monitor multiple keywords — save each to a separate JSON file
-for keyword in "wireless earbuds" "smart watch" "portable charger"; do
-  safe=$(echo "$keyword" | tr ' ' '_')
-  xurl search "$keyword" -n 50 > "data/${safe}_$(date +%Y%m%d_%H%M%S).json"
-  echo "Collected: $keyword"
-done
-```
-
-### Product Launch Tracking
-
-```bash
-# Pre-launch hype
-xurl search "[Brand] [Product] coming soon" -n 30
-
-# Post-launch reviews
-xurl search "[Product] review lang:en" -n 30
-
-# Unboxing
-xurl search "[Product] unboxing lang:en" -n 20
-```
-
-### Engagement Signals (likes + retweets as popularity proxy)
-
-```bash
-# High-engagement posts about a product
-# (combine with jq to sort by engagement — requires jq installed)
-xurl search "[product name]" -n 100 | jq '.data[] | {id, text, public_metrics}' 2>/dev/null
-```
-
-### Saved Search (recent search endpoint — 7-day lookback)
-
-```bash
-# Use the recent endpoint for up-to-the-minute results
-xurl /2/tweets/search/recent?query="your product" -n 10
-```
-
----
-
-## 2. Competitor Social Media Analysis
-
-Build a structured picture of a competitor's X presence: follower growth, engagement rates, posting cadence, top content, and audience sentiment.
-
-### Profile Overview
-
-```bash
-# Get user profile details
-xurl user @competitorhandle
-
-# Follower / following counts (from public_metrics in user response)
-xurl /2/users/by/username/COMPETITOR?user.fields=public_metrics,description
-```
-
-### Post History Snapshot
-
-```bash
-# Last N posts from a competitor
-xurl /2/users/:COMPETITOR_ID/tweets?max_results=10
-
-# High-engagement posts (sort by engagement — use timeline then filter)
-xurl timeline -n 5                          # your own timeline for benchmarking
-xurl /2/users/:COMPETITOR_ID/tweets?max_results=10&tweet.fields=public_metrics,created_at
-```
-
-### Engagement Rate Calculation
-
-```bash
-# Calculate: (likes + retweets + replies) / followers * 100
-# Example — extract competitor metrics (requires jq):
-COMPETITOR_ID="1234567890"
-METRICS=$(xurl /2/users/$COMPETITOR_ID?user.fields=public_metrics | jq '.data.public_metrics')
-FOLLOWERS=$(echo $METRICS | jq '.followers_count')
-echo "Followers: $FOLLOWERS"
-```
-
-### Competitor Comparison Table
-
-```bash
-# Compare two competitors side-by-side
-xurl /2/users/by/username/COMPETITOR1?user.fields=public_metrics,description
-xurl /2/users/by/username/COMPETITOR2?user.fields=public_metrics,description
-```
-
-### Tracked Competitors List
-
-```bash
-# Maintain a list of competitor handles to scan regularly
-COMPETITORS="competitor1 competitor2 competitor3"
-for h in $COMPETITORS; do
-  echo "=== $h ==="
-  xurl user @$h
-  echo ""
-done
-```
-
----
-
-## 3. 1688 Supplier Public Opinion Monitoring
-
-Track news, complaints, factory incidents, and trade signals related to specific 1688 suppliers or Chinese manufacturers on X.
-
-### Supplier Name Tracking
-
-```bash
-# General supplier mentions
-xurl search "1688 supplier" -n 20
-xurl search "[supplier name] factory" -n 20
-
-# Quality / complaint signals
-xurl search "[supplier] quality issue" -n 20
-xurl search "[supplier] scam" -n 20
-xurl search "[supplier] delayed delivery" -n 20
-
-# Factory incidents
-xurl search "[supplier name] fire OR explosion OR shutdown" -n 20
-
-# Trade policy impact on suppliers
-xurl search "1688 tariff impact" -n 20
-xurl search "Chinese supplier shipping delay" -n 20
-```
-
-### Sentiment Signals
-
-```bash
-# Negative signals — complaints and risks
-xurl search "[supplier] DEFECTIVE lang:en" -n 20
-xurl search "[supplier] fraud lang:en" -n 20
-xurl search "[supplier] counterfeit lang:en" -n 20
-
-# Positive signals — reviews and orders
-xurl search "[supplier] genuine OR authentic" -n 20
-xurl search "[supplier] bulk order" -n 20
-```
-
-### Cross-Reference with Chinese-language Mentions
-
-```bash
-# Track English-language discussion of Chinese suppliers
-xurl search "[supplier name] Alibaba OR 1688" -n 20
-xurl search "\"made in China\" supplier review" -n 20
-```
-
----
-
-## 4. Automated Content Collection
-
-Set up recurring collection pipelines using streaming endpoints, cron jobs, and file-based output for ongoing research.
-
-### Streaming Pipeline (real-time)
-
-```bash
-# Stream all posts matching a keyword — runs until interrupted
-# Great for events, product launches, crises
-xurl -s /2/tweets/search/stream?query="your keyword"
-
-# Multi-keyword stream via separate background processes
-xurl -s /2/tweets/search/stream?query="keyword1" > data/stream_k1.json &
-xurl -s /2/tweets/search/stream?query="keyword2" > data/stream_k2.json &
-```
-
-### Scheduled Collection (cron)
-
-```bash
-# Add to crontab for periodic snapshots (every hour)
-# Run every day at 9am:
-# 0 9 * * * /bin/bash /Users/aimac/scripts/xurl-daily.sh
-
-# Example script: xurl-daily.sh
-#!/bin/bash
-OUT="/Users/aimac/data/xurl"
-KEYWORDS="product_name competitor_a supplier_x"
-DATE=$(date +%Y%m%d)
-for kw in $KEYWORDS; do
-  safe=$(echo "$kw" | tr ' ' '_')
-  xurl search "$kw" -n 100 > "$OUT/${safe}_${DATE}.json"
-  echo "[$(date)] Collected: $kw"
-done
-```
-
-### Full Timeline Archival
-
-```bash
-# Collect your own timeline for archival
-xurl timeline -n 100 > "data/timeline_$(date +%Y%m%d_%H%M%S).json"
-
-# Collect mentions for CRM / reply tracking
-xurl mentions -n 100 > "data/mentions_$(date +%Y%m%d_%H%M%S).json"
-```
-
-### Competitor Periodic Snapshot
-
-```bash
-# Script to snapshot competitor activity weekly
-# competitors-snapshot.sh
-#!/bin/bash
-OUT="/Users/aimac/data/competitors"
-mkdir -p "$OUT"
-for handle in "@comp1" "@comp2" "@comp3"; do
-  name=$(echo $handle | tr -d '@')
-  xurl user $handle > "$OUT/${name}_profile_$(date +%Y%m%d).json"
-  echo "[$(date)] Saved: $handle"
-  sleep 5   # be respectful to rate limits
-done
-```
-
-### Sample Stream (random 1% of all posts — for baseline trends)
-
-```bash
-# Random sample for trend analysis
-xurl -s /2/tweets/sample/stream > data/sample_stream.json
-```
-
-### Output File Naming Convention
-
-Recommended structure for collected data:
-
-```
-data/
-  search_keyword_YYYYMMDD.json
-  timeline_YYYYMMDD.json
-  mentions_YYYYMMDD.json
-  competitors/
-    handle_profile_YYYYMMDD.json
-    handle_tweets_YYYYMMDD.json
-  stream/
-    keyword_YYYYMMDD_HHMMSS.json
-```
 
 ---
 
@@ -663,10 +411,8 @@ data/
 - **Token refresh:** OAuth 2.0 tokens auto-refresh. Nothing to do.
 - **Multiple apps:** Each app has isolated credentials/tokens. Switch with `xurl auth default` or `--app`.
 - **Multiple accounts per app:** Select with `-u / --username`, or set a default with `xurl auth default APP USER`.
-- **Token storage:** `~/.xurl` is YAML. Never read or send this file to LLM context.
+- **Token storage:** `~/.xurl` is YAML. In Docker, use the Hermes subprocess HOME (`/opt/data/home` in the official image) so tokens land under `/opt/data/home/.xurl`. Never read or send this file to LLM context.
 - **Cost:** X API access is typically paid for meaningful usage. Many failures are plan/permission problems, not code problems.
-- **1688 monitoring:** 1688 discussion on X is limited; supplement with direct 1688 platform monitoring for complete supplier intel.
-- **Streaming:** Streaming processes run until killed. Use background mode (`&`) and redirect output to files. Monitor disk usage for long-running streams.
 
 ---
 
@@ -675,4 +421,3 @@ data/
 - Upstream CLI: https://github.com/xdevplatform/xurl (X developer platform team, Chris Park et al.)
 - Upstream agent skill: https://github.com/openclaw/openclaw/blob/main/skills/xurl/SKILL.md
 - Hermes adaptation: reformatted for Hermes skill conventions; safety guardrails preserved verbatim.
-- Extended capabilities v1.2.0: e-commerce monitoring, competitor analysis, 1688 supplier intel, automated content collection.

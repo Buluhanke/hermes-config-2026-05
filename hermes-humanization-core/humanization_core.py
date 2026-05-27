@@ -27,102 +27,60 @@ import requests
 pyautogui.FAILSAFE = True
 pyautogui.PAUSE = 0.05
 
-SCREENSHOT_PATH = "/Users/aimac/hermes-v3/hermes_screen.png"
+SCREENSHOT_PATH = "/tmp/hermes_screen.png"
 OLLAMA_URL = "http://127.0.0.1:11434/api/generate"
-
-# 发呆机制计数器（每 N 次操作随机停 3-8 秒）
-_action_counter = 0
 
 # ─────────────────────────────────────────
 # 1. 打字拟真
 # ─────────────────────────────────────────
 def human_type(text: str, speed: float = 0.1):
-    """模拟人类打字：随机延迟 + 5% 概率错字回退（非线性节奏）"""
+    """模拟人类打字：随机延迟 + 1% 概率错字回退"""
     for char in text:
-        pyautogui.write(char, interval=random.uniform(0.02, speed))
-        if random.random() < 0.05:
+        pyautogui.write(char, interval=random.uniform(0.03, speed))
+        if random.random() < 0.01:
             # 打错一个字符
             wrong_char = random.choice('abcdefghijklmnopqrstuvwxyz0123456789')
-            pyautogui.write(wrong_char, interval=random.uniform(0.04, 0.1))
-            time.sleep(random.uniform(0.08, 0.2))
+            pyautogui.write(wrong_char, interval=random.uniform(0.03, 0.08))
+            time.sleep(random.uniform(0.1, 0.25))
             # 回退修正
             pyautogui.press('backspace')
-            time.sleep(random.uniform(0.06, 0.12))
+            time.sleep(random.uniform(0.08, 0.15))
 
 
 # ─────────────────────────────────────────
 # 2. 鼠标移动（贝塞尔曲线）
 # ─────────────────────────────────────────
 def human_move(x: int, y: int, duration: float = None):
-    """模拟人类鼠标移动：贝塞尔曲线轨迹 + 过冲回拉 + 随机发呆
-
-    真人鼠标的核心特征：
-    1. 不会走直线（弧形控制点）
-    2. 会先越过目标 5-15px，再缓慢回拉（overshoot）
-    3. 偶尔会停下来"想一下"（发呆机制）
-    """
-    current_x, current_y = pyautogui.position()
-    distance = ((x - current_x)**2 + (y - current_y)**2) ** 0.5
-
-    # ── 发呆机制：每约 40 次操作随机停 3-8 秒 ──
-    global _action_counter
-    try:
-        _action_counter += 1
-    except NameError:
-        _action_counter = 1
-
-    if _action_counter % random.randint(35, 55) == 0:
-        # 停止移动，单纯发呆
-        time.sleep(random.uniform(3.0, 8.0))
-
-    if distance < 15:
-        # 超短距离：直接到位，不走过冲（反而更像人）
-        pyautogui.moveTo(x, y, _pause=False)
-        return
-
+    """模拟人类鼠标移动：贝塞尔曲线轨迹 + 随机弧度"""
     if duration is None:
-        duration = max(0.4, min(distance / 350, 2.0))
+        # 根据距离动态决定速度（越远越慢，模拟人类抬手移动的习惯）
+        current_x, current_y = pyautogui.position()
+        distance = ((x - current_x)**2 + (y - current_y)**2) ** 0.5
+        duration = max(0.3, min(distance / 400, 1.5))  # 距离400px时约1秒
 
-    start_x, start_y = current_x, current_y
+    start_x, start_y = pyautogui.position()
 
-    # ── 第一段：从起点到过冲点（超越目标） ──
-    overshoot_dist = random.uniform(6, 16)  # 过冲距离
-    direction_x = (x - start_x) / distance if distance > 0 else 0
-    direction_y = (y - start_y) / distance if distance > 0 else 0
+    # 生成有弧度的控制点（避免直线）
+    mid_x = (start_x + x) // 2 + random.randint(-80, 80)
+    mid_y = (start_y + y) // 2 + random.randint(-60, 60)
 
-    overshoot_x = int(x + direction_x * overshoot_dist)
-    overshoot_y = int(y + direction_y * overshoot_dist)
-
-    # 控制点：弧形偏移，避免直线
-    ctrl_x = int((start_x + overshoot_x) / 2 + random.randint(-90, 90))
-    ctrl_y = int((start_y + overshoot_y) / 2 + random.randint(-70, 70))
-
-    steps = max(int(duration * 110), 25)
-    path = []
+    # 二阶贝塞尔曲线
+    points = []
+    steps = max(int(duration * 120), 20)  # 至少20步
     for t in np.linspace(0, 1, steps):
-        bx = (1-t)**2 * start_x + 2*(1-t)*t * ctrl_x + t**2 * overshoot_x
-        by = (1-t)**2 * start_y + 2*(1-t)*t * ctrl_y + t**2 * overshoot_y
-        path.append((int(bx), int(by)))
+        bx = (1-t)**2 * start_x + 2*(1-t)*t * mid_x + t**2 * x
+        by = (1-t)**2 * start_y + 2*(1-t)*t * mid_y + t**2 * y
+        points.append((int(bx), int(by)))
 
-    # 执行第一段移动
-    for i, (px, py) in enumerate(path):
-        if i > len(path) * 0.75:
-            delay = duration / steps * 1.8  # 接近过冲点时减速
+    # 移动（带微小随机扰动）
+    for i, (px, py) in enumerate(points):
+        # 末尾几帧稍微减速（模拟人类接近目标时的犹豫）
+        if i > len(points) * 0.8:
+            delay = duration / steps * 1.5
         else:
-            delay = duration / steps * random.uniform(0.7, 1.3)
+            delay = duration / steps * random.uniform(0.8, 1.2)
         pyautogui.moveTo(px, py, _pause=False)
         time.sleep(delay)
-
-    # ── 第二段：从过冲点缓慢回拉到真实目标（真人核心特征） ──
-    return_steps = random.randint(5, 9)
-    for i in range(return_steps):
-        t = i / return_steps
-        # 缓入：起步慢，接近目标更慢
-        ease = t * t  # 二次缓入
-        rx = int(overshoot_x + (x - overshoot_x) * ease)
-        ry = int(overshoot_y + (y - overshoot_y) * ease)
-        pyautogui.moveTo(rx, ry, _pause=False)
-        time.sleep(random.uniform(0.025, 0.07))
 
 
 # ─────────────────────────────────────────
@@ -181,47 +139,25 @@ def capture_region(x: int, y: int, w: int, h: int) -> str:
 # ─────────────────────────────────────────
 # 6. 本地 VLM（默认 qwen2.5vl:7b，备选 smolvlm2）
 # ─────────────────────────────────────────
-VLM_MODEL_DEFAULT = "ahmadwaqar/smolvlm2-agentic-gui:latest"
-VLM_MODEL_FALLBACK = "qwen2.5vl:7b"
+VLM_MODEL_DEFAULT = "qwen2.5vl:7b"
+VLM_MODEL_FALLBACK = "ahmadwaqar/smolvlm2-agentic-gui:latest"
 
 def ask_vlm(image_path: str, question: str, model: str = VLM_MODEL_DEFAULT,
             num_ctx: int = 4096, timeout: int = 90) -> str:
-    """将截图发给本地 VLM 模型，返回回答
-    
-    smolvlm2 专用 /api/chat 接口（才能触发 action 输出）
-    其他模型用 /api/generate 接口
-    """
+    """将截图发给本地 VLM 模型，返回回答"""
     with open(image_path, "rb") as f:
         img_b64 = base64.b64encode(f.read()).decode('utf-8')
 
-    # smolvlm2 必须走 /api/chat 才能输出 click/scroll 等 action
-    if "smolvlm" in model.lower() or "ahmadwaqar" in model.lower():
-        try:
-            payload = {
-                "model": model,
-                "messages": [{"role": "user", "content": question, "images": [img_b64]}],
-                "stream": False,
-                "options": {"num_ctx": num_ctx, "temperature": 0.1}
-            }
-            r = requests.post("http://127.0.0.1:11434/api/chat", json=payload, timeout=timeout)
-            d = r.json()
-            if "error" in d:
-                return f"[VLM错误] {d['error']}"
-            return d.get("message", {}).get("content", "")
-        except requests.exceptions.Timeout:
-            return "[VLM超时]"
-        except Exception as e:
-            return f"[VLM异常] {e}"
+    payload = {
+        "model": model,
+        "prompt": question,
+        "images": [img_b64],
+        "stream": False,
+        "options": {"num_ctx": num_ctx}
+    }
 
-    # 其他模型走 /api/generate
     try:
-        r = requests.post(OLLAMA_URL, json={
-            "model": model,
-            "prompt": question,
-            "images": [img_b64],
-            "stream": False,
-            "options": {"num_ctx": num_ctx}
-        }, timeout=timeout)
+        r = requests.post(OLLAMA_URL, json=payload, timeout=timeout)
         d = r.json()
         if "error" in d:
             return f"[VLM错误] {d['error']}"
@@ -238,95 +174,34 @@ def ask_vlm_fast(image_path: str, question: str) -> str:
                    model=VLM_MODEL_FALLBACK, num_ctx=2048, timeout=30)
 
 
-def _parse_smolVLM_coords(raw: str, sw: int = 1920, sh: int = 1080) -> tuple:
-    """从 smolvlm2 输出中解析坐标，返回 (x, y) 像素坐标，失败返回 (-1, -1)"""
-    import re
-    raw = raw.strip()
-    
-    # 方法1: 正则提取 <code>click(x=0.5, y=0.5)</code>
-    code_match = re.search(r'click\(x=([0-9.]+),\s*y=([0-9.]+)\)', raw)
-    if code_match:
-        nx, ny = float(code_match.group(1)), float(code_match.group(2))
-        if 0 <= nx <= 1 and 0 <= ny <= 1:
-            return int(nx * sw), int(ny * sh)
-        elif nx > 1:
-            return int(nx), int(ny)
-    
-    # 方法2: 正则提取 <code>{...}</code> 中的数字对
-    code_json = re.search(r'<code>\s*\{[^}]+\}\s*</code>', raw, re.DOTALL)
-    if code_json:
-        inner = code_json.group()
-        nums = re.findall(r'[0-9.]+', inner)
-        if len(nums) >= 2:
-            nx, ny = float(nums[-2]), float(nums[-1])
-            if 0 <= nx <= 1 and 0 <= ny <= 1:
-                return int(nx * sw), int(ny * sh)
-            elif nx > 1:
-                return int(nx), int(ny)
-    
-    # 方法3: x= y= 格式
-    x_matches = re.findall(r'x\s*=\s*([0-9.]+)', raw)
-    y_matches = re.findall(r'y\s*=\s*([0-9.]+)', raw)
-    if x_matches and y_matches:
-        nx, ny = float(x_matches[-1]), float(y_matches[-1])
-        if 0 <= nx <= 1 and 0 <= ny <= 1:
-            return int(nx * sw), int(ny * sh)
-        elif nx > 1:
-            return int(nx), int(ny)
-    
-    # 方法4: 括号计数解析JSON
-    try:
-        if '{' not in raw:
-            return -1, -1
-        start = raw.index('{')
-        depth = 0
-        for i, c in enumerate(raw[start:], start):
-            depth += 1 if c == '{' else -1 if c == '}' else 0
-            if depth == 0:
-                json_str = raw[start:i+1].replace("'", '"')
-                parsed = json.loads(json_str)
-                if isinstance(parsed, list):
-                    parsed = parsed[0] if parsed else {}
-                rx = parsed.get('x', -1)
-                ry = parsed.get('y', -1)
-                if isinstance(rx, (int, float)) and isinstance(ry, (int, float)):
-                    if 0 <= rx <= 1 and 0 <= ry <= 1:
-                        return int(rx * sw), int(ry * sh)
-                    elif rx > 1:
-                        return int(rx), int(ry)
-                return -1, -1
-    except Exception:
-        pass
-    
-    return -1, -1
-
-
-def find_element_by_vision(description: str, screen_size: tuple = None) -> tuple:
-    """视觉找坐标：如果找到返回 (x, y) 像素坐标，找不到返回 None
-    
-    smolvlm2 输出归一化坐标(0-1)，智能解析并转换为像素坐标
-    """
-    if screen_size is None:
-        import pyautogui
-        screen_size = pyautogui.size()  # (宽, 高)
-    sw, sh = screen_size
-    
+def find_element_by_vision(description: str) -> tuple:
+    """视觉找坐标：如果找到返回 (x, y)，找不到返回 None"""
     img = capture_screen()
     prompt = (
         f"DIRECT指令：找到屏幕截图中「{description}」的位置。\n"
         f"不要解释，不要思考过程。\n"
-        f"返回归一化坐标(0-1范围)：{{\"x\": 中心点X/屏幕宽度, \"y\": 中心点Y/屏幕高度}}\n"
+        f"只返回一行JSON：{{\"x\": 中心点X坐标整数, \"y\": 中心点Y坐标整数}}\n"
         f"如果找不到，返回：{{\"x\": -1, \"y\": -1}}\n"
         f"只返回JSON，不要其他文字。"
     )
-    result = ask_vlm(img, prompt, model=VLM_MODEL_DEFAULT, timeout=30)
+    result = ask_vlm(img, prompt)
 
     try:
-        x, y = _parse_smolVLM_coords(result, sw, sh)
+        # 清理 JSON：去代码块标记、去多余换行、单引号转双引号
+        clean = result.strip()
+        clean = clean.replace("```json", "").replace("```", "").strip()
+        clean = clean.replace("'", '"')
+
+        # 尝试解析（可能返回数组 [{...}] 或单对象 {...}）
+        parsed = json.loads(clean)
+        if isinstance(parsed, list):
+            parsed = parsed[0] if parsed else {}
+
+        x, y = int(parsed.get('x', -1)), int(parsed.get('y', -1))
         if x < 0 or y < 0:
             return None
         return (x, y)
-    except Exception:
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
         return None
 
 

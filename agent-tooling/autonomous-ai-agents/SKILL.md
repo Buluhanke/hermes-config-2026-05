@@ -11,7 +11,6 @@ triggers:
   - python 3.13 compatibility issue
   - free claude code proxy
   - NVIDIA NIM free models
-version: 1.0.0
 ---
 
 # Autonomous AI Agents
@@ -21,7 +20,7 @@ Skills for building, deploying, and orchestrating autonomous AI agents — frame
 ## Tools & Integrations
 
 ### Browser Automation
-- **browser-use** — Local browser automation for AI agents (91K Stars). No API key needed for local use. Install via `uv add browser-use`, browser driver via `uvx browser-use install`. Works with Ollama (local qwen2.5). → 独立 skill `browser-use`
+- **browser-use** — Local browser automation for AI agents (91K Stars). No API key needed for local use. Install via `uv add browser-use`, browser driver via `uvx browser-use install`. Works with Ollama (local qwen2.5). → `references/browser-use.md`
 - **CDP direct control** — When `mcp-chrome-stdio` bridge is down, control local Chrome directly via raw Python WebSocket + CDP. Bypasses the MCP bridge entirely. Includes tab discovery, masked frame encoding, scroll/click/screenshot patterns. → `references/cdp-raw-websocket.md`
 
 ### CLI Delegation
@@ -46,8 +45,6 @@ This skill governs: agent frameworks, tool integrations that extend agent capabi
 
 ## References
 - `references/browser-use.md` — Local browser automation for AI agents (91K Stars, uv install, Ollama compatible)
-- `references/agent-browser-runtime.md` — Anti-bot browser runtime: fingerprint consistency, Bezier mouse curves, platform cooldowns, Canvas/Audio noise injection (analyzed 2026-05-17)
-- `references/web-access.md` — eze-is web-access Skill 分析存档：CDP Proxy 架构、浏览哲学（目标驱动）、find-url 思路、URL POST body 传输方式、站点经验积累机制。与 Hermes 内置实现的架构对比。
 - `references/cdp-raw-websocket.md` — Raw Python WebSocket + CDP control of local Chrome (fallback when MCP bridge is down, tab discovery, scroll/click/screenshot, frame encoding, pitfall: SOCKS proxy + websockets library)
 
 ---

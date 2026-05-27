@@ -9,34 +9,13 @@ required_paths:
 required_commands:
   - /Users/aimac/MOSS-TTS-Nano/.venv312/bin/python
 required_packages: []
-version: 1.0.0
 ---
 
 # moss-tts-nano
 
 将文字转换为语音，使用 MOSS-TTS-Nano（0.1B 参数，CPU 可运行）。
 
-## edge-tts 备选方案（已验证可用）
-
-若 MOSS-TTS-Nano 不可用，edge-tts 是稳定替代：
-
-```python
-import asyncio
-from edge_tts import communicate
-
-async def tts_weather():
-    text = "义乌今天天气晴，气温30~19℃，湿度82%，东南风2.7米每秒，气压1004百帕"
-    cm = communicate(text, voice="zh-CN-XiaoxiaoNeural")
-    await cm.save("/Users/aimac/.hermes/audio_cache/weather.mp3")
-
-asyncio.run(tts_weather())
-```
-
-**验证结果**：76,896 字节，3.36 秒生成完成，XiaoxiaoNeural 中文发音自然。
-
----
-
-## 核心依赖
+## 依赖
 
 MOSS-TTS-Nano 已安装在 `/Users/aimac/MOSS-TTS-Nano`，依赖已在该环境内。
 
@@ -75,19 +54,6 @@ result = terminal(
 # 2. 发给用户（QQ/微信会自动作为语音消息播放）
 send_message(message="MEDIA:/tmp/moss_voice.wav", target="origin")
 ```
-
-## 平台语音发送支持矩阵
-
-| 平台 | TTS文件发送 | 原生语音消息 | 备注 |
-|------|------------|------------|------|
-| **Telegram** | ✅ 可行 | ✅ 支持 | 语音消息直接发送 |
-| **QQ** | ❌ 不支持 | ❌ 不支持 | MEDIA标签被忽略，无其他绕过方式 |
-| **微信** | ❌ 不支持 | ❌ 不支持 | 同QQ，平台级限制无法绕过 |
-| **Discord** | ✅ 可行 | ✅ 支持 | |
-
-**结论**：TTS 生成 → Telegram 发送是唯一可用的语音通道。微信/QQ 无法以语音消息发送。
-
-**如果用户要求语音回复**：先确认当前对话在 Telegram 还是微信。微信/QQ 只能文字，解释原因即可，不要浪费算力重复尝试。
 
 ## 注意事项
 

@@ -3,28 +3,18 @@ name: hermes-rpa
 description: >-
   Hermes 类人桌面代理核心技能。通过 AXUI 读窗口结构 + 区域截图 + Baidu OCR 感知屏幕内容 +
   cliclick/PyAutoGUI 模拟键鼠，实现"像真人一样操控整台电脑"的通用能力。
-  **范式转变（2026-05-16确认）**：1688找品只是其中一个应用场景，Hermes 2.0 的目标是
-  有眼睛（屏幕语义理解）、有嘴巴（情感TTS）、有手脚（电脑+手机控制）的数字生命体。
-  **不要主动提1688，除非用户先提。**
-  **CUA截图（重大发现）**：`mcp_cua_screenshot(window_id=N)` 可后台捕获任意窗口，不抢焦点。替代 `screencapture -x`。详见 hermes-vision-connect/references/smart-click-key-findings-2026-05-17.md。
-version: 2.5.0
+  核心定位：桌面全域 Agent——不限于浏览器，能操控任何应用（Chrome/微信/Excel/飞书/桌面系统）。
+  1688找品只是其中一个应用场景，不是目标本身；类人化控制做到位了，找品自然解决。
+version: 2.1.0
 author: Hermes Agent
 triggers:
   - 拟人控制 / 操控桌面 / 操作电脑 / 点这个 / 去那里
   - 打开Chrome / 截图看看 / 读一下屏幕
   - 帮我点 / 帮我输入 / 帮我滚动
+  - 1688找品 / 去1688搜 / 1688 sourcing
   - 桌面代理 / 数字劳动力 / 全能助手
   - 帮我操作Excel / 操作微信 / 操作飞书 / 操作桌面应用
   - 去ChatGPT问 / 帮我发微信 / 帮我回消息
-  - 眼睛 / 嘴巴 / 嘴巴有情感 / TTS本地 / 语音情感
-  - 屏幕理解 / 页面语义 / 看懂屏幕 / 视觉感知升级
-  - 手机控制 / iPhone控制 / 移动端 / 手机自动化
-  - 反思能力 / 自我判断 / 任务复盘
-  - 长眼睛 / 长嘴巴 / 长手脚 / 数字生命体
-  # 验证码处理
-  - 验证码 / 滑块 / 拼图 / 点选 / captcha / 过验证码
-  - 帮我过验证码 / 解验证码 / 缺口检测 / 识别滑动
-  - 打码 / captcha solver / 识别图中物体
 ---
 
 # Hermes RPA — 全栈桌面自动化系统 v2
@@ -281,75 +271,11 @@ print("ChatGPT回复:", response.get("text", ""))
 | CDP调试端口(默认profile) | macOS Chrome单例锁，端口绑定失败 | 用独立profile目录（`~/.hermes/chrome-debug`），见CDP章节 |
 | Playwright新实例操控已有Chrome | 新实例独立profile, 无用户登录态 | cliclick操控前台Chrome |
 | pyobjc AXUIElement C API | Python 3.14 + pyobjc 12.1 下符号不可用 | System Events (AppleScript) |
-### CUA overlay 窗口干扰 Dock 点击（2026-05-17 新发现）
+> ⚠️ `vision_analyze` 和 `browser_vision` 都不支持 `image_url` 格式 — MiniMax 模型报错 `unknown variant 'image_url', expected 'text'`。不要尝试这两个工具做截图分析。
+> 
+> ✅ **正确做法**：用 `execute_code` 中 Python + `urllib.request` 直调 Baidu OCR API（见 baidu-ocr skill），数据不经过 Hermes 安全检查层。
 
-**症状**：当 CUA driver overlay 窗口存在时，尝试点击 Dock 上的应用图标，点击事件被路由到 overlay 窗口而不是目标 app。
-
-**根因**：CUA 的 agent-cursor overlay 窗口会劫持事件路由。
-
-**解法**：不依赖 Dock 点击，用 osascript 直接激活应用：
-
-```python
-# ✅ 激活 Chrome（绕过 Dock）
-subprocess.run(["osascript", "-e",
-    'tell application "Google Chrome" to activate'])
-
-# ✅ 打开新窗口并跳转 URL
-subprocess.run([
-    "osascript",
-    "-e", 'tell application "Google Chrome" to make new window',
-    "-e", 'tell application "Google Chrome" to open location "https://www.baidu.com"'
-], timeout=15)
-```
-
-### hermes_vision.py 屏幕语义理解脚本（2026-05-17 实测）
-
-**位置**：`~/.hermes/scripts/hermes_vision.py`
-
-Qwen2.5VL 屏幕理解完整 pipeline：
-
-```python
-import requests, base64, subprocess
-
-OLLAMA_URL = 'http://localhost:11434/api/generate'
-SCREEN_PATH = '/tmp/hermes_screen.png'
-SCREEN_SMALL_PATH = '/tmp/hermes_screen_small.jpg'
-
-def capture_screen():
-    subprocess.run(['screencapture', '-x', SCREEN_PATH], check=True)
-    subprocess.run([
-        'sips', '-z', '600', '800', '-s', 'formatOptions', '40',
-        SCREEN_PATH, '--out', SCREEN_SMALL_PATH
-    ], check=True)
-
-def vision_query(question):
-    with open(SCREEN_SMALL_PATH, 'rb') as f:
-        img_b64 = base64.b64encode(f.read()).decode()
-    payload = {
-        'model': 'qwen2.5vl:7b',
-        'prompt': f'你是一个桌面AI助手。根据截图内容回答问题。\n\n问题: {question}',
-        'images': [img_b64],
-        'stream': False,
-        'options': {'num_gpu': 0}  # 强制 CPU 模式，避免 M4 24GB OOM
-    }
-    resp = requests.post(OLLAMA_URL, json=payload, timeout=180)
-    return resp.json().get('response', '')
-
-capture_screen()
-desc = vision_query('桌面上有哪些可交互元素？')
-```
-
-**关键参数**：`options: {"num_gpu": 0}` 强制 CPU 模式，否则 qwen2.5vl:7b 在 M4 24GB 上 OOM。
-
-**截图压缩**：全屏截图（3MB）直接发 Ollama 会 OOM。用 `sips -z 600 800` 压缩到 ~150KB 再发。
-
-**坐标映射**：VLM 返回缩图空间（800×600）坐标，映射回实际屏幕（1920×1080）：
-```python
-x_screen = int(x_small * 1920 / 800)
-y_screen = int(y_small * 1080 / 600)
-```
-
-## Red Flags
+## 核心执行 Pipeline（每次任务的标准流程）
 
 ```
 用户指令（QQ/微信/Dashboard）
@@ -511,7 +437,6 @@ r = subprocess.run(["python3", os.path.expanduser(script), "readchat"],
 - `scripts/hermes_desktop_rpa.py` — 主入口（wininfo/ocr/click/type/send/readchat）
 - `scripts/exec_applescript.py` — 解决terminal tool中`&`被误判的问题
 - `scripts/desktop_controller.py` — PyAutoGUI桌面操作
-- `scripts/captcha_solver.py` — **验证码统一解题器**（滑块/点选/拼图/旋转/reCAPTCHA/Turnstile，CapSolver+smolvlm2双通道）
 ### `scripts/cdp_playwright.py` — CDP连接（✅ aimac已验证可用：独立profile `~/.hermes/chrome-debug` + `connect_over_cdp`）
 
 ### `scripts/cdp_screenshot_verify.py` — CDP截图链路验证（2026-05-15 新增）
@@ -1078,8 +1003,6 @@ subprocess.run(["screencapture", "-x", "-R0,30,1920,960", "/tmp/1688_results.png
 - `screencapture` — macOS内置截图
 - `convert` (ImageMagick) — 图片裁剪/缩放（已安装）
 - `curl` + Baidu OCR API — 文字识别
-- `patchright` — Playwright反检测fork，CLI在 `/Library/Frameworks/Python.framework/Versions/3.14/bin/patchright`（v1.58.2）
-- `playwright` — hermes venv中已装（1.59.0），`from playwright.sync_api import sync_playwright` 可用
 
 ## 限制与坑
 
@@ -1258,28 +1181,7 @@ print(f'截图成功: {len(img)} bytes')
 - `webSocketDebuggerUrl` ✅（正确）
 - `webSocketURL` ❌（不存在，不要用）
 
-**创建新标签页**（绕过 MCP bridge 直连 CDP HTTP）：
-```bash
-# 1. 用 HTTP PUT 创建空白新 tab
-curl -s -X PUT http://127.0.0.1:9333/json/new \
-  -H "Content-Type: application/json" \
-  -d '{"url":"about:blank"}'
-
-# 返回: {"id":"TAB_ID","webSocketDebuggerUrl":"ws://127.0.0.1:9333/devtools/page/TAB_ID",...}
-
-# 2. 用 WebSocket 直连该 tab，发送 Page.navigate
-send_frame(sock, {
-    "id": 1,
-    "method": "Page.navigate",
-    "params": {"url": "https://chat.deepseek.com"}
-})
-
-# 3. 等待 Page.navigate 响应后，tab 已加载目标 URL
-```
-
-**注意**：`/json/new` 是 PUT 方法，不是 POST。返回的 `id` 即该 tab 的 `pageId`，拼入 `ws://localhost:9333/devtools/page/{id}` 即为该 tab 的 WebSocket CDP URL。
-
-**依赖**：`websocket-client` Python 包（`pip3 install websocket-client`）。
+**依赖**：`websocket-client` Python 包（CDP WebSocket 通信必需）：
 ```bash
 pip3 install websocket-client
 ```
@@ -1488,43 +1390,13 @@ CDP 截图要求：
 
 ```python
 import random, pyautogui
+# 在元素中心点加随机偏移（±5px）
 offset_x = random.randint(-5, 5)
 offset_y = random.randint(-5, 5)
 pyautogui.click(center_x + offset_x, center_y + offset_y)
 ```
 
-## vision_connect.py 接口（2026-05-17 确认可用）
-
-**venv路径**：`~/.hermes/hermes-agent/venv/bin/python3`（Vision/AppKit 框架在此 Python 中有，Homebrew Python 3.14 无）
-
-**截图路径**：`/Users/aimac/hermes-v3/hermes_screen.png`（不用 /tmp/，tesseract 沙盒隔离无法访问）
-
-**已验证可导入函数**：
-```python
-from vision_connect import (
-    capture_screen,   # → str (截图路径)
-    smart_click,     # Ollama smolvlm2 找元素 + CUA 点击
-    find_and_click,   # smart_click 的别名
-    ask_screen,      # Ollama 截图理解（返回文字描述）
-    ask_ollama_vlm,  # 直接调 Ollama generate
-    vision_ocr,      # Apple Vision → tesseract fallback
-)
-```
-
-**调用示例**：
-```python
-import sys
-sys.path.insert(0, '/Users/aimac/.hermes/skills/vision/hermes-vision-connect')
-from vision_connect import capture_screen, smart_click, ask_screen
-
-path = capture_screen()
-result = smart_click("登录按钮")
-desc = ask_screen("页面上有什么按钮？")
-```
-
-**已知限制**：
-- smolvlm2 响应 3-6 秒，不适合高频调用
-- 坐标需手动从归一化 (0-1) 转为实际像素：`(int(x * screen_width), int(y * screen_height))`
+**调用方式（关键！不是 /api/chat，是 /api/generate）**：
 ```python
 import requests, base64
 
@@ -1591,9 +1463,8 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 ---
 
 ## 参考文档
-- `references/deepseek-v4-flash-nous-portal-2026-05-16.md` — **历史研究：Nous Portal（已下线）+ DeepSeek V4 Flash 配置。仅供参考，Nous Portal 已于2026-05-16下线。**
-- `references/deepseek-expert-mode-self-diagnosis-2026-05-16.md` — **DeepSeek 专家模式自诊断工作流**
-- `references/omniparser-seeclick-agenttars-install-2026-05-15.md` — **OmniParser+SeeClick+Agent TARS 实际安装步骤**（conda env路径、paddleocr版本兼容性、npx安装命令、ollama升级注意）
+
+- `references/omniparser-seeclick-agenttars-install-2026-05-15.md` — **新增：OmniParser+SeeClick+Agent TARS 实际安装步骤**（conda env路径、paddleocr版本兼容性、npx安装命令、ollama升级注意）
 - `references/screen-understanding-vlm-research-2026-05-14.md` — **Screen Understanding VLM调研**：OmniParser/SeeClick/UI-TARS/CogAgent/Qwen2-VL架构对比，Hermes架构差距矩阵，升级路线图。源自2026-05-14调研任务。
 - `references/screen-understanding-free-local-2026-05-14.md` — **Screen Understanding 免费本地方案**：Qwen3-VL + browser-use + Ollama 组合、Fazm AI、Taskhomie、open-computer-use 等开源免费方案调研结论。用户明确要求免费+本地+不依赖大模型时优先推荐。
 - `references/perception-kernel-modules-2026-05-14.md` — **扩展模块详解**：坐标系转换(world_diff/entity_resolution/mouse_driver)
@@ -1612,7 +1483,3 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 - `references/world-state-v0-2026-05-14.md` — **WorldState v0 实现笔记**（最小闭环架构+tesseract路径坑+Baidu OCR token问题）
 - `references/peekaboo-macos-desktop-automation.md` — Peekaboo macOS 桌面自动化工具（vision/voice Agent，可选替代方案）
 - `references/alternative-desktop-automation-tools.md` — 替代方案（Mano-P / UI-TARS）评估框架
-- `references/2026-05-17-deep-evolution-research.md` — **2026-05-17深度进化研究**：Patchright已装、smolvlm2已装、CapSolver验证码方案、browser-use 78k stars分析、1688采购闭环卡点、**visual_buffer环形缓冲区**（后台每2秒截一帧保留最近5帧）、**slider_captcha自动解题**（auto_solve_if_present + overshoot回退校准）、**连续视觉流**（失败时串联历史帧给VLM分析）
-- `references/hermes_body.py-2026-05-16.md` — **新增模块（2026-05-17确认已实现）**：`visual_buffer.py`（VisualRingBuffer后台截屏+get_recent_frames）、`slider_captcha.py`（solve_slider_captcha overshoot机制）、连续视觉流（get_buffer→get_frame_paths串联历史帧）
-- `references/screen-understanding-vlm-research-2026-05-14.md` — **Screen Understanding VLM调研**：OmniParser/SeeClick/UI-TARS/CogAgent/Qwen2-VL架构对比，Hermes架构差距矩阵，升级路线图。源自2026-05-14调研任务。
-- `references/captcha-handling-2026-05-17.md` — **验证码处理完整指南**：滑块/点选/拼图三大类完整策略 + CapSolver打码平台集成 + 自训练YOLOv8缺口检测模型路线图。
