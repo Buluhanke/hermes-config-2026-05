@@ -17,6 +17,12 @@ triggers:
 tags: [perception, architecture, accessibility, ax, ocr, jina, element-registry]
 ---
 
+> **⚠️ 关键陷阱（2026-05-28实测确认）**：
+> `perception/` 目录**不存在**！SKILL.md 中描述的 `perception.py`、`perception/bridge.py`、`perception/world/state.py` 等都是**规划中的架构**，尚未实际构建。
+> `HermesPerceptionBridge` 只是设计文档中的类名，不是可执行代码。
+> 实际执行层仍依赖 `hermes_desktop_rpa.py` 的单文件脚本模式。
+> 不要尝试 `from perception import ...` — 会失败。
+
 # Unified Perception Layer — 统一感知层（架构第7层）
 
 > **把 DOM 语义树 + OCR + 浏览器状态统一成一个感知接口，让 Agent 无论用浏览器还是桌面都能"看见"屏幕。**

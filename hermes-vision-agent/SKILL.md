@@ -66,7 +66,7 @@ find_and_open_app("Safari")
 
 ## 已知局限
 
-- smolvlm2 响应约30-60秒，需要耐心等待
+- smolvlm2 响应约 **10-13秒**（实测，M4 24GB），不是30-60秒，需要耐心等待
 - 找元素需要描述尽量具体："发送按钮" 比 "按钮" 效果好
 - 文件对话框目前需要手动介入（VLM无法操作 macOS 原生文件选择器）
 
@@ -161,5 +161,7 @@ smart_click("发送")
     └─ 3. VLM 也找不到 -> 打印警告，人工介入
 ```
 > **注意**：smolvlm2（ahmadwaqar/smolvlm2-agentic-gui:latest）是当前主模型，qwen2.5vl:7b 因未安装在 Ollama 中已降为备选。
+
+> ⚠️ **github blocked 期间**，FastVLM、SmolVLM2-2.2B、moondream2 等候选模型无法 pull 测试。网络恢复后优先测试 Apple FastVLM（CVPR 2025，85x faster TTFT，MLX版本在HuggingFace可用）。
 
 分层感知原则：能用底层 API 解决的不上高级模型，日常 80% 点击走 OCR 瞬发。定位参考：`hermes-fast-ocr-ssim`
