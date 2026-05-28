@@ -79,24 +79,9 @@ curl -s "https://hacker-news.firebaseio.com/v0/item/{story_id}.json"
 根据当天方向，搜索对应主题（全部免费资源）：
 
 **方向 A — 看见（Vision 能力）**
-- 搜索：`ollama vision model mac m4 2025 best free`
-- 搜索：`smolvlm2 vs llava vs moondream benchmark 2025`
+- 搜索：`ollama vision model mac m4 2026 best free`
+- 搜索：`smolvlm2 vs llava vs moondream benchmark 2026`
 - 目标：找到 M4 24G 上跑得最好的免费视觉模型
-
-**方向 B — 看懂（理解屏幕内容）**
-- 搜索：`GUI understanding agent screen parsing 2025`
-- 搜索：`screenshot to action model open source`
-- 目标：学习如何把屏幕截图转换为可操作的理解
-
-**方向 C — 决策操作（Computer Use）**
-- 搜索：`computer use agent best practices 2025`
-- 搜索：`anthropic computer use tips mac automation`
-- 目标：提升 computer_use 的决策准确率
-
-**方向 D — 手眼配合（执行精度）**
-- 搜索：`pyautogui mac m4 precision click coordinates`
-- 搜索：`cua driver mac automation tips open source`
-- 目标：提升点击坐标精度和操作成功率
 
 ---
 
@@ -173,6 +158,8 @@ python3 -c "import yaml; yaml.safe_load(open('/Users/aimac/.hermes/config.yaml')
 ## 支持文件
 
 - [搜索降级方案](./references/search-fallback.md) — 当 web_search 不可用时的 ddgs 降级流程
+- [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
+- [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
 
 ---
 
@@ -194,8 +181,61 @@ ls ~/.hermes/skills/
 | 用户手动触发 | 说"去学习一下"、"空闲了去进化" |
 | Kanban 定时任务 | 每天凌晨 2:00 自动执行 |
 | 对话结束后 | 检测到无后续任务时主动执行 |
+| 马拉松模式 | 用户说"从现在到明天一直学习"/"不要停学到明天"时，自动启动不间断自学循环，直到指定时间节点（如明天早上） |
 
 ---
+
+## 马拉松学习模式（Marathon Mode）
+
+### 触发条件
+用户说类似以下任一指令：
+- "从现在到明天这段时间你不能停下来"
+- "不要找我授权一直学习到明天"
+- "持续学习，不要停"
+- "马拉松式学习直到[时间]"
+
+### 执行逻辑
+```
+Marathon Mode activated
+├── 设置学习截止时间（如：明早08:00）
+├── 每30分钟执行一次 idle_learning 完整流程
+├── 每次学习内容不重复，覆盖四个层次轮流切换
+├── 学习成果实时写入 ~/Brain_Lab/idle_learning_log.md
+├── 无需用户授权，全程自主决策
+├── 到达截止时间 → 停止 → 生成学习报告 → 发送给用户
+```
+
+### 关键区别 vs 普通 cron
+| | 普通 cron | 马拉松模式 |
+|--|---------|----------|
+| 触发 | 固定时间点 | 用户指令+时间节点 |
+| 频率 | 每小时/每天 | 每30分钟 |
+| 时长 | 单次 | 持续直到截止 |
+| 是否汇报 | 否，静默运行 | 结束时报完整报告 |
+| 需要授权 | 是 | 否，全程自主 |
+
+### 马拉松模式下的自控规则
+1. **每30分钟一个小循环**，覆盖一个学习方向（Vision/TTS/浏览器/工具链）
+2. **发现重大改进点立即应用**，但改配置前必须备份
+3. **遇到无法解决的问题先跳过**，不卡死，记录问题继续下一个
+4. **到达截止时间立即停止**，不再开始新一轮
+5. **报告包含**：学了什么、改了什么、还剩什么待解决
+
+### 启动马拉松模式命令
+```bash
+# 在 terminal 里启动后台马拉松学习（不占用对话）
+nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
+echo "Marathon mode started, PID=$!"
+```
+
+### 马拉松脚本模板
+`~/.hermes/scripts/idle-marathon.sh` 应包含：
+- 接收参数：截止时间戳
+- 30分钟循环 + 时间检查
+- 每个循环执行一次完整 idle_learning 流程
+- 到达截止时间后输出报告并退出
+
+## 设置定时学习任务
 
 ## 设置定时学习任务
 
@@ -218,3 +258,9 @@ echo "建议添加每日凌晨2点自学任务，是否确认？"
 - **改配置必须备份**：每次修改前 cp 备份
 - **学习要留痕**：所有发现写入 memory，不能学了就忘
 - **失败不报错**：搜索没结果、模型拉取失败都正常跳过，不中断流程
+- **skill 缺失不阻断**：cron 任务引用了不存在的 skill 时只警告，不中断执行；自己不要引用不存在的 skill
+
+## 已知 skill 依赖
+
+本 skill 被以下 cron 任务引用：`夜间自学`(2:00，`pro-buyer` skill) 和 `每日空闲自学`(22:00，`idle_learning` skill)。
+`pro-buyer` 是已废弃的旧 name，当前版本直接用 `idle_learning` 即可，不需要引用 `pro-buyer`。
