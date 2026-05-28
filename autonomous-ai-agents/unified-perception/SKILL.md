@@ -219,7 +219,13 @@ result = asyncio.run(perceive_url("https://example.com"))
 
 ## 关键陷阱
 
-1. **模块级单例** — `get_engine()` 返回同一个 `PerceptionEngine` 实例，`ElementRegistry` 跨调用共享。如果要在独立环境中测试，手动 `PerceptionEngine()` 创建新实例。
+1. **perception.py 不存在！** — ⚠️ 2026-05-28 实测确认：`~/.hermes/hermes-agent/perception.py` **不存在**，本 skill 描述的 `PerceptionEngine`、`PerceptionElement`、`ElementRegistry`、`HermesPerceptionBridge` 等都是**规划中的架构**，尚未实现为可执行代码。不要试图 import 或调用这些组件。
+   - **实际可用感知**：由 `hermes-rpa` skill 的 `hermes_desktop_rpa.py` 统一入口提供（activate/click/type/send/readchat/ocr 等）
+   - **实际视觉分析**：`screen-watcher-vision` skill 的 smolvlm2 截图分析
+   - **perception/ 子目录**：不存在，`hermes-rpa` SKILL.md 中描述的 `perception/bridge.py` 等也是规划而非代码
+   - **不要相信 SKILL.md 中的代码示例** — `from perception import perceive_what` 这类调用会失败
+
+2. **模块级单例** — `get_engine()` 返回同一个 `PerceptionEngine` 实例，`ElementRegistry` 跨调用共享。如果要在独立环境中测试，手动 `PerceptionEngine()` 创建新实例。
 2. **CDP后端依赖 agent-browser** — `BrowserPerception` 依赖 npx agent-browser CLI，如果 Hermes 浏览器网关未运行，会返回空元素列表。
 3. **OCR后端需要网络** — `ScreenOCRPerceiver` 需要百度OCR API可达，且走 Clash 代理127.0.0.1:7897。
 4. **Jina Reader也有代理依赖** — `perceive_url()` 默认走127.0.0.1:7897代理，如果代理未配置或网络不可达会报错。

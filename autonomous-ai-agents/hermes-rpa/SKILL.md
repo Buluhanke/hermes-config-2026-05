@@ -173,7 +173,9 @@ r = subprocess.run(["python3", script, "ocr", "--region", "260,80,1400,700"],
 tags: [rpa, automation, browser, desktop, accessibility, ocr, cliclick, applescript]
 ---
 
-> **🧠 感知层升级**：`unified-perception` skill 提供了跨通道统一感知引擎（perception.py），将 CDP AX树、桌面OCR、Jina Reader 合并为统一的 PerceptionElement 数据模型 + ElementRegistry 跨turn追踪。hermes-rpa 应优先使用 perception.py 的 `perceive_what()` 进行页面感知，再用本 skill 的执行能力操作。详见 `autonomous-ai-agents/unified-perception` skill。
+> ⚠️ **perception/ 目录不存在！** — `hermes-rpa` SKILL.md 中描述的 `perception/bridge.py`、`perception/world/state.py` 等都是**规划中的架构**，尚未实际构建。`HermesPerceptionBridge` 只是设计文档，不是可执行代码。实际执行层仍依赖 `hermes_desktop_rpa.py` 的单文件脚本模式。
+
+> **🧠 感知层升级**：`unified-perception` skill 提供的是**设计文档层面的统一感知架构**，其描述的 `perception.py` 模块和 `PerceptionElement` 数据模型尚未实现为可执行代码。详见 `unified-perception` skill 的"关键陷阱"章节。
 
 # Hermes RPA — 类人桌面代理系统 v2
 
