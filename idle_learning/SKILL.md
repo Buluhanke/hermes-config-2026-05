@@ -165,6 +165,7 @@ for m in models.models:
 **⚠️ smolvlm2 稳定性确认（2026-05-28 桌面截图实测）**：
 - 测试1（桌面浏览器+ChatGPT窗口）：响应时间 10.3s，准确识别浏览器tabs、chat窗口、navigation icons，未发现幻觉
 - 测试2（移动端购物页面截图）：响应时间 11.1s，准确识别搜索框、商品卡片、价格、评分、移动端布局，给出合理操作建议（scroll up）
+- ⚠️ **更新（2026-05-28）**：最新测试响应时间 5.2s，准确识别时间、状态栏、FAB 按钮、壁纸
 - ✅ **结论**：smolvlm2 当前版本（ahmadwaqar/smolvlm2-agentic-gui，1.8GB Q4_K_M）表现稳定，可信任用于GUI理解任务
 
 **⚠️ github.com vs raw.githubusercontent.com 区分**：
@@ -203,13 +204,19 @@ python3 /tmp/test_smolvlm.py
 
 **测试结果（2026-05-28）**：
 - 桌面截图（多标签页浏览器 + ChatGPT 窗口 + Android 模拟器）
-- 响应时间：11 秒
-- 输出质量：准确识别了浏览器 tabs、chat 窗口、navigation icons
+- 响应时间：5.2 秒（更新，比之前的 10-11s 快）
+- 输出质量：准确识别了浏览器 tabs、chat 窗口、navigation icons、时间、状态栏、FAB 按钮
 - 未发现"湖光山色"幻觉问题
 
 **候选模型对比**（github blocked 时无法拉取，待网络恢复后测试）：
 - **llama3.2-vision:11b** — ⭐ 最高优先级（2026-05-28 确认），Meta出品，~8GB，M4 24G可运行，通用视觉理解强
-- **blaifa/internvl3:8b-Q4_K_M** — ⭐ 次优先级，InternVL3 已上线 Ollama（2026-05 实测），基于 Qwen2.5，多模态能力强，量化后 M4 24G 可运行；版本：InternVL3:latest / InternVL3:8b-Q4_K_M
+- **InternVL3（2025-04发布）** — ⭐ GUI grounding 专项最强（2026-05 实测）
+  - InternVL3-78B MMMU 72.2（开源 MLLM SOTA）
+  - InternVL3-Chat-V1.2 MMMU val 51.6, MMBench test 82.3
+  - GUI grounding benchmark 表现优异，支持工具使用、GUI agents、3D视觉感知、工业图像分析
+  - HuggingFace: OpenGVLab/InternVL3-78B
+  - ⚠️ Ollama 暂未收录（2026-05），需用 vLLM 或社区 builds 部署
+- **blaifa/internvl3:8b-Q4_K_M** — ⭐ 次优先级，基于 Qwen2.5，多模态能力强，量化后 M4 24G 可运行；版本：InternVL3:latest / InternVL3:8b-Q4_K_M
 - **InternVL3-1B** — 开源VLM，GUI grounding benchmark表现优异，1B版本适合M4 24G；HuggingFace: `OpenGVLab/InternVL3-1B-Instruct`；Ollama 暂未收录（2026-05）
 - **ScreenAI（Google 2024）**— UI专项模型，基于PaLI架构（ViT+T5），专门训练于UI截图理解；⚠️ Google自用为主，开源社区无直接可运行版本
 - **ShowUI（CVPR 2025）**— 4.2B参数 VLA模型（Phi-3.5-vision-instruct base）；⚠️ 4.2B > 24GB，M4无法运行
