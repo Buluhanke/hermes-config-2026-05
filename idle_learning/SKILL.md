@@ -126,6 +126,11 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - 搜索：`ScreenAI ShowUI InternVL3 GUI understanding benchmark 2026`
 - 新方向（2026-05-28 发现）：Apple FastVLM（CVPR 2025，MLX版本在HuggingFace）+ Ollama v0.19 MLX集成
 - 新方向（2026-05-29 发现）：Ollama MLX backend 需要 32GB+ RAM，24GB 不支持；smolvlm2-agentic-gui 有 q8_0 (~1.9GB) 和 fp16 (~3.6GB) 变体可用；Qwen2.5VL 在 Ollama 上有 3b/7b/32b/72b 各变体
+- **⭐ ZonUI-3B（WACV 2026，2026-05-29 发现）** — 轻量级GUI grounding VLM，3B参数
+  - 基于Qwen2.5VL架构，RTX 4090单卡训练（仅24K样本），跨平台GUI grounding
+  - HuggingFace: `zonghanHZH/ZonUI-3B`，Apache-2.0
+  - ⚠️ 无GGUF发布，需Transformers推理（非Ollama），M4 24G可运行PyTorch版
+  - 潜在价值：若转GGUF导入Ollama，是比Vocaela-500M更完整的GUI grounding方案
 - **⭐ Vocaela-500M（2026-05-29 发现，2026-05-29 实测部署结论）**：仅 500M 参数，GGUF Q8_0 仅 437MB（+ 109MB mmproj），ScreenSpotV2 基准 **85.8%**（vs smolvlm2-agentic-gui 2.2B 的 61.71%）
   - 基于 SmolVLM2-500M-Video-Instruct，两阶段 SFT + GRPO RFT 训练
   - 输出结构化 JSON action（click/type/scroll/hotkey/drag）+ [0,1) 归一化坐标
@@ -243,14 +248,18 @@ python3 /tmp/test_smolvlm.py
   - Vocaela-2（vocaela/Vocaela-2-500M-1024R2）3x faster，支持更高分辨率，只有 safetensors（无 GGUF）
   - 限制：低分辨率（2048px 限制），无通用对话/推理能力，适合纯 GUI agent 场景
 - **llama3.2-vision:11b** — ⭐ 次优先级（2026-05-28 确认），Meta出品，~8GB，M4 24G可运行，通用视觉理解强
-- **InternVL3（2025-04发布）** — ⭐ GUI grounding 专项最强（2026-05 实测）
-  - InternVL3-78B MMMU 72.2（开源 MLLM SOTA）
-  - InternVL3-Chat-V1.2 MMMU val 51.6, MMBench test 82.3
-  - GUI grounding benchmark 表现优异，支持工具使用、GUI agents、3D视觉感知、工业图像分析
-  - HuggingFace: OpenGVLab/InternVL3-78B
-  - ⚠️ Ollama 暂未收录（2026-05），需用 vLLM 或社区 builds 部署
-- **blaifa/internvl3:8b-Q4_K_M** — ⭐ 次优先级，基于 Qwen2.5，多模态能力强，量化后 M4 24G 可运行；版本：InternVL3:latest / InternVL3:8b-Q4_K_M
-- **InternVL3-1B** — 开源VLM，GUI grounding benchmark表现优异，1B版本适合M4 24G；HuggingFace: `OpenGVLab/InternVL3-1B-Instruct`；Ollama 暂未收录（2026-05）
+- **InternVL3（2025-04发布）/ InternVL3.5（更新版）** — Ollama 社区版已可用
+  - **blaifa/InternVL3:8b-Q4_K_M** — Ollama可拉取，约5GB，M4 24G可运行
+  - **⭐ blaifa/InternVL3_5:4B（2026-05-29发现）** — InternVL3.5轻量版，约3GB，M4 24G首选
+  - **blaifa/InternVL3_5:8b** — InternVL3.5标准版
+  - InternVL3系列基于Qwen2.5，多模态能力强，支持GUI agents、工具使用
+  - HuggingFace: OpenGVLab/InternVL3-78B（完整版）
+- **moondream 2 — 1.8B轻量视觉模型，Ollama完整可用**
+  - 多量化变体：`moondream:1.8b-v2-q4_K_M`（~1GB，推荐）到fp16
+  - 同smolvlm2量级，通用视觉理解好但非GUI专项
+- **richardyoung/smolvlm2-2.2b-instruct — SmolVLM2通用版（2026-05-29发现）**
+  - 通用SmolVLM2 2.2B（非GUI finetune版），Ollama可用
+  - Q4_K_M仅1.0GB，M4上约30+ tok/s；量化变体：Q4_K_M/Q6_K/Q8_0(1.8GB)/f16(3.4GB)
 - **ScreenAI（Google 2024）**— UI专项模型，基于PaLI架构（ViT+T5），专门训练于UI截图理解；⚠️ Google自用为主，开源社区无直接可运行版本
 - **ShowUI（CVPR 2025）**— 4.2B参数 VLA模型（Phi-3.5-vision-instruct base）；⚠️ 4.2B > 24GB，M4无法运行
 - moondream2 — 更轻量，截图理解能力强
@@ -260,7 +269,9 @@ python3 /tmp/test_smolvlm.py
 
 **已确认 Ollama 视觉模型池**（2026-05 实测）：
 - 官方 gallery（https://ollama.com/search?c=vision）：llama3.2-vision（11b）、moondream、minicpm-v、gemma3、llava:7b
-- 第三方：ahmadwaqar/smolvlm2-agentic-gui（当前在用，GUI专用）
+- ahmadwaqar/smolvlm2-agentic-gui（当前在用，GUI专用）
+- blaifa/InternVL3 / blaifa/InternVL3_5（InternVL3/3.5社区版，8B/4B）
+- richardyoung/smolvlm2-2.2b-instruct（SmolVLM2通用版，1-3.4GB）
 - LatentRouter 论文（arXiv 2026-05-11）验证了5个本地视觉模型可用的 OLLAMA 池：llama3.2-vision、gemma3、llava:7b、moondream、minicpm-v
 
 **⚠️ FastVLM 补充信息（2026-05-28 发现）**：
@@ -335,6 +346,7 @@ PYEOF
 - [Cron 脚本执行限制](./references/cron-script-execution.md) — python3 -c/heredoc 在 cron 环境被拦截的 workaround
 - [smolvlm2-agentic-gui 模型变体与基准](./references/smolvlm2-agentic-gui-variants.md) — 可用变体(q8_0/fp16)、benchmark数据、本地实测响应时间
 - [Vocaela-500M 基准与集成方案](./references/vocaela-500m-benchmarks.md) — 2026-05 发现的超高性价比 GUI agent 模型（500M, 85.8% ScreenSpotV2），含集成方式与限制
+- [ZonUI-3B 基准与集成方案](./references/zonui-3b-benchmarks.md) — 2026-05-29 发现的轻量级GUI grounding VLM（3B, WACV 2026），含部署方式与限制
 - [TTS 供应商选择指南](./references/tts-provider-selection.md) — Kokoro(已删)/Edge/MOSS TTS 实测结论，2026-05-29 更新
 - [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
