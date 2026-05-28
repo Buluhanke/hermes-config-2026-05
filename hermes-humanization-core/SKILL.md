@@ -150,7 +150,27 @@ print('ok')
 - **pynput 需要 macOS 辅助功能权限**：系统设置 → 隐私与安全性 → 辅助功能 → 勾选终端/Python
 - **视觉找坐标成功率依赖屏幕分辨率稳定性**：分辨率变化后 VLM 需要重新适应
 
-## ⚠️ 已验证的坑点
+### capture_region() 参数被忽略（2026-05-29 已修复）
+
+`capture_region(x, y, w, h)` 声明接受四个区域参数，但内部始终用 `sct.grab(sct.monitors[1])` 截全屏，x/y/w/h 完全无用。2026-05-29 修复。
+
+**修复**：
+```python
+# ❌ 之前
+sct.img_to_png(sct.grab(sct.monitors[1]), output=output_path)
+
+# ✅ 修复后
+region = {"left": x, "top": y, "width": w, "height": h}
+sct.img_to_png(sct.grab(region), output=output_path)
+```
+
+### Smol2Operator 归一化坐标关键洞察
+
+Smol2Operator（HuggingFace, 2025-09）实验证明：归一化坐标（0-1 范围）比像素坐标在 ScreenSpot-v2 上高 **20x**（41% vs 4%）。
+
+当前 `find_element_by_vision()` prompt 要求模型返回像素坐标（`x: 整数, y: 整数`），而 smolvlm2-agentic-gui 训练数据使用归一化坐标。**推荐改用归一化坐标 prompt**以匹配模型训练分布。
+
+### 已验证的坑点
 
 ### Qwen2.5-VL 输出 JSON 格式多样
 

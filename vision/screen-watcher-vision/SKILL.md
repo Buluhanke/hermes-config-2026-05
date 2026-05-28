@@ -58,6 +58,22 @@ screen_trigger_handler 必须在调用视觉分析前先做场景类型过滤。
 
 **解法**：在 screen_watcher 加运行标记文件 `.handler_lock`，启动前检查，运行完删锁。详见 `references/screen-watcher-handler-lock-2026-05-26.md`。
 
+## 严重性能 Bug：禁止向 gateway.log 写屏幕分析结果
+
+**⚠️ 已确认问题（2026-05-29）**：
+screen_trigger_handler 向 `gateway.log` 写屏幕分析结果（screen_watch 标签），日志审查发现 gateway.log 有 2553 条 screen_watch 记录（1.1MB），这是 gateway 性能下降的根因之一。
+
+**✅ 正确做法**：
+- 分析结果写入 `~/.hermes/logs/Screen_analysis.log`（screen-watcher-vision SKILL.md 第14行已定义）
+- **绝对禁止**向 gateway.log 写任何屏幕分析内容
+- 写日志时用模块级 logger（如 `logger = logging.getLogger("screen_watcher")`），不要用平台通用的 gateway logger
+
+**检查方法**：
+```bash
+grep -c "screen_watch\|Screen analysis\|screen_trigger" ~/.hermes/logs/gateway.log
+# 如果 > 0，说明有 bug，screen_analysis 内容进了 gateway.log
+```
+
 ## 紧急度分流（2026-05-26 新增）
 
 screen_trigger_handler 对分析结果进行紧急度分级，非紧急内容不推 Telegram：
@@ -68,13 +84,34 @@ screen_trigger_handler 对分析结果进行紧急度分级，非紧急内容不
 
 关键词库路径：`~/.hermes/scripts/screen_trigger_handler.py` 第171-174行。
 
-## 性格文件（2026-05-26 新增）
+## Auto-Execute 自动执行（2026-05-29 新增）
 
-Hermes 性格设定已写入 `~/.hermes/hermes-agent/personality.md`，包含口头禅/情绪触发/主动行为原则。对话系统提示应加载此文件形成固定风格。
+**断链修复**：原本 screen_trigger_handler 只分析屏幕+推送 Telegram，从不执行任何操作。
+现在通过 `auto_execute()` 函数 + `ACTION_WHITELIST` 配置桥接到 hermes_desktop_rpa.py。
 
-## 当前项目上下文（2026-05-26 新增）
+**当前状态**：
+- `DRY_RUN = True`（安全模式，只记录不执行）
+- 白名单场景：浏览器/微信/1688/ChatGPT/钉钉/Telegram
+- 初始动作均为 `wininfo`（只读获取窗口信息）
+- Telegram 推送增加 `[Auto-Exec dry-run for X]` 前缀提示
 
-跨会话追踪文件：`~/.hermes/current_context.json` — 记录最近项目/订单/待办/用户提过的事，对话开始时扫描相关关键词自动带上上下文。
+**切换到执行模式的步骤**：
+1. 验证 dry-run 日志输出正常
+2. 为每个场景校准坐标（用 `hermes_desktop_rpa.py wininfo` 获取窗口位置）
+3. 将 `DRY_RUN = False`
+4. 先在低风险场景（桌面/计算器）测试
+
+**结构化JSON输出发现**（2026-05-29 实测）：
+- smolvlm2 可用 JSON prompt 引导输出结构化结果
+- 输出始终包裹在 `<code>...</code>` 标签内
+- `get_scene_type()` 已有标签清理逻辑：`response.split('</think>')[-1].strip()` + `.split('<code>')[-1].strip()`
+- 需增强清理逻辑以处理 `<code>` -> `\n</code>` 尾部
+
+## 参考文件
+
+- `references/smolvlm2-structured-json-2026-05-29.md` — smolvlm2 JSON 输出测试详情（响应时间、清理函数、可靠性评估）
+- `references/screen-trigger-handler-auto-execute-2026-05-28.md` — Auto-Execute 集成设计文档
+- `references/screen-watcher-handler-lock-2026-05-26.md` — Handler 重复 spawn 修复
 
 ## 温度参数
 ```json

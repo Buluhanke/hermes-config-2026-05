@@ -60,6 +60,38 @@ Vocaela-500M 支持的动作类型与 hermes-rpa 高度一致：
 3. **输出格式固定**：不支持自由文本描述，只输出 JSON action
 4. **依赖 mmproj**：需要独立的 multimodal projector GGUF（109MB）
 
+## 实测部署结果（2026-05-29）
+
+在 aimac (M4 24GB) 上实测部署结果如下：
+
+### ❌ Ollama 直接跑 `hf.co/` 失败
+```
+GET "https://huggingface.co/v2/.../blobs/..."
+→ dial tcp IPv6 address: i/o timeout
+```
+**根因**：huggingface.co 被网络阻断（IPv6 超时）。`hf.co` 返回 307 但 blob 下载走 huggingface.co 域名。
+
+### ✅ ollama create 导入成功，但无 vision encoder
+- GGUF 从 hf-mirror.com 下载成功（416MB, ~1.5min, ~4.4MB/s）
+- `ollama create vocaela-500m:Q8_0` CLI 创建成功（模型 0.41GB）
+- **GGUF 元数据**：`general.architecture = llama`（纯语言模型），32 blocks，960 embedding dim，**无 vision 相关字段**
+- **Ollama 当前版本不支持 `MMPROJ` 命令**：
+  ```
+  Error: (line 2): command must be one of "from", "license", "template",
+  "system", "adapter", "draft", "renderer", "parser", "parameter", "message", or "requires"
+  ```
+- Vision encoder 权重在分离的 `mmproj-Vocaela-500M-Q8_0.gguf`（103MB）中，无法载入
+- `ollama.chat()` 测试超时 60s（模型等待图像输入但无法处理）
+
+### ❌ llama-cli 未安装
+- `which llama-cli` → not found
+- 需 `brew install llama.cpp` 才能用原生 mmproj 支持
+
+### 后续可用路径（需额外设置）
+1. **方案A**: `brew install llama.cpp` → `llama-cli -m GGUF -mmproj MMPROJ --image IMG -p "..."` — 实测最可行
+2. **方案B**: 等社区发布 fused GGUF（vision encoder 已包含在 GGUF 中）
+3. **方案C**: Vocaela-2-500M-1024R2 只有 safetensors（无 GGUF），需用 llama.cpp convert 工具转换
+
 ## 集成方式
 
 ### Ollama（推荐）

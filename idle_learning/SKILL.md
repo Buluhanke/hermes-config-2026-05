@@ -126,11 +126,15 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - 搜索：`ScreenAI ShowUI InternVL3 GUI understanding benchmark 2026`
 - 新方向（2026-05-28 发现）：Apple FastVLM（CVPR 2025，MLX版本在HuggingFace）+ Ollama v0.19 MLX集成
 - 新方向（2026-05-29 发现）：Ollama MLX backend 需要 32GB+ RAM，24GB 不支持；smolvlm2-agentic-gui 有 q8_0 (~1.9GB) 和 fp16 (~3.6GB) 变体可用；Qwen2.5VL 在 Ollama 上有 3b/7b/32b/72b 各变体
-- **⭐ Vocaela-500M（2026-05-29 发现）**：仅 500M 参数，GGUF Q8_0 仅 437MB（+ 109MB mmproj），ScreenSpotV2 基准 **85.8%**（vs smolvlm2-agentic-gui 2.2B 的 61.71%）
+- **⭐ Vocaela-500M（2026-05-29 发现，2026-05-29 实测部署结论）**：仅 500M 参数，GGUF Q8_0 仅 437MB（+ 109MB mmproj），ScreenSpotV2 基准 **85.8%**（vs smolvlm2-agentic-gui 2.2B 的 61.71%）
   - 基于 SmolVLM2-500M-Video-Instruct，两阶段 SFT + GRPO RFT 训练
   - 输出结构化 JSON action（click/type/scroll/hotkey/drag）+ [0,1) 归一化坐标
-  - Ollama 支持：`ollama run hf.co/vocaela/Vocaela-500M-GGUF:Q8_0`
   - Vocaela-2 已发布：vocaela/Vocaela-2-500M-1024R2，3x faster
+  - **⚠️ 实测部署限制**：
+    - `ollama run hf.co/vocaela/Vocaela-500M-GGUF:Q8_0` ❌ 失败 — huggingface.co 被网络阻断（IPv6 timeout）
+    - `ollama create` 导入成功但 Ollama 当前版本**不支持 MMPROJ 命令**（GGUF 只含纯语言权重，vision encoder 在 mmproj 中）
+    - `llama-cli` 未安装，需 `brew install llama.cpp` 才能用 mmproj
+    - 详见 `references/vocaela-500m-benchmarks.md` 的"实测部署结果"章节
   - 限制：低分辨率（2048px 限制），ScreenSpotPro 仅 15.1%（高分辨率大屏+小按钮识别差）；无通用对话/推理能力
   - **HF 镜像可用**：hf-mirror.com（返回 302，可直接用 hf-mirror.com 替代 huggingface.co）
 - **Smol2Operator（2025-09）**：归一化坐标（0-1 范围）比像素坐标好 **20x**（41% vs 4% ScreenSpot-v2）。当前 find_element_by_vision() 要求像素坐标，可能在降级 smolvlm2 表现
@@ -141,10 +145,16 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 **方向 D — 执行（手眼配合）调研方向**
 - 本地工具链盘点：hermes-rpa（成熟）、computer_use、mcp_chrome_*（背景运行不抢焦点）
 - 已有能力：拟人化鼠标/点击/拖拽/打字/滚屏，依赖 cliclick
-- 核心瓶颈：vision → action 断链 — 缺少"分析→决策→调用hermes-rpa执行"的闭环
-- screen_trigger_handler 只分析不执行，实际执行层是 hermes_desktop_rpa.py
+- ✅ **2026-05-29 Phase 1 完成：Auto-Execute Dry-Run 已上线**
+  - screen_trigger_handler.py 新增 auto_execute() 函数 + ACTION_WHITELIST
+  - DRY_RUN=True 安全模式，6个场景预配置（浏览器/微信/1688/ChatGPT/钉钉/Telegram）
+  - 详见 `screen-watcher-vision` skill 的 [Auto-Execute 自动执行] 章节
+- **smolvlm2 结构化 JSON 输出实测**（2026-05-29）：
+  - JSON prompt 可行，输出始终包裹 `<code>...</code>` 标签
+  - 场景分类 ~13s，结构化 JSON ~2s（可能缓存）
+  - 可用于 future auto-execute 精确动作规划
+- 剩余步骤：验证dry-run日志 → 坐标校准 → DRY_RUN=False
 - CDP直连方案已知可用：原生Python WebSocket连接9333，不依赖mcp-chrome-stdio bridge
-- 可改进：给screen_trigger_handler增加"自动执行"模式（配置白名单：场景→操作映射）
 - **重要底层限制（2026-05-28 发现）**：cua-driver/macOS CGEventTap 对某些应用（Blender等）的event loop只接受cghidEventTap且前面有mouseMoved事件，需要短暂前台激活。"不抢焦点"承诺对这类应用不可实现，Hermes computer_use同理
 
 **搜索降级：当 web_search 402 时**
@@ -224,12 +234,13 @@ python3 /tmp/test_smolvlm.py
 
 **候选模型对比**（优先测试可 Ollama 直接拉取的，HF 镜像可用 hf-mirror.com 替代 huggingface.co）：
 
-- **⭐ Vocaela-500M（最高优先级，2026-05-29 发现）** — 500M 参数，ScreenSpotV2 85.8%（24pp 高于当前 smolvlm2），GGUF Q8_0 仅 437MB
-  - Ollama: `ollama run hf.co/vocaela/Vocaela-500M-GGUF:Q8_0`
-  - llama.cpp: `llama-cli -hf vocaela/Vocaela-500M-GGUF:Q8_0`
+- **⭐ Vocaela-500M（最高优先级，2026-05-29 发现，2026-05-29 实测部署结论）** — 500M 参数，ScreenSpotV2 85.8%（24pp 高于当前 smolvlm2），GGUF Q8_0 仅 437MB
+  - ⚠️ Ollama 直接跑失败（hf.co 走 huggingface.co 被网络阻断 IPv6 timeout）
+  - ollama create 导入成功但 Ollama 当前版本不支持 MMPROJ 命令（GGUF 只含纯语言权重）
+  - llama.cpp: 需先 `brew install llama.cpp` 再用 `llama-cli -m GGUF -mmproj MMPROJ`
   - 输出结构化 JSON action（click/type/scroll/hotkey）+ 归一化坐标，完美匹配 hermes-rpa 动作层
-  - 基于 SmolVLM2-500M，GGUF 从 hf-mirror.com 下载经 curl 验证可达
-  - Vocaela-2（vocaela/Vocaela-2-500M-1024R2）3x faster，支持更高分辨率
+  - 基于 SmolVLM2-500M，GGUF 从 hf-mirror.com 下载经 curl 验证可达（416MB, ~1.5min）
+  - Vocaela-2（vocaela/Vocaela-2-500M-1024R2）3x faster，支持更高分辨率，只有 safetensors（无 GGUF）
   - 限制：低分辨率（2048px 限制），无通用对话/推理能力，适合纯 GUI agent 场景
 - **llama3.2-vision:11b** — ⭐ 次优先级（2026-05-28 确认），Meta出品，~8GB，M4 24G可运行，通用视觉理解强
 - **InternVL3（2025-04发布）** — ⭐ GUI grounding 专项最强（2026-05 实测）
@@ -324,6 +335,7 @@ PYEOF
 - [Cron 脚本执行限制](./references/cron-script-execution.md) — python3 -c/heredoc 在 cron 环境被拦截的 workaround
 - [smolvlm2-agentic-gui 模型变体与基准](./references/smolvlm2-agentic-gui-variants.md) — 可用变体(q8_0/fp16)、benchmark数据、本地实测响应时间
 - [Vocaela-500M 基准与集成方案](./references/vocaela-500m-benchmarks.md) — 2026-05 发现的超高性价比 GUI agent 模型（500M, 85.8% ScreenSpotV2），含集成方式与限制
+- [TTS 供应商选择指南](./references/tts-provider-selection.md) — Kokoro(已删)/Edge/MOSS TTS 实测结论，2026-05-29 更新
 - [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
 
@@ -416,6 +428,14 @@ echo "建议添加每日凌晨2点自学任务，是否确认？"
 | Firecrawl web_search 经常 402 | 搜索不可用 | 默认走 HN Firebase API 降级 |
 | GitHub API 偶发 pending_approval | 搜索受限 | 降级用 HN Firebase API |
 | ddgs CLI 返回空 | 备选搜索不可用 | 依赖 HN Firebase API |
+
+**屏幕分析日志污染 gateway.log（2026-05-29 发现）**：
+- `screen_trigger_handler` 的 screen_watch 分析结果正在写入 `gateway.log`（2553 条记录，1.1MB）
+- **症状**：gateway.log 异常膨胀，Gateway 响应变慢
+- **根因**：screen_watch 日志用了平台通用 logger（写到 gateway.log）而不是专用 logger
+- **检查**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log`，结果 > 0 说明有污染
+- **修复**：详见 `screen-watcher-vision` skill 的 Bug 说明
+- **影响**：影响所有依赖 gateway.log 诊断的排查工作（正常日志被淹没）
 
 ### idle_learning 执行过程中的 skill 引用注意
 

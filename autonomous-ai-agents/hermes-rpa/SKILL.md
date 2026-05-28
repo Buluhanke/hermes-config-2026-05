@@ -696,15 +696,25 @@ ws.close()
 
 **与 ScreenAgent 架构的差距**：Hermes 的 vision→action 管道在 screen_poller 处中断 — 有感知、无决策、无执行。详见 `references/screenagent-research-2026-05-29.md`。
 
-### screen_trigger_handler × hermes_desktop_rpa 断链（2026-05-28 发现）
+### screen_trigger_handler × hermes_desktop_rpa — Auto-Execute（2026-05-29 已实现）
 
-**问题**：`screen_trigger_handler.py` 的 `on_trigger()` 只做：smolvlm2分析 → 关键词匹配 → Telegram推送。**从不调用 hermes_desktop_rpa.py 执行任何操作**。
+**2026-05-29 更新：断链已修复，Auto-Execute Dry-Run 模式已上线。**
 
-**断链证据**：Line 196-203 只调用 `send_message`，无任何 `subprocess.run(['python3', 'hermes_desktop_rpa.py', ...])` 调用。
+`screen_trigger_handler.py` 新增：
+- `auto_execute()` 函数 — 按场景类型调用 hermes_desktop_rpa.py
+- `ACTION_WHITELIST` — 6个预配置场景（浏览器/微信/1688/ChatGPT/钉钉/Telegram）
+- `DRY_RUN = True` — 安全模式，只记录不实际执行
 
-**集成方案**：在 Telegram 推送之前，按场景类型调用 hermes_desktop_rpa.py 执行。详见 `references/screen-trigger-handler-auto-execute-2026-05-28.md`。
+**当前状态**：dry-run 记录日志 + Telegram 推送增加 `[Auto-Exec dry-run for X]` 前缀。验证 dry-run 日志正常后可将 `DRY_RUN = False` 开启实际执行。
+
+**集成方案 & 白名单配置**：详见 `screen-watcher-vision` skill 的 [Auto-Execute 自动执行] 章节。
 
 **cron 环境验证**：`subprocess.run(["python3", rpa_path, "wininfo"])` 调用成功（return code 0），CLI 接口完全可用。
+
+**smolvlm2 结构化 JSON 输出实测**（2026-05-29）：
+- JSON prompt 引导输出有效，但始终包裹在 `<code>...</code>` 标签内
+- 场景分类 ~13s，JSON prompt ~2s（可能缓存）
+- 可用于未来 auto-execute 的精确动作规划
 
 ### 🛡️ 安全扫描器拦截 Baidu OCR（高频踩坑）
 

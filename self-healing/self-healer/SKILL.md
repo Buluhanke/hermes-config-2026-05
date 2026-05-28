@@ -18,13 +18,14 @@ trigger: 当用户说"你生病了"/"你坏了"/"怎么不动了"/"你没反应"
 
 ```
 1. Gateway存活？        → ps aux | grep hermes_cli | grep gateway
-2. TTS能生成音频？      → echo "测试" | tts命令 测试
-3. STT能转写语音？      → 用麦克风测试
-4. 浏览器CDP连通？       → curl localhost:9333/json 测连通
-5. 各平台连接正常？      → telegram/qqbot/weixin 连接状态
+2. TTS能生成音频？      → text_to_speech("测试中文")
+3. 打字指示器响应速度？ → 检查gateway.log中 inbound→typing 间隔
+4. 浏览器CDP连通？       → curl localhost:9222/json（用户Chrome）和localhost:9333/json（Hermes专用）
+5. 各平台连接正常？      → tail gateway.log | grep "connected"
 6. 定时任务正常？        → cronjob list 检查error状态
-7. 磁盘/内存正常？       → df -h / 和 free -m
+7. 磁盘/内存正常？       → df -h / 和 vm_stat | head -5
 8. 最新git备份成功？     → git log -1 --format="%ci %s"
+9. screen_watch日志污染？  → grep -c "screen_watch\|Screenshot\|The screenshot" gateway.log
 ```
 
 ## 常见故障自动修复方案
@@ -51,19 +52,19 @@ echo "[$(date)] TTS自愈: $from_provider → $to_provider" >> ~/Brain_Lab/self_
 - 异常时自动修复，全程无需用户参与
 - 日志写入 `~/Brain_Lab/self_healing_log.md`
 
-**已知TTS Provider切换顺序**（2026-05-28验证）：
+**已知TTS Provider切换顺序**（2026-05-29更新）：
 ```
-edge（用户印象中"昨天12:00前正常"）
-  → edge合成中文失败
-  → moss（当前稳定provider）
-  → 若moss失败 → 尝试edge
-  → 若仍失败 → openai
+edge（zh-CN-XiaoxiaoNeural，中文主力）
+  → edge合成失败 → openai（兜底）
+  → 若仍失败 → local（faster-whisper备用）
 ```
+
+**注意**：Kokoro和Moss TTS已删除（只有英文voice，不支持中文语音合成）
 
 **完全修复代码示例**：
 ```python
 # 自动循环尝试所有可用TTS provider
-providers = ['moss', 'edge', 'openai', 'local']
+providers = ['edge', 'openai', 'local']
 for p in providers:
     result = subprocess.run(['hermes', 'config', 'set', 'tts.provider', p], capture_output=True)
     sleep(2)
@@ -112,7 +113,7 @@ git checkout <last-good-commit> -- config.yaml
 # 示例：恢复到昨天可用的备份
 git checkout d7042e10 -- config.yaml
 # 然后重新设置当前需要的配置（如tts.provider）
-hermes config set tts.provider moss
+hermes config set tts.provider edge
 hermes gateway restart
 ```
 
