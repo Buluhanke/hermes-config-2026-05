@@ -119,6 +119,41 @@ hermes gateway restart
 
 **如何识别损坏**：config.yaml里command_allowlist段如果变成逐字符拆分行（如`"- r"`, `"- e"`等）就是损坏了
 
+### Cron 脚本 HOME 变量陷阱（关键！）
+
+**问题**：cron 环境下 HOME 变量为空，`~/.hermes/` 展开为 `/.hermes/`，权限不足写入失败。
+表现为 cron job 状态 `error`，日志显示 `Permission denied`。
+
+**修复**：所有脚本内 `cd ~/.hermes` → `cd "${HOME:-/Users/aimac}/.hermes"`
+
+**验证**：`env -i HOME= PATH=$PATH bash ~/.hermes/scripts/xxx.sh`
+
+### screen_watch 日志污染
+
+**检查**：`grep -c "screen_watch" gateway.log` — 超过500行算污染
+
+**修复**：`tail -2000 gateway.log > /tmp/_tail && mv /tmp/_tail gateway.log`
+
+### 深度清理流程（用户说"深层清理"时执行）
+
+一次性执行全部：
+1. 清理空skill目录（api-integration, logging-best-practices, hermes-restart等）
+2. 清理旧 curator 备份（保留最新1个，可回收~120MB）
+3. 清理音频缓存（~/.hermes/audio_cache/）
+4. 清理 /tmp Hermes 临时文件（hermes-*, check_*, hn_top_*）
+5. 截断gateway.log为最近2000行
+6. 扫描skills/找出空目录+孤立.md+同名skill+大文件
+7. 检查cron jobs，修复HOME变量bug，删除无效skill引用
+
+### Skills 扫描检查
+
+定期检查 skills/ 目录健康：
+1. 空目录（只有DESCRIPTION.md或无文件）
+2. 孤立 .md 文件（root下非SKILL.md）
+3. 同名重复skill（software-development/ vs superpowers/）
+4. 大文件 >50MB（旧备份 tar.gz）
+5. cron job 引用已删除的 skill
+
 ### Gateway卡死/不响应
 
 **症状**：用户说"你没反应"、消息发不出去、PID存在但僵死

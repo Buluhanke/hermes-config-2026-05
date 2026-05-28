@@ -52,7 +52,22 @@ OBSIDIAN="${HOME:-/Users/aimac}/Obsidian/..."
 
 **验证**：用 `env -i HOME= PATH=$PATH bash ~/.hermes/scripts/xxx.sh` 模拟 cron 环境测试。
 
-## cron job 修复模式
+### Depth-first cleanup pattern（2026-05-29验证）
+
+当用户说"深层清理"或"全部修复"时，采用subagent并行模式最高效：
+
+```python
+# 并行派发3个子任务：
+subagent1: 修复基础设施（CDP Chrome重启、cron修复、gateway重启）
+subagent2: 扫描技能目录（找空目录/孤立文件/同名重复/大文件/无效引用）
+subagent3: 清理临时文件（音频缓存/tmp文件/旧备份/日志截断）
+```
+
+**关键经验**：
+- 修复类任务（subagent1）设置toolsets=["terminal","file"]
+- 扫描类任务（subagent3）可能超时（600s），要设置短timeout或拆小
+- 用户说"全部修复"=一次执行所有操作，不需要逐个请示
+- 说"深层清理"=连根拔起不留尾巴，需要覆盖：空目录、缓存、日志、备份、冗余skill
 
 当 cron job 出现 error/fail 时：
 1. 读取 `~/.hermes/logs/gateway.log` 定位错误原因

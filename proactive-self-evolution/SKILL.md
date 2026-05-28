@@ -209,10 +209,22 @@ ChatGPT / Claude.ai / Perplexity 均返回"正在进行安全验证"，**无法�
 - 扫描GitHub优质项目
 - 优化一个现有流程
 
-### 每周（深度进化）
+### 每周（深度进化 — 凌晨2点满血跑版）
 - 复盘本周学习，整理有价值的内容到Obsidian
 - 识别能力GAP，主动学习填补
 - 更新技能库
+
+**第二阶段：深度学习（每天凌晨2点，完整工作流）**
+- **必须走全网搜索**，不依赖模型知识
+- **搜索方向（锚定真人化路线）**：
+  - 屏幕感知突破（最优先）：screen understanding AI agent / desktop computer use / visual grounding
+  - 验证码对抗：CAPTCHA bypass / anti-detection / browser fingerprint
+  - 类人操作节奏：humanization browser automation / behavioral simulation
+  - 1688采购闭环：1688 API / procurement automation
+- **搜索降级链**：Firecrawl 402先后 → curl GitHub API搜索 → ddgs → browser直接访问
+- **ChatGPT/Claude对话仅在用户会话中可行**，cron模式跳过（Cloudflare阻挡已确认）
+- **归档标准**：Vision_Lab（工具）+ Brain_Lab（思路）+ gaps_known.json更新
+- **通知标准**：已验证的重大突破→QQ；未验证的发现→静默存档等周五汇总
 
 ## 问题处理原则
 

@@ -124,6 +124,7 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - 搜索：`ollama vision model mac m4 2026 best free`
 - 搜索：`smolvlm2 vs llava vs moondream benchmark 2026`
 - 搜索：`ScreenAI ShowUI InternVL3 GUI understanding benchmark 2026`
+- 搜索：`ZonUI-3B GUI grounding WACV 2026 benchmark`
 - 新方向（2026-05-28 发现）：Apple FastVLM（CVPR 2025，MLX版本在HuggingFace）+ Ollama v0.19 MLX集成
 - 新方向（2026-05-29 发现）：Ollama MLX backend 需要 32GB+ RAM，24GB 不支持；smolvlm2-agentic-gui 有 q8_0 (~1.9GB) 和 fp16 (~3.6GB) 变体可用；Qwen2.5VL 在 Ollama 上有 3b/7b/32b/72b 各变体
 - **⭐ ZonUI-3B（WACV 2026，2026-05-29 发现）** — 轻量级GUI grounding VLM，3B参数
@@ -131,6 +132,20 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - HuggingFace: `zonghanHZH/ZonUI-3B`，Apache-2.0
   - ⚠️ 无GGUF发布，需Transformers推理（非Ollama），M4 24G可运行PyTorch版
   - 潜在价值：若转GGUF导入Ollama，是比Vocaela-500M更完整的GUI grounding方案
+- **⭐ Qwen3-VL（2026-05-29 发现，2026-05-29 实测成功）** — Qwen最新旗舰VLM
+  - Ollama完整可用：qwen3-vl:2b（1.9GB）、qwen3-vl:4b（3.3GB）、qwen3-vl:8b（6.1GB）
+  - 官方声明：可直接操作电脑/手机界面，OSWorld全球顶级表现
+  - 2D grounding（绝对→相对坐标），256K上下文
+  - **实测**：qwen3-vl:2b 500px截图19.3s响应，正确识别UI元素
+  - 限制：1024px+图像处理超时，需较小输入尺寸
+- **⭐ Gemma 4（Google DeepMind，2026-04-02 发布）** — Apache 2.0，多模态
+  - Ollama完整可用：gemma4:e2b（7.2GB）、gemma4:e4b（9.6GB）、gemma4:26b（18GB）
+  - vision benchmarks: MMMU Pro 52.6%/73.8%/76.9%
+  - e2b/e4b为边缘设备优化，128K上下文
+- **⭐ Qwen 3.6（2026-05）** — 视觉内建于基座模型（无独立VL分支）
+  - Qwen 3.6-27B dense（~17GB Q4_K_M）— 新SOTA本地视觉
+  - Qwen 3.6-35B-A3B MoE（~22GB）
+  - ⚠️ Ollama不支持，需llama.cpp/LM Studio
 - **⭐ Vocaela-500M（2026-05-29 发现，2026-05-29 实测部署结论）**：仅 500M 参数，GGUF Q8_0 仅 437MB（+ 109MB mmproj），ScreenSpotV2 基准 **85.8%**（vs smolvlm2-agentic-gui 2.2B 的 61.71%）
   - 基于 SmolVLM2-500M-Video-Instruct，两阶段 SFT + GRPO RFT 训练
   - 输出结构化 JSON action（click/type/scroll/hotkey/drag）+ [0,1) 归一化坐标
@@ -158,9 +173,32 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - JSON prompt 可行，输出始终包裹 `<code>...</code>` 标签
   - 场景分类 ~13s，结构化 JSON ~2s（可能缓存）
   - 可用于 future auto-execute 精确动作规划
-- 剩余步骤：验证dry-run日志 → 坐标校准 → DRY_RUN=False
+- **⭐ UI-TARS Desktop（ByteDance，35.6k stars）** — 纯视觉桌面执行 Agent
+  - UI-TARS-2B（Q4_K ~1GB）理论上 M4 24G 可运行
+  - **94.2%** ScreenSpot-V2 坐标准确率（smolvlm2 的 61.71%）
+  - UI-TARS 2 MoE 达 **47.5%** OSWorld（2x Claude Computer Use）
+  - Agent TARS CLI v0.3.0 — 多工具流式执行 + 运行时统计
+  - 架构（vision→action→verify循环）与 ScreenAgent 规划完全一致
+  - 详见 `references/ui-tars-desktop-research.md`
+- **DesktopCtl**（yaroshevych, 34 stars）— Rust 桌面控制 CLI
+  - tokenized screen output 思路：smolvlm2 做 UI 元素文本化而非只输出坐标
+  - macOS-first, daemon+CLI 架构
+  - 太早期不推荐直接采用，但 selector-first 方法值得借鉴
+- **剩余步骤（⚠️ 2026-05-29 实测修正）**：整个 auto-execute 链路的关键前提是 **screen_watcher 本身在运行**。如果 screen_watcher 不工作，dry-run 日志永远为空。
+  1. ✅ 先**检查 screen_watcher 是否存活**（`ls -lt ~/.hermes/screenshots/.changed`，最后修改时间应在最近24h内）
+  2. 如果 screen_watcher 不运行 → 诊断原因（handler lock 残留？cron 未启动？进程被杀？）
+  3. screen_watcher 恢复后 → **验证 dry-run 日志**
+  4. 坐标校准 → DRY_RUN=False
 - CDP直连方案已知可用：原生Python WebSocket连接9333，不依赖mcp-chrome-stdio bridge
 - **重要底层限制（2026-05-28 发现）**：cua-driver/macOS CGEventTap 对某些应用（Blender等）的event loop只接受cghidEventTap且前面有mouseMoved事件，需要短暂前台激活。"不抢焦点"承诺对这类应用不可实现，Hermes computer_use同理
+- **执行层四级断链（2026-05-29 发现）**：全链路在 cron 环境断在 screen_watcher 不运行
+  ```
+  screen_watcher (检测变化) → [断链：不运行]
+  screen_trigger_handler (分析) → [断链：未被触发]
+  auto_execute() (dry-run) → [断链：日志为空]
+  hermes_desktop_rpa.py (执行) → [断链：cron 无前台窗口/CDP 9222]
+  ```
+  修复顺序：screen_watcher 存活 → handler 触发 → dry-run 验证 → 坐标校准 → 切换 DRY_RUN=False
 
 **搜索降级：当 web_search 402 时**
 - 优先用 HN Firebase API + ddgs 组合（ddgs 格式：`ddgs text -q "query" -m 5`）
@@ -347,7 +385,9 @@ PYEOF
 - [smolvlm2-agentic-gui 模型变体与基准](./references/smolvlm2-agentic-gui-variants.md) — 可用变体(q8_0/fp16)、benchmark数据、本地实测响应时间
 - [Vocaela-500M 基准与集成方案](./references/vocaela-500m-benchmarks.md) — 2026-05 发现的超高性价比 GUI agent 模型（500M, 85.8% ScreenSpotV2），含集成方式与限制
 - [ZonUI-3B 基准与集成方案](./references/zonui-3b-benchmarks.md) — 2026-05-29 发现的轻量级GUI grounding VLM（3B, WACV 2026），含部署方式与限制
+- [UI-TARS Desktop 执行层调研](./references/ui-tars-desktop-research.md) — ByteDance 纯视觉桌面 Agent（35.6k stars），94.2% 坐标准确率，架构对比与硬件适配建议
 - [TTS 供应商选择指南](./references/tts-provider-selection.md) — Kokoro(已删)/Edge/MOSS TTS 实测结论，2026-05-29 更新
+- [Ollama Vision 模型测试方法论](./references/ollama-vision-testing.md) — cron环境下测试VLM的API调用、图像大小限制、预热策略和超时处理
 - [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
 
