@@ -137,7 +137,35 @@ sed -i '' '/^credential_pool_strategies:/,/^[a-z]/ {
 
 ### fallback_model 配置位置
 
-`fallback_model` 必须在 `model:` 区块**内部**（不是文件末尾的注释区域）。插入位置在 `top_p` 之后、`providers:` 之前。
+`fallback_model` 是**顶层键**，不在 `model:` 区块内部。正确位置在 `providers:` 和 `fallback_providers:` 之间，属于顶层 YAML 字段。
+
+```yaml
+model:
+  provider: custom
+  default: MiniMax-M2.7-highspeed
+  ...
+providers:
+  openrouter:
+    ...
+fallback_model:
+  provider: minimax-cn
+  model: MiniMax-M2.7
+fallback_providers:
+- model: deepseek-v4-flash
+  provider: deepseek
+```
+
+### 3 层路由链路
+
+Hermes 的模型降级按顺序走：**主模型 → fallback_model → fallback_providers**
+
+| 层级 | 配置字段 | 说明 |
+|------|---------|------|
+| 主模型 | `model.provider` + `model.default` | 当前会话使用的模型 |
+| 备选 | `fallback_model` (顶层键) | 主模型不可用时自动切换 |
+| 兜底 | `fallback_providers` (列表) | 备选也失败时最后的退路 |
+
+注意 `fallback_providers` 是列表，支持多个兜底按顺序尝试。
 
 ### 修改后必做 YAML 格式验证
 
@@ -185,6 +213,14 @@ with open(path, 'w') as f:
 grep -n "aicodee-relay\|V2.aicodee\|custom_providers\|model_catalog.providers" ~/.hermes/config.yaml
 # 应该没有结果
 ```
+
+### 推荐的 config.yaml 编辑方式（防止 key 重排）
+
+**⚠️ 不要用 `yaml.safe_load()` + `yaml.dump()`** — 这会把所有 key 按字母重排，破坏已有结构。
+
+**最佳实践：`read_file` + Python `str.replace()`**
+详见 [references/config-py-edit.md]
+详见 [references/v2-aicodee-gateway.md] — v2.aicodee.com API 聚合网关平台详情（可用模型、端点、API key 行为差异）
 
 ### config.yaml 编辑安全
 
