@@ -95,6 +95,7 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 **方向 A — 看见（Vision 能力）**
 - 搜索：`ollama vision model mac m4 2026 best free`
 - 搜索：`smolvlm2 vs llava vs moondream benchmark 2026`
+- 搜索：`ScreenAI ShowUI InternVL3 GUI understanding benchmark 2026`
 - 新方向（2026-05-28 发现）：Apple FastVLM（CVPR 2025，MLX版本在HuggingFace）+ Ollama v0.19 MLX集成
 - 目标：找到 M4 24G 上跑得最好的免费视觉模型
 
@@ -124,10 +125,9 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - 当前本地模型：nomic-embed-text（274MB）+ ahmadwaqar/smolvlm2-agentic-gui（1.8GB Q4_K_M）
 
 **⚠️ smolvlm2 稳定性确认（2026-05-28 桌面截图实测）**：
-- 桌面截图测试：10.3s响应，准确识别 Calendar/Chat/Text input/Browser/Navigation icons
-- 上一条笔记"桌面截图幻觉"是孤证，可能是测试图片问题，非模型本身缺陷
-- ✅ **结论**：smolvlm2 当前版本（ahmadwaqar/smolvlm2-agentic-gui，1.8GB Q4_K_M）表现稳定，可信任
-- github blocked 时无法拉取替代模型（moondream2, llava:7b, FastVLM 等）
+- 测试1（桌面浏览器+ChatGPT窗口）：响应时间 10.3s，准确识别浏览器tabs、chat窗口、navigation icons，未发现幻觉
+- 测试2（移动端购物页面截图）：响应时间 11.1s，准确识别搜索框、商品卡片、价格、评分、移动端布局，给出合理操作建议（scroll up）
+- ✅ **结论**：smolvlm2 当前版本（ahmadwaqar/smolvlm2-agentic-gui，1.8GB Q4_K_M）表现稳定，可信任用于GUI理解任务
 
 **⚠️ github.com vs raw.githubusercontent.com 区分**：
 - `github.com` 可能被 blocked，但 `raw.githubusercontent.com` 通常仍可访问
@@ -170,11 +170,22 @@ python3 /tmp/test_smolvlm.py
 - 未发现"湖光山色"幻觉问题
 
 **候选模型对比**（github blocked 时无法拉取，待网络恢复后测试）：
+- **llama3.2-vision:11b** — ⭐ 最高优先级（2026-05-28 发现），Meta出品，~8GB，M4 24G可运行，通用视觉理解强
+- **ScreenAI（Google 2024）**— UI专项模型，基于PaLI架构（ViT+T5），专门训练于UI截图理解；GitHub: `kyegomez/ScreenAI`；⚠️ Google自用为主，开源社区无直接可运行版本
+- **ShowUI（CVPR 2025）**— 4.2B参数 VLA模型（Phi-3.5-vision-instruct base），输入截图直接输出点击/导航动作；HuggingFace: `showlab/ShowUI`；⚠️ 4.2B > 24GB，M4无法运行
+- **InternVL3-1B** — 开源VLM，GUI grounding benchmark表现优异，1B版本适合M4 24G；⚠️ Ollama支持情况待实测
 - moondream2 — 更轻量，截图理解能力强
-- llava:7b — 开源最成熟，24.8k ⭐
 - internvl2-4b — CVPR 2024 Oral，M4 24G 可运行
 - minicpm-v — Q4 量化可在 24GB 内运行
-- **Apple FastVLM（新增，CVPR 2025）**— MLX/CoreML 版本在 HuggingFace 可用，85x 更快 TTFT，等 github 恢复后测试
+- **Apple FastVLM（CVPR 2025）**— MLX/CoreML 版本在 HuggingFace 可用（apple/ml-fastvlm），85x faster than 标准ViT；等 github 恢复后测试
+
+**⚠️ FastVLM 补充信息（2026-05-28 发现）**：
+- 论文：FastVLM: Efficient Vision Encoding for Vision Language Models（CVPR 2025）
+- 架构：FastViTHD 混合视觉编码器，高分辨率低延迟
+- HuggingFace checkpoint：https://huggingface.co/apple/ml-fastvlm
+- 亮点：85x faster than 标准 ViT（官方说法）
+- WebGPU demo 已可在浏览器运行（transformers.js）
+- ⚠️ github.com blocked，无法 clone `apple/ml-fastvlm` 仓库研究细节
 
 **⚠️ github.com vs raw.githubusercontent.com 区分**：
 - `github.com` 可能被 blocked，但 `raw.githubusercontent.com` 通常仍可访问
@@ -373,7 +384,9 @@ for i, story_id in enumerate(ids[:10]):
 
 执行：`python3 /tmp/hn_top.py`（⚠️ 不要用 `python3 -c "..."` 或 heredoc，会被 cron 拦截）
 
-**⚠️ 马拉松脚本已知问题**：`idle-marathon-core.sh` 使用了 `python3 << 'PYEOF'` heredoc，在 cron 环境下会失败。如需使用马拉松模式，需先将 heredoc Python 块改为写 .py 文件调用。
+**⚠️ 马拉松脚本修复（2026-05-28）**：
+`idle-marathon-core.sh` 原本使用 `python3 << 'PYEOF'` heredoc，已修复为写 .py 文件调用模式。
+脚本现已符合 cron 环境限制，可正常使用。
 
 ## 当前定时任务配置
 

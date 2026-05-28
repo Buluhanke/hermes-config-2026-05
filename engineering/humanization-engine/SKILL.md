@@ -419,6 +419,50 @@ Beyond behavioral simulation (mouse curves, typing rhythm), two categories of **
 - Cache dir: `~/Library/Caches/camoufox/` (expected by camoufox-js)
 - Old binary may exist at `~/.camoufox/` (older version, same compatibility risk)
 
+### CloakBrowser — 反检测浏览器（2026-05-29 验证为真）
+
+**来源**：GitHub CloakHQ/CloakBrowser，21,907 stars，MIT协议，2026年2月创建
+
+**安装**：`pip install cloakbrowser`（当前版本 0.3.31）
+
+**核心能力**：
+- 58项C++指纹补丁（Canvas/WebGL/GPU/音频等）
+- `humanize=True` 参数：鼠标轨迹+键盘节奏+滚动拟真
+- drop-in Playwright替代品：`cloakbrowser.launch()` = `playwright.chromium.launch()`
+- reCAPTCHA v3得分0.9（官方声称，无法独立验证）
+
+**正确用法**：
+```python
+import cloakbrowser
+
+# 启动隐身浏览器（全新，无cookies）
+browser = cloakbrowser.launch(headless=True, humanize=True)
+
+# humanize参数是 humanize=True，不是 human=True
+# human_preset='default' | 'careful'
+# human_config=HumanConfigOverrides(...) 自定义配置
+```
+
+**致命限制**：launch()开全新浏览器，**无用户登录态**。必须配合CDP连接用户Chrome：
+```python
+# CloakBrowser human层 + 用户Chrome登录态
+from playwright.sync_api import sync_playwright
+from cloakbrowser.human import patch_context, patch_page, HumanConfig, _CursorState
+
+pw = sync_playwright().start()
+browser = pw.chromium.connect_over_cdp("http://localhost:9222")  # 用户Chrome
+ctx = browser.contexts[0]
+cfg = HumanConfig(typing_delay=70, typing_delay_spread=40, mistype_chance=0.02,
+                   mouse_min_steps=25, mouse_max_steps=80,
+                   idle_between_actions=True, idle_between_duration=(0.3, 0.8))
+cursor = _CursorState()
+patch_context(ctx, cfg)  # 给整个context注入真人化
+```
+
+**CFGPU.COM**：官方商业服务，用于30+平台检测报告，**无法验证其真实性**
+
+**替代Peekaboo/Camoufox的优势**：直接Python包，不需要npm安装，不依赖系统权限（peekaboo需要授权），不依赖特殊浏览器实例
+
 ### Layer B: OS-Level Input Simulation
 
 **Peekaboo** (`@steipete/peekaboo`) — simulates real mouse/keyboard at macOS OS level, not through browser API:

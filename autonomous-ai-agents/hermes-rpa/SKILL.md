@@ -273,7 +273,9 @@ print("ChatGPT回复:", response.get("text", ""))
 | CDP调试端口(默认profile) | macOS Chrome单例锁，端口绑定失败 | 用独立profile目录（`~/.hermes/chrome-debug`），见CDP章节 |
 | Playwright新实例操控已有Chrome | 新实例独立profile, 无用户登录态 | cliclick操控前台Chrome |
 | pyobjc AXUIElement C API | Python 3.14 + pyobjc 12.1 下符号不可用 | System Events (AppleScript) |
-> ⚠️ `vision_analyze` 和 `browser_vision` 都不支持 `image_url` 格式 — MiniMax 模型报错 `unknown variant 'image_url', expected 'text'`。不要尝试这两个工具做截图分析。
+> ⚠️ `vision_analyze` 不支持 `image_url` 参数（403错误）— MiniMax vision API 不允许通过URL获取远程图片。不要尝试用 `vision_analyze(image_url=...)` 做截图分析，模型报错 `unknown variant 'image_url'`。
+
+> **重要工作原则**：用户说"两个都选行不"时，代表用户愿意并行尝试多个方案。此时不要序列化执行（先A后B），应该**同时跑两个方向**，谁先完成/谁有效就用谁。序列化执行是浪费用户时间。
 > 
 > ✅ **正确做法**：用 `execute_code` 中 Python + `urllib.request` 直调 Baidu OCR API（见 baidu-ocr skill），数据不经过 Hermes 安全检查层。
 
@@ -458,11 +460,49 @@ python3 ~/.hermes/skills/autonomous-ai-agents/hermes-rpa/scripts/cdp_screenshot_
 | 场景 | 推荐方案 | 原因 |
 |------|---------|------|
 | 已登录的登录墙网站（1688等） | CDP (`connect_over_cdp`) + 持久化 Chrome profile | 直接复用已有 cookies，无需重新登录 |
-| 公开页面 + 轻度反爬 | Scrapling `FetcherSession(impersonate='chrome')` | 隐身HTTP请求，速度快，不开浏览器 |
+| 公开页面+轻度反爬 | Scrapling `FetcherSession(impersonate='chrome')` | 隐身HTTP请求，速度快，不开浏览器 |
 | Cloudflare/Turnstile 等反爬 | Scrapling `StealthyFetcher` | 内置 bypass，开浏览器模拟真人 |
 | JS 密集渲染页面（价格/规格） | Playwright CDP 或 hermes-rpa 截图+OCR | 纯 HTTP 拿不到动态内容 |
 | 大规模匿名采集 | Scrapling Spider 框架 | 并发+暂停恢复+代理轮换 |
 | 需要已登录会话 + JS 渲染 | CDP + 持久化 Chrome（当前方案） | Scrapling 的 StealthyFetcher 无法复用 Chrome 登录态 |
+| **反爬检测极严的网站** | **CloakBrowser 0.3.31** | **MIT开源，21k stars，58项C++指纹补丁，reCAPTCHA v3得分0.9，drop-in Playwright替代品** |
+
+**CloakBrowser 0.3.31 实测（2026-05-29）**：
+- ✅ `pip install cloakbrowser` → 升级成功（0.3.30 → 0.3.31）
+- ✅ `cloakbrowser.launch(headless=True, humanize=True)` 启动正常
+- ✅ MIT协议，GitHub CloakHQ/CloakBrowser（21,907 stars），2026年2月创建
+- ✅ `humanize=True` 参数开启真人化行为（不是`human=True`）
+- ❌ `cloakbrowser.launch()` 开全新浏览器，**无用户cookies/登录态**
+- ⚠️ `CFGPU.COM`服务无法验证是否存在
+- ⚠️ npm/Docker安装未测试
+
+**CloakBrowser + CDP 正确用法**：
+```python
+# 正确方式：用CloakBrowser启动 + 连用户CDP端口继承登录态
+import cloakbrowser
+from playwright.sync_api import sync_playwright
+
+# 方式1：cloakbrowser启动全新浏览器（无登录态，适合公开页面）
+browser = cloakbrowser.launch(headless=True, humanize=True)
+page = browser.new_page()
+page.goto("https://example.com")
+
+# 方式2：CloakBrowser human层注入到已有CDP连接（最佳）
+pw = sync_playwright().start()
+browser = pw.chromium.connect_over_cdp("http://localhost:9222")  # 用户Chrome
+ctx = browser.contexts[0]
+from cloakbrowser.human import patch_context, patch_page, HumanConfig, _CursorState
+cfg = HumanConfig(typing_delay=70, typing_delay_spread=40, mistype_chance=0.02,
+                   mouse_min_steps=25, mouse_max_steps=80,
+                   idle_between_actions=True, idle_between_duration=(0.3, 0.8))
+cursor = _CursorState()
+patch_context(ctx, cfg)
+page = ctx.pages[-1]
+patch_page(page, cfg, cursor)
+# 现在page操作有人真人化行为 + 用户登录态
+```
+
+**关键教训**：工具再强，不能解决根本架构问题——登录态在哪个Chrome里，就得连那个Chrome。
 
 **Scrapling + 1688 实测（2026-05-10）：**
 - `StealthyFetcher` 能绕过反爬，但每次新建 headless 实例无登录态 → 跳转淘宝登录页
@@ -480,41 +520,145 @@ python3 ~/.hermes/skills/autonomous-ai-agents/hermes-rpa/scripts/cdp_screenshot_
 
 ## ⚠️ 关键陷阱
 
-### CDP Chrome 9333 与用户Chrome是独立进程（2026-05-29 新发现）
+### CDP Chrome 9333 与用户Chrome是独立进程（2026-05-29 重大更新）
 
 **致命误解**：以为"连接 CDP 9333 就能操作用户的 1688 已登录会话"。
 
-**真相**：
-- CDP 9333 的 Chrome = `~/.hermes/chrome-debug` + MCP扩展 → 只有扩展，无用户cookies
-- 用户平时用的 Chrome = 另一个独立进程（无调试端口）→ 1688登录态在这里
-- 两者是**物理隔离**的Chrome进程，cookies/登录态完全不共享
+**真相（实测）**：
+- CDP 9333 的 Chrome = `~/.hermes/chrome-debug` + MCP扩展 → 只有扩展页面（chrome://glic、chrome-extension://...），**无用户cookies**
+- 用户个人 Chrome = 另一个独立进程 → 1688登录态在这里，**但未开调试端口时不可连接**
+- 两者是**物理隔离**的 Chrome 进程，cookies/登录态完全不共享
 
-**验证方法**：
+**验证命令（每次都要先跑这个确认）**：
 ```python
-# 连接9333，列出所有tabs
+# 检查9333里有什么tabs
 browser = p.chromium.connect_over_cdp("http://localhost:9333")
 for ctx in browser.contexts:
     for pg in ctx.pages:
         print(f"  {pg.title()} | {pg.url}")
-# 9333实例里只有 chrome://glic、chrome-extension://... 这类内部页面
-# 没有用户的 1688 / taobao 登录会话
+# 9333只有 chrome://glic、chrome-extension://... 这类内部页面
+# 没有用户的 1688 / taobao 登录会话 → 所有操作无效
 ```
 
-**后果**：所有 `connect_over_cdp("http://localhost:9333")` 操作（注入真人化、搜索、点商品）都是在 Hermes 自己的空白Chrome里进行的，无法触碰到用户的 1688 登录会话。
+**✅ 2026-05-29 确认方案：用户Chrome 9222端口（已跑通全流程）**
 
-**解法（按需选择）**：
+用户 Chrome 开启调试端口后，CDP 9222 有完整的 1688 登录态：
 
-| 方案 | 做法 | 登录态 |
-|------|------|--------|
-| 方案A | 用户Chrome开调试端口 `--remote-debugging-port=9222`，Hermes连接这个端口 | ✅ 继承用户登录态 |
-| 方案B | 用户手动在 Hermes Chrome（9333）里登录 1688 | ✅ Hermes专属登录态 |
-| 方案C | 放弃浏览器控制，走 1688 Open Platform API | ❌ 企业资质要求，买家不可用 |
-| 方案D | computer_use 控制用户屏幕 | ⚠️ 窗口bounds为0，完全不可见 |
+| 方案 | 做法 | 登录态 | 状态 |
+|------|------|--------|------|
+| 方案A | 用户Chrome开9222调试端口 | ✅ 继承用户登录态 | **✅ 已跑通全流程** |
+| 方案B | Hermes Chrome（9333） | ❌ 无用户登录态 | ❌ 不可用 |
+| 方案C | 用户手动操作，Hermes旁观 | ✅ 用户已登录 | ⚠️ 临时方案 |
 
-**方案A操作步骤**：
-1. 用户终端执行：`open -a "Google Chrome" --args --remote-debugging-port=9222`
-2. 或用户Chrome菜单 → 更多工具 → 启动调试（需要Chrome命令行参数）
-3. Hermes配置 `browser.cdp_url: 'http://127.0.0.1:9222'`
+**方案A操作步骤（已验证，2026-05-29）**：
+1. 用户终端运行：
+   ```bash
+   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+     --remote-debugging-port=9222 \
+     --user-data-dir=/tmp/chrome-debug \
+     --remote-allow-origins=*
+   ```
+2. Hermes连接：`connect_over_cdp("http://localhost:9222")` → 继承用户登录态
+3. 用 `Target.createTarget` 在 browser endpoint 创建新tab
+4. 从 `/json` 获取新tab的websocket URL
+5. 向tab发 `Page.navigate` 命令
+
+**✅ 1688全流程已跑通（2026-05-29）**：
+- 搜索"纸箱" → 34页商品列表，标题/价格/供应商/起订量全部提取
+- 点进商品详情页（`https://detail.1688.com/offer/{offerId}.html`）
+- 提取：标题、价格¥0.1、起订量100个、已售8.5万+个
+- 截图保存到 `/tmp/1688_detail.png`
+
+**关键坑（已踩过）**：
+- Chrome必须加`--remote-allow-origins=*`，否则WebSocket handshake返回403
+- 用browser CDP endpoint发`Target.createTarget`，不是tab endpoint
+- 详情页价格是动态渲染，需要 `time.sleep(6)` 等JS执行
+- 详情页URL格式：`https://detail.1688.com/offer/{offerId}.html`
+- offerId从搜索页innerHTML的href里提取：`re.search(r'(\d{10,})', raw)`
+
+**完整代码模板**：
+```python
+import subprocess, urllib.request, json, time, websocket, re, base64
+
+# 1. 连接CDP 9222
+req = urllib.request.urlopen("http://localhost:9222/json", timeout=5)
+targets = json.loads(req.read())
+# 找1688的tab或创建新的
+ws_url = next((t['webSocketDebuggerUrl'] for t in targets if '1688' in t.get('url','')), None)
+if not ws_url:
+    # 用browser endpoint创建新tab
+    browser_ws = next(t['webSocketDebuggerUrl'] for t in targets if 'version' in t)
+    ws = websocket.create_connection(browser_ws, timeout=10, suppress_origin=True)
+    ws.send(json.dumps({"id":1,"method":"Target.createTarget","params":{"url":"about:blank"}}))
+    resp = json.loads(ws.recv())
+    new_target_id = resp['result']['targetId']
+    ws.close()
+    # 重新获取新tab的ws url
+    req = urllib.request.urlopen("http://localhost:9222/json", timeout=5)
+    targets = json.loads(req.read())
+    ws_url = next(t['webSocketDebuggerUrl'] for t in targets if t.get('id')==new_target_id)
+
+# 2. 连接tab的WebSocket
+ws = websocket.create_connection(ws_url, timeout=10, suppress_origin=True)
+msg_id = [1]
+
+def send(method, params=None):
+    ws.send(json.dumps({"id": msg_id[0], "method": method, "params": params or {}}))
+    resp = json.loads(ws.recv())
+    msg_id[0] += 1
+    return resp
+
+# 3. 搜索
+send("Page.navigate", {"url": "https://s.1688.com/company/company_search.htm?keywords=纸箱&beginPage=1"})
+time.sleep(5)
+
+# 4. 提取商品列表
+r = send("Runtime.evaluate", {
+    "expression": "document.body.innerText.slice(0,3000)",
+    "returnByValue": True
+})
+print(r['result']['result']['value'])
+
+# 5. 从href提取offerId
+r = send("Runtime.evaluate", {
+    "expression": 'document.body.innerHTML.match(/offerId=(\\d+)&/)?.[0]',
+    "returnByValue": True
+})
+raw = r.get('result',{}).get('result',{}).get('value','')
+offer_id = re.search(r'(\d{10,})', raw).group(1) if raw else None
+
+# 6. 导航到详情页
+if offer_id:
+    send("Page.navigate", {"url": f"https://detail.1688.com/offer/{offer_id}.html"})
+    time.sleep(6)
+    
+    # 截图
+    r_s = send("Page.captureScreenshot", {"format": "png"})
+    img = r_s.get('result',{}).get('data','')
+    if img:
+        with open('/tmp/1688_detail.png', 'wb') as f:
+            f.write(base64.b64decode(img))
+    
+    # 提取价格和详情
+    r_t = send("Runtime.evaluate", {
+        "expression": "document.body.innerText.slice(0,2000)",
+        "returnByValue": True
+    })
+    text = r_t['result']['result']['value']
+    print(text)
+
+ws.close()
+```
+
+### screen_trigger_handler × hermes_desktop_rpa 断链（2026-05-28 发现）
+
+**问题**：`screen_trigger_handler.py` 的 `on_trigger()` 只做：smolvlm2分析 → 关键词匹配 → Telegram推送。**从不调用 hermes_desktop_rpa.py 执行任何操作**。
+
+**断链证据**：Line 196-203 只调用 `send_message`，无任何 `subprocess.run(['python3', 'hermes_desktop_rpa.py', ...])` 调用。
+
+**集成方案**：在 Telegram 推送之前，按场景类型调用 hermes_desktop_rpa.py 执行。详见 `references/screen-trigger-handler-auto-execute-2026-05-28.md`。
+
+**cron 环境验证**：`subprocess.run(["python3", rpa_path, "wininfo"])` 调用成功（return code 0），CLI 接口完全可用。
 
 ### 🛡️ 安全扫描器拦截 Baidu OCR（高频踩坑）
 
@@ -1428,18 +1572,27 @@ subprocess.run([
 
 > ⚠️ 1688 Open Platform API 企业资质要求，纯买家不可用。详见 `1688-open-platform-api` skill。
 
-### 接 Ollama VL 模型（2026-05-14 实测）
+### 接 Ollama VL 模型（2026-05-14 实测，2026-05-28 更新）
 
-**可用模型（2026-05-14）**：
-```
-qwen3-fast:latest  (5.2GB, 纯文本)
-qwen3:8b           (5.2GB, 纯文本)
-```
+**可用VL模型对比（2026-05-28）**：
 
-**GUI自动化专用VL模型（推荐）**：`ahmadwaqar/smolvlm2-agentic-gui`
+| 模型 | 大小 | RAM需求 | 特点 | 状态 |
+|------|------|---------|------|------|
+| `ahmadwaqar/smolvlm2-agentic-gui` | 2.0GB | ~4GB | 微调输出归一化坐标`click(x,y)`，GUI专用 | ✅ 已安装可用 |
+| `llama3.2-vision:11b` | ~8GB | ~8GB | Meta出品，通用视觉理解能力强 | ⚠️ github blocked时无法pull |
+| `llama3.2-vision:90b` | ~80GB | ~80GB+ | 超M4上限，不推荐 | ❌ |
+
+**GUI自动化专用VL模型（当前推荐）**：`ahmadwaqar/smolvlm2-agentic-gui`
 - 微调过直接输出 `click(x=0.519, y=0.238)` 归一化坐标
-- 大小：2.0GB
-- 安装：`ollama pull ahmadwaqar/smolvlm2-agentic-gui`
+- 大小：2.0GB，最适合M4 24G
+- 安装（github恢复后）：`ollama pull llama3.2-vision:11b` 或 `ollama pull ahmadwaqar/smolvlm2-agentic-gui`
+
+**Llama 3.2 Vision 11B 测试计划（github恢复后优先）**：
+```bash
+ollama pull llama3.2-vision:11b
+# 替换smolvlm2做GUI视觉理解，预计准确率显著提升
+# 11B参数，~8GB，比smolvlm2的2GB能力更强
+```
 
 **screen_vision 截图方案（2026-05-15 确认）**：
 
@@ -1553,5 +1706,7 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 - `references/chrome-applescript-patterns.md` — Chrome AppleScript模式
 - `references/desktop-agent-roadmap-2026-05-14.md` — **桌面全域Agent成长路线图**（战略方向+现状+下一步优先级）
 - `references/world-state-v0-2026-05-14.md` — **WorldState v0 实现笔记**（最小闭环架构+tesseract路径坑+Baidu OCR token问题）
-- `references/trycua-cua-research-2026-05-27.md` — **新增：trycua/cua 17k stars 调研**（Window Zoom精确点击技
+- `references/trycua-cua-research-2026-05-27.md` — **trycua/cua 17k stars 调研**（Window Zoom精确点击技术）
+- `references/screen-trigger-handler-auto-execute-2026-05-28.md` — **screen_trigger_handler × hermes_desktop_rpa 断链分析 + Auto-Execute 集成方案**
+- `references/user-workflow-preferences.md` — **用户工作流偏好**：并行尝试原则、执行优先原则、简短汇报格式
 - `references/alternative-desktop-automation-tools.md` — 替代方案（Mano-P / UI-TARS）评估框架

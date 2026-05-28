@@ -34,53 +34,35 @@ curl -s "https://hacker-news.firebaseio.com/v0/item/${id}.json" -o "/tmp/hn_${id
 # 步骤1：获取 IDs
 curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.json
 
-# 步骤2：写 Python 解析脚本（不用 heredoc）
-write_file tool:
-  path: /tmp/parse_hn.py
-  content: |
-    import json
-    ids = json.load(open('/tmp/hn_ids.json'))[:10]
-    for i in ids:
-        print(i)
-
-# 步骤3：执行脚本
+# 步骤2：用 write_file 工具写 Python 解析脚本（不用 heredoc）
+# path: /tmp/parse_hn.py
+# content: | import json; ids=json.load(open('/tmp/hn_ids.json'))[:10]; ...
+# 步骤3：执行
 python3 /tmp/parse_hn.py
+```
 
-# 步骤4：批量抓故事（不用 & 后台）
-for id in 48299753 48302745 48296794 48299220 48297645; do
-  curl -s "https://hacker-news.firebaseio.com/v0/item/${id}.json" -o "/tmp/hn_${id}.json"
-done
+HN Firebase API 偶发 SSL EOF 错误（`[SSL: UNEXPECTED_EOF_WHILE_READING]`），需加 retry：
+```python
+import urllib.request
+import json
+import time
 
-# 步骤5：写解析脚本
-write_file tool:
-  path: /tmp/parse_hn_stories.py
-  content: |
-    import json
-    for hid in [48299753, 48302745, 48296794, 48299220, 48297645]:
+def fetch_hn(url, retries=3):
+    for attempt in range(retries):
         try:
-            d = json.load(open(f'/tmp/hn_{hid}.json'))
-            score = d.get('score', 0)
-            title = d.get('title', '')
-            url = d.get('url', '') or f"https://news.ycombinator.com/item?id={hid}"
-            if d.get('type') == 'story':
-                print(f"[{score}] {title}")
-                print(f"  URL: {url}")
-                print()
+            req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                return json.loads(resp.read())
         except Exception as e:
-            print(f"Error {hid}: {e}")
+            if attempt < retries - 1:
+                time.sleep(2)
+            else:
+                raise
 
-# 步骤6：执行
-python3 /tmp/parse_hn_stories.py
-```
-
-## 已验证可用的 Top IDs（2026-05-28）
-
-```
-48299753 — YouTube 自动标注AI生成视频 [632]
-48302745 — "Can we have the day off?" [761]
-48296794 — Anthropic & OpenAI 产品市场契合 [713]
-48299220 — Apple/Google 推送通知演进 [215]
-48297645 — SimCity 3k in 4k [309]
+ids = fetch_hn("https://hacker-news.firebaseio.com/v0/topstories.json")[:10]
+for sid in ids:
+    story = fetch_hn(f"https://hacker-news.firebaseio.com/v0/item/{sid}.json")
+    print(f"[{story.get('score',0)}] {story.get('title','N/A')}")
 ```
 
 ## 数据字段说明

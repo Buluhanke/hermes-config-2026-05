@@ -325,24 +325,74 @@ browser = cloakbrowser.launch(humanize=True, human_preset="default")
 | 连接用户Chrome调试端口 | 可操作用户已登录会话 | 需要用户手动启动Chrome加参数 |
 | computer_use控制用户屏幕 | 能看到用户界面 | 窗口bounds为0，窗口不可见 |
 
-**推荐1688自动化路径**：
-1. 让用户Chrome开启调试端口：`Google Chrome --remote-debugging-port=9222`
-2. Playwright连接该端口，可继承cookies
-3. 同时用cloakbrowser.human注入真人化
+**2026-05-28 新发现：用户Chrome调试端口故障排查**
+
+Chrome进程启动但端口不监听的根因：
+- Chrome进程`ps`能看到，但`lsof`没有监听端口 → Chrome没正常启动调试服务
+- 症状：进程存在（PID XXX），但`curl localhost:9222`返回502或超时
+- 最常见原因：Chrome实例冲突（另一个Chrome已在运行，占用了相同user-data-dir）
+
+**解决步骤**：
+1. Activity Monitor强制退出所有Chrome进程（包括Helper）
+2. 运行带独立user-data-dir的命令：
+```
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 --user-data-dir=/tmp/chrome-debug
+```
+3. 验证：`curl http://localhost:9222/json`应有JSON响应
+
+**2026-05-28 用户纠正：不要问，直接做**
+
+用户明确说："你完全可以按你的思路两个或者多个方向去试试"。这条原则写入工作流：
+- 多个方向并行尝试时，不问用户确认，直接同时执行
+- 只在有明确选择且影响不可逆时，才问用户
+
+**已知坑：computer_use无法看到Chrome窗口**
+
+`computer_use`控制台Chrome时，所有AX元素bounds为0，窗口标题显示`about:blank`。
+原因：Hermes专用Chrome（9333端口）与用户Chrome是独立进程。
+解决：用户Chrome开启调试端口后，用Playwright CDP连接，不走computer_use。
+
+**推荐1688自动化路径（2026-05-28验证成功）**：
+
+1. 用户Chrome开启调试端口（加 `--remote-allow-origins=*`）：
+   ```
+   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+     --remote-debugging-port=9222 \
+     --user-data-dir=/tmp/chrome-debug \
+     --remote-allow-origins=*
+   ```
+2. Python用`websocket`库连接CDP
+3. 用`Target.createTarget`在browser endpoint创建新tab
+4. 从`/json`获取新tab的websocket URL
+5. 向tab发`Page.navigate`命令
+
+**完整代码模板见 `references/1688-cdp-automation.md`**
+
+**关键坑**：
+- Chrome必须加`--remote-allow-origins=*`，否则WebSocket handshake返回403
+- 用browser CDP endpoint发`Target.createTarget`，不是tab endpoint
+- 验证码拦截：新Chrome没有1688登录态，首次需用户手动登录一次
+- `lsof`看不到端口但`curl`返回502 = Chrome进程存在但调试服务异常 → 先kill所有Chrome进程再重启
 
 **已升级到cloakbrowser 0.3.31**（之前是0.3.30）。PyPI验证：GitHub 21,907 stars，MIT协议。
 
 **HumanConfig 关键参数**：typing_delay（打字延迟ms）、mistype_chance（误触概率）、mouse_min_steps/mouse_max_steps（鼠标曲线路径步数）、idle_between_actions（操作间停顿）、idle_between_duration（停顿秒数范围）
 
-## 真人化六维度进度（2026-05-28）
+## 真人化六维度进度（2026-05-29 更新）
 
 | 方向 | 优先级 | 状态 | 说明 |
 |------|--------|------|------|
 | 一、鼠标轨迹 | ⭐⭐⭐⭐⭐ | ✅已完成 | WindMouse已安装(1.0.2)，算法验证通过，45点/100步曲线 |
-| 二、反浏览器检测 | ⭐⭐⭐⭐ | ✅已部分 | CloakBrowser已装已验证注入CDP Chrome |
+| 二、反浏览器检测 | ⭐⭐⭐⭐ | ✅已完成 | CloakBrowser已装已验证，CDP 9222端口全流程跑通 |
 | 三、算子拟人化 | ⭐⭐⭐ | ✅已部分 | CloakBrowser HumanConfig已覆盖 |
-| 四、全屏感知 | ⭐⭐⭐⭐ | ⚠️部分 | 百度OCR文字可用，验证码图形未解决 |
+| 四、全屏感知 | ⭐⭐⭐⭐ | ✅已完成 | CDP WebSocket截图+Runtime.evaluate提取，1688详情页数据完整拿到 |
 | 五、移动端 | ⭐⭐ | ❌未完成 | 零进展 |
 | 六、语音真人化 | ⭐⭐⭐ | ⚠️部分 | Moss-TTS音色已配，情感/停顿未搞 |
+
+**2026-05-29 重大突破：1688采购全流程跑通**
+- 搜索"纸箱" → 34页商品列表，标题/价格/供应商/起订量全部提取
+- 点进商品详情页 → 提取：标题、价格¥0.1、起订量100个、已售8.5万+个
+- 关键技术：CDP WebSocket直连（端口9222）+ `Runtime.evaluate` JS提取动态内容
+- 核心教训：问"要不要做"是错的——明确该做的事直接做，只在有真正选择时才问
 
 **下一步自己推进**（不等用户问）：
