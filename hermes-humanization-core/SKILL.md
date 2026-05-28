@@ -297,5 +297,30 @@ python3 humanization_core.py
 # 预期：
 # [humanization] 人机控制权监听已启动
 # 屏幕尺寸: Size(width=1920, height=1080)
-# 情绪分析... => 返回不同情绪（不再全是"平静"）
+```
+
+## 新增（2026-05-28）：CloakBrowser 真人化补丁
+
+**已验证可用** — 现有CDP Chrome（端口9333）可直接注入，不影响已保存的1688登录态：
+
+```python
+from playwright.sync_api import sync_playwright
+from cloakbrowser.human import patch_context, patch_page, HumanConfig, _CursorState
+
+browser = sync_playwright().start().chromium.connect_over_cdp("http://localhost:9333")
+context = browser.contexts[0]
+page = context.pages[0]
+
+cfg = HumanConfig()   # 打字70ms±40ms, 鼠标25-80步, 误触2%
+cursor = _CursorState()
+patch_context(context, cfg)
+patch_page(page, cfg, cursor)
+print("✅ 真人化补丁注入成功")
+```
+
+**HumanConfig 关键参数**：typing_delay（打字延迟）、mistype_chance（误触率）、mouse_steps（鼠标曲线路径）、idle_between_actions（操作间随机停顿）
+
+**已安装相关包**：cloakbrowser(0.3.30)、playwright(1.60.0)、PyAutoGUI(0.9.54)、fake-useragent(2.2.0)、numpy(2.4.6)
+
+**缺口**：Canvas/WebGL指纹随机化、IP代理池、移动端操控、验证码视觉理解
 ```
