@@ -97,6 +97,38 @@ python3 skills/tts/scripts/tts.py render --srt input.srt --voice-map vm.json -o 
 python3 skills/tts/scripts/tts.py render --srt input.srt --voice-map vm.json --backend noiz --auto-emotion -o output.wav
 ```
 
+## Kokoro TTS — 本地 ONNX 引擎（已安装）
+
+安装位置：`~/kokoro/`（Python 虚拟环境 `~/kokoro/venv/`）
+
+### 使用方式
+
+```bash
+cd ~/kokoro && source venv/bin/activate && python speak.py "文字内容"
+```
+
+### 注意事项 / Pitfalls
+
+| 坑 | 说明 |
+|---|---|
+| **模型文件名** | 常见安装脚本里写的是 `kokoro-v1.0.onnx` 和 `voices-v1.0.bin`，但这两个文件在 GitHub release 中不存在（返回 404）。实际文件名是 `kokoro-v0_19.onnx` / `kokoro-v0_19.fp16.onnx` / `kokoro-v0_19.int8.onnx` 和 `voices.bin` |
+| **中文语言码** | kokoro-onnx 的 `lang` 参数传 `"zh"` 会报错 `language not supported by espeak backend`。必须用 `"cmn"`（ISO 639-3 标准，espeak-ng 的实际语言码） |
+| **espeak-ng 数据** | 中文语音需要 espeak-ng 数据中的 `cmn_dict` 和 `lang/sit/` 规则。从 release 下载 `espeak-ng-data-v1.51.tar.gz` 并解压到 `espeakng_loader` 的数据目录下即可。kokoro-onnx 已内置 `espeakng_loader`，会自动加载 |
+| **onnxruntime-silicon** | Python 3.14 下 `pip install onnxruntime-silicon` 会报 `No matching distribution`。普通 `onnxruntime` 即可（自动安装），M4 上运行正常 |
+| **缺少依赖** | `misaki[zh]` 还需要 `num2words`，但 pip 不会自动安装。遇到 `ModuleNotFoundError: No module named 'num2words'` 时手动 `pip install num2words` |
+| **下载超时** | GitHub release 国内直连不稳定（310MB 的 FP32 模型容易断流）。建议走代理或下载 FP16 版（~169MB 更稳定）|
+
+### 编程对接
+
+```python
+import subprocess
+subprocess.run([
+    "python", "speak.py", text
+], cwd="/Users/aimac/kokoro")
+```
+
+推荐升级方向：LLM 边生成边说（流式），而非生成完再合成。
+
 ## 语音回复 vs 微信原生语音消息（重要区别）
 
 用户要"语音回复"时，有两种完全不同的形式：

@@ -1,11 +1,11 @@
 ---
 name: voice-reply-rules
 description: 语音/文字回复规则固化
-version: 1.1.0
+version: 2.0.0
 ---
 
 ## 规则
-用户发语音 → 语音回复（auto_tts=true，Moss-TTS-Nano 本地合成，Xiaoyu音色）
+用户发语音 → 语音回复（auto_tts=true，Kokoro 本地合成，af_sky 音色）
 用户发文字 → 文字回复
 不混用，规则已固化
 
@@ -26,45 +26,82 @@ version: 1.1.0
 - 不凭记忆生成答案，不尝试拼凑，不反复查找
 - 用户纠正后立即承认，不要解释过程
 
-**TTS音频质量投诉处理流程**
-用户报告"都是杂音"时：
-1. 不发 mp3，发刚生成的原始 WAV（绕过 Telegram 转码干扰判断）
-2. 用实际 TTS 命令生成：`/Users/aimac/MOSS-TTS-Nano/.venv312/bin/python .../tts.py -t '测试内容' --voice-name Xiaoyu -o /tmp/test.wav`
-3. 发到 Telegram 后等待用户确认是"能听清但不是那个声音"还是"完全杂音"
-4. 区分：生成杂音（模型问题）vs 播放杂音（平台/设备问题）
+## 当前配置（已固化，2026-05-28 备份）
 
-**当前配置（已固化，2026-05-28 备份）**：
-- `tts.provider = edge`
-- `tts.edge.voice = zh-CN-XiaoxiaoNeural`（中文女声，已固化）
-- `voice.auto_tts = true`
+**主 TTS 引擎：Kokoro（本地 ONNX）**
+```yaml
+tts:
+  provider: kokoro
+  kokoro:
+    type: command
+    command: "/Users/aimac/kokoro/venv/bin/python3 /Users/aimac/kokoro/tts_kokoro.py --input {input_path} --output {output_path} --voice {voice} --speed {speed}"
+    voice: af_sky
+    format: wav
+```
 
-⚠️ **语音配置已固化，不可轻易改动。** 备份位置：
+**备用（Edge TTS，中文女声）：**
+```yaml
+tts.edge.voice = zh-CN-XiaoxiaoNeural
+```
+
+**⚠️ 语音配置已固化，不可轻易改动。** 备份位置：
 - 恢复脚本：`~/.hermes/backups/tts_config_backup.sh` — 运行 `bash ~/.hermes/backups/tts_config_backup.sh` 一键恢复
 - 配置快照：`~/.hermes/backups/config_snapshot_20260528_语音固化.yaml`
 
-**切换音色流程**（如用户要求试听）：
-1. 用 `edge-tts --voice <音色名> --text "你好" --write-media /tmp/sample.ogg` 逐个生成试听
-2. 用户选定后通过 `hermes config set tts.edge.voice <音色名>` 写入配置
-3. 重启 gateway 生效
-4. 更新备份脚本中的 voice 值
-
-**Moss-TTS 目标配置（供参考）**：
-```yaml
-tts:
-  provider: moss
-  providers:
-    moss:
-      type: command
-      command: "/Users/aimac/MOSS-TTS-Nano/.venv312/bin/python /Users/aimac/.hermes/skills/tts/moss-tts-nano/scripts/tts.py -t '{text}' --voice-name Xiaoyu -o {output_path}"
-```
-
-**Moss-TTS 调用方式**：
+**切换回 Edge TTS 的方法：**
 ```bash
-/Users/aimac/MOSS-TTS-Nano/.venv312/bin/python \
-  /Users/aimac/.hermes/skills/tts/moss-tts-nano/scripts/tts.py \
-  -t '回复内容' --voice-name Xiaoyu -o /tmp/moss_voice.wav
+hermes config set tts.provider edge
+# 然后重启 gateway
 ```
-QQ平台不支持原生语音，生成后告知用户文件路径让他手动播放；Telegram/微信/Discord 可直接 MEDIA 发送。
+
+## Kokoro TTS 详细说明
+
+### 安装位置
+```
+~/kokoro/
+├── tts_kokoro.py          # Hermes command provider wrapper
+├── models/
+│   ├── kokoro-v0_19.fp16.onnx  # 模型文件（169MB）
+│   ├── voices.bin              # 音色文件
+│   └── espeak-ng-data/         # 中文语音数据
+├── venv/                  # 虚拟环境
+└── speak.py               # 简易测试脚本
+```
+
+### Kokoro 音色列表
+- `af_sky`（当前默认）- 美国女声，中性自然，中文效果最佳
+- `af` / `af_bella` / `af_nicole` / `af_sarah` - 美国女声
+- `am_adam` / `am_michael` - 美国男声
+- `bf_emma` / `bf_isabella` - 英国女声
+- `bm_george` / `bm_lewis` - 英国男声
+
+### Kokoro 已知问题
+| 坑 | 说明 |
+|---|---|
+| 模型文件名过时 | GitHub release 无 v1.0，实际是 v0_19 |
+| 中文语言码 | `lang="zh"` 报错，必须用 `"cmn"` |
+| espeak-ng 缺中文数据 | 需下载 espeak-ng-data-v1.51.tar.gz 覆盖 espeakng_loader 数据目录 |
+
+### 测试命令
+```bash
+cd ~/kokoro && source venv/bin/activate && python speak.py "你好"
+```
+
+## 中断系统（TODO - 待实现）
+
+用户要求加入以下功能，让 Hermes 说话时可被打断：
+
+- [ ] **Silero VAD** — 后台监听麦克风，检测用户说话
+- [ ] **Interrupt Event** — VAD 检测到用户说话时触发中断信号
+- [ ] **Audio Cancel** — 中断信号立即停止当前 TTS 播放
+
+实现后效果：Hermes 说话时用户可以直接插嘴 → Hermes 立刻闭嘴开始听
+
+## 切换音色流程（Edge TTS）
+```bash
+edge-tts --voice zh-CN-XiaoxiaoNeural --text "测试" --write-media /tmp/sample.ogg
+hermes config set tts.edge.voice zh-CN-XiaoxiaoNeural
+```
 
 ## 平台能力速查
 
@@ -72,7 +109,7 @@ QQ平台不支持原生语音，生成后告知用户文件路径让他手动播
 |------|------------|---------|
 | Telegram | ✅ | 直接发送 MEDIA |
 | 微信 | ✅ | 直接发送 MEDIA |
-| QQ | ❌ | Moss-TTS 生成，告知路径 |
+| QQ | ❌ | 告知文件路径 |
 | Discord | ✅ | 直接发送 MEDIA |
 
 ## Session恢复验证
