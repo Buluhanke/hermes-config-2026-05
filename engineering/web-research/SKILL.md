@@ -82,29 +82,52 @@ for src in result["sources"]:
 ```
 ① web_extract()  — 免费，需抓取5个以内页面
    注意：firecrawl托管的页面可能收费，失败返回 "Payment Required"
+   失败时直接跳到方案②，不浪费时间
 
-② browser_navigate()  — 免费，Hermes内置browser工具
-   成功率更高，返回完整AX树快照
-   推荐用于：Hermes文档、GitHub、需登录态的页面
+② browser_navigate() + browser_console JS提取  — 推荐方案
+   无需任何API key，绕过Firecrawl限制
+   长页面用JS分段提取，比snapshot可靠
 
-③ mcp_chrome_chrome_navigate()  — MCP chrome工具
+③ browser_navigate() snapshot  — 后备方案
+   适合短页面，8000字符以内
+   超过8000字符会被截断，snapshot实质不完整
+
+④ mcp_chrome_chrome_navigate()  — MCP chrome工具
    需确保mcp-chrome-stdio进程运行中
 ```
 
-**browser_navigate 提取页面内容的标准流程：**
-```python
-# 1. navigate到目标页面
-browser_navigate(url="https://example.com/page")
+**browser_navigate + JS提取（推荐，Firecrawl不可用时首选项）：**
 
-# 2. 直接读取snapshot（包含完整AX树）
-# 返回值中已有页面所有文本内容，无需额外工具调用
+```
+browser_navigate(url="https://example.com/long-article")
 
-# 3. 如果需要滚动长页面
-browser_scroll(direction="down", amount=3)
-browser_snapshot()  # 重新获取
+# 方案A：提取文章主体内容（最常用）
+browser_console(
+  expression='document.querySelector("article").innerText.slice(0, 5000)'
+)
+# ↓
+browser_console(
+  expression='document.querySelector("article").innerText.slice(5000, 10000)'
+)
+
+# 方案B：提取整个页面文本
+browser_console(
+  expression='document.body.innerText.slice(0, 50000)'
+)
+
+# 方案C：提取特定区域
+browser_console(
+  expression='document.querySelector(".content").innerText'
+)
 ```
 
+**为什么优先用 JS 提取而非 scroll + snapshot：**
+- browser_snapshot 有硬 8000 字符截断，且对长页面返回的内容可能在滚动后仍然被截断（内容重复，出现 "N more lines truncated" 且滚动后 snapshot 返回相同内容）
+- browser_console 返回完整 JS 执行结果，不截断
+- JS 提取只占用一次 tool call，scroll+snapshot 需要多次且可能白费
+
 **已知限制：**
-- browser快照超过8000字符会被截断，长页面需滚动分段获取
+- article/body 选择器不是所有页面都适用（一些页面用 div.content、main、#root）
+- 单次 browser_console 返回上限约 50KB，极长页面需分片
 - mcp_chrome_stdio需要进程运行中，否则报"Failed to connect to MCP server"
 - 某些页面有反爬（stealth_warning提示），内容可能受限

@@ -129,10 +129,11 @@ def capture_screen(output_path: str = SCREENSHOT_PATH, monitor: int = 1) -> str:
 
 
 def capture_region(x: int, y: int, w: int, h: int) -> str:
-    """截取屏幕指定区域"""
+    """截取屏幕指定区域（修复：以前忽略了x,y,w,h参数，总是截全屏）"""
     output_path = f"/tmp/hermes_region_{int(time.time())}.png"
     with mss.MSS() as sct:
-        sct.img_to_png(sct.grab(sct.monitors[1]), output=output_path)
+        region = {"left": x, "top": y, "width": w, "height": h}
+        sct.img_to_png(sct.grab(region), output=output_path)
     return output_path
 
 

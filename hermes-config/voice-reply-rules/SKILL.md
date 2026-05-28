@@ -69,7 +69,7 @@ hermes config set tts.provider edge
 ```
 
 ### Kokoro 音色列表
-- `af_sky`（当前默认）- 美国女声，中性自然，中文效果最佳
+- `af_sky`（当前默认）- 美国女声，英文质量好，中文质量差（英文 voice 硬读 cmn 注音，听感像老外说中文）
 - `af` / `af_bella` / `af_nicole` / `af_sarah` - 美国女声
 - `am_adam` / `am_michael` - 美国男声
 - `bf_emma` / `bf_isabella` - 英国女声

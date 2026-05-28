@@ -57,7 +57,11 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 **已验证稳定的搜索降级链**：
 1. HN Firebase API → `python3 /tmp/hn_top.py` 获取 HN 热门故事（免费，稳定，无需认证）
 2. ddgs CLI → `ddgs text -q "query" -m 5`（免费，无需认证）
-3. browser_navigate 直接访问 URL → 获取文章内文（绕过 Firecrawl 费用）
+3. **browser_navigate + browser_console JS提取** → 获取文章内文（绕过 Firecrawl 费用）
+   - 用 `document.querySelector("article").innerText.slice(0, 5000)` 分片提取
+   - 比 snapshot 更可靠（snapshot 8000 字符截断且滚动后可能仍被截断）
+   - 比 web_extract 更快（无 Firecrawl 调用）
+   - 详见 [web-research skill](../engineering/web-research/SKILL.md)
 
 **Firecrawl web_search 状态**：已多次验证 402/404，credits 耗尽。在 cron 环境下默认不走 web_search，直接用 HN Firebase API + ddgs。
 
@@ -121,7 +125,18 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - 搜索：`smolvlm2 vs llava vs moondream benchmark 2026`
 - 搜索：`ScreenAI ShowUI InternVL3 GUI understanding benchmark 2026`
 - 新方向（2026-05-28 发现）：Apple FastVLM（CVPR 2025，MLX版本在HuggingFace）+ Ollama v0.19 MLX集成
+- 新方向（2026-05-29 发现）：Ollama MLX backend 需要 32GB+ RAM，24GB 不支持；smolvlm2-agentic-gui 有 q8_0 (~1.9GB) 和 fp16 (~3.6GB) 变体可用；Qwen2.5VL 在 Ollama 上有 3b/7b/32b/72b 各变体
+- **⭐ Vocaela-500M（2026-05-29 发现）**：仅 500M 参数，GGUF Q8_0 仅 437MB（+ 109MB mmproj），ScreenSpotV2 基准 **85.8%**（vs smolvlm2-agentic-gui 2.2B 的 61.71%）
+  - 基于 SmolVLM2-500M-Video-Instruct，两阶段 SFT + GRPO RFT 训练
+  - 输出结构化 JSON action（click/type/scroll/hotkey/drag）+ [0,1) 归一化坐标
+  - Ollama 支持：`ollama run hf.co/vocaela/Vocaela-500M-GGUF:Q8_0`
+  - Vocaela-2 已发布：vocaela/Vocaela-2-500M-1024R2，3x faster
+  - 限制：低分辨率（2048px 限制），ScreenSpotPro 仅 15.1%（高分辨率大屏+小按钮识别差）；无通用对话/推理能力
+  - **HF 镜像可用**：hf-mirror.com（返回 302，可直接用 hf-mirror.com 替代 huggingface.co）
+- **Smol2Operator（2025-09）**：归一化坐标（0-1 范围）比像素坐标好 **20x**（41% vs 4% ScreenSpot-v2）。当前 find_element_by_vision() 要求像素坐标，可能在降级 smolvlm2 表现
+- 推荐来源：InsiderLLM（insiderllm.com）Mac LLM 指南（定期更新模型推荐和 tok/s 基准）；Qwen2.5VL Ollama 页面（ollama.com/library/qwen2.5vl）
 - 目标：找到 M4 24G 上跑得最好的免费视觉模型
+- ⚠️ 已知限制：`OLLAMA_USE_MLX=1` 需要 32GB+ 统一内存（M4 24GB 不支持）
 
 **方向 D — 执行（手眼配合）调研方向**
 - 本地工具链盘点：hermes-rpa（成熟）、computer_use、mcp_chrome_*（背景运行不抢焦点）
@@ -135,6 +150,9 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 **搜索降级：当 web_search 402 时**
 - 优先用 HN Firebase API + ddgs 组合（ddgs 格式：`ddgs text -q "query" -m 5`）
 - HN Firebase API 获取高分文章 URL，ddgs 补充精准搜索
+- 获取文章内文时用 **browser_navigate + browser_console JS提取** 替代 web_extract
+  - `browser_console(expression='document.querySelector("article").innerText')`
+  - 需要大段截取时分片：`.slice(0,5000)` → `.slice(5000,10000)`
 - 适合深度文章（得分>500），不适合批量抓取
 
 ---
@@ -162,11 +180,13 @@ for m in models.models:
 ```
 ⚠️ **关键发现（2026-05-28）**：`ollama.list()` CLI 在 cron 环境被 script-execution 策略拦截，但 `ollama.chat()` 正常工作。检查模型时必须用 Python API 写文件方式，不能直接调用 CLI。
 
-**⚠️ smolvlm2 稳定性确认（2026-05-28 桌面截图实测）**：
-- 测试1（桌面浏览器+ChatGPT窗口）：响应时间 10.3s，准确识别浏览器tabs、chat窗口、navigation icons，未发现幻觉
-- 测试2（移动端购物页面截图）：响应时间 11.1s，准确识别搜索框、商品卡片、价格、评分、移动端布局，给出合理操作建议（scroll up）
-- ⚠️ **更新（2026-05-28）**：最新测试响应时间 5.2s，准确识别时间、状态栏、FAB 按钮、壁纸
-- ✅ **结论**：smolvlm2 当前版本（ahmadwaqar/smolvlm2-agentic-gui，1.8GB Q4_K_M）表现稳定，可信任用于GUI理解任务
+**⚠️ smolvlm2 稳定性确认（多次实测汇总）**：
+- 2026-05-28 测试1（桌面浏览器+ChatGPT窗口）：响应时间 10.3s，准确识别浏览器tabs、chat窗口、navigation icons，无幻觉
+- 2026-05-28 测试2（移动端购物页面）：响应时间 11.1s，准确识别搜索框、商品卡片、价格、评分、移动端布局
+- 2026-05-28 测试3（桌面+状态栏）：响应时间 5.2s，准确识别时间、状态栏、FAB 按钮、壁纸
+- 2026-05-29 测试4（Chrome+弹窗+键盘+图标）：响应时间 10.5s，准确识别浏览器、弹窗、底部图标、搜索栏、键盘、标签页、通知图标
+- ScreenSpot-v2 基准分数：61.71%（来自 smolvlm2-agentic-gui 模型页面）
+- ✅ **结论**：smolvlm2 当前版本（ahmadwaqar/smolvlm2-agentic-gui，Q4_K_M，1.85GB）表现稳定，可信任用于GUI理解任务。响应时间 5-11s 取决于截图复杂度
 
 **⚠️ github.com vs raw.githubusercontent.com 区分**：
 - `github.com` 可能被 blocked，但 `raw.githubusercontent.com` 通常仍可访问
@@ -202,14 +222,16 @@ screencapture -x /tmp/test_screen.png
 python3 /tmp/test_smolvlm.py
 ```
 
-**测试结果（2026-05-28）**：
-- 桌面截图（多标签页浏览器 + ChatGPT 窗口 + Android 模拟器）
-- 响应时间：5.2 秒（更新，比之前的 10-11s 快）
-- 输出质量：准确识别了浏览器 tabs、chat 窗口、navigation icons、时间、状态栏、FAB 按钮
-- 未发现"湖光山色"幻觉问题
+**候选模型对比**（优先测试可 Ollama 直接拉取的，HF 镜像可用 hf-mirror.com 替代 huggingface.co）：
 
-**候选模型对比**（github blocked 时无法拉取，待网络恢复后测试）：
-- **llama3.2-vision:11b** — ⭐ 最高优先级（2026-05-28 确认），Meta出品，~8GB，M4 24G可运行，通用视觉理解强
+- **⭐ Vocaela-500M（最高优先级，2026-05-29 发现）** — 500M 参数，ScreenSpotV2 85.8%（24pp 高于当前 smolvlm2），GGUF Q8_0 仅 437MB
+  - Ollama: `ollama run hf.co/vocaela/Vocaela-500M-GGUF:Q8_0`
+  - llama.cpp: `llama-cli -hf vocaela/Vocaela-500M-GGUF:Q8_0`
+  - 输出结构化 JSON action（click/type/scroll/hotkey）+ 归一化坐标，完美匹配 hermes-rpa 动作层
+  - 基于 SmolVLM2-500M，GGUF 从 hf-mirror.com 下载经 curl 验证可达
+  - Vocaela-2（vocaela/Vocaela-2-500M-1024R2）3x faster，支持更高分辨率
+  - 限制：低分辨率（2048px 限制），无通用对话/推理能力，适合纯 GUI agent 场景
+- **llama3.2-vision:11b** — ⭐ 次优先级（2026-05-28 确认），Meta出品，~8GB，M4 24G可运行，通用视觉理解强
 - **InternVL3（2025-04发布）** — ⭐ GUI grounding 专项最强（2026-05 实测）
   - InternVL3-78B MMMU 72.2（开源 MLLM SOTA）
   - InternVL3-Chat-V1.2 MMMU val 51.6, MMBench test 82.3
@@ -237,11 +259,6 @@ python3 /tmp/test_smolvlm.py
 - 亮点：85x faster than 标准 ViT（官方说法）
 - WebGPU demo 已可在浏览器运行（transformers.js）
 - ⚠️ github.com blocked，无法 clone `apple/ml-fastvlm` 仓库研究细节
-
-**⚠️ github.com vs raw.githubusercontent.com 区分**：
-- `github.com` 可能被 blocked，但 `raw.githubusercontent.com` 通常仍可访问
-- ollama pull 需要完整 github.com 访问，此限制待恢复
-- raw.githubusercontent.com 可访问时可用于获取脚本内容和文档
 
 ---
 
@@ -305,6 +322,8 @@ PYEOF
 - [网络与代理诊断](./references/network-proxy-debugging.md) — 代理故障排查，HN/HN Firebase/github 分项检测
 - [HN Firebase API 安全调用脚本](./references/hn-firebase-api-cron-safe.md) — Cron 环境专用（避免 60s 超时卡死）
 - [Cron 脚本执行限制](./references/cron-script-execution.md) — python3 -c/heredoc 在 cron 环境被拦截的 workaround
+- [smolvlm2-agentic-gui 模型变体与基准](./references/smolvlm2-agentic-gui-variants.md) — 可用变体(q8_0/fp16)、benchmark数据、本地实测响应时间
+- [Vocaela-500M 基准与集成方案](./references/vocaela-500m-benchmarks.md) — 2026-05 发现的超高性价比 GUI agent 模型（500M, 85.8% ScreenSpotV2），含集成方式与限制
 - [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
 

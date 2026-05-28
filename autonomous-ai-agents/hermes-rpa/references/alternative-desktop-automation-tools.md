@@ -35,6 +35,18 @@
 | 评估结论 | 同样是视觉 Agent，与 Hermes RPA 定位重叠 |
 | 决策理由 | 32k star 生态大，但纯视觉方案在 24GB 机器上效率不如 AXUI+OCR |
 
+## DesktopCtl（2026新项目）
+
+| 维度 | 详情 |
+|------|------|
+| 方案 | 桌面控制 CLI 工具，AI agent 可观察屏幕状态 + tokenize UI + 执行确定性键鼠自动化 |
+| 官网 | https://desktopctl.com/ |
+| 定位 | Codex computer use 和 Claude computer use 的开源替代 |
+| 亮点 | 屏幕状态观察、UI tokenization、确定性命令执行、与具体应用无关 |
+| CLI | `desktopctl` 命令行工具 |
+| 评估结论 | 值得研究其 UI tokenization 方法，看能否融合到 CDP 9222 pipeline |
+| 决策理由 | 和 Hermes RPA 定位重叠但 UI tokenization 方法是独特价值 |
+
 ## 通用原则
 
 ### 什么时候应该考虑集成

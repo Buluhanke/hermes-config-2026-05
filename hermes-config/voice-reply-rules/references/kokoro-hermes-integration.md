@@ -67,11 +67,16 @@ Command Provider 占位符：
 | `{speed}` | 语速 | `--speed {speed}` |
 | `{format}` | 输出格式 | wav（硬编码） |
 
-## 音色参考（均为英文名，用于中文时效果不同）
-- `af_sky` = 中性自然，中文推荐
-- `af_sarah` = 更明亮的女性
-- `am_adam` = 年轻男性
-- `bm_george` = 英式男声
+## 音色参考（均为英文，中文质量差）
+
+| 音色 | 特点 | 中文质量 |
+|------|------|---------|
+| `af_sky` | 中性女声 | ❌ 差（老外读中文口音） |
+| `af_sarah` | 明亮女声 | ❌ 差 |
+| `am_adam` | 年轻男声 | ❌ 差 |
+| `bm_george` | 英式男声 | ❌ 差 |
+
+**结论**：Kokoro 自带 voice 全部英文，中文场景用 Edge TTS（zh-CN-XiaoxiaoNeural）。
 
 ## 注意事项
 - `onnxruntime-silicon` 在 Python 3.14 上不可用，普通 `onnxruntime` 在 M4 上足够

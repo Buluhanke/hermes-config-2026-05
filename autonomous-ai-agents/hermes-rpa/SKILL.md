@@ -687,6 +687,15 @@ if offer_id:
 ws.close()
 ```
 
+### screen_poller.py 的现状与限制（2026-05-29 确认）
+
+**位置**：`~/.hermes/scripts/screen_poller.py`
+**能力**：只检测触发文件（`~/.hermes/screenshots/.changed`）的变化，发现新触发时写入事件队列
+**限制**：**不分析任何屏幕内容，不执行任何操作**。检测到变化后仅通知，后续无实际动作执行。
+**proactive_monitor.py**：基础窗口状态检测，同样无行动能力
+
+**与 ScreenAgent 架构的差距**：Hermes 的 vision→action 管道在 screen_poller 处中断 — 有感知、无决策、无执行。详见 `references/screenagent-research-2026-05-29.md`。
+
 ### screen_trigger_handler × hermes_desktop_rpa 断链（2026-05-28 发现）
 
 **问题**：`screen_trigger_handler.py` 的 `on_trigger()` 只做：smolvlm2分析 → 关键词匹配 → Telegram推送。**从不调用 hermes_desktop_rpa.py 执行任何操作**。
@@ -1611,6 +1620,15 @@ subprocess.run([
 
 ### 接 Ollama VL 模型（2026-05-14 实测，2026-05-28 更新）
 
+**可用VL模型对比（2026-05-29 更新 — 含 Moondream3 评测）**：
+
+**Moondream3 评测**（来源: learnopencv.com, 2025-09）：
+- MoE 架构：9B 总参数 / 2B 激活，64个专家网络
+- fp16 精度需要 **19GB vRAM** → M4 24G **无法运行**
+- GUI 定位精度显著优于之前所有轻量模型（FastVLM, SmolVLM, InternVL, Qwen2.5VL, Moondream2）
+- 规划层依赖 Gemini 2.5 Flash（受限表示本地模型不足以支撑复杂规划）
+- ⚠️ 结论：Moondream3 不适合 M4 24G，继续用 smolvlm2 作为主视觉模型
+
 **可用VL模型对比（2026-05-28）**：
 
 | 模型 | 大小 | RAM需求 | 特点 | 状态 |
@@ -1723,6 +1741,11 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 - 背后 Ollama 地址需在 open-webui 管理界面配置
 
 ---
+
+## 参考文档（新增）
+
+- `references/screenagent-research-2026-05-29.md` — **ScreenAgent (IJCAI 2024) 架构调研 + 与 Hermes vision→action 断链对比**。planning-acting-reflection 三阶段循环是 Hermes 执行层升级的直接模板。
+- `references/DesktopCtl` — DesktopCtl 2026 开源桌面控制工具，UI tokenization 方法值得研究
 
 ## 参考文档
 

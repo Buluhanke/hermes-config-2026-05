@@ -72,6 +72,32 @@ python3 voice_module.py
 
 ## ⚠️ 已知坑点
 
+### Kokoro TTS 只有英文 voice（重要！）
+
+Kokoro 自带 voice 文件（`voices.bin`）全是英文：af_sky, af_bella, bf_emma 等，没有中文 voice。
+
+**`lang="cmn"` 参数不创造中文 voice**——它只改变发音规则，但 voice 本身是英文人，读中文听起来像英文（怪怪的英文腔）。
+
+**中文 TTS 正确方案**：
+- 首选：Edge TTS 音色 `zh-CN-XiaoxiaoNeural`（微软免费，配好即用）
+- Kokoro 中文支持需额外下载中文 voice 文件（2025年中才出现），非默认包
+
+**验证 Kokoro voice 列表**：
+```bash
+cd ~/kokoro && ./venv/bin/python3 -c "
+from kokoro_onnx import Kokoro
+k = Kokoro('models/kokoro-v0_19.fp16.onnx', 'models/voices.bin')
+print('Voices:', list(k.voices.keys()))
+"
+```
+
+**验证 TTS 输出语言**（最直接方法）：
+```bash
+echo "你好，这是中文测试" > /tmp/test.txt
+~/kokoro/venv/bin/python3 tts_kokoro.py --input /tmp/test.txt --output /tmp/test.wav --voice af_sky
+# 播放，如果听起来像英文而不是中文 → 证明 voice 不支持中文
+```
+
 ### HuggingFace 被墙（中国网络）导致 Whisper 模型下载失败
 
 国内网络环境下，`faster-whisper` 初始化时下载模型失败。httpx 库走 `huggingface_hub` 访问 `huggingface.co` 会报 `Connection reset by peer` 或 `ConnectTimeout`。
