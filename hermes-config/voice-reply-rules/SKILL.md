@@ -33,11 +33,20 @@ version: 1.1.0
 3. 发到 Telegram 后等待用户确认是"能听清但不是那个声音"还是"完全杂音"
 4. 区分：生成杂音（模型问题）vs 播放杂音（平台/设备问题）
 
-**当前配置（2026-05-27）**：
-- `tts.provider = edge`（**实际运行配置**，不是 moss）
-- `tts.edge.voice = en-US-AriaNeural`（英文音色，合成中文会失败）
-- `voice.auto_tts = true`（收到语音自动触发TTS回复）
-- 目标音色：zh-CN-XiaoxiaoNeural（中文，需手动改 config.yaml 生效）
+**当前配置（已固化，2026-05-28 备份）**：
+- `tts.provider = edge`
+- `tts.edge.voice = zh-CN-XiaoxiaoNeural`（中文女声，已固化）
+- `voice.auto_tts = true`
+
+⚠️ **语音配置已固化，不可轻易改动。** 备份位置：
+- 恢复脚本：`~/.hermes/backups/tts_config_backup.sh` — 运行 `bash ~/.hermes/backups/tts_config_backup.sh` 一键恢复
+- 配置快照：`~/.hermes/backups/config_snapshot_20260528_语音固化.yaml`
+
+**切换音色流程**（如用户要求试听）：
+1. 用 `edge-tts --voice <音色名> --text "你好" --write-media /tmp/sample.ogg` 逐个生成试听
+2. 用户选定后通过 `hermes config set tts.edge.voice <音色名>` 写入配置
+3. 重启 gateway 生效
+4. 更新备份脚本中的 voice 值
 
 **Moss-TTS 目标配置（供参考）**：
 ```yaml

@@ -43,53 +43,83 @@ category: procurement
 用户说"搜XX" → 立即确认关键词 → 执行
 
 ### Step 2：找品策略（重要！）
+### Step 2：找品策略（重大更新 2026-05-28）
 
-**1688搜索页（s.1688.com）严重反爬** — 不要直接访问搜索结果URL，会触发滑块验证（返回"请拖动滑块"页面）。
+**✅ 正确方式：通过CDP拦截1688搜索postMessage数据**
 
-**✅ 正确方式：1688首页精选货源入口**
-1. `browser_navigate` → `https://www.1688.com`
-2. 输入框输入关键词 → 回车搜索
-3. 从首页"精选货源"区块提取供应商数据
+1688搜索结果页（s.1688.com）数据通过`window.postMessage`从父窗口注入，DOM中不直接渲染。
+正确流程：
 
-**原因**：首页精选货源是1688主动推荐流量，绕过反爬限制。
+1. `browser_navigate` → `https://s.1688.com/selloffer/offer_search.htm?keywords=关键词`（CDP浏览器，已登录态）
+2. 等待8秒，等postMessage数据到达
+3. 从`window.data.offerV2.response.data.OFFER.items`读取所有商品数据
+4. 数据字段映射：`items[i].data.offerId / title / priceInfo.price / bookedCount / companyName / province / linkUrl`
 
-**❌ 不要尝试的方式**：
-- `https://s.1688.com/company/search.html?keyword=XX` → 触发验证
-- `https://search.1688.com/selloffer/offer_search.html` → 触发验证
-- 直接URL带关键词参数 → 触发验证
-
-### Step 3：提取数据
-
-**从首页"精选货源"区块提取（innerText方法）：**
+**示例代码（CDP Python）：**
 ```python
-r = send2("Runtime.evaluate", {"expression": """
+import urllib.request, json, websocket, time
+
+req = urllib.request.urlopen("http://localhost:9222/json", timeout=5)
+tabs = json.loads(req.read())
+t = tabs[-1]  # 最新标签
+ws = websocket.create_connection(t['webSocketDebuggerUrl'], timeout=15, suppress_origin=True)
+mid = [1]
+def sv(m, p=None):
+    ws.send(json.dumps({"id": mid[0], "method": m, "params": p or {}}))
+    r = json.loads(ws.recv())
+    mid[0] += 1
+    return r
+
+sv("Page.navigate", {"url": "https://s.1688.com/selloffer/offer_search.htm?keywords=关键词"})
+time.sleep(8)
+
+# 重新连接（导航后websocket可能断开）
+ws.close()
+req2 = urllib.request.urlopen("http://localhost:9222/json", timeout=5)
+tabs2 = json.loads(req2.read())
+t2 = tabs2[-1]
+ws2 = websocket.create_connection(t2['webSocketDebuggerUrl'], timeout=15, suppress_origin=True)
+
+# 等待数据
+for _ in range(8):
+    r = sv("Runtime.evaluate", {"expression": "window.data?.offerV2?.response?.data?.OFFER?.items?.length || 'waiting'", "returnByValue": True})
+    if r.get('result',{}).get('result',{}).get('value','') > 0:
+        break
+    time.sleep(1.5)
+
+# 提取所有60个商品
+r = sv("Runtime.evaluate", {"expression": """
 (function(){
-  var results = [];
-  var seenTxt = new Set();
-  document.querySelectorAll('[class*="card"], [class*="item"], .seb-quotaitem').forEach(function(el){
-    var txt = el.innerText;
-    if(txt.match(/关键词/) && !seenTxt.has(txt.substring(0,30))){
-      seenTxt.add(txt.substring(0,30));
-      var price = (txt.match(/¥[\\d.]+/) || [])[0] || '';
-      var sold = (txt.match(/已售[\\d万+件包]+/) || [])[0] || '';
-      var moq = (txt.match(/\\d+件起批|起订量[^\\n]+/) || [])[0] || '';
-      var comp = (txt.match(/[^\\n]{4,30}(?:公司|厂|商行|合作社)/) || [])[0] || '';
-      results.push({price, sold, moq, comp, text: txt.substring(0,150)});
-    }
-  });
-  return JSON.stringify(results.slice(0,20));
+  var items = window.data.offerV2.response.data.OFFER.items;
+  var out = [];
+  for(var i=0; i<items.length; i++){
+    var d = items[i].data || items[i];
+    out.push({
+      offerId: d.offerId,
+      title: (d.title||'').replace(/<[^>]+>/g,''),
+      price: (d.priceInfo||{}).price||'',
+      priceUnit: (d.priceInfo||{}).unit||'',
+      sold: d.bookedCount||'',
+      comp: d.companyName||d.loginId||'',
+      loc: d.province||'',
+      city: d.city||'',
+      href: (d.linkUrl||'').replace('http://','https://')
+    });
+  }
+  return JSON.stringify(out);
 })()
 """, "returnByValue": True})
 ```
 
-**从详情页提取（offer ID已知时）：**
+**❌ 已废弃的方式**（直接访问搜索URL，用innerText/DOM提取）：1688搜索页的DOM中不包含offer数据，只返回一个空壳页面。innerText提取不到价格/公司名/offerID。
+
+**❌ 也不要尝试**：1688首页搜索框（homepage search box）→ 只返回"为你推荐"4-5个商品，不是搜索结果。
+
+### Step 3：筛选江浙沪
+
+从提取的items中筛选：
 ```python
-url = f"https://detail.1688.com/offer/{offerId}.html"
-# 等待6秒等JS渲染
-price = (text.match(/¥[\\d.]+/g) || []).slice(0,1).join(' / ')
-sold = (text.match(/已售[\\d万+件包]+/) || [])[0] || ''
-moq = (text.match(/\\d+件起批|起订量[^\\n]+/) || [])[0] || ''
-loc = (text.match(/浙江[^\\n]{0,15}|江苏[^\\n]{0,15}|上海[^\\n]{0,15}|安徽[^\\n]{0,15}/) || [])[0] || ''
+jiangzhe = [it for it in items if it['loc'] in ['浙江','江苏','上海','安徽'] and '气泡' in it['title']]
 ```
 
 ### Step 4：汇报
@@ -143,12 +173,22 @@ price = (text.match(/¥[\d.]+/g) || []).slice(0,1).join(' / ')
 
 ### 50*25cm等非标准尺寸
 
-**大多数品类没有50*25cm标准规格**，需要定制。告知用户：
-- 有标准规格的：直接比价
-- 没有标准规格的：需要定制，定制价格通常比标准贵30-50%
+**问题**：大多数品类没有50*25cm这种非标准规格，搜索"气泡袋 50*25cm"结果里全是其他尺寸。
+
+**正确做法**：
+1. 搜索更大范围关键词（如"气泡袋"），提取所有结果
+2. 从结果中筛选**接近尺寸**（如20×25、25×30等）
+3. 如果没有接近尺寸 → 告知用户需要定制，报价通常比标准规格贵30-50%
+4. 也可以用艺诺包装源头厂家（ID:808613438216）这类有"多规格可选"标题的供应商，询问是否有50*25
+
+**50*25cm可直接推荐的供应商**：
+- 金华翼美包装（ID:903586941684）：20×25cm ¥5/件，已售43
+- 艺诺包装源头厂家（ID:808613438216）：多规格（10~30cm都有），¥0.11/件起，已售329 — **问这家有没有50*25**
+- wutao19860806（ID:623635256786）：25*30cm ¥0.12/件，已售149
 
 ## 关联技能
 
 - `email-drafter` — 询价邮件起草
 - `hermes-rpa` — CDP浏览器自动化底层
 - `1688-open-platform-api` — 官方API（需企业资质，不适合纯买家）
+- `references/1688-search-postmessage.md` — 搜索数据postMessage拦截法的完整技术细节和数据结构

@@ -83,6 +83,22 @@ grep "provider: moss" ~/.hermes/logs/agent.log | tail -5
 # 如果看到 "provider: edge" 说明是 fallback
 ```
 
+## 当前生产配置（2026-05-28 更新）
+
+**MOSS-TTS-Nano 已不稳定，不要用于生产语音回复。**
+
+当前稳定方案：`tts.provider: edge` + `zh-CN-XiaoxiaoNeural`
+
+```bash
+# 当前配置（Edge TTS，已验证可用）
+hermes config set tts.provider edge
+
+# Edge TTS 验证命令（直接测试，不走 gateway）
+python3 -c "import asyncio, edge_tts; asyncio.run(edge_tts.Communicate('测试', 'zh-CN-XiaoxiaoNeural').save('/tmp/test.mp3'))"
+```
+
+MOSS-TTS-Nano 在 CPU 模式下首次推理超过 60s 超时，生成不稳定（短文本只输出 0.5 秒），**已降级为实验/备用**。
+
 ## 已知问题
 
 | 问题 | 原因 | 解法 |
@@ -90,8 +106,9 @@ grep "provider: moss" ~/.hermes/logs/agent.log | tail -5
 | Edge TTS 报 "No audio was received" | config 里 voice 是英文音色（如 `en-US-AriaNeural`），但说了中文 → Edge TTS 无法合成，直接失败 | 手动改 `~/.hermes/config.yaml` 中 `tts.edge.voice` 为 `zh-CN-XiaoxiaoNeural` |
 | 配置了 `provider: moss` 但实际走 Edge TTS | MOSS 不在内置名单且未在 config 声明 command provider | 在 config.yaml 加 `tts.providers.moss.type: command` 并填入 command |
 | 日志显示 "Generating speech with Edge TTS" 但用了 moss provider | 同上，静默 fallback | 同上 |
-| config.yaml 的 command 被 YAML 多行拆散 | YAML 缩进导致多行 YAML 语法错误，Python 解析时 command 变成两行无法执行 | command 必须写成单行，或用 yaml.dump() 序列化后验证 |
-| 日志显示 "provider: moss" 但实际走 Edge，声音/内容都不对 | 配置有但没生效，排查同第一行 | 用手动测试验证，不依赖日志 |
+| config.yaml 是受保护文件，不能直接 patch | 安全限制 | 用 `hermes config set tts.provider edge` 命令修改配置 |
+| MOSS 进程超时（>60s）无响应 | venv 环境问题或 MOSS 推理卡住 | 立即切换 `tts.provider` 为 `edge`，用 `hermes config set tts.provider edge` |
+| 日志显示 "provider: moss" 但实际走 Edge | 配置有但没生效，排查同第一行 | 用手动测试验证，不依赖日志 |
 | Edge TTS provider 不检查语音-语言匹配 | Edge TTS 收到不匹配语言的文本会静默失败（"No audio was received"）而不是 fallback | 直接调终端 `edge-tts --text "中文" --voice zh-CN-XiaoxiaoNeural --write-media /tmp/test.mp3` 验证，不要依赖 gateway 的 provider 选择逻辑 |
 
 ## 注意事项
@@ -124,6 +141,22 @@ grep "provider: moss" ~/.hermes/logs/agent.log | tail -5
 1. 先確認用戶在問什麼 → 用戶語音消息的內容
 2. 回覆的內容必須針對該問題，不能是「今年學了什麼」在語音回覆裡變成「介紹Hermes的學習成果」
 3. 如果對話主題不明確，先用文字確認再語音回覆
+
+## TTS Provider 降级规则（重要）
+
+**当 MOSS TTS 出现任何问题时，立即切换到 Edge TTS，不要等。**
+
+判断标准（任一即切换）：
+- 终端调用 MOSS 超过 60s 无输出
+- `text_to_speech` 调用超时或返回错误
+- 用户反馈语音没声音/声音不对
+
+切换命令：
+```bash
+hermes config set tts.provider edge
+```
+
+Edge TTS 优势：已安装（`/Library/Frameworks/Python.framework/Versions/3.14/bin/edge-tts`），响应快，无需额外配置。
 
 ## 手动测试 TTS 音色的正确步骤
 

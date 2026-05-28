@@ -186,6 +186,11 @@ Gateway 配置 `tts.provider: moss`，但 `text_to_speech_tool` 内部有 fallba
 - **用户偏好**：中文语音回复默认使用 `zh-CN-XiaoxiaoNeural`（女声），所有中文语音优先选这个
 - **音频缓存**：`~/.hermes/audio_cache/` 用于存放语音文件，用户要求15天自动清理。配合 cronjob `no_agent=true` 使用清理脚本时，`script` 参数必须为相对路径（相对于 `~/.hermes/scripts/`），不能是绝对路径
 
+**⚠️ 语音回复内容必须匹配话题**：
+用户会直接抱怨「语音回覆對不上聊的內容」= 最高优先级质量投诉。
+触发语音回复前：先确认用户语音消息说了什么 → 回复内容必须针对该问题。
+跨 session 也要检查上下文，不能在语音回复里突然切换话题。
+
 See `references/wechat-voice-verification.md` for WeChat voice send verification records.
 
 ## When to Choose Which
