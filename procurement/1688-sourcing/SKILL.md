@@ -158,6 +158,22 @@ jiangzhe = [it for it in items if it['loc'] in ['浙江','江苏','上海','安�
 
 ## 关键陷阱
 
+### ClawHub社区技能安全扫描规则（重要！）
+
+**症状**：`hermes skills install` 报 "BLOCKED — community source + dangerous verdict"
+
+**原因**：Hermes安全扫描对community源skill有3级判定：
+- `SAFE` → 直接安装
+- `CAUTION` → 可用 `--force` 强制安装
+- `DANGEROUS` → `--force` 也无法安装（通常是需要外部API密钥）
+
+1688相关技能大多标记为 DANGEROUS（因为需要 `ALI1688_APP_KEY` 等密钥存放在环境变量，被扫描识别为"凭证泄露风险"）。这是误报，解决方法是先配置好密钥再安装。
+
+**正确流程**：
+1. 在 `~/.hermes/.env` 配置好 `ALI1688_APP_KEY=...` 等
+2. 再执行 `hermes skills install clawhub/1688-product-search --yes`
+3. 如果还是DANGEROUS，只能等官方修复扫描规则
+
 ### 1688搜索URL反爬（最常见失败原因）
 
 **症状**：访问 `s.1688.com/company/search.html?keyword=XX` 返回滑块验证页面。
@@ -186,7 +202,28 @@ price = (text.match(/¥[\d.]+/g) || []).slice(0,1).join(' / ')
 - 艺诺包装源头厂家（ID:808613438216）：多规格（10~30cm都有），¥0.11/件起，已售329 — **问这家有没有50*25**
 - wutao19860806（ID:623635256786）：25*30cm ¥0.12/件，已售149
 
-## 关联技能
+## 1688官方API技能（需1688开放平台企业资质）
+
+如已申请1688开放平台API Key，可在 `~/.hermes/.env` 配置后使用：
+- `clawhub/1688-product-search` — 官方API搜索
+- `clawhub/1688-product-find` — 以图搜货
+
+个人买家身份难以申请，建议优先用CDP postMessage法。
+
+## 1688 ClawHub技能库（2026-05-29新增）
+
+已安装以下ClawHub技能，可直接调用：
+
+| 技能 | 用途 |
+|------|------|
+| `1688-sourcing-agent` | 采购全流程 |
+| `1688-procurement-agent` | 采购教练 |
+| `1688-price-monitor` | 监控批发价 |
+| `1688-source-suppliers` | 找供应商 |
+| `1688-shop-health-check` | 店铺诊断 |
+| `1688-finance-tax` | 税负测算 |
+
+**安全扫描规则**：community源skill被标记为dangerous的无法安装（即使--force也不行）。被标记为caution的可用--force强制安装。
 
 - `email-drafter` — 询价邮件起草
 - `hermes-rpa` — CDP浏览器自动化底层

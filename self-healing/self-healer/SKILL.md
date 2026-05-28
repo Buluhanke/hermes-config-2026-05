@@ -26,6 +26,9 @@ trigger: 当用户说"你生病了"/"你坏了"/"怎么不动了"/"你没反应"
 7. 磁盘/内存正常？       → df -h / 和 vm_stat | head -5
 8. 最新git备份成功？     → git log -1 --format="%ci %s"
 9. screen_watch日志污染？  → grep -c "screen_watch\|Screenshot\|The screenshot" gateway.log
+10. Web后端可用？         → web_search("test") 测试Firecrawl/Parallel/Tavily是否可用
+11. Cron引用的skill是否存在？→ 检查cron job列表中skill字段，对应目录是否在~/.hermes/skills/下存在
+12. Memory剩余空间？      → memory工具检查是否接近满（上限1375字符）
 ```
 
 ## 常见故障自动修复方案
@@ -133,6 +136,47 @@ hermes gateway restart
 **检查**：`grep -c "screen_watch" gateway.log` — 超过500行算污染
 
 **修复**：`tail -2000 gateway.log > /tmp/_tail && mv /tmp/_tail gateway.log`
+
+### Web后端（Firecrawl/Parallel/Tavily）不可用
+
+**症状**：`web_search` 或 `web_extract` 失败
+
+**排查步骤**：
+1. 检查 `hermes config get web.backend` — 空值需要配置
+2. 尝试 `FIRECRAWL_API_KEY` 是否有效：`curl -H "Authorization: Bearer $FIRECRAWL_API_KEY" https://api.firecrawl.dev/v1/status`
+3. 若Firecrawl无额度，切到其他后端
+
+**自动修复方案**（按优先级）：
+```yaml
+# config.yaml 中配置备用后端
+web:
+  backend: tavily     # 免费额度 Tavily (TAVILY_API_KEY)
+  # 或
+  backend: parallel   # 有免费额度 (PARALLEL_API_KEY)
+  # 或
+  backend: exa        # 搜索+提取 (EXA_API_KEY)
+```
+
+### Cron引用了不存在的Skill
+
+**症状**：cron job 状态 `error`，prompt中引用了已删除的 skill（如 `pro-buyer`）
+
+**排查**：`cronjob list` → 检查每个job的 `skills` 字段 → 验证 `~/.hermes/skills/<skill-name>/SKILL.md` 是否存在
+
+**自动修复**：
+- skill存在但路径错误 → 更新cron job的skills字段
+- skill已删除 → `cronjob remove <job_id>`（不再空转浪费token）
+
+### Memory满载（1350+/1375字符）
+
+**症状**：新偏好无法保存，每次保存都触发压缩
+
+**自愈流程**：
+1. 读取 `memory` 工具内容，识别可清理的过时上下文
+2. 归档到 Obsidian：`~/Obsidian/迅龙贸易/MEMORY_archive_<date>.md`
+3. 重置memory为关键持久信息（用户偏好+系统配置）
+
+---
 
 ### 深度清理流程（用户说"深层清理"时执行）
 
