@@ -1,12 +1,22 @@
 ---
 name: hermes-provider-credentials
 description: "管理 Hermes 自定义 Provider 的 API Key 和凭据 — 更新 key、添加 provider 到候选区、处理 credential pool"
-version: 1.0.0
+version: 1.1.0
 author: Hermes
 tags: [hermes, credentials, provider, api-key, auth, config]
 ---
 
 # Hermes Provider 凭据管理
+
+## 新增 Provider 前的验证原则
+
+**不要盲信第三方对 LLM API 网关/路由服务的描述。** 先做三件事再配置：
+
+1. **访问官网** — 确认实际产品形态（云服务 vs 本地工具）
+2. **看注册/Key 获取流程** — API Key 格式、是否需要注册
+3. **确认 API 兼容性** — Base URL、认证方式、定价模式
+
+常见陷阱：原始描述说"无需API key、USDC按次支付、本地路由"，实际可能是"需注册拿YOUR_API_KEY、Stripe充值、云API网关"。先验证再配置。
 
 ## 凭据存储架构
 
@@ -81,6 +91,94 @@ at = cp[t][0].get('access_token', '')
 print(f'Key length: {len(at)}, starts_with_sk: {at.startswith(\"YOUR_API_KEY\")}')  # 或其他前缀
 "
 ```
+
+## 首次添加全新 Provider（完整4步流程）
+
+新增之前不存在的 provider 时，按此顺序操作：
+
+### Step 1 — `.env` 存 API Key
+
+```bash
+echo 'NEW_PROVIDER_API_KEY=*** >> ~/.hermes/.env
+```
+
+### Step 2 — `config.yaml` 加 custom_providers 条目
+
+追加到已有 `custom_providers:` 列表末尾。两种 key 模式：
+
+**模式A — `api_key_env_var`（推荐，更安全）：**
+```yaml
+- api_key_env_var: NEW_PROVIDER_API_KEY
+  base_url: https://example.com/v1
+  model: claude-sonnet-4
+  name: my-provider
+```
+
+**模式B — `api_key`（直接写 key 到配置，不推荐）：**
+```yaml
+- api_key: YOUR_API_KEY...
+  base_url: https://example.com/v1
+  model: gpt-4o
+  name: my-provider
+```
+
+**追加到已有列表的方法（防止 yaml.dump 重排 key）：**
+```python
+# str.replace 精准追加
+old_marker = """custom_providers:
+- name: Existing-Provider"""
+new_block = """custom_providers:
+- name: Existing-Provider
+  ...
+- api_key_env_var: NEW_PROVIDER_API_KEY
+  base_url: https://example.com/v1
+  model: claude-sonnet-4
+  name: my-provider"""
+content = content.replace(old_marker, new_block)
+```
+
+### Step 3 — `config.yaml` 加 credential_pool_strategies
+
+```yaml
+credential_pool_strategies:
+  custom:my-provider: fill_first
+```
+
+原值是 `{}` 时直接替换；已有条目时追加。
+
+### Step 4 — `auth.json` 创建 credential pool 条目
+
+```python
+import json
+with open('/Users/aimac/.hermes/auth.json') as f:
+    a = json.load(f)
+entry = {
+    "access_token": "YOUR_API_KEY...",
+    "api_key": "YOUR_API_KEY...",
+    "base_url": "https://example.com/v1",
+    "filters": {},
+    "last_status": None,
+    "provider": "custom:my-provider",
+    "source": "env:NEW_PROVIDER_API_KEY",  # 必须匹配 .env 变量名
+    "spend": {}
+}
+a.setdefault('credential_pool', {})['custom:my-provider'] = [entry]
+with open('/Users/aimac/.hermes/auth.json', 'w') as f:
+    json.dump(a, f, indent=2, ensure_ascii=False)
+```
+
+⚠️ `source` 字段必须写 `env:变量名`，与 `.env` 变量名一致。
+
+### 验证
+
+```bash
+# YAML 格式
+python3 -c "import yaml; yaml.safe_load(open('/Users/aimac/.hermes/config.yaml'))" && echo "YAML OK"
+# 凭据
+python3 -c "import json; d=json.load(open('/Users/aimac/.hermes/auth.json')); e=d['credential_pool'].get('custom:my-provider',[]); print(f'{len(e)} entries, key len={len(e[0].get(\"access_token\",\"\")) if e else 0}')"
+```
+
+---
 
 ## 让 Provider 出现在候选区
 
@@ -221,6 +319,7 @@ grep -n "aicodee-relay\|V2.aicodee\|custom_providers\|model_catalog.providers" ~
 **最佳实践：`read_file` + Python `str.replace()`**
 详见 [references/config-py-edit.md]
 详见 [references/v2-aicodee-gateway.md] — v2.aicodee.com API 聚合网关平台详情（可用模型、端点、API key 行为差异）
+详见 [references/clawrouter-gateway.md] — ClawRouter 云 API 网关详情（OpenAI 兼容、111+ 模型、Stripe 支付）
 
 ### config.yaml 编辑安全
 

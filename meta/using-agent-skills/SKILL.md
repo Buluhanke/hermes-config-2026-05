@@ -7,13 +7,47 @@ triggers:
   - "需要组合多个skill完成复杂任务"
   - "想确认是否有更合适的skill可用"
   - "某个skill不work，想找替代方案"
+  - "熟记这些技能"  # 新增：用户要求主动学习技能
+  - "我们安装的与实际使用的相差很大"  # 新增：用户指出差距
 ---
 
 # Using Agent Skills
 
 ## Overview
 
-Hermes拥有74+技能，覆盖不同任务类型。本skill帮助你快速定位最合适的技能组合，避免在错误的方向上浪费时间。
+Hermes拥有185+技能，覆盖不同任务类型。本skill帮助你快速定位最合适的技能组合，避免在错误的方向上浪费时间。
+
+## ⚠️ Active Skill Learning（主动学习原则）
+
+**用户期望**：你不是"技能导航员"，而是"技能学习者"。当用户说"熟记这些技能"或提供文档链接时，你需要：
+
+1. **深度理解**：不只是浏览 SKILL.md，要逐字阅读、理解每个技能的核心逻辑、触发条件、使用场景
+2. **阅读完整文档**：包括 user-stories、所有子页面、参考文档
+3. **理解差距**：对比"已安装的技能"和"实际使用的技能"，找出未充分利用的技能
+4. **主动应用**：学习后立即在任务中应用相关技能，验证理解是否正确
+
+**学习信号**：
+- 用户说"熟记这些技能" + 文档链接
+- 用户说"我们安装的与实际使用的相差很大"
+- 用户说"读一遍所有内容，包括每一页"
+
+**学习流程**：
+```
+收到学习请求
+├── 1. 识别文档来源（skills 列表 / user-stories）
+├── 2. 逐页阅读（不跳过任何页面）
+├── 3. 提取关键信息（核心能力、触发条件、使用场景）
+├── 4. 对比已安装技能（找出差距）
+└── 5. 在任务中应用（验证理解）
+```
+
+**示例**：
+- 用户说"研究 Agent Reach 和 ClawRouter"：
+  - 先阅读官方文档（install.md、README.md）
+  - 理解每个工具的核心能力、安装方式、使用场景
+  - 对比当前 Hermes 架构（web_search、skills）
+  - 给出"是否需要安装"的明确建议
+  - 在后续任务中尝试调用（如用 curl 测试 API）
 
 ## Skill分类全景图
 
@@ -21,7 +55,7 @@ Hermes拥有74+技能，覆盖不同任务类型。本skill帮助你快速定位
 | 任务 | 推荐Skill |
 |------|----------|
 | 规格不清晰，需要先定义需求 | spec-driven-sourcing |
-| 1688搜索商品、比价、找供应商 | pro-buyer |
+| 1688搜索商品、比价、找供应商 | 1688-sourcing |
 | 1688官方API数据获取 | 1688-open-platform-api |
 
 ### 🟢 工程流程（Engineering Workflow）
@@ -71,7 +105,7 @@ Hermes拥有74+技能，覆盖不同任务类型。本skill帮助你快速定位
 | 任务 | 推荐Skill |
 |------|----------|
 | 文字转语音 | tts, moss-tts-nano |
-| 图片处理 | vision-image-processing |
+| 图片处理 | Vision — Image Processing, Resize, Convert & Watermark |
 | 音乐生成 | audiocraft-audio-generation |
 | PPT制作 | powerpoint |
 
@@ -79,16 +113,16 @@ Hermes拥有74+技能，覆盖不同任务类型。本skill帮助你快速定位
 | 任务 | 推荐Skill |
 |------|----------|
 | 本地模型推理 | vllm |
-| 模型微调 | unsloth, trl-fine-tuning |
-| 模型评测 | lm-evaluation-harness |
-| 图像分割 | segment-anything |
+| 模型微调 | unsloth, fine-tuning-with-trl |
+| 模型评测 | evaluating-llms-harness |
+| 图像分割 | segment-anything-model |
 
 ## 复杂任务的技能组合
 
 ### 场景1: 1688采购完整流程
 ```
-spec-driven-sourcing → pro-buyer → hermes-rpa → data-analyzer
-    （定义规格）   （搜索比价）  （提取数据）  （整理结果）
+spec-driven-sourcing → 1688-sourcing → hermes-rpa → data-analyzer
+    （定义规格）     （搜索比价）    （提取数据）  （整理结果）
 ```
 
 ### 场景2: 新功能开发
@@ -119,7 +153,7 @@ code-review-and-quality → security-hardening → git-workflow-and-versioning
 任务类型？
 ├── 采购/供应链
 │   ├── 规格不清晰 → spec-driven-sourcing
-│   └── 规格清晰 → pro-buyer / 1688-open-platform-api
+│   └── 规格清晰 → 1688-sourcing / 1688-open-platform-api
 │
 ├── 工程开发
 │   ├── 任务规划 → idea-refine → planning-and-taYOUR_API_KEY
@@ -138,7 +172,7 @@ code-review-and-quality → security-hardening → git-workflow-and-versioning
 ├── 数据分析
 │   ├── 数据处理 → data-analyzer
 │   ├── Jupyter → jupyter-live-kernel
-│   └── AI模型 → vllm / unsloth / trl-fine-tuning
+│   └── AI模型 → vllm / unsloth / fine-tuning-with-trl
 │
 └── 平台集成
     ├── GitHub → github-pr-workflow
@@ -154,7 +188,8 @@ code-review-and-quality → security-hardening → git-workflow-and-versioning
 | 用browser-use操作需要登录的1688 | 每次都是新会话，无法保留登录态 | 用hermes-rpa连接已有Chrome |
 | 遇到错误直接尝试修复 | 浪费时间在症状而非根因 | 先用debugging-and-error-recovery |
 | 大任务不分解直接开始 | 容易迷失方向，返工多 | 先planning-and-taYOUR_API_KEY |
-| 用pro-buyer搜索时规格不清晰 | 搜索结果不符合需求 | 先spec-driven-sourcing |
+| 用1688-sourcing搜索时规格不清晰 | 搜索结果不符合需求 | 先spec-driven-sourcing |
+| 读了技能文档但从未在任务中使用 | 理解停留在表面 | 学习后立即在任务中应用 |
 
 ## Verification
 
@@ -165,3 +200,13 @@ code-review-and-quality → security-hardening → git-workflow-and-versioning
 - [ ] 确认该skill的triggers匹配当前情况
 - [ ] 多个任务时已规划skill调用顺序
 - [ ] 确认没有更专门的skill可用
+
+## 支持文件
+
+- [Agent Reach 和 ClawRouter 研究报告](./references/agent-reach-clawrouter-research.md) — 2026-05-28 对比评估两个工具的安装必要性和优势
+- [搜索降级方案](./references/search-fallback.md) — 当 web_search 不可用时的 ddgs 降级流程
+- [网络与代理诊断](./references/network-proxy-debugging.md) — 代理故障排查，HN/HN Firebase/github 分项检测
+- [HN Firebase API 用法](./references/hn-firebase-api-usage.md) —HN 数据获取的正确 Python 脚本模式（cron 环境必备）
+- [Cron 脚本执行限制](./references/cron-script-execution.md) — python3 -c/heredoc 在 cron 环境被拦截的 workaround
+- [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
+- [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
