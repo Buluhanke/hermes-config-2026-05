@@ -55,12 +55,29 @@ cua do unzoom                   # 恢复全屏坐标
 所有操作自动录制到 `~/.cua/trajectories/{machine}/{session}/`，
 可 `cua trajectory share` 生成可分享链接。
 
+### 5. ⚠️ macOS CGEventTap 底层限制（2026-05-28 发现）
+
+**来源**：cua repo 博客 `blog/inside-macos-window-internals.md`（2026-04-23）
+
+**问题**：某些应用的 event loop（Blender、Final Cut Pro、模拟器、游戏等）只接受来自 `cghidEventTap` 且前面有 `mouseMoved` 的事件。
+
+**影响**：
+- cua-driver（以及 Hermes computer_use 的底层）对这类应用**无法真正实现"不抢焦点"**
+- 需要短暂激活目标应用到前台才能发送事件
+- cursor warp 是不可避免的
+
+**结论**：
+- "后台运行，不抢焦点"的承诺只对**常规 macOS 应用**（Chrome、Safari、Finder等）有效
+- 对**专业创作软件、游戏、模拟器**类应用，自动化会受到根本性限制
+- 这是 macOS CGEventTap 架构层面的限制，不是 cua 或 Hermes 的 bug
+
 ## 与 Hermes 的关系
 
 **可借鉴点**：
 1. Window Zoom思路 → hermes-rpa skill 中"精确点击小元素"流程
 2. Trajectory回放 → 调试/复盘
 3. AI snapshot（需API Key）→ 未来可做本地VLM替代
+4. CGEventTap 限制认知 → 准确评估 Hermes computer_use 的能力边界
 
 **不直接替换**：
 - Hermes已有 `computer_use` (cua-driver) 实现类似功能
@@ -75,3 +92,4 @@ cua do unzoom                   # 恢复全屏坐标
 
 - https://github.com/trycua/cua
 - https://cua.ai
+- https://github.com/trycua/cua/blob/main/blog/inside-macos-window-internals.md

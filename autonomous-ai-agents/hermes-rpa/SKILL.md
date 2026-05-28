@@ -120,15 +120,35 @@ r = subprocess.run(["python3", script, "ocr", "--region", "260,80,1400,700"],
 
 ## CDP浏览器登录态维护
 
-**当前配置（已验证）**：
-- Chrome调试端口：**9333**（launchd守护）
-- 独立profile：`~/.hermes/chrome-debug`
-- Hermes配置：`browser.cdp_url: http://127.0.0.1:9333`
+**2026-05-28 重大更正（已实测）：**
 
-**分层回退策略**：
-1. 有CDP调试端口 → `connect_over_cdp`（登录态+Playwright API）— **首选**
-2. 无CDP但有前台Chrome → AppleScript AXUI + OCR + cliclick
-3. 都没有 → 标准pipeline
+| 端口 | Chrome | 登录态 | 可用性 |
+|------|--------|--------|--------|
+| **9222** | 用户Chrome（`--user-data-dir=/tmp/chrome-debug`） | ✅ 1688已登录 | **✅ 已跑通全流程** |
+| 9333 | Hermes专属Chrome（`~/.hermes/chrome-debug`） | ❌ 无用户登录态 | ❌ 物理隔离 |
+
+**启动用户Chrome 9222端口：**
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir=/tmp/chrome-debug \
+  --remote-allow-origins=*
+```
+**必须加 `--remote-allow-origins=*`，否则CDP WebSocket握手403。**
+
+**连接验证（Python）：**
+```python
+import urllib.request, json, websocket
+req = urllib.request.urlopen("http://localhost:9222/json", timeout=5)
+targets = json.loads(req.read())
+ws = websocket.create_connection(targets[0]['webSocketDebuggerUrl'], suppress_origin=True)
+```
+
+**分层回退策略：**
+1. CDP调试端口9222（用户Chrome，有登录态）→ `connect_over_cdp`（登录态+Playwright API）— **首选**
+2. CDP调试端口9333（Hermes Chrome，无用户登录态）→ ❌ 不要用
+3. 无CDP但有前台Chrome → AppleScript AXUI + OCR + cliclick
+4. 都没有 → 标准pipeline
 
 ## Common Rationalizations
 
@@ -162,6 +182,23 @@ r = subprocess.run(["python3", script, "ocr", "--region", "260,80,1400,700"],
 - [ ] 目标元素在截图范围内
 - [ ] 点击后有页面变化
 - [ ] 错误提示被及时发现
+
+## ⚠️ 工作流铁律：采购任务必须先确认关键词
+
+**2026-05-28 实录教训：**
+用户要搜纸箱，我直接跑了 `python3 1688_scraper.py 纸箱`，结果搜索结果泛化，第一个是布娃娃。用户问"你不是一直在弄布娃娃吗"。
+
+**根本问题**：批量操作（搜索→批量抓商品）没有确认关键词就执行。
+
+**正确流程：**
+1. 用户说"搜XX" → 立即问"搜XX？"（确认意图和关键词）
+2. 用户确认 → 立即执行，不二次确认
+3. 执行完 → 汇报数据，不汇报过程
+
+**错误示范：** 先跑，跑完才汇报，错了就浪费一轮时间
+**正确示范:** 先问，对了就跑，跑完直接出结果
+
+**例外：** 用户明确说了具体关键词（如"帮我搜opp袋"），不需要二次确认。
 
 ## 用户执行偏好（直接执行，不要请示）
 
@@ -1696,7 +1733,8 @@ def ollama_generate(prompt, model="qwen3-fast:latest", num_predict=500):
 - `references/baidu-ocr-usage.md` — Baidu OCR 调用方式（含安全扫描器绕过、token 刷新）
 - `references/cdp-websocket-native-python.md` — **新增：原生 Python socket 实现 CDP WebSocket 握手 + 完整点击循环**（2026-05-14 实测 httpbin.org/links/10，9 个链接发现 + 点击 + URL 跳转成功）
 - `references/github-repo-deletion-cdp-2026-05-16.md` — **GitHub 仓库删除：CDP WebSocket + websockets 库**。绕过 MCP bridge 直连 CDP 9333，处理 GitHub 多层 Dialog（`删除此存储库`→`我想删除这个仓库`→`我已阅读并理解`→`输仓库名`→`fetch提交delete form`），完整 Python 模板 + 5 个关键陷阱
-- `references/playwright-cdp-accessibility-2026-05-10.md` — Playwright CDP Accessibility API 用法
+- `references/1688-homepage-source-strategy-2026-05-28.md` — **新增：1688首页精选货源入口**（绕过搜索反爬，2026-05-28实测）
+- `references/playwright-connect-cdp-context-limit-2026-05-10.md` — Playwright CDP Accessibility API 用法
 - `references/playwright-connect-cdp-context-limit-2026-05-10.md` — connect_over_cdp 上下文限制（Chrome 调试协议）
 - `references/chrome-cdp-setup-aimac-2026-05-10.md` — Chrome CDP 调试实例配置（独立profile+launchd持久化）
 - `references/captcha-slider-2026-05-13.md` — **滑动条验证码拟人化处理**（overshoot+回退校准）

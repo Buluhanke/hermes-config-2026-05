@@ -72,6 +72,28 @@ curl -s --max-time 5 "https://api.firecrawl.dev/v0/search?q=test" -o /dev/null -
 
 **HN Firebase API 用法**（免费稳定，无需认证）：
 ```bash
+# ⚠️ 注意：遍历 30 个故事 + 每条 10s 超时会触发 cron 60s 硬限制！
+# ✅ 正确做法：只取前 10 条，每条超时 4s（合计约 40s）
+```
+
+**⚠️ HN Firebase API 性能问题（2026-05-28 发现）**：
+- 遍历 30 个故事 + 每条 10s 超时 = 总超时 60s（被 cron 任务 60s 硬限制卡死）
+- ✅ 修复：只取前 10 条（`ids[:10]`），每条超时 4s，合计约 40s 内完成
+- ✅ 备用快速版：只取 top 5 IDs 测试连接，5s 内完成
+```python
+# /tmp/hn_fast.py — 快速版（取 top 10，每条4s超时）
+import urllib.request,json
+base = 'https://hacker-news.firebaseio.com/v0/item/'
+r = urllib.request.urlopen('https://hacker-news.firebaseio.com/v0/topstories.json',timeout=8)
+ids = json.loads(r.read())[:10]
+for sid in ids:
+    try:
+        s = json.loads(urllib.request.urlopen(base+str(sid)+'.json',timeout=4).read())
+        print(f"[{s.get('score',0)}] {s.get('title','')} | {s.get('url','')[:60]}")
+    except:
+        print(f"ERR {sid}")
+```
+```bash
 # 获取 HN 当日热门故事 IDs
 # ⚠️ cron 环境限制：python3 -c 内联 和 heredoc (<<) 都会被 script-execution 策略拦截
 # ✅ 正确做法：用 write_file 写 .py 文件，再用 terminal 执行 python3 /tmp/xxx.py
@@ -106,6 +128,7 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - screen_trigger_handler 只分析不执行，实际执行层是 hermes_desktop_rpa.py
 - CDP直连方案已知可用：原生Python WebSocket连接9333，不依赖mcp-chrome-stdio bridge
 - 可改进：给screen_trigger_handler增加"自动执行"模式（配置白名单：场景→操作映射）
+- **重要底层限制（2026-05-28 发现）**：cua-driver/macOS CGEventTap 对某些应用（Blender等）的event loop只接受cghidEventTap且前面有mouseMoved事件，需要短暂前台激活。"不抢焦点"承诺对这类应用不可实现，Hermes computer_use同理
 
 **搜索降级：当 web_search 402 时**
 - 优先用 HN Firebase API + ddgs 组合（ddgs 格式：`ddgs text -q "query" -m 5`）
@@ -123,6 +146,19 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - ✅ **正确做法：写 .py 文件调用 ollama Python API**（`import ollama; ollama.list()` 写入文件执行）
 - ✅ **smolvlm2 实测成功**：响应时间 10.3s，截图理解准确，无明显幻觉
 - 当前本地模型：nomic-embed-text（274MB）+ ahmadwaqar/smolvlm2-agentic-gui（1.8GB Q4_K_M）
+
+**检查本地模型的正确方法（Ollama Python API + Pydantic v2）**：
+```python
+import ollama
+models = ollama.list()
+for m in models.models:
+    print(f"  {m.model}")
+    print(f"    size: {m.size / (1024**3):.2f} GB")
+    print(f"    params: {m.details.parameter_size}")
+    print(f"    format: {m.details.format}")
+    print(f"    quantization: {m.details.quantization_level}")
+```
+⚠️ 注意：`ollama.list()` 返回 `ListResponse`（Pydantic v2 模型），属性是 `models.models`（嵌套），不是平铺的。`Model` 对象属性：`model`（字符串）、`size`（字节）、`details`（ModelDetails 子对象）。
 
 **⚠️ smolvlm2 稳定性确认（2026-05-28 桌面截图实测）**：
 - 测试1（桌面浏览器+ChatGPT窗口）：响应时间 10.3s，准确识别浏览器tabs、chat窗口、navigation icons，未发现幻觉
@@ -170,14 +206,20 @@ python3 /tmp/test_smolvlm.py
 - 未发现"湖光山色"幻觉问题
 
 **候选模型对比**（github blocked 时无法拉取，待网络恢复后测试）：
-- **llama3.2-vision:11b** — ⭐ 最高优先级（2026-05-28 发现），Meta出品，~8GB，M4 24G可运行，通用视觉理解强
-- **ScreenAI（Google 2024）**— UI专项模型，基于PaLI架构（ViT+T5），专门训练于UI截图理解；GitHub: `kyegomez/ScreenAI`；⚠️ Google自用为主，开源社区无直接可运行版本
-- **ShowUI（CVPR 2025）**— 4.2B参数 VLA模型（Phi-3.5-vision-instruct base），输入截图直接输出点击/导航动作；HuggingFace: `showlab/ShowUI`；⚠️ 4.2B > 24GB，M4无法运行
-- **InternVL3-1B** — 开源VLM，GUI grounding benchmark表现优异，1B版本适合M4 24G；⚠️ Ollama支持情况待实测
+- **llama3.2-vision:11b** — ⭐ 最高优先级（2026-05-28 确认），Meta出品，~8GB，M4 24G可运行，通用视觉理解强
+- **blaifa/internvl3:8b-Q4_K_M** — ⭐ 次优先级，InternVL3 已上线 Ollama（2026-05 实测），基于 Qwen2.5，多模态能力强，量化后 M4 24G 可运行；版本：InternVL3:latest / InternVL3:8b-Q4_K_M
+- **InternVL3-1B** — 开源VLM，GUI grounding benchmark表现优异，1B版本适合M4 24G；HuggingFace: `OpenGVLab/InternVL3-1B-Instruct`；Ollama 暂未收录（2026-05）
+- **ScreenAI（Google 2024）**— UI专项模型，基于PaLI架构（ViT+T5），专门训练于UI截图理解；⚠️ Google自用为主，开源社区无直接可运行版本
+- **ShowUI（CVPR 2025）**— 4.2B参数 VLA模型（Phi-3.5-vision-instruct base）；⚠️ 4.2B > 24GB，M4无法运行
 - moondream2 — 更轻量，截图理解能力强
 - internvl2-4b — CVPR 2024 Oral，M4 24G 可运行
 - minicpm-v — Q4 量化可在 24GB 内运行
-- **Apple FastVLM（CVPR 2025）**— MLX/CoreML 版本在 HuggingFace 可用（apple/ml-fastvlm），85x faster than 标准ViT；等 github 恢复后测试
+- **Apple FastVLM（CVPR 2025）**— MLX/CoreML 版本在 HuggingFace 可用（apple/ml-fastvlm），85x faster than 标准ViT
+
+**已确认 Ollama 视觉模型池**（2026-05 实测）：
+- 官方 gallery（https://ollama.com/search?c=vision）：llama3.2-vision（11b）、moondream、minicpm-v、gemma3、llava:7b
+- 第三方：ahmadwaqar/smolvlm2-agentic-gui（当前在用，GUI专用）
+- LatentRouter 论文（arXiv 2026-05-11）验证了5个本地视觉模型可用的 OLLAMA 池：llama3.2-vision、gemma3、llava:7b、moondream、minicpm-v
 
 **⚠️ FastVLM 补充信息（2026-05-28 发现）**：
 - 论文：FastVLM: Efficient Vision Encoding for Vision Language Models（CVPR 2025）
@@ -383,6 +425,8 @@ for i, story_id in enumerate(ids[:10]):
 ```
 
 执行：`python3 /tmp/hn_top.py`（⚠️ 不要用 `python3 -c "..."` 或 heredoc，会被 cron 拦截）
+
+**⚠️ /tmp 路径竞争注意**：cron/scheduled-job 环境下，`execute_code` 和 `terminal` 共享 `/tmp`。同时运行的多个 cron job 可能相互覆盖同名文件（如 `/tmp/hn_top.py`）。用带时间戳的文件名（`/tmp/hn_top_20260528.py`）可避免。
 
 **⚠️ 马拉松脚本修复（2026-05-28）**：
 `idle-marathon-core.sh` 原本使用 `python3 << 'PYEOF'` heredoc，已修复为写 .py 文件调用模式。

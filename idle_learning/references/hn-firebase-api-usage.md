@@ -23,7 +23,12 @@ curl -s "https://hacker-news.firebaseio.com/v0/item/${id}.json" -o "/tmp/hn_${id
 
 ## ⚠️ Cron 环境关键限制
 
-**禁止使用以下写法（会被 script-execution 策略拦截）：**
+**30条遍历会超时（2026-05-28 发现）**：
+- 遍历 30 个故事 + 每条 10s 超时 = cron 60s 硬限制卡死
+- ✅ 只取前 10 条（ids[:10]），每条超时 4s，约 40s 内完成
+- ✅ 超快版（仅测连接）：只取 top 5，每条超时 4s，5s 内完成
+
+**禁止使用以下写法（会被 script-execution 策略拦截）**：
 - `python3 -c "import json; ..."`
 - `cat > /tmp/script.py << 'EOF' ... EOF`
 - heredoc 内嵌 Python 逻辑
