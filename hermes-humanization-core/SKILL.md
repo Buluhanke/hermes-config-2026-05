@@ -299,28 +299,50 @@ python3 humanization_core.py
 # 屏幕尺寸: Size(width=1920, height=1080)
 ```
 
-## 新增（2026-05-28）：CloakBrowser 真人化补丁
+**CloakBrowser 真人化（2026-05-28验证，2026-05-29更新）**
 
-**已验证可用** — 现有CDP Chrome（端口9333）可直接注入，不影响已保存的1688登录态：
-
+**关键发现1：CloakBrowser launch参数是`humanize`，不是`human`**：
 ```python
-from playwright.sync_api import sync_playwright
-from cloakbrowser.human import patch_context, patch_page, HumanConfig, _CursorState
+# ❌ 错误
+browser = cloakbrowser.launch(human=True)  # TypeError!
 
-browser = sync_playwright().start().chromium.connect_over_cdp("http://localhost:9333")
-context = browser.contexts[0]
-page = context.pages[0]
-
-cfg = HumanConfig()   # 打字70ms±40ms, 鼠标25-80步, 误触2%
-cursor = _CursorState()
-patch_context(context, cfg)
-patch_page(page, cfg, cursor)
-print("✅ 真人化补丁注入成功")
+# ✅ 正确
+browser = cloakbrowser.launch(humanize=True, human_preset="default")
 ```
 
-**HumanConfig 关键参数**：typing_delay（打字延迟）、mistype_chance（误触率）、mouse_steps（鼠标曲线路径）、idle_between_actions（操作间随机停顿）
+**关键发现2：CDP Chrome 9333是Hermes专属浏览器，与用户Chrome隔离**
+- 端口9333的Chrome实例 = `~/.hermes/chrome-debug` + MCP扩展 → 只有扩展，无用户cookies
+- 用户平时用的Chrome = 另一个独立进程 → 1688登录态在这里
+- **两者是物理隔离的Chrome进程，cookies不共享**
+- cloakbrowser.launch()会启动全新浏览器，也无法继承用户登录态
 
-**已安装相关包**：cloakbrowser(0.3.30)、playwright(1.60.0)、PyAutoGUI(0.9.54)、fake-useragent(2.2.0)、numpy(2.4.6)
+**可用方案对比**：
 
-**缺口**：Canvas/WebGL指纹随机化、IP代理池、移动端操控、验证码视觉理解
-```
+| 方案 | 优点 | 缺点 |
+|------|------|------|
+| CDP 9333 + cloakbrowser.patch_page | 真人化注入到已有CDP Chrome | 无用户1688登录态 |
+| cloakbrowser.launch() 新浏览器 | 全新干净隐身浏览器 | 无登录态，要重新登录 |
+| 连接用户Chrome调试端口 | 可操作用户已登录会话 | 需要用户手动启动Chrome加参数 |
+| computer_use控制用户屏幕 | 能看到用户界面 | 窗口bounds为0，窗口不可见 |
+
+**推荐1688自动化路径**：
+1. 让用户Chrome开启调试端口：`Google Chrome --remote-debugging-port=9222`
+2. Playwright连接该端口，可继承cookies
+3. 同时用cloakbrowser.human注入真人化
+
+**已升级到cloakbrowser 0.3.31**（之前是0.3.30）。PyPI验证：GitHub 21,907 stars，MIT协议。
+
+**HumanConfig 关键参数**：typing_delay（打字延迟ms）、mistype_chance（误触概率）、mouse_min_steps/mouse_max_steps（鼠标曲线路径步数）、idle_between_actions（操作间停顿）、idle_between_duration（停顿秒数范围）
+
+## 真人化六维度进度（2026-05-28）
+
+| 方向 | 优先级 | 状态 | 说明 |
+|------|--------|------|------|
+| 一、鼠标轨迹 | ⭐⭐⭐⭐⭐ | ✅已完成 | WindMouse已安装(1.0.2)，算法验证通过，45点/100步曲线 |
+| 二、反浏览器检测 | ⭐⭐⭐⭐ | ✅已部分 | CloakBrowser已装已验证注入CDP Chrome |
+| 三、算子拟人化 | ⭐⭐⭐ | ✅已部分 | CloakBrowser HumanConfig已覆盖 |
+| 四、全屏感知 | ⭐⭐⭐⭐ | ⚠️部分 | 百度OCR文字可用，验证码图形未解决 |
+| 五、移动端 | ⭐⭐ | ❌未完成 | 零进展 |
+| 六、语音真人化 | ⭐⭐⭐ | ⚠️部分 | Moss-TTS音色已配，情感/停顿未搞 |
+
+**下一步自己推进**（不等用户问）：

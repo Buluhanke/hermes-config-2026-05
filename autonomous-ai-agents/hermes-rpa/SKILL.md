@@ -480,6 +480,42 @@ python3 ~/.hermes/skills/autonomous-ai-agents/hermes-rpa/scripts/cdp_screenshot_
 
 ## ⚠️ 关键陷阱
 
+### CDP Chrome 9333 与用户Chrome是独立进程（2026-05-29 新发现）
+
+**致命误解**：以为"连接 CDP 9333 就能操作用户的 1688 已登录会话"。
+
+**真相**：
+- CDP 9333 的 Chrome = `~/.hermes/chrome-debug` + MCP扩展 → 只有扩展，无用户cookies
+- 用户平时用的 Chrome = 另一个独立进程（无调试端口）→ 1688登录态在这里
+- 两者是**物理隔离**的Chrome进程，cookies/登录态完全不共享
+
+**验证方法**：
+```python
+# 连接9333，列出所有tabs
+browser = p.chromium.connect_over_cdp("http://localhost:9333")
+for ctx in browser.contexts:
+    for pg in ctx.pages:
+        print(f"  {pg.title()} | {pg.url}")
+# 9333实例里只有 chrome://glic、chrome-extension://... 这类内部页面
+# 没有用户的 1688 / taobao 登录会话
+```
+
+**后果**：所有 `connect_over_cdp("http://localhost:9333")` 操作（注入真人化、搜索、点商品）都是在 Hermes 自己的空白Chrome里进行的，无法触碰到用户的 1688 登录会话。
+
+**解法（按需选择）**：
+
+| 方案 | 做法 | 登录态 |
+|------|------|--------|
+| 方案A | 用户Chrome开调试端口 `--remote-debugging-port=9222`，Hermes连接这个端口 | ✅ 继承用户登录态 |
+| 方案B | 用户手动在 Hermes Chrome（9333）里登录 1688 | ✅ Hermes专属登录态 |
+| 方案C | 放弃浏览器控制，走 1688 Open Platform API | ❌ 企业资质要求，买家不可用 |
+| 方案D | computer_use 控制用户屏幕 | ⚠️ 窗口bounds为0，完全不可见 |
+
+**方案A操作步骤**：
+1. 用户终端执行：`open -a "Google Chrome" --args --remote-debugging-port=9222`
+2. 或用户Chrome菜单 → 更多工具 → 启动调试（需要Chrome命令行参数）
+3. Hermes配置 `browser.cdp_url: 'http://127.0.0.1:9222'`
+
 ### 🛡️ 安全扫描器拦截 Baidu OCR（高频踩坑）
 
 不要在 `terminal` 工具中用 curl 直接发送 base64 图片数据。Hermes 的安全扫描器会拦截 base64 数据块，报错 `BLOCKED: User denied`。

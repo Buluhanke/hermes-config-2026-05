@@ -5,7 +5,7 @@ triggers:
   - Hermes启动时
   - 用户问"你记得"
   - 主动行为完成后记录
-version: 2026-05-26
+version: 2026-05-28
 ---
 
 # Hermes Evolution Context Loader
