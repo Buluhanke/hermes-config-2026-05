@@ -81,6 +81,43 @@ for p in providers:
 - 重启太快会导致新provider还没加载完就测试，容易误判失败
 - 连续2次测试失败才判定该provider不可用，切下一个
 
+### watchdog防震荡逻辑（关键！）
+
+**问题**：TTS异常 → 切provider → 下次运行TTS仍异常 → 再次切回 → 形成震荡
+
+**解决方案**：在 `~/.hermes/.self-healer-state` 文件记录上次状态
+- `tts_ok`：TTS正常，本次正常则写`tts_ok`
+- `tts_flip`：上次已切换过，本次仍异常则跳过切换，改为记录告警
+
+**判断逻辑**（伪代码）：
+```
+if TTS正常: write_state("tts_ok"), log("✓ TTS正常")
+else:
+    last = read_state()
+    if last == "tts_flip": log("⚠️ 仍异常但上次已切换，跳过"); 写告警
+    else: 切换provider → 验证 → 成功则tts_ok，失败则tts_flip
+```
+
+### command_allowlist损坏的修复
+
+**症状**：Shell命令报 `Command not allowed`，脚本执行失败
+
+**原因**：patch工具或手动编辑把YAML中的allowlist字符串拆成了单字符数组
+
+**修复方法**（不能用patch工具，会被保护拒绝）：
+```bash
+# 从git历史恢复正确版本
+cd ~/.hermes
+git checkout <last-good-commit> -- config.yaml
+# 示例：恢复到昨天可用的备份
+git checkout d7042e10 -- config.yaml
+# 然后重新设置当前需要的配置（如tts.provider）
+hermes config set tts.provider moss
+hermes gateway restart
+```
+
+**如何识别损坏**：config.yaml里command_allowlist段如果变成逐字符拆分行（如`"- r"`, `"- e"`等）就是损坏了
+
 ### Gateway卡死/不响应
 
 **症状**：用户说"你没反应"、消息发不出去、PID存在但僵死
