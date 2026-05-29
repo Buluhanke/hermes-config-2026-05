@@ -345,9 +345,13 @@ $HERMES_HOME/skills/        Installed skills
 ~/.hermes/hermes-agent/     Source code (if git-installed)
 ```
 
-Profiles use `~/.hermes/profiles/<name>/` with the same layout.
+### Disaster Recovery & Backup
 
-### Config Sections
+See `references/hermes-disaster-recovery-backup.md` — lean backup strategy, GitHub push limits, rclone cloud backup, disaster recovery.
+
+Full config reference: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
+
+Config Sections
 
 Edit with `hermes config edit` or `hermes config set section.key value`.
 
@@ -365,9 +369,13 @@ Edit with `hermes config edit` or `hermes config set section.key value`.
 | `delegation` | `model`, `provider`, `base_url`, `api_key`, `max_iterations` (50), `reasoning_effort` |
 | `checkpoints` | `enabled`, `max_snapshots` (50) |
 
+### Disaster Recovery & Backup
+
+See `references/hermes-disaster-recovery-backup.md` — lean backup strategy, GitHub push limits, rclone cloud backup, disaster recovery.
+
 Full config reference: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
 
-### Providers
+Config Sections
 
 20+ providers supported. Set via `hermes model` or `hermes setup`.
 
