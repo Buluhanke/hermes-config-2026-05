@@ -42,89 +42,43 @@ category: procurement
 ### Step 1：确定关键词
 用户说"搜XX" → 立即确认关键词 → 执行
 
-### Step 2：找品策略（重大更新 2026-05-29）
+### Step 2：找品策略
 
-**三步走，任选其一：**
+**三步走，按优先级选：**
 
-#### 方式A：AnySearch（推荐，最快）
+#### 方式A：AnySearch（推荐，2026-05-29验证可用）
 ```bash
 python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py batch_search \
   --queries '[{"query":"纸箱 义乌 1688 批发","max_results":5}]'
 ```
-输出结构化，1688商品直接命中。注意：1688搜索结果页JS渲染，extract可能拿不到数据，但search本身能返回摘要。
+- 输出结构化，1688商品直接命中摘要
+- 速度快，不触发反爬
+- **局限**：摘要数据有限（标题/价格/已售/货源地），无法自动获取商品详情页的规格/颜色/尺寸等详细规格数据
 
-#### 方式B：CDP拦截1688搜索postMessage数据（数据最准确）
-1688搜索结果页（s.1688.com）数据通过`window.postMessage`从父窗口注入，DOM中不直接渲染。
-正确流程：
+#### 方式B：CDP拦截1688搜索postMessage数据
+**⚠️ 已失效（2026-05-29验证）**：1688对headless Chrome触发滑块验证，直接搜索URL（s.1688.com）100%被拦。CDP浏览器无法绕过。
 
-1. `browser_navigate` → `https://s.1688.com/selloffer/offer_search.htm?keywords=关键词`（CDP浏览器，已登录态）
+**触发条件**：只有在用户**已登录1688的浏览器**中手动搜索关键词后，才能用CDP拦截postMessage数据。自动化搜索全部失败。
+
+正确流程（如条件满足）：
+1. `browser_navigate` → `https://s.1688.com/selloffer/offer_search.htm?keywords=关键词`（用户已登录态）
 2. 等待8秒，等postMessage数据到达
 3. 从`window.data.offerV2.response.data.OFFER.items`读取所有商品数据
 4. 数据字段映射：`items[i].data.offerId / title / priceInfo.price / bookedCount / companyName / province / linkUrl`
 
-**示例代码（CDP Python）：**
-```python
-import urllib.request, json, websocket, time
-
-req = urllib.request.urlopen("http://localhost:9222/json", timeout=5)
-tabs = json.loads(req.read())
-t = tabs[-1]  # 最新标签
-ws = websocket.create_connection(t['webSocketDebuggerUrl'], timeout=15, suppress_origin=True)
-mid = [1]
-def sv(m, p=None):
-    ws.send(json.dumps({"id": mid[0], "method": m, "params": p or {}}))
-    r = json.loads(ws.recv())
-    mid[0] += 1
-    return r
-
-sv("Page.navigate", {"url": "https://s.1688.com/selloffer/offer_search.htm?keywords=关键词"})
-time.sleep(8)
-
-# 重新连接（导航后websocket可能断开）
-ws.close()
-req2 = urllib.request.urlopen("http://localhost:9222/json", timeout=5)
-tabs2 = json.loads(req2.read())
-t2 = tabs2[-1]
-ws2 = websocket.create_connection(t2['webSocketDebuggerUrl'], timeout=15, suppress_origin=True)
-
-# 等待数据
-for _ in range(8):
-    r = sv("Runtime.evaluate", {"expression": "window.data?.offerV2?.response?.data?.OFFER?.items?.length || 'waiting'", "returnByValue": True})
-    if r.get('result',{}).get('result',{}).get('value','') > 0:
-        break
-    time.sleep(1.5)
-
-# 提取所有商品
-r = sv("Runtime.evaluate", {"expression": """
-(function(){
-  var items = window.data.offerV2.response.data.OFFER.items;
-  var out = [];
-  for(var i=0; i<items.length; i++){
-    var d = items[i].data || items[i];
-    out.push({
-      offerId: d.offerId,
-      title: (d.title||'').replace(/<[^>]+>/g,''),
-      price: (d.priceInfo||{}).price||'',
-      priceUnit: (d.priceInfo||{}).unit||'',
-      sold: d.bookedCount||'',
-      comp: d.companyName||d.loginId||'',
-      loc: d.province||'',
-      city: d.city||'',
-      href: (d.linkUrl||'').replace('http://','https://')
-    });
-  }
-  return JSON.stringify(out);
-})()
-""", "returnByValue": True})
-```
-
-#### 方式C：extract提取工厂详情页（适合拿到商品链接后查资质）
+#### 方式C：extract提取工厂详情页
 ```bash
 python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py extract "https://detail.1688.com/offer/商品ID.html"
 ```
-可提取联系方式、公司名所在地等静态内容。搜索结果页（JS渲染）extract效果差，详情页效果好。
+可提取联系方式、公司名所在地等静态内容。详情页反爬较轻，可以访问。
 
-**方式选择优先级**：AnySearch(快) → CDP(准) → extract(辅助)
+**方式选择优先级**：AnySearch(快) → extract详情页(辅助) → CDP(仅用户已登录时)
+
+### 1688反爬实测结论（2026-05-29）
+- 直接URL访问搜索结果页 → 100%触发滑块验证码
+- AnySearch → 可用，但数据粒度受限
+- 详情页extract → 可用，数据较全
+- CDP拦截 → 仅用户在浏览器登录后才有效
 
 ### Step 3：筛选江浙沪
 
@@ -167,6 +121,37 @@ jiangzhe = [it for it in items if it['loc'] in ['浙江','江苏','上海','安�
 | 快递袋/塑料袋 | 浙江、广东 |
 | 包装辅材 | 浙江、江苏 |
 
+## AI 网站智囊工作流（重要！）
+
+当 1688 自动化遇到技术障碍（验证码、反爬、CDP连接失败等），不要硬撞。
+**正确路径：咨询 AI 网站智囊获取方向性建议，再决定下一步。**
+
+### 已验证可用的 AI 网站（免登录）
+- **Gemini** (https://gemini.google.com) ✅ — 可直接输入技术问题
+- **智谱清言** (https://www.zhipuai.cn) ✅ — 页面可直接输入
+- **豆包** (https://www.doubao.com) ✅ — 免登录，页面可直接输入
+- **DeepSeek** — 需要登录
+
+### 工作流
+1. 截图当前问题界面（用 `browser_vision` 或 `computer_use` capture）
+2. 在 AI 网站输入具体技术问题，如："1688网站滑块验证码如何通过自动化方式解决？请提供技术方案"
+3. AI 回复后，用 Vision OCR 读取截图文字（`/opt/homebrew/bin/python3` + Vision.framework）
+4. 根据建议决定是否继续尝试，或切换方案
+
+### 读截图的方法（已验证）
+```python
+# Vision.framework 读本地图片（Mac原生，无需网络）
+/opt/homebrew/bin/python3 -c "
+from Vision import *
+import Cocoa
+img = Cocoa.NSImage.alloc().initWithContentsOfFile_('/path/to/screenshot.png')
+if img:
+    print(f'OK: {img.size().width}x{img.size().height}')
+else:
+    print('FAILED')
+"
+```
+
 ## 关键陷阱
 
 ### ClawHub社区技能安全扫描规则（重要！）
@@ -191,6 +176,23 @@ jiangzhe = [it for it in items if it['loc'] in ['浙江','江苏','上海','安�
 
 **解决方案**：永远不要直接访问搜索结果URL。用1688首页搜索框输入关键词。
 
+### 本地Chrome CDP连接失败（已验证）
+
+**症状**：`curl http://localhost:9222/json` 返回502，或连接成功但 Chrome 使用随机端口。
+
+**原因**：用户Chrome以 random port 模式运行，或9222端口已被占用。
+
+**解决方案**：需要用户手动开启Chrome远程调试并告知端口，或接受CDP方案不可用的事实。
+
+**检测命令**：
+```bash
+# 检查9222端口是否在用
+lsof -i :9222
+
+# 查看Chrome调试端口
+ps aux | grep -i chrome | grep remote-debugging
+```
+
 ### 1688价格提取
 
 详情页价格是**阶梯价**，正则 `¥[\d.]+` 会匹配所有价格阶梯。只取第1个（起批量价格）：
@@ -213,13 +215,20 @@ price = (text.match(/¥[\d.]+/g) || []).slice(0,1).join(' / ')
 - 艺诺包装源头厂家（ID:808613438216）：多规格（10~30cm都有），¥0.11/件起，已售329 — **问这家有没有50*25**
 - wutao19860806（ID:623635256786）：25*30cm ¥0.12/件，已售149
 
-## 1688官方API技能（需1688开放平台企业资质）
+## 1688官方API结论（2026-05-29验证）
 
-如已申请1688开放平台API Key，可在 `~/.hermes/.env` 配置后使用：
-- `clawhub/1688-product-search` — 官方API搜索
-- `clawhub/1688-product-find` — 以图搜货
+**结论：不适合买家身份的中小贸易商。**
 
-个人买家身份难以申请，建议优先用CDP postMessage法。
+1688开放平台ISV入驻需要：
+- 企业支付宝（已认证）
+- 营业执照
+- 审核时间2-3工作日
+
+迅龙贸易是买家身份（从1688采购，不是卖货），不需要这些权限，也无法利用卖家端API。
+
+1688官方API技能（`1688-open-platform-api`等）都是**卖家端**功能：商品发布、订单管理、营销工具。买家能用的是"找货/搜索"类API，但需要企业资质认证。
+
+**实际路径**：CDP拦截已登录浏览器的postMessage数据，或用AnySearch替代。不申API Key。
 
 ## 技能联动工作流
 
@@ -263,3 +272,4 @@ python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py extract "https://det
 - `hermes-rpa` — CDP浏览器自动化底层
 - `1688-open-platform-api` — 官方API（需企业资质，不适合纯买家）
 - `references/1688-search-postmessage.md` — 搜索数据postMessage拦截法的完整技术细节和数据结构
+- `references/ai-agents-1688-knowledge.md` — AI网站智囊（Gemini/智谱清言/豆包）关于1688自动化方案的问答记录
