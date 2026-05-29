@@ -253,6 +253,7 @@ ACTION_WHITELIST = {
 
 ## 参考文件
 
+- `references/ollama-api-endpoint-chat-vs-generate-2026-05-30.md` — ⚠️ 重要：/api/chat vs /api/generate 性能差异，错误端点导致120s超时
 - `references/screen-trigger-handler-telegram-fix-2026-05-30.md` — Telegram推送失败修复（hermes_tools → 直接Bot API）+ 场景分类prompt幻觉bug修复
 - `references/smolvlm2-structured-json-2026-05-29.md` — smolvlm2 JSON 输出测试详情（响应时间、清理函数、可靠性评估）
 - `references/screen-trigger-handler-auto-execute-2026-05-28.md` — Auto-Execute 集成设计文档
@@ -270,5 +271,45 @@ ACTION_WHITELIST = {
 - 截图：`~/.hermes/screenshots/current.png`
 - 分析缓存：`/tmp/hermes_trigger_vision.jpg`
 - 日志：`~/.hermes/logs/screen_analysis.log`
-- Ollama地址：`http://localhost:11434/api/generate`
+- Ollama地址：`http://localhost:11434/api/chat`（⚠️ 必须用 `/api/chat`，不能用 `/api/generate`）
 - 模型：`ahmadwaqar/smolvlm2-agentic-gui:latest`
+
+## ⚠️ Ollama API 端点关键陷阱（2026-05-30 实测）
+
+**禁止使用 `/api/generate`**：处理 1920x1080 截图需 41.6s，容易触发 120s 超时。
+
+**必须使用 `/api/chat`**：相同截图只需 31.7s，快 24%，且响应格式更干净。
+
+**payload 格式差异**：
+```python
+# ❌ /api/generate 格式（已废弃）
+{"model": "...", "prompt": "...", "images": [b64], "stream": False, ...}
+
+# ✅ /api/chat 格式（当前使用）
+{"model": "...", "messages": [{"role": "user", "content": "...", "images": [b64]}], "stream": False, ...}
+
+# response 格式差异
+# /api/generate:  data['response']
+# /api/chat:      data['message']['content']
+```
+
+**测试方法**（验证 endpoint 选择正确）：
+```python
+# /tmp/test_endpoint.py — 对比两个端点速度
+import requests, base64, time
+
+OLLAMA_HOST = "http://localhost:11434"
+with open("/tmp/hermes_trigger_vision.jpg", "rb") as f:
+    img_b64 = base64.b64encode(f.read()).decode()
+
+payload = {
+    "model": "ahmadwaqar/smolvlm2-agentic-gui:latest",
+    "messages": [{"role": "user", "content": "Describe in one sentence.", "images": [img_b64]}],
+    "stream": False, "options": {"temperature": 0.0}
+}
+
+# /api/chat（正确）
+t0 = time.time()
+r = requests.post(f"{OLLAMA_HOST}/api/chat", json=payload, timeout=60)
+print(f"/api/chat: {time.time()-t0:.1f}s, status={r.status_code}")
+```

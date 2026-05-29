@@ -12,24 +12,23 @@
 - 超时无法单独控制（继承 urllib 默认 30s?）
 
 **✅ 正确做法**：直接用 `urllib.request` 或 `curl` 调用 REST API
+**✅ 正确做法**：直接用 `urllib.request` 或 `curl` 调用 REST API，**必须用 `/api/chat`**（不能用 `/api/generate`，性能差24%且易超时）
 
 ```python
 import urllib.request, base64, json
 
 with open('/tmp/image.jpg', 'rb') as f:
     img_b64 = base64.b64encode(f.read()).decode()
-
 payload = {
     "model": "qwen3-vl:2b",
-    "prompt": "Describe this image",
-    "images": [img_b64],
+    "messages": [{"role": "user", "content": "Describe this image", "images": [img_b64]}],
     "keep_alive": -1,    # 保持模型在内存
     "options": {"temperature": 0.1},
     "stream": False       # 非流式，获取单次响应
 }
 
 req = urllib.request.Request(
-    "http://localhost:11434/api/generate",
+    "http://localhost:11434/api/chat",  # ⚠️ 必须用 /api/chat
     data=json.dumps(payload).encode(),
     headers={"Content-Type": "application/json"}
 )
@@ -37,6 +36,7 @@ req = urllib.request.Request(
 # 必须用长超时（模型首次加载可能 > 60s）
 with urllib.request.urlopen(req, timeout=600) as resp:
     data = json.loads(resp.read())
+    print(data['message']['content'])
 ```
 
 ### 2. 图像大小限制
@@ -57,11 +57,11 @@ with urllib.request.urlopen(req, timeout=600) as resp:
 
 ```bash
 # 预加载：发一个简单的文本请求，keep_alive=-1
-curl -s --max-time 120 -X POST http://localhost:11434/api/generate \
+curl -s --max-time 120 -X POST http://localhost:11434/api/chat \
   -H "Content-Type: application/json" \
-  -d '{"model": "qwen3-vl:2b", "prompt": "Hello", "keep_alive": -1}'
-
+  -d '{"model": "qwen3-vl:2b", "messages": [{"role":"user","content":"Hello"}], "keep_alive": -1}'
 # 然后发视觉请求（通常快 5-10s）
+```
 ```
 
 验证模型是否在内存：

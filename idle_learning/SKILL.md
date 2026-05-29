@@ -317,6 +317,13 @@ for m in models.models:
 ```
 ⚠️ **关键发现（2026-05-28）**：`ollama.list()` CLI 在 cron 环境被 script-execution 策略拦截，但 `ollama.chat()` 正常工作。检查模型时必须用 Python API 写文件方式，不能直接调用 CLI。
 
+**⚠️ Ollama API 端点关键陷阱（2026-05-30 实测）**：
+- `/api/generate` 处理 1920x1080 截图需 41.6s → 容易触发 120s 超时
+- `/api/chat` + `messages` 格式只需 31.7s → 快 24%，响应格式更干净
+- **所有 Ollama Vision 集成必须用 `/api/chat`**，不能用 `/api/generate`
+- response 格式：`/api/generate` → `data['response']`；`/api/chat` → `data['message']['content']`
+- 详见 `screen-watcher-vision/references/ollama-api-endpoint-chat-vs-generate-2026-05-30.md`
+
 **⚠️ smolvlm2 稳定性确认（多次实测汇总）**：
 - 2026-05-28 测试1（桌面浏览器+ChatGPT窗口）：响应时间 10.3s，准确识别浏览器tabs、chat窗口、navigation icons，无幻觉
 - 2026-05-28 测试2（移动端购物页面）：响应时间 11.1s，准确识别搜索框、商品卡片、价格、评分、移动端布局
@@ -381,7 +388,11 @@ python3 /tmp/test_smolvlm.py
   - 基于 SmolVLM2-500M，GGUF 从 hf-mirror.com 下载经 curl 验证可达（416MB, ~1.5min）
   - Vocaela-2（vocaela/Vocaela-2-500M-1024R2）3x faster，支持更高分辨率，只有 safetensors（无 GGUF）
   - 限制：低分辨率（2048px 限制），无通用对话/推理能力，适合纯 GUI agent 场景
-- **llama3.2-vision:11b** — ⭐ 次优先级（2026-05-28 确认），Meta出品，~8GB，M4 24G可运行，通用视觉理解强
+- **llama3.2-vision:11b** — ❌ 不安装（2026-05-30 重新评估）
+  - Meta出品，~8GB，M4 24GB可运行，通用视觉理解强
+  - **ScreenSpot 约 79%**，几乎所有任务输给 Qwen2.5-VL 7B（尽管模型更大）
+  - benchmark 数据来源：InsiderLLM + Codersera 2026
+  - **结论**：本地已有 qwen3-vl:2b（通用视觉）和 smolvlm2-agentic-gui（GUI专用），llama3.2-vision:11b 无安装必要；如需通用视觉升级，优先考虑 qwen3-vl:4b（如 Ollama 可用）或 GGUF 导入 Holo1.5-3B（91.7%）
 - **InternVL3.5（2026-05 更新）** — Ollama 社区版已可用
   - **blaifa/InternVL3_5:4B** ✅ Ollama 可拉取（**3.4GB**，Q4_K_M，基于 **Qwen3** 架构，4.41B params）
   - **blaifa/InternVL3_5:8B** ✅ Ollama 可拉取（~5GB）
@@ -497,6 +508,7 @@ PYEOF
 - [ZonUI-3B 基准与集成方案](./references/zonui-3b-benchmarks.md) — 2026-05-29 发现的轻量级GUI grounding VLM（3B, WACV 2026），含部署方式与限制
 - [UI-TARS Desktop 执行层调研](./references/ui-tars-desktop-research.md) — ByteDance 纯视觉桌面 Agent（35.6k stars），94.2% 坐标准确率，架构对比与硬件适配建议
 - [CAPTCHAs 检测 AI Agent 研究](./references/captchas-detect-ai-agent-2026-05-30.md) — Roundtable Research CogCAPTCHA30 论文核心结论，行为过程 vs 输出等价性，anti-detection 对策思路
+- [llama3.2-vision:11b 评估 (2026-05-30)](./references/llama3.2-vision-11b-2026-05-30.md) — benchmark 79%，不安装原因，本地模型状态
 - [TTS 供应商选择指南](./references/tts-provider-selection.md) — Kokoro(已删)/Edge/MOSS TTS 实测结论，2026-05-29 更新
 - [Qwen3.6 推理框架横评](./references/qwen3.6-inference-frameworks-benchmark.md) — llama.cpp/ik_llama.cpp/BeeLlama/vLLM 基准测试（2026-05-21），memory bandwidth 瓶颈分析，Ollama 投机解码缺失
 - [ScreenSpot-V2 Leaderboard 2026-05-30](./references/screenspot-v2-leaderboard-2026-05-30.md) — 实际抓取 top-24 模型排名，Holo1.5-3B(91.7%)/Qwen2.5-VL-7B(86.5%) 可作为 M4 升级候选
