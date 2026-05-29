@@ -117,7 +117,50 @@ Top Scores（2026-05-29）：
 - Vocaela-500M（85.8% ScreenSpotV2）方向正确，但 Ollama 集成有问题
 - Smol2Operator 归一化坐标（0-1）比像素坐标好 20x，Hermes 未来应采用归一化坐标
 
-**⚠️ auto_execute 场景类型 key 不匹配 bug（2026-05-30 实测）**
+### 4.1 Perea.AI GUI Grounding Models 2026（SOTA 权威报告，2026-05-30 新增）
+
+**来源**：https://www.perea.ai/research/gui-grounding-models-2026
+
+**核心结论**：Planner（GPT-4o/Claude 3.7/Gemini 2.5 Pro）已成熟，**Grounder（视觉 grounding）是瓶颈所在**，开源栈已追上甚至超越闭源前沿。
+
+**2026 SOTA benchmark 核心数据**：
+| 模型 | 参数量 | ScreenSpot-V2 | ScreenSpot-Pro | OSWorld-G | AndroidWorld |
+|------|--------|---------------|---------------|-----------|--------------|
+| **UI-Venus-1.5-30B-A3B** | 30B-MoE | **96.2%** | 69.6% | 70.6% | **77.6%** |
+| UGround-V1-72B | 72B | 89.4% | — | — | — |
+| MAI-UI-32B | 32B | 96.5% | 67.9% | 67.6% | 73.3% |
+| OS-Atlas-7B | 7B | 81.0% | — | — | — |
+| ShowUI | 2B | 75.1% | — | — | — |
+| Aguvis-7B | 7B | 83.0% | — | — | — |
+| UI-Venus-1.5-8B | 8B | — | 68.4% | 69.7% | 73.7% |
+
+**架构选择决定模型效果（5个关键选择）**：
+1. **纯视觉 vs AXTree**：纯视觉已胜出，2026所有SOTA grounding模型都是纯视觉方案
+2. **RFT（强化微调）**：UI-Venus-1.0基于Qwen2.5-VL + 350K高质量grounding样本 + GRPO训练
+3. **四阶段训练流程**（UI-Venus-1.5）：Mid-Training(10B tokens) → Offline-RL → Online-RL(full-trajectory) → Model Merge(TIES)
+4. **多阶段ROI分解**（MEGA-GUI）：Gemini 2.5 Pro做ROI选择（88.8%准确率），系统级73.18% ScreenSpot-Pro
+5. **MoE架构**（A3B=3B active/token）：解释了其高效性——3B激活参数达到30B参数效果
+
+**关键洞察**：
+- **纯视觉方案已完全胜出**：AXTree方案被淘汰，原因是泛化能力差（依赖平台特定的Accessibility API）
+- **ScreenSpot-Pro是更难基准**：OS-Atlas+ScreenSeeker cascading搜索才48.1%，MEGA-GUI系统才73.18%
+- **AndroidWorld进展最快**：Aria-UI 44.8%（2024-12）→ UI-Venus-1.5 77.6%（2026-02），一年内+32.8%
+- **WebVoyager仍是OpenAI CUA最强**：87.0%，但差距在缩小
+
+**Ollama 可用模型**（2026-05-30确认）：
+- smolvlm2-agentic-gui ✅ 在用（1.85GB，7-64s响应）
+- qwen3-vl:2b ✅ 在用（1.9GB）
+- qwen3-vl:4b ❌ 不存在（not found 404）
+- blaifa/InternVL3_5:4b ✅ 可测试（~3GB，基于Qwen2.5）
+- blaifa/InternVL3_5:8b ✅ 可测试（~5GB）
+- **ui-venus ❌ Ollama不存在**（页面404，搜索无结果）
+
+**对 Hermes 的启发**：
+- UI-Venus-1.5 的四阶段训练流程值得借鉴到 hermes-rpa 的 auto_execute 改进
+- MoE架构（A3B）是 M4 24GB 的正确选择——30B参数只用3B激活
+- InternVL3_5（基于Qwen2.5，~3GB）是 smolvlm2 的潜在升级候选
+
+### 5. 本地视觉模型选型指南（InsiderLLM 2026-05 更新）
 screen_trigger_handler 的 ACTION_WHITELIST 用中文 key（浏览器/微信/桌面...），但 get_scene_type() 输出英文（browser/wechat/desktop...），导致 auto_execute() 永远 return None。详见 `screen-watcher-vision` skill 的"场景类型 key 不匹配 bug"章节。
 
 ### 5. 本地视觉模型选型指南（InsiderLLM 2026-05 更新）
@@ -159,6 +202,46 @@ FSM多智能体架构，用于复杂桌面自动化：
 - 多步骤复杂任务规划（需要Manager模块）
 - 持续质量评估+自适应重规划
 - 环境状态记忆（World Model）
+
+### 9. Process Turing Test — AI能力进化 ≠ 人类化进化（2026-05-30 新增）
+
+**论文来源**：Roundtable Research，CogCAPTCHA30（CAPTCHA + 29项认知心理学任务）
+
+**核心发现**：
+- 经典图灵测试：测输出是否与人无法区分（Output Turing Test）
+- **Process Turing Test**：测过程是否与人无法区分（Process Turing Test）
+- 结果：人类和AI可以完成相同的CAPTCHA任务，但**过程完全不同**
+  - 点击序列、方向变化、过度选择行为等过程特征有统计显著差异
+  - 前沿模型（Claude、GPT、Gemini）过程最不像人
+  - 小模型（Qwen 1.5B、Centaur 70B）过程更像人
+  - Centaur表现最好，推测因为大规模输出微调（10M+人类选择，160项认知实验）
+
+**Process Humanness 三层模型（新增）**：
+| 层级 | 描述 | 当前Hermes状态 |
+|------|------|--------------|
+| System 1 | 快思考，直觉反应 | ✅ 简单重复任务 |
+| System 2 | 慢思考，操作前想目的，操作后检查 | ✅ 复杂多步任务 |
+| **System P（Process）** | 过程拟人——动作时序/节奏/先后顺序像人 | ❌ auto_execute是纯机器瞬时性 |
+
+**对Hermes auto_execute的实践意义**：
+- 当前auto_execute生成action是纯机器速度，没有人类操作的"节律感"
+- 可以在vision分析prompt中增加"你会怎么点击"的推理步骤（让模型先想再做）
+- 考虑在执行层加入延迟/随机性，模拟人类操作节奏（避免纯机器的瞬时性）
+- 这个发现解释了为什么能力强的VLM不一定做出更像人的桌面Agent
+
+**论文地址**：https://research.roundtable.ai/captchas-detect-ai/（2026-05-30HN 12pts）
+
+### 10. UI-TARS Desktop/MobileAgent 生态更新（2026-05-30）
+
+**UI-TARS-2（ByteDance 2025-09）**：
+- 88.2 Online-Mind2Web, 47.5 OSWorld, 50.6 WindowsAgentArena
+- 多轮强化学习端到端训练，支持长序列交互记忆
+- UI-TARS-1.5已发布，架构（vision→action→verify循环）与ScreenAgent完全一致
+
+**MobileAgent（X-PLUG 2026）**：
+- 支持desktop/mobile/browser自动化，20+ GUI benchmarks SOTA
+- 基于Qwen3-VL，具备grounding/tool calling/long-horizon memory能力
+- ⚠️ M4 24G适配待验证（qwen3-vl:2b响应46.6s，agent loop成本高）
 
 ## 用户进化目标（2026-05-25确认）
 - 终极目标：数字生命体进化成真人——能自己判断、决策、执行，不用触发

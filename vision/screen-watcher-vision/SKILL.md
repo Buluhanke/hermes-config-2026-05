@@ -12,6 +12,20 @@ trigger: screen_watcher触发screen_trigger_handler后调用
 ## 已知问题：smolvlm2 幻觉
 smolvlm2 是一个小模型，存在明显幻觉问题，尤其在简单场景（计算器、空白桌面）上会生成不存在的湖光山色等描述。
 
+### 关键发现：smolvlm2 不适合场景分类（2026-06-02 修正）
+
+**症状（2026-06-02 实测）**：`get_scene_type()` 中 smolvlm2 输出：
+```
+RAW: "final_answer(''The i..."   # 乱码，无法匹配任何 whitelist key
+CLEANED: "final_answer(''The i..."
+```
+
+同一截图，qwen3-vl:2b 输出：`"desktop"` → 直接匹配 `"desktop" in ACTION_WHITELIST` ✅
+
+**根因**：smolvlm2 是一个 GUI 特化微调模型，在**纯场景分类**（无GUI操作任务、多选一）任务上持续产生结构化输出幻觉。即使 prompt 明确要求"只回答一个英文单词"，smolvlm2 仍然输出 `final_answer(''...)` 形式的完整回答。
+
+**结论**：smolvlm2 适合 `ask_screen()`（GUI 内容分析和操作规划），**不适合** `get_scene_type()`（快速场景分类）。
+
 ### 缓解策略
 1. **强制选项 prompt**：给出明确的选项列表，限制回答范围
 2. **低温参数**：temperature=0.0 减少随机性
@@ -19,6 +33,7 @@ smolvlm2 是一个小模型，存在明显幻觉问题，尤其在简单场景�
 4. **时间戳验证**：提示"这是截图而不是风景照"
 5. **英文选项**：使用英文单词（browser/wechat/desktop...）而非中文，避免模型输出中文时混入代码片段
 6. **明确禁止代码**：prompt 中加 "不要代码" 指令
+7. **场景分类专用模型**：使用 qwen3-vl:2b 而非 smolvlm2 做场景分类
 
 ### ⚠️ 场景分类幻觉 bug（2026-05-30 实测）
 
@@ -49,10 +64,29 @@ smolvlm2 是一个小模型，存在明显幻觉问题，尤其在简单场景�
 
 **结论**：smolvlm2 速度快6倍+原生分辨率，是 screen_watcher 实时分析的正确选择。qwen3-vl:2b OCR能力更强但不适用于实时场景，保留为离线分析备选。
 
+**Ollama 可用模型**（2026-05-30 实测确认）：
+| 模型 | 大小 | 状态 | 适用场景 |
+|------|------|------|----------|
+| smolvlm2-agentic-gui | 1.85GB | ✅ 在用 | 实时GUI监控（7-64s响应）|
+| qwen3-vl:2b | 1.9GB | ✅ 在用 | 离线OCR分析（需缩图）|
+| qwen3-vl:4b | 3.3GB | ❌ 不存在 | — |
+| blaifa/InternVL3_5:4b | ~3GB | ✅ 可pull | 通用视觉，潜在升级候选 |
+| blaifa/InternVL3_5:8b | ~5GB | ✅ 可pull | 更高精度 |
+| ui-venus | — | ❌ Ollama无 | 页面404，搜索无结果 |
+
 **qwen3-vl:2b 已知限制**（Ollama）：
 - 原生1920x1080截图会超时（>60s）
 - 必须缩图到~900x900才能在46s内响应
 - 4B版本（3.3GB，90% ScreenSpot）待验证
+
+**smolvlm2 响应时间实测范围（2026-05-30 更新）**：
+- 简单桌面/壁纸：~5-8s
+- 中等复杂度（浏览器tabs+导航）：~10-13s
+- 高复杂度（移动端UI+商品卡片）：~20-25s
+- **复杂桌面截图（壁纸+聊天图标+状态栏）：~64s**（比预期显著更慢）
+- 场景复杂度直接影响 token 生成量，从而影响 decode 延迟
+- 结论：21.8s 在高复杂度场景属于正常范围，非模型异常
+- ⚠️ 复杂桌面截图（湖景壁纸+AIMAC图标）响应达64s，需考虑截图预处理降复杂度
 
 ## 推荐 Prompt 模板
 
@@ -127,8 +161,7 @@ screen_trigger_handler 对分析结果进行紧急度分级，非紧急内容不
 
 **当前状态**：
 - `DRY_RUN = True`（安全模式，只记录不执行）
-- 白名单场景：浏览器/微信/1688/ChatGPT/钉钉/Telegram（6个）
-- ⚠️ **已知不匹配**：分类器支持10个场景（+桌面/计算器/京东/其他），但 ACTION_WHITELIST 只有6个；不匹配时 auto_execute 返回 None，静默处理
+- 白名单场景：browser/wechat/1688/dingtalk/telegram（5个，与 get_scene_type() 英文输出对齐）
 - 初始动作均为 `wininfo`（只读获取窗口信息）
 - Telegram 推送增加 `[Auto-Exec dry-run for X]` 前缀提示
 
@@ -172,21 +205,29 @@ cat ~/.hermes/logs/screen_watcher.log | tail -15
 ls ~/.hermes/screenshots/.handler_lock
 ```
 
-**⚠️ 场景类型 key 不匹配 bug（2026-05-30 实测）**
+**⚠️ 场景类型 key 不匹配 bug（2026-05-30 实测，已修复）**
 
 **症状**：日志中从未出现 `[AUTO-EXEC-DRY]` 标记，auto_execute() 静默失效。
 
 **根因**：get_scene_type() 输出**英文单词**（browser/wechat/desktop/calculator/jingdong/1688/dingtalk/telegram/other），但 ACTION_WHITELIST 的 key 是**中文**（浏览器/微信/桌面/计算器/京东/1688/钉钉/Telegram）。两者不匹配 → auto_execute() 第46行 `if scene_type not in ACTION_WHITELIST` 直接 return None。
 
-**修复方案**（二选一）：
-1. **方案A（推荐）**：统一语言 — 修改 get_scene_type() prompt 输出**中文** app 名称，与 ACTION_WHITELIST 对齐：
-   ```
-   选项：浏览器/微信/桌面/计算器/京东/1688/钉钉/其他
-   只说一个词，不要其他内容。
-   ```
-2. **方案B**：ACTION_WHITELIST 用英文 key，auto_execute() 做英汉映射
+**修复方案（2026-05-30 已实施：方案B）**：统一 ACTION_WHITELIST 为英文 key，与 get_scene_type() 输出对齐：
+```python
+ACTION_WHITELIST = {
+    "browser": ("wininfo", None),
+    "wechat": ("wininfo", None),
+    "1688": ("wininfo", None),
+    "dingtalk": ("wininfo", None),
+    "telegram": ("wininfo", None),
+    "desktop": ("wininfo", None),    # 新增（2026-05-30）
+    "calculator": ("wininfo", None), # 新增（2026-05-30）
+    "other": ("wininfo", None),      # 新增（2026-05-30）
+}
+```
 
-**验证方法**：日志中应出现 `[AUTO-EXEC-DRY] Would execute: wininfo for scene=浏览器`，若为 `[AUTO-EXEC-DRY] Would execute: wininfo for scene=browser` 说明格式不匹配。
+**验证方法**：日志中应出现 `[AUTO-EXEC-DRY] Would execute: wininfo for scene=browser`，表示 auto_execute 正常触发。
+
+> ⚠️ **wininfo 命令不在 PATH**：DRY_RUN 模式下只记录不执行所以未暴露。切换 DRY_RUN=False 前需将 wininfo 替换为实际存在的命令（如 cliclick），详见 `references/action-whitelist-fix-2026-05-30.md`
 
 **常见断链故障排查**：
 - `screenshots/` 目录不存在 → 手动 `mkdir -p ~/.hermes/screenshots`，watcher 会自动创建
@@ -219,6 +260,7 @@ ls ~/.hermes/screenshots/.handler_lock
 - `references/screen-trigger-handler-auto-execute-2026-05-28.md` — Auto-Execute 集成设计文档
 - `references/screen-watcher-handler-lock-2026-05-26.md` — Handler 重复 spawn 修复
 - `references/qwen3vl-vs-smolvlm2-2026-05-30.md` — qwen3-vl:2b vs smolvlm2 实测对比（速度、分辨率、适用场景）
+- `references/scene-classification-model-fix-2026-06-02.md` — ⚠️ 重要：get_scene_type() 从 smolvlm2 切换到 qwen3-vl:2b，smolvlm2 在纯分类任务上会产生 final_answer 乱码
 
 ## 温度参数
 ```json

@@ -162,11 +162,12 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - ⚠️ 无GGUF发布，需Transformers推理（非Ollama），M4 24G可运行PyTorch版
   - 潜在价值：若转GGUF导入Ollama，是比Vocaela-500M更完整的GUI grounding方案
 - **⭐ Qwen3-VL（2026-05-29 发现，2026-05-29 实测成功）** — Qwen最新旗舰VLM
-  - Ollama完整可用：qwen3-vl:2b（1.9GB）、qwen3-vl:4b（3.3GB）、qwen3-vl:8b（6.1GB）
+  - Ollama完整可用：qwen3-vl:2b（1.9GB）✅，qwen3-vl:8b（6.1GB）✅
+  - ⚠️ **qwen3-vl:4b 不存在**（2026-05-30 实测：not found 404）— 不要尝试 pull
   - 官方声明：可直接操作电脑/手机界面，OSWorld全球顶级表现
   - 2D grounding（绝对→相对坐标），256K上下文
-  - **实测**：qwen3-vl:2b 500px截图19.3s响应，正确识别UI元素
-  - 限制：1024px+图像处理超时，需较小输入尺寸
+  - **实测**：qwen3-vl:2b 500px截图19.3s响应，正确识别UI元素；1024px+超时
+  - 限制：1024px+图像处理超时，需较小输入尺寸；46.6s（需缩到900x900）
 - **⭐ Gemma 4（Google DeepMind，2026-04-02 发布）** — Apache 2.0，多模态
   - Ollama完整可用：gemma4:e2b（7.2GB）、gemma4:e4b（9.6GB）、gemma4:26b（18GB）
   - vision benchmarks: MMMU Pro 52.6%/73.8%/76.9%
@@ -209,6 +210,12 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - Agent TARS CLI v0.3.0 — 多工具流式执行 + 运行时统计
   - 架构（vision→action→verify循环）与 ScreenAgent 规划完全一致
   - 详见 `references/ui-tars-desktop-research.md`
+- **⭐ MobileAgent（X-PLUG/GitHub，2026-05-30 发现）** — 基于 Qwen3-VL 的开源 Native GUI Agent
+  - 支持 desktop/mobile/browser 自动化，20+ GUI benchmarks SOTA
+  - 具备 grounding/tool calling/long-horizon memory 能力
+  - 架构：vision→action→verify 循环，与 hermes-rpa 规划一致
+  - 详见 `references/mobileagent-2026-05-30.md`
+  - ⚠️ M4 24G 适配待验证（qwen3-vl:2b 响应 46.6s，agent loop 成本高）
 - **DesktopCtl**（yaroshevych, 34 stars）— Rust 桌面控制 CLI
   - tokenized screen output 思路：smolvlm2 做 UI 元素文本化而非只输出坐标
   - macOS-first, daemon+CLI 架构
@@ -245,6 +252,14 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   hermes_desktop_rpa.py (执行) → [断链：cron 无前台窗口/CDP 9222]
   ```
   修复顺序：screen_watcher 存活 → handler 触发 → dry-run 验证 → 坐标校准 → 切换 DRY_RUN=False
+
+**⚠️ 执行层性能优化 — Memory Bandwidth 瓶颈（2026-05-30 发现）**：
+- **Kog AI Inference Engine (KIE)**：3,000 tokens/s per request on 8× AMD MI300X，2,100 on 8× NVIDIA H200（FP16，无投机解码）
+- **核心洞察**：推理速度瓶颈是 **memory bandwidth**，不是 FLOPS。低 batch decode 算术强度极低（FP16 约 1 FLOP/byte，GPU 暴露数百 FLOP/byte）
+- **Agentic 串行循环**（inspect→plan→edit→test→revise）决定了单请求 decode 速度是核心指标，不是 aggregate throughput
+- **50,000 tokens 生成**：100 tok/s ≈ 8分钟，3,000 tok/s ≈ 17秒 — 产品体验的本质差异
+- **智能 × 迭代速度**：生产力边界从"只拼智能"转向"智能 × 迭代速度"
+- **实践意义**：Hermes auto-execute dry-run 生成大量 reasoning token，decode 速度直接影响 action 响应延迟。当前 smolvlm2 响应 7-11s，关注 llama.cpp 最新版对 memory bandwidth 的优化
 
 **搜索降级：当 web_search 402 时**
 - 优先用 HN Firebase API + ddgs 组合（ddgs 格式：`ddgs text -q "query" -m 5`）
@@ -326,6 +341,7 @@ python3 /tmp/test_smolvlm.py
 - **⭐ qwen3-vl:2b vs smolvlm2-agentic-gui 实测（2026-05-30）**：
   - smolvlm2-agentic-gui：**7.7s**原生1920x1080，GUI专项，screen_watcher实时分析首选
   - qwen3-vl:2b：**46.6s**（需缩到900x900），通用视觉，OCR更强但不适用实时场景
+  - qwen3-vl:4b：**不存在**（not found 404）— 不要尝试 pull
   - 结论：screen_watcher 实时分析继续用 smolvlm2，qwen3-vl:2b 保留为离线OCR备选
 
 - **⭐ Vocaela-500M（最高优先级，2026-05-29 发现，2026-05-29 实测部署结论）** — 500M 参数，ScreenSpotV2 85.8%（24pp 高于当前 smolvlm2），GGUF Q8_0 仅 437MB
@@ -337,11 +353,11 @@ python3 /tmp/test_smolvlm.py
   - Vocaela-2（vocaela/Vocaela-2-500M-1024R2）3x faster，支持更高分辨率，只有 safetensors（无 GGUF）
   - 限制：低分辨率（2048px 限制），无通用对话/推理能力，适合纯 GUI agent 场景
 - **llama3.2-vision:11b** — ⭐ 次优先级（2026-05-28 确认），Meta出品，~8GB，M4 24G可运行，通用视觉理解强
-- **InternVL3（2025-04发布）/ InternVL3.5（更新版）** — Ollama 社区版已可用
-  - **blaifa/InternVL3:8b-Q4_K_M** — Ollama可拉取，约5GB，M4 24G可运行
-  - **⭐ blaifa/InternVL3_5:4B（2026-05-29发现）** — InternVL3.5轻量版，约3GB，M4 24G首选
-  - **blaifa/InternVL3_5:8b** — InternVL3.5标准版
-  - InternVL3系列基于Qwen2.5，多模态能力强，支持GUI agents、工具使用
+- **InternVL3.5（2026-05 更新）** — Ollama 社区版已可用
+  - **blaifa/InternVL3_5:4B** ✅ Ollama 可拉取（~3GB，基于 Qwen2.5）
+  - **blaifa/InternVL3_5:8B** ✅ Ollama 可拉取（~5GB）
+  - ⚠️ 2026-05-30 搜索发现 `ui-venus` 在 Ollama **不存在**（页面 404）
+  - InternVL3 系列基于 Qwen2.5，多模态能力强，支持 GUI agents、工具使用
   - HuggingFace: OpenGVLab/InternVL3-78B（完整版）
 - **moondream 2 — 1.8B轻量视觉模型，Ollama完整可用**
   - 多量化变体：`moondream:1.8b-v2-q4_K_M`（~1GB，推荐）到fp16
@@ -438,6 +454,7 @@ PYEOF
 - [ZonUI-3B 基准与集成方案](./references/zonui-3b-benchmarks.md) — 2026-05-29 发现的轻量级GUI grounding VLM（3B, WACV 2026），含部署方式与限制
 - [UI-TARS Desktop 执行层调研](./references/ui-tars-desktop-research.md) — ByteDance 纯视觉桌面 Agent（35.6k stars），94.2% 坐标准确率，架构对比与硬件适配建议
 - [TTS 供应商选择指南](./references/tts-provider-selection.md) — Kokoro(已删)/Edge/MOSS TTS 实测结论，2026-05-29 更新
+- [Qwen3.6 推理框架横评](./references/qwen3.6-inference-frameworks-benchmark.md) — llama.cpp/ik_llama.cpp/BeeLlama/vLLM 基准测试（2026-05-21），memory bandwidth 瓶颈分析，Ollama 投机解码缺失
 - [Ollama Vision 模型测试方法论](./references/ollama-vision-testing.md) — cron环境下测试VLM的API调用、图像大小限制、预热策略和超时处理
 - [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环

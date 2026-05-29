@@ -88,8 +88,22 @@ browser_navigate "https://example.com/article-url/"
 browser_snapshot full=true
 ```
 
-注意：browser 工具在 cron 环境下**可用**（与 web_search/web_extract 不同），但不适合大规模抓取，每个故事需单独访问。此方法适合读取高价值文章（如得分 >500 的高分深度文章），不适合批量巡检。
+**✅ 进阶技巧：browser_console JS提取（比 snapshot 更可靠，2026-05-30 新增）**
 
+`snapshot` 有 8000 字符截断限制且滚动后可能仍被截断。更好的方法是用 `browser_console` 执行 JS 直接提取文本：
+
+```bash
+# 先 navigate，再用 browser_console 分片提取
+browser_console(expression='document.querySelector("article")?.innerText.slice(0,3000)')
+browser_console(expression='document.body.innerText.slice(3000,6000)')
+```
+
+适用场景：
+- 文章超过 8000 字符（snapshot 截断）
+- 需要精准提取 article/main 标签内容
+- 分片 `.slice(0,3000)` → `.slice(3000,6000)` 可处理任意长度
+
+注意：browser 工具在 cron 环境下**可用**（与 web_search/web_extract 不同），但不适合大规模抓取，每个故事需单独访问。此方法适合读取高价值文章（如得分 >500 的高分深度文章），不适合批量巡检。
 **典型场景**：HN 某个故事得分 >500 且是长文时，用 browser 直接读取比 web_extract 更可靠。
 
 ## Bing 搜索 — 备选降级
