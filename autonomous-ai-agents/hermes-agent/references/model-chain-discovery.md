@@ -7,39 +7,42 @@
 | `minimax` (minimax.io) | https://api.minimax.io/v1 | 列表有 M2.7 | **假的**，无真实渠道 |
 | `minimax-cn` (minimaxi.com) | https://api.minimaxi.com/v1 | M2.7, M2.5, M2.1 | **真的**，官方渠道 |
 
-## V2.aicodee.com 中转
+## V2.aicodee.com 中转（当前主链路）
 
-- 列表有 `MiniMax-M2.7-highspeed`
-- 实际调用返回 503 `model_not_found` = distributor 上没有可用渠道
-- **中转已死，但配置里依然填主模型位置**，等它恢复
-- Fallback 触发条件：503 + `model_not_found` 不在标准 fallback 条件里，需要代码修复
+- 列表有 `MiniMax-M2.7-highspeed`（实际可通）
+- 中转 key 写在 `custom_providers[0].api_key`
+- Fallback 走 minimax-cn 官方
 
-## 当前模型链（config.yaml）
+## 当前模型链（2026-05-29 更新）
 
 ```yaml
-# 2026-05-17 更新：已切到 minimax-cn 直连
-# V2.aicodee.com 主链路 503 无法恢复，直接走 minimaxi.com 官方 API
 model:
-  default: minimax-cn/MiniMax-M2.7
-  temperature: 0.7
-  top_p: 0.95
+  default: MiniMax-M2.7-highspeed
+  provider: custom:v2.aicodee.com
+  fallback: MiniMax-M2.7
   max_tokens: 8192
-  provider: minimax-cn
-```
 
-之前的状态（已废弃）：
+providers:
+  minimax-cn:
+    api_key_env: MINIMAX_CN_API_KEY
+    base_url_env: MINIMAX_CN_BASE_URL
 
-```yaml
-model:
-  default: V2.aicodee.com/MiniMax-M2.7-highspeed  # 503 model_not_found
-  provider: custom
-  fallback_model:
-  - provider: minimax-cn      # Fallback 1
-    model: MiniMax-M2.7
-  - provider: deepseek        # Fallback 2
-    model: deepseek-v4-flash
+fallback_model:
+  provider: deepseek
+  model: deepseek/deepseek-v4-flash
+
+fallback_model_autoswitch: true
+
+custom_providers:
+- name: V2.aicodee.com
   base_url: https://v2.aicodee.com/v1
+  api_key: YOUR_API_KEY***  # 已填入
 ```
+
+**模型链优先级**：
+1. MiniMax-M2.7-highspeed → V2.aicodee.com（主）
+2. MiniMax-M2.7 → minimax-cn（备用，官方 API）
+3. deepseek-v4-flash → deepseek 直连（兜底）
 
 ## 手动切换命令
 
