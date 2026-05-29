@@ -50,13 +50,14 @@ description: >
 发现问题 → 立刻解决 → 再继续。不等授权，不问用户，不跳过。
 网络不通 = 阻塞事件，必须优先修复。发现 github/HN 不通，立即诊断代理/DNS/防火墙，不能"切降级路径绕过继续学"。
 
-**⚠️ 自主执行原则（2026-05-29 确立）：**
+**⚠️ 自主执行原则（2026-05-29 确立，2026-05-30 强化）：**
 空闲学习时，完全自主操作，不等待用户授权。发现可改进点：
 1. 直接执行（配置修改、脚本运行、文件编辑）
 2. 非破坏性操作为主（改配置、整理文件、优化代码）
 3. 持续执行直到任务完成，不中途停下等用户
 4. 完成后记录结果到 memory，不打扰用户
 5. 破坏性操作（删文件、停进程、改系统设置）需保守，优先备份再操作
+6. **多选择场景优先自主执行，不停下来等确认**（2026-05-30 强化）：推荐列表任务直接执行，不等用户命令
 
 ### 第一步：评估当前状态 + 网络预检
 
@@ -232,35 +233,42 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - DRY_RUN=True 安全模式，6个场景预配置（浏览器/微信/1688/ChatGPT/钉钉/Telegram）
   - 详见 `screen-watcher-vision` skill 的 [Auto-Execute 自动执行] 章节
 
-### ⚠️ auto_execute DRY_RUN 日志为空的根因（2026-06-02 发现）
+### auto_execute DRY_RUN 状态确认（2026-05-30 实测）
 
-**症状**：`grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log` 返回 0。
+**症状（2026-06-02 旧报告）**：`grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log` 返回 0。
 
-**根因**：场景分类器（get_scene_type）持续输出 `"unknown"`，但 ACTION_WHITELIST 中没有 `"unknown"` key：
-```python
-def auto_execute(scene_type, answer):
-    if scene_type not in ACTION_WHITELIST:  # "unknown" 不在白名单
-        return None  # 直接返回，DRY_RUN 日志永远到不了
-    if DRY_RUN:
-        log(f"[AUTO-EXEC-DRY] Would execute...")  # 这行永不触发
-```
+**2026-05-30 实测结果**：
+- `grep -c "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log` → **90条**（非0）
+- screen_watcher 进程运行中（PID 61102），current.png 持续更新（07:04）
+- 场景分类正常：browser/wechat/calculator 轮流
+- **结论**：之前日志为空是因为 screen_watcher 未运行；现在运行正常，dry-run 日志持续增长
 
-**修复**：在 ACTION_WHITELIST 中添加 `"unknown": ("wininfo", None)`，使 unknown 场景也能记录 dry-run 日志。备份：`~/.hermes/scripts/screen_trigger_handler.py.bak.20260530_0600`
-
-**验证**：修复后日志应出现 `[AUTO-EXEC-DRY] Would execute: wininfo for scene=unknown`
-
-**⚠️ 注意**：这是**设计问题而非 bug**。unknown 场景本就不应该触发真实动作。日志为空说明场景分类器持续输出 unknown，需从根源改善场景分类准确率，而非简单加入白名单。
+**ACTION_WHITELIST 场景覆盖**：browser, calculator, wechat 等场景均已覆盖。
 - **smolvlm2 结构化 JSON 输出实测**（2026-05-29）：
   - JSON prompt 可行，输出始终包裹 `<code>...</code>` 标签
   - 场景分类 ~13s，结构化 JSON ~2s（可能缓存）
   - 可用于 future auto-execute 精确动作规划
-- **⭐ UI-TARS Desktop（ByteDance，35.6k stars）** — 纯视觉桌面执行 Agent
+- **UI-TARS Desktop（ByteDance，35.6k stars）** — 纯视觉桌面执行 Agent
   - UI-TARS-2B（Q4_K ~1GB）理论上 M4 24G 可运行
   - **94.2%** ScreenSpot-V2 坐标准确率（smolvlm2 的 61.71%）
   - UI-TARS 2 MoE 达 **47.5%** OSWorld（2x Claude Computer Use）
   - Agent TARS CLI v0.3.0 — 多工具流式执行 + 运行时统计
   - 架构（vision→action→verify循环）与 ScreenAgent 规划完全一致
   - 详见 `references/ui-tars-desktop-research.md`
+
+**⚠️ MCP 架构缺陷 — Hermes 应优先用 Skills 模式（2026-05-30 发现）**
+- 来源：Quandri Engineering（`mcp-is-dead`，21pts HN）
+- **77个MCP工具 = ~21K tokens = 占 Claude 200K 上下文的 10.5%**
+- Linear MCP server 单独 42个工具 = ~12.8K tokens（619 tokens/call）
+- **问题1：吞噬 Context Window** — 工具定义常驻内存，无法按需加载
+- **问题2：低可靠性** — 进程隔离导致 mid-session tool death、MCP server 崩溃
+- **问题3：架构重叠** — 与现有 CLI/API 功能重复，但只存在于 LLM 对话中
+- **Skills 模式优势**：按需加载（only loaded when needed）vs MCP 全量加载
+- **对 Hermes auto_execute 的意义**：
+  - auto_execute 的 action_whitelist 正是 Skills 模式的体现（按场景加载动作）
+  - 避免为每个 app 引入完整 MCP server，保持轻量
+  - 备选：MCP 只用于需要严格权限隔离的生产级 DB 场景
+- 详见 `references/mcp-is-dead-analysis.md`
 - **⭐ MobileAgent（X-PLUG/GitHub，2026-05-30 发现）** — 基于 Qwen3-VL 的开源 Native GUI Agent
   - 支持 desktop/mobile/browser 自动化，20+ GUI benchmarks SOTA
   - 具备 grounding/tool calling/long-horizon memory 能力
@@ -566,6 +574,7 @@ PYEOF
 - [Vocaela-500M 基准与集成方案](./references/vocaela-500m-benchmarks.md) — 2026-05 发现的超高性价比 GUI agent 模型（500M, 85.8% ScreenSpotV2），含集成方式与限制
 - [ZonUI-3B 基准与集成方案](./references/zonui-3b-benchmarks.md) — 2026-05-29 发现的轻量级GUI grounding VLM（3B, WACV 2026），含部署方式与限制
 - [UI-TARS Desktop 执行层调研](./references/ui-tars-desktop-research.md) — ByteDance 纯视觉桌面 Agent（35.6k stars），94.2% 坐标准确率，架构对比与硬件适配建议
+- [MCP Is Dead 分析](./references/mcp-is-dead-analysis.md) — Quandri Engineering，77工具=21K tokens（占Claude 10.5%），Skills模式优于MCP，适合Hermes轻量架构
 - [CAPTCHAs 检测 AI Agent 研究](./references/captchas-detect-ai-agent-2026-05-30.md) — Roundtable Research CogCAPTCHA30 论文核心结论，行为过程 vs 输出等价性，anti-detection 对策思路
 - [llama3.2-vision:11b 评估 (2026-05-30)](./references/llama3.2-vision-11b-2026-05-30.md) — benchmark 79%，不安装原因，本地模型状态
 - [TTS 供应商选择指南](./references/tts-provider-selection.md) — Kokoro(已删)/Edge/MOSS TTS 实测结论，2026-05-29 更新
@@ -577,6 +586,8 @@ PYEOF
 - [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
 - [HN Top 热点文章 2026-06-02](./references/hn-top-2026-06-02.md) — HN 热门文章列表，重点关注 Tiny-vLLM/LFM2.5-8B
+- [HN Top 2026-05-30](./references/hn-top-2026-05-30.md) — 本次学习发现的 15 条 HN 热门，含 Tiny-vLLM(235 stars)/LFM2.5-8B(277pts)
+- [Tiny-vLLM C++/CUDA 推理引擎调研](./references/tiny-vllm-2026-06-02.md) — HN 559分项目，从零构建 vLLM 精简版，含 30+ 章节课程大纲
 - [Idle Learning 2026-06-02 Session](./references/idle-learning-2026-06-02-session.md) — response 标准化修复，screen_watcher 链路实测
 - [Idle Learning 2026-06-02 发现：auto_execute DRY_RUN 日志为空根因](./references/idle-learning-2026-06-02-dryrun-log-empty.md) — unknown 场景不在 ACTION_WHITELIST 导致 dry-run 永不触发，修复方案
 

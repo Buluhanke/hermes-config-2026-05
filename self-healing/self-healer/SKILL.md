@@ -221,26 +221,37 @@ web:
 ### Gateway卡死/不响应
 
 **症状**：用户说"你没反应"、消息发不出去、PID存在但僵死
+**诊断特征**：
+- 进程CPU占用100%且不下降
+- gateway.log超过2小时无新条目（memory_monitor仍写但无inbound说明卡住了）
+- uptime持续增长但没有任何业务日志
 
 **正确重启流程（2026-05-29验证）**：
 ```bash
 # 1. 找到gateway进程
 ps aux | grep "hermes_cli.main gateway" | grep -v grep
 
-# 2. 杀掉旧进程
-kill <PID>
+# 2. 先用hermes gateway stop优雅停止，再用kill保险
+cd ~/.hermes/hermes-agent && venv/bin/hermes gateway stop 2>/dev/null
+sleep 2
+kill <PID> 2>/dev/null
 
-# 3. 立即重启（用background=true模式避免nohup陷阱）
-~/.hermes/hermes-agent/.venv/bin/python -m hermes_cli.main gateway run --replace
+# 3. 立即重启（用background=true模式，不能用nohup&）
+cd ~/.hermes/hermes-agent && venv/bin/hermes gateway run --replace &
+# 正确方式：
+background=true + notify_on_complete=true 启动
+sleep 8 && tail -30 ~/.hermes/logs/gateway.log
 
-# 4. 验证
-sleep 3 && ps aux | grep "hermes_cli.main gateway" | grep -v grep
+# 4. 验证日志是否在8秒内有新条目（ свежие memory_monitor 或 platform connected）
+# 如果日志时间戳仍是卡住前的旧时间 → 重启失败，需要重新kill再试
 ```
 
 **关键细节**：
 - 必须用 `background=true` + `notify_on_complete=true` 启动，不能用 `nohup` + `&` 前台组合（会报"shell-level background wrapper"错误）
 - 旧进程必须先kill掉，否则新进程会端口冲突
 - 不用 `kill -9` 除非进程已僵死，SIGTERM即可
+- 重启后验证时间：等8秒后检查日志是否有新条目（platform connected 或 memory_monitor）
+- 若gateway_state.json里feishu状态为connected但日志里已无飞书连接记录 → 说明飞书已断开但状态未更新，也是卡死的信号
 
 **当patch工具被保护拒绝时的替代编辑方法**：
 ```bash
