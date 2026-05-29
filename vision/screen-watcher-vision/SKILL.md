@@ -17,6 +17,42 @@ smolvlm2 是一个小模型，存在明显幻觉问题，尤其在简单场景�
 2. **低温参数**：temperature=0.0 减少随机性
 3. **场景前缀**：在 prompt 开头加场景描述，强制模型聚焦
 4. **时间戳验证**：提示"这是截图而不是风景照"
+5. **英文选项**：使用英文单词（browser/wechat/desktop...）而非中文，避免模型输出中文时混入代码片段
+6. **明确禁止代码**：prompt 中加 "不要代码" 指令
+
+### ⚠️ 场景分类幻觉 bug（2026-05-30 实测）
+
+**症状**：get_scene_type() 对手机计时器界面输出 "type('seconds')" 等 Python 代码片段。
+
+**根因**：smolvlm2 将中文选项 "浏览器/微信/桌面/..." 理解为代码语法，输出类似 "type('seconds')" 的代码片段。
+
+**修复后 prompt（已验证）**：
+```
+[这是macOS系统截图，不是照片]
+看这张截图，判断这是什么场景？
+选项：browser/wechat/desktop/calculator/jingdong/1688/dingtalk/telegram/other
+只回答一个选项，写作对应英文单词。不要其他文字，不要代码。
+```
+
+**验证方法**：日志中 "场景类型:" 应为英文单词（如 "calculator"），而非代码片段（"type('seconds')"）。
+
+## 视觉模型选型（2026-05-30 实测修正）
+
+**当前在用**：smolvlm2-agentic-gui（1.85GB Q4_K_M，ahmadwaqar/smolvlm2-agentic-gui:latest）
+
+| 指标 | smolvlm2-agentic-gui | qwen3-vl:2b（对比参考）|
+|------|---------------------|----------------------|
+| 模型大小 | 1.85GB | 1.76GB |
+| 响应时间 | **7.7s**（原生1920x1080）| **46.6s**（需缩到900x900）|
+| 原生分辨率 | ✅ 1920x1080直接处理 | ❌ 超时，需预处理缩图 |
+| 适用场景 | **实时GUI监控** | 离线精确OCR分析 |
+
+**结论**：smolvlm2 速度快6倍+原生分辨率，是 screen_watcher 实时分析的正确选择。qwen3-vl:2b OCR能力更强但不适用于实时场景，保留为离线分析备选。
+
+**qwen3-vl:2b 已知限制**（Ollama）：
+- 原生1920x1080截图会超时（>60s）
+- 必须缩图到~900x900才能在46s内响应
+- 4B版本（3.3GB，90% ScreenSpot）待验证
 
 ## 推荐 Prompt 模板
 
@@ -91,7 +127,8 @@ screen_trigger_handler 对分析结果进行紧急度分级，非紧急内容不
 
 **当前状态**：
 - `DRY_RUN = True`（安全模式，只记录不执行）
-- 白名单场景：浏览器/微信/1688/ChatGPT/钉钉/Telegram
+- 白名单场景：浏览器/微信/1688/ChatGPT/钉钉/Telegram（6个）
+- ⚠️ **已知不匹配**：分类器支持10个场景（+桌面/计算器/京东/其他），但 ACTION_WHITELIST 只有6个；不匹配时 auto_execute 返回 None，静默处理
 - 初始动作均为 `wininfo`（只读获取窗口信息）
 - Telegram 推送增加 `[Auto-Exec dry-run for X]` 前缀提示
 
@@ -107,11 +144,81 @@ screen_trigger_handler 对分析结果进行紧急度分级，非紧急内容不
 - `get_scene_type()` 已有标签清理逻辑：`response.split('</think>')[-1].strip()` + `.split('<code>')[-1].strip()`
 - 需增强清理逻辑以处理 `<code>` -> `\n</code>` 尾部
 
+## 链路状态快照（2026-05-30 实测验证）
+
+**验证结论**：screen_watcher 链路已完整激活，所有节点正常工作：
+
+```
+screen_watcher.py（PID 61099）
+  → 每15秒扫描，检测有效变化则触发
+  → touch_trigger() 创建 .changed 文件 + .handler_lock 互斥锁
+  → subprocess.Popen(screen_trigger_handler.py)（PID 61146）
+      → smolvlm2 分析屏幕（~25s 端到端）
+      → auto_execute() dry-run 记录到 ~/.hermes/logs/screen_trigger.log
+      → 无匹配场景则 silent（不推 Telegram）
+```
+
+**关键验证命令**：
+```bash
+# 检查进程是否运行
+ps aux | grep screen_watcher | grep -v grep
+# 检查 screenshots 目录
+ls -lt ~/.hermes/screenshots/
+# 检查 handler 日志
+cat ~/.hermes/logs/screen_trigger.log | tail -10
+# 检查 watcher 日志
+cat ~/.hermes/logs/screen_watcher.log | tail -15
+# 检查 handler 是否还在运行（lock 文件存在）
+ls ~/.hermes/screenshots/.handler_lock
+```
+
+**⚠️ 场景类型 key 不匹配 bug（2026-05-30 实测）**
+
+**症状**：日志中从未出现 `[AUTO-EXEC-DRY]` 标记，auto_execute() 静默失效。
+
+**根因**：get_scene_type() 输出**英文单词**（browser/wechat/desktop/calculator/jingdong/1688/dingtalk/telegram/other），但 ACTION_WHITELIST 的 key 是**中文**（浏览器/微信/桌面/计算器/京东/1688/钉钉/Telegram）。两者不匹配 → auto_execute() 第46行 `if scene_type not in ACTION_WHITELIST` 直接 return None。
+
+**修复方案**（二选一）：
+1. **方案A（推荐）**：统一语言 — 修改 get_scene_type() prompt 输出**中文** app 名称，与 ACTION_WHITELIST 对齐：
+   ```
+   选项：浏览器/微信/桌面/计算器/京东/1688/钉钉/其他
+   只说一个词，不要其他内容。
+   ```
+2. **方案B**：ACTION_WHITELIST 用英文 key，auto_execute() 做英汉映射
+
+**验证方法**：日志中应出现 `[AUTO-EXEC-DRY] Would execute: wininfo for scene=浏览器`，若为 `[AUTO-EXEC-DRY] Would execute: wininfo for scene=browser` 说明格式不匹配。
+
+**常见断链故障排查**：
+- `screenshots/` 目录不存在 → 手动 `mkdir -p ~/.hermes/screenshots`，watcher 会自动创建
+- 无 `screen_watcher` 进程 → 手动启动 `python3 ~/.hermes/scripts/screen_watcher.py &`（用 background=true）
+- `.handler_lock` 永久存在（进程被 kill） → 手动 `rm ~/.hermes/screenshots/.handler_lock`
+- handler 重复 spawn → 检查 `.handler_lock` 是否正确创建/删除（见 2026-05-26 修复）
+- **dry-run 日志从无 `[AUTO-EXEC-DRY]`** → 检查 scene_type 格式是否与 ACTION_WHITELIST key 匹配（见上方场景类型 key 不匹配 bug）
+
+**启动后状态**：
+- `~/.hermes/screenshots/current.png` 存在（3.4MB 截图表当前桌面）
+- `~/.hermes/screenshots/.watcher_state.json` 记录上次触发时间
+- `DRY_RUN=True` 模式下 auto_execute 只记录不动手，安全验证正常
+
+**可执行改进**：
+- **Bug 修复**：screen_trigger_handler.py 的 get_scene_type() 返回完整描述，但 auto_execute() 期望 app 名称。需要统一格式，或让 auto_execute 接受描述并做模糊匹配
+- **TTS 现状**：Edge TTS 已配置（hermes-voice-module），Noiz API 有配置但未实测
+- **模型状态**：smolvlm2-agentic-gui 稳定（实时分析首选），qwen3-vl:2b 可用（离线OCR）
+
+**待验证项**：
+- Edge TTS 是否正常工作（execute_code 里测，不用 terminal 走代理）
+- Noiz API key 是否已配置
+- UI-TARS Desktop Mac M4 安装可行性（github.blocked 无法下载 .dmg）
+
+**下次学习方向**：Vision — 检查 Edge TTS 可用性，测试 noiz_api_key 是否有效
+
 ## 参考文件
 
+- `references/screen-trigger-handler-telegram-fix-2026-05-30.md` — Telegram推送失败修复（hermes_tools → 直接Bot API）+ 场景分类prompt幻觉bug修复
 - `references/smolvlm2-structured-json-2026-05-29.md` — smolvlm2 JSON 输出测试详情（响应时间、清理函数、可靠性评估）
 - `references/screen-trigger-handler-auto-execute-2026-05-28.md` — Auto-Execute 集成设计文档
 - `references/screen-watcher-handler-lock-2026-05-26.md` — Handler 重复 spawn 修复
+- `references/qwen3vl-vs-smolvlm2-2026-05-30.md` — qwen3-vl:2b vs smolvlm2 实测对比（速度、分辨率、适用场景）
 
 ## 温度参数
 ```json

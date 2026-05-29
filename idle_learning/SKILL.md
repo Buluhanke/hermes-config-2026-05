@@ -218,6 +218,23 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   2. 如果 screen_watcher 不运行 → 诊断原因（handler lock 残留？cron 未启动？进程被杀？）
   3. screen_watcher 恢复后 → **验证 dry-run 日志**
   4. 坐标校准 → DRY_RUN=False
+- ⚠️ **screen_watcher 完全未部署的诊断流程（2026-05-30 实测）**：
+  - `ls ~/.hermes/screenshots/` → dir 不存在 = screen_watcher 从未运行
+  - `ps aux | grep -E "screen_watcher|screen_poller|screen_trigger"` → 无输出 = 进程不存在
+  - `crontab -l` → 空 = 无 cron 定时任务
+  - `ls ~/.hermes/scripts/ | grep -i "screen"` → 检查是否有 screen_* 脚本（screen_watcher.py 应在 scripts/）
+  - **结论**：如果以上全部为空，说明整个 screen_watcher 机制从未部署，需手动启动验证
+
+**⚠️ screen_watcher 启动与验证流程（2026-05-30 实测完整链路）**：
+  1. `mkdir -p ~/.hermes/screenshots`（watcher 不会自动创建父目录）
+  2. 启动 watcher：`terminal(background=true)` 执行 `python3 ~/.hermes/scripts/screen_watcher.py`
+  3. 验证进程：`ps aux | grep screen_watcher | grep -v grep`
+  4. 验证截图：`ls -lt ~/.hermes/screenshots/current.png`（应有 3MB+ 文件）
+  5. 验证 handler 被触发：`cat ~/.hermes/logs/screen_trigger.log | tail -10`
+  6. 验证 dry-run 记录：`grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log`
+  - **如一切正常**：screen_watcher 链路完整，auto_execute dry-run 正在记录
+  - **如 lock 文件残留**：`rm ~/.hermes/screenshots/.handler_lock` 后重试
+- ⚠️ **screen_watcher 目录不存在的情况（2026-05-29 发现）**：若 `ls ~/.hermes/screenshots/` 返回"No such file or directory"，说明 screen_watcher 从未启动过或已被清理。需要手动检查 screen_watcher 进程和启动脚本，确认目录会被正确创建。
 - CDP直连方案已知可用：原生Python WebSocket连接9333，不依赖mcp-chrome-stdio bridge
 - **重要底层限制（2026-05-28 发现）**：cua-driver/macOS CGEventTap 对某些应用（Blender等）的event loop只接受cghidEventTap且前面有mouseMoved事件，需要短暂前台激活。"不抢焦点"承诺对这类应用不可实现，Hermes computer_use同理
 - **执行层四级断链（2026-05-29 发现）**：全链路在 cron 环境断在 screen_watcher 不运行
@@ -305,6 +322,11 @@ python3 /tmp/test_smolvlm.py
 ```
 
 **候选模型对比**（优先测试可 Ollama 直接拉取的，HF 镜像可用 hf-mirror.com 替代 huggingface.co）：
+
+- **⭐ qwen3-vl:2b vs smolvlm2-agentic-gui 实测（2026-05-30）**：
+  - smolvlm2-agentic-gui：**7.7s**原生1920x1080，GUI专项，screen_watcher实时分析首选
+  - qwen3-vl:2b：**46.6s**（需缩到900x900），通用视觉，OCR更强但不适用实时场景
+  - 结论：screen_watcher 实时分析继续用 smolvlm2，qwen3-vl:2b 保留为离线OCR备选
 
 - **⭐ Vocaela-500M（最高优先级，2026-05-29 发现，2026-05-29 实测部署结论）** — 500M 参数，ScreenSpotV2 85.8%（24pp 高于当前 smolvlm2），GGUF Q8_0 仅 437MB
   - ⚠️ Ollama 直接跑失败（hf.co 走 huggingface.co 被网络阻断 IPv6 timeout）

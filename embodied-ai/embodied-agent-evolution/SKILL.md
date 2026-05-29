@@ -88,26 +88,74 @@ tags: [embodied-ai, desktop-automation, self-evolution, hermes]
 | 模块 | 推荐技术 | 说明 |
 |------|---------|------|
 | VLM大脑 | GPT-4o、Claude 3.7 Sonnet、Qwen2.5-VL | 视觉理解+推理决策 |
-| 本地VLM | smolvlm2-agentic-gui（当前）、Qwen3-VL（下一步） | M4 24GB可用 |
-| 执行层 | PyAutoGUI、OSWorld、Playwright | OS底层鼠标键盘控制 |
+| 本地VLM | smolvlm2-agentic-gui（当前）、Qwen3-VL 2B/4B/8B（Ollama可用，235B需llama.cpp） | M4 24GB可用 |
+| 执行层 | PyAutoGUI、OSWorld、Playwright、NutJS（UI-TARS） | OS底层鼠标键盘控制 |
 | 记忆层 | Vector DB + 知识图谱 | 用户偏好+历史操作 |
 | 混合模式 | VLM（看全局）+ 传统UI自动化（点局部） | 目前最优落地方案 |
 
 **关键瓶颈**：4K截图成本高 + 长序列任务容错率低。当前最优解是混合模式。
 
-### 4. Agentic Lybic（OSWorld SOTA 57.07%）
+### 4. OSWorld Benchmark 关键洞察（2026-05-29 更新）
+
+**OSWorld（ NeurIPS 2024 ）：369个真实桌面任务，评测视觉Agent**
+
+Top Scores（2026-05-29）：
+- Claude Opus 4.6: 72.7% | Claude Sonnet 4.6: 72.5% | **Qwen3 VL 235B A22B: 66.7%（开源第一）**
+
+**⚠️ 核心发现：75% 的失败是 visuomotor grounding errors（看见但做不到），而非 reasoning 失败**
+
+> 来源：OSWorld 论文结论，75% of failures traced to visuomotor grounding errors rather than reasoning failures
+
+**含义**：
+- 模型"看懂"了屏幕，但"做不到"正确点击/输入
+- 纯 reasoning 能力强的模型不等于桌面操作强
+- **GUI grounding 能力（看见→做到）是核心瓶颈**，比提升推理能力更有价值
+
+**对 Hermes 的启发**：
+- Hermes 的 vision 层（smolvlm2）负责"看见"，但需要精确的坐标准确率才能"做到"
+- Auto-execute 的核心挑战不是理解场景，而是精确定位 UI 元素
+- Vocaela-500M（85.8% ScreenSpotV2）方向正确，但 Ollama 集成有问题
+- Smol2Operator 归一化坐标（0-1）比像素坐标好 20x，Hermes 未来应采用归一化坐标
+
+**⚠️ auto_execute 场景类型 key 不匹配 bug（2026-05-30 实测）**
+screen_trigger_handler 的 ACTION_WHITELIST 用中文 key（浏览器/微信/桌面...），但 get_scene_type() 输出英文（browser/wechat/desktop...），导致 auto_execute() 永远 return None。详见 `screen-watcher-vision` skill 的"场景类型 key 不匹配 bug"章节。
+
+### 5. 本地视觉模型选型指南（InsiderLLM 2026-05 更新）
+
+**VRAM tier 选型表（InsiderLLM 2026-05，insiderllm.com/guides/vision-models-locally）**：
+
+| VRAM | 最佳选择 | Ollama命令 | 说明 |
+|------|---------|-----------|------|
+| 4GB | Gemma 3 4B (int4) | `ollama run gemma3:4b` | 2.6GB，真实视觉 |
+| 4GB | SmolVLM2 2.2B | — (HuggingFace) | ~2GB，边缘级 |
+| 8GB | Qwen 2.5-VL 7B (Q4) | `ollama run qwen2.5vl:7b` | 8GB fallback（Qwen 3.6未入Ollama）|
+| 10-12GB | Phi-4-reasoning-vision 15B | — (llama.cpp) | 数学/科学图表 |
+| 16-22GB | Qwen 3.6-35B-A3B MoE | — (llama.cpp + --cpu-moe) | 35B via expert offload |
+| ~18GB | Gemma 4 26B-A4B | `ollama run gemma4:26b` | Fast MoE，3.8B active/token |
+| ~20GB | Gemma 4 31B dense | `ollama run gemma4:31b` | MMMU Pro 76.9% |
+| 24GB+ | Qwen 3.6-27B dense | — (llama.cpp/LM Studio) | **新SOTA本地视觉** |
+| 24GB+ | Qwen 3.6-35B-A3B MoE | — (llama.cpp/LM Studio) | Faster than 27B dense |
+| Any | PaddleOCR-VL 0.9B | `pip install` | OCR专用，CPU可跑，92.6%准确率 |
+
+**关键更新（2026-05）**：
+- **Qwen 3.6 vision 内建于基座**（无独立VL track），27B/35B-A3B 均原生多模态
+- **Gemma 4 是 Ollama 最快多模态路径**：`ollama run gemma4:26b` 直接跑，18GB+
+- **⚠️ Qwen 3.6 Ollama 暂不支持**：需 llama.cpp 或 LM Studio；`ollama run qwen3-vl:8b` 是 3-VL 系列，不是 3.6
+- **M4 Mac 24GB 实际可用**：qwen3-vl:2b（1.9GB）/4b（3.3GB）/8b（6.1GB）via Ollama；gemma4:e2b（7.2GB）/e4b（9.6GB）
+
+### 6. Agentic Lybic（OSWorld SOTA 57.07%）
 FSM多智能体架构，用于复杂桌面自动化：
 - Controller → Manager → Worker(Technician/Operator/Analyst) → Evaluator
 - FSM动态路由 + 质量门控 + 错误恢复
 - 启发：Hermes需要类似的状态机+质量检查机制
 
-### 5. Embodied EvoAgent（大脑左右半球架构）
+### 7. Embodied EvoAgent（大脑左右半球架构）
 - 左半球：MLLM理解指令+视觉场景
 - 右半球：World Model状态空间模型，预测未来
 - 胼胝体：动态通信slot交换信息
 - 启发：Hermes的vision_agent和humanization_core可以类比这个架构
 
-### 6. 关键能力缺口（对照Hermes现状）
+### 8. 关键能力缺口（对照Hermes现状）
 - 多步骤复杂任务规划（需要Manager模块）
 - 持续质量评估+自适应重规划
 - 环境状态记忆（World Model）
