@@ -42,11 +42,18 @@ category: procurement
 ### Step 1：确定关键词
 用户说"搜XX" → 立即确认关键词 → 执行
 
-### Step 2：找品策略（重要！）
-### Step 2：找品策略（重大更新 2026-05-28）
+### Step 2：找品策略（重大更新 2026-05-29）
 
-**✅ 正确方式：通过CDP拦截1688搜索postMessage数据**
+**三步走，任选其一：**
 
+#### 方式A：AnySearch（推荐，最快）
+```bash
+python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py batch_search \
+  --queries '[{"query":"纸箱 义乌 1688 批发","max_results":5}]'
+```
+输出结构化，1688商品直接命中。注意：1688搜索结果页JS渲染，extract可能拿不到数据，但search本身能返回摘要。
+
+#### 方式B：CDP拦截1688搜索postMessage数据（数据最准确）
 1688搜索结果页（s.1688.com）数据通过`window.postMessage`从父窗口注入，DOM中不直接渲染。
 正确流程：
 
@@ -87,7 +94,7 @@ for _ in range(8):
         break
     time.sleep(1.5)
 
-# 提取所有60个商品
+# 提取所有商品
 r = sv("Runtime.evaluate", {"expression": """
 (function(){
   var items = window.data.offerV2.response.data.OFFER.items;
@@ -111,9 +118,13 @@ r = sv("Runtime.evaluate", {"expression": """
 """, "returnByValue": True})
 ```
 
-**❌ 已废弃的方式**（直接访问搜索URL，用innerText/DOM提取）：1688搜索页的DOM中不包含offer数据，只返回一个空壳页面。innerText提取不到价格/公司名/offerID。
+#### 方式C：extract提取工厂详情页（适合拿到商品链接后查资质）
+```bash
+python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py extract "https://detail.1688.com/offer/商品ID.html"
+```
+可提取联系方式、公司名所在地等静态内容。搜索结果页（JS渲染）extract效果差，详情页效果好。
 
-**❌ 也不要尝试**：1688首页搜索框（homepage search box）→ 只返回"为你推荐"4-5个商品，不是搜索结果。
+**方式选择优先级**：AnySearch(快) → CDP(准) → extract(辅助)
 
 ### Step 3：筛选江浙沪
 
@@ -210,7 +221,30 @@ price = (text.match(/¥[\d.]+/g) || []).slice(0,1).join(' / ')
 
 个人买家身份难以申请，建议优先用CDP postMessage法。
 
-## 1688 ClawHub技能库（2026-05-29新增）
+## 技能联动工作流
+
+```
+anysearch（批量搜索）→ 1688-sourcing（比价流程）→ decision-helper（决策评估）
+                                        ↓
+hindsight（记住决策）← 每次采购完成后自动存入
+                                        ↓
+hermes-ocr（辅助）← extract工厂资质文件 / 读报价单截图
+```
+
+**AnySearch常用命令**（runtime.conf已配置python3）：
+```bash
+# 单次搜索
+python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py search "关键词" --max_results 5
+
+# 批量搜索（推荐，比单次快）
+python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py batch_search \
+  --queries '[{"query":"纸箱 义乌 工厂","max_results":5},{"query":"气泡袋 金华 批发","max_results":5}]'
+
+# 全页内容提取（工厂详情页）
+python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py extract "https://detail.1688.com/offer/ID.html"
+```
+
+**1688 ClawHub技能库（2026-05-29新增）
 
 已安装以下ClawHub技能，可直接调用：
 

@@ -77,6 +77,36 @@ docker run -d \
   ghcr.io/vectorize-io/hindsight:latest
 ```
 
+## Hermes 插件集成
+
+Hermes 内置 `hindsight` memory provider，配置后自动挂载：
+
+```bash
+# config.yaml 已配置
+memory:
+  provider: hindsight
+  memory_enabled: true
+
+# 插件配置文件
+~/.hermes/hindsight/config.json
+```
+
+插件会自动加载，暴露 3 个工具：`hindsight_retain` / `hindsight_recall` / `hindsight_reflect`
+
+每次对话结束（`on_session_end` hook）自动存入 Hindsight，下轮对话前自动召回相关记忆。
+
+```json
+{
+  "mode": "local_external",
+  "api_url": "http://localhost:8899",
+  "bank_id": "hermes",
+  "recall_budget": "mid",
+  "auto_retain": true,
+  "auto_recall": true,
+  "memory_mode": "hybrid"
+}
+```
+
 ## ⚠️ 关键坑点
 
 ### 模型速度决定响应时间

@@ -71,6 +71,27 @@ grep -E "error|ERROR|exception" ~/.hermes/logs/gateway.log | tail -20
 `~/.hermes/scripts/screen_watcher.py` — HANDLER_LOCK 锁文件防止重复拉起handler
 **坑**：之前没锁机制，watcher多次触发导致多个handler并发跑，必须加锁文件+finally清理。
 
+### Hindsight 长期记忆（2026-05-29 已部署）
+Docker容器 `hermes-hindsight`，端口8899，API根路径 `http://localhost:8899`
+银行ID: `hermes`，observations模式开启（自动叙事化为AI视角经验）
+推理模型: `qwen2.5:1.5b`（Ollama本地推理，比qwen3-vl:2b快30x）
+Embedding模型: `nomic-embed-text:latest`
+
+**接入方式**：
+```python
+from hindsight_client import Hindsight
+client = Hindsight(base_url="http://localhost:8899")
+client.retain(bank_id="hermes", content="记忆内容", tags=["标签"])
+result = client.recall(bank_id="hermes", query="搜索query")
+```
+
+**已知坑**：
+- `observations=true` 时内容被重写成AI视角，不是原始输入
+- API路径：`POST /v1/default/banks/{bank_id}/memories`（不是 `/memories/retain`）
+- Retain请求体：`{"items": [{"content": "...", "tags": [...]}]}`
+- Recall响应字段：`.text` 不是 `.content`，`.type` 不是 `.type_`
+- qwen3-vl:2b 太慢（30s+），换 qwen2.5:1.5b
+
 ### Context Loader
 `~/.hermes/scripts/evolution_core.py` — 整合 personality + LTM + 当前上下文，下次对话自动加载
 

@@ -52,27 +52,39 @@ window.data.offerV2.response.data.OFFER.items
 - 1688动态渲染，DOM里没有商品数据
 - 直接从`window.data`读取，不要从DOM提取
 
-## 1688开放平台API密钥配置（2026-05-29新增）
+## 1688开放平台API申请结论（2026-05-29验证）
 
-危险级别（--force也无法绕过）：`clawhub/1688-product-search`、`clawhub/1688-product-find`、`clawhub/1688-sourcing-inquiry` — 需 ALI1688_APP_KEY/SECRET/ACCESS_TOKEN/REFRESH_TOKEN
+**申请条件：**
+- 企业支付宝账号（必须）
+- 营业执照认证
+- 需审核，审核时间1-3天
 
-谨慎级别（--force可安装，运行需Key）：`clawhub/1688-shopkeeper`、`clawhub/1688-source-suppliers` 等
+**适合场景：** 有自己1688店铺的卖家（需要管理店铺商品、订单、物流）
 
-在 `~/.hermes/.env` 中添加：
-```
-ALI1688_APP_KEY=your_key
-ALI1688_APP_SECRET=your_secret
-ALI1688_ACCESS_TOKEN=your_token
-ALI1688_REFRESH_TOKEN=your_refresh_token
-```
+**迅龙贸易的情况：** 是买家身份（找供应商、采购），不是卖家，不需要店铺管理。申请1688开放平台API对采购场景没有直接帮助，且企业认证门槛暂时过不了。
 
-## 当前已安装的1688技能（2026-05-29）
+**结论：** 不用申请1688 API Key。CDP方案（`1688-sourcing` skill）已经够用，数据质量和API接近，不需要花时间申请。
 
-✅ 直接可用：`1688-sourcing-agent`、`1688-procurement-agent`、`1688-price-monitor`
+---
 
-✅ force安装可用：`1688-source-suppliers`、`1688-shopkeeper`、`1688-shop-health-check`、`1688-item-select`、`1688-product-analysis`、`1688-finance-tax`、`1688-item-title-optimizer`、`1688-item-one-click`
+## 当前已安装的1688技能状态（2026-05-29）
 
-⚠️ 需配置API Key后才能运行：`1688-product-search`、`1688-product-find`、`1688-sourcing-inquiry`
+⚠️ **需API Key（需企业认证，暂时跳过）：**
+- `1688-source-suppliers` — 找供应商，需AK
+- `1688-shopkeeper` — 店铺管理，需AK
+- `1688-item-select` — 重点品圈选，需AK
+- `1688-product-analysis` — 商品分析，需AK
+- `1688-shop-health-check` — 店铺健康检查，需AK
+- `1688-item-one-click` — 一键修改，需AK
+
+✅ **直接可用（无需Key）：**
+- `1688-sourcing` (`procurement/1688-sourcing/`) — CDP拦截法找品，5家比价，标准化流程
+- `1688-search-data-extract` — 底层CDP数据提取，1688-sourcing依赖此技能
+
+❌ **需换方案：**
+- `1688-price-monitor` — 官方API方案，需AK；已用CDP方案替代
+
+---
 
 ## 已知限制
 - 长关键词被截断（如"50*25cm气泡袋"变成乱码）
