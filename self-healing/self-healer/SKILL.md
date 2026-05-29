@@ -167,6 +167,26 @@ web:
 - skill存在但路径错误 → 更新cron job的skills字段
 - skill已删除 → `cronjob remove <job_id>`（不再空转浪费token）
 
+### Git Push被GitHub Secret Scanning拦截
+
+**症状**：cron脚本 `git push` 失败，报 `GH013: Repository rule violations` 或 `Push cannot contain secrets`
+
+**诊断**：直接运行 `git push 2>&1` 看报错，错误信息会指明key类型和所在文件/commit
+
+**修复流程**：见 `references/github-push-block-large-repo.md`
+
+**预防**：永远不要把真实API Key提交到git（即使只是测试）。用 `YOUR_API_KEY` 等占位符替代。
+
+### 仓库过大Push失败（5GB+）
+
+**症状**：`RPC failed; HTTP 400` 或 `Everything up-to-date` 但push仍失败
+
+**诊断**：`du -sh .git` 检查大小，GitHub单仓库限制5GB
+
+**修复流程**：见 `references/github-push-block-large-repo.md`
+
+**预防**：定期 `du -sh ~/.hermes/.git`，大文件及时从git跟踪中移除
+
 ### Memory满载（1350+/1375字符）
 
 **症状**：新偏好无法保存，每次保存都触发压缩
