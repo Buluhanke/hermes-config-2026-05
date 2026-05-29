@@ -172,7 +172,10 @@ def smart_click(target_desc, use_vlm_fallback=True, region=None):
 
 ```python
 import subprocess
-venv_python = "/Users/aimac/.hermes/hermes-agent/venv/bin/python"
+# macOS 上有 pyobjc 的 Python：
+#   /opt/homebrew/bin/python3  ← 有 Vision Framework（M系列Mac）
+#   /usr/bin/python3           ← 无 pyobjc
+python_with_vision = "/opt/homebrew/bin/python3"
 
 test_code = '''
 import Vision
@@ -182,7 +185,10 @@ import Vision
 with open("/tmp/script.py", "w") as f:
     f.write(test_code)
 
-result = subprocess.run([venv_python, "/tmp/script.py"], capture_output=True, text=True, timeout=30)
+result = subprocess.run(
+    [python_with_vision, "/tmp/script.py"],
+    capture_output=True, text=True, timeout=30
+)
 ```
 
 ### Vision OCR 对终端/TUI 识别率低
@@ -192,6 +198,8 @@ result = subprocess.run([venv_python, "/tmp/script.py"], capture_output=True, te
 ### 局部区域截不到目标文字
 
 局部截图只扫一片，如果目标不在区域内会漏扫。已知目标位置时用 region 参数加速，未知时用全屏。
+
+> ⚠️ 必须是 `/opt/homebrew/bin/python3`（M系列Mac内置pyobjc），`/usr/bin/python3` 没有 pyobjc。
 
 ## 设计原则
 1. **分层感知**: 能用底层API解决的不上高级模型

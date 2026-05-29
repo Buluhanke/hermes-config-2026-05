@@ -268,6 +268,52 @@ grep "provider:" ~/.hermes/config.yaml | grep -v "auto"
 4. 恢复 → 报告"浏览器已重启"
 ```
 
+### hermes-agent venv 损坏（venv/bin/hermes 不存在）
+
+**症状**：`~/.local/bin/hermes` 执行时报 `No such file or directory`，说明 venv 的 python 二进制损坏或 Python 版本升级后不兼容。
+
+**修复流程**：
+```bash
+# 1. 用 python3.11 重建 venv（不能用 python3.14，paddlepaddle 不支持）
+python3.11 -m venv /Users/aimac/.hermes/hermes-agent/venv
+
+# 2. 从源码安装 hermes-agent（不能用 pip install hermesai，包名不存在）
+cd /Users/aimac/.hermes/hermes-agent
+venv/bin/pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 3. 验证
+venv/bin/hermes --version
+```
+
+**Python 版本注意**：
+- Python 3.14 不兼容 paddlepaddle（Mac arm64 无预编译 wheel）
+- 当前稳定版本：Python 3.11（`/Users/aimac/.local/bin/python3.11`）
+
+### PaddleOCR v3.6.0 安装（hermes-agent venv 内）
+
+**症状**：用户要求 OCR 能力，但 PaddleOCR 未安装或 `import paddleocr` 失败。
+
+**依赖链**：`paddlepaddle` → `paddlex[ocr]` → `paddleocr`
+
+**安装命令**（在 hermes-agent venv 内执行）：
+```bash
+cd /Users/aimac/.hermes/hermes-agent
+./venv/bin/pip install paddlepaddle paddlex paddleocr \
+  -i https://pypi.tuna.tsinghua.edu.cn/simple
+```
+
+**验证**：
+```bash
+./venv/bin/python -c "from paddleocr import PaddleOCR; ocr = PaddleOCR(lang='ch'); print('✓ PaddleOCR OK')"
+```
+首次运行会自动下载模型（约 300MB+），耐心等待。
+
+**注意**：
+- 清华镜像（pypi.tuna.tsinghua.edu.cn）比官方源快很多
+- 必须装在 hermes-agent venv 内（`./venv/bin/python`），不能用系统 python3.14
+- 若遇到 `Engine 'paddle_static' is unavailable because dependency 'paddlepaddle' is not installed`，
+  说明 paddlepaddle 未装，执行上述安装命令即可
+
 ### 定时任务全部失败
 
 **症状**：cronjob list 显示多个 error 状态

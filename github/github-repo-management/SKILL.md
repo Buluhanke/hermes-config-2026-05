@@ -14,7 +14,9 @@ metadata:
 
 Create, clone, fork, configure, and manage GitHub repositories. Each section shows `gh` first, then the `git` + `curl` fallback.
 
-Add step: Verify URL with case-sensitive check. Add pitfall: Private repos require owner contact. Add reference: 404 error handling workflow (see references/404-github-repo.md). Update trigger to include "repository not found" scenarios.
+- `gh repo rename` CLI syntax is counter-intuitive — positional arg, `--repo` flag for source repo
+- OAuth token vs PAT detection and `delete_repo` scope gap — see `references/github-oauth-vs-pat.md`
+- GitHub network requires proxy `http://127.0.0.1:7897` for curl; `gh` does not auto-use proxy
 
 ### Setup
 
@@ -620,6 +622,8 @@ Parameters:
   5. `git push --force --mirror`（推送所有分支和标签）
   - 注意：`gh api repos/<owner>/<repo>` 返回的 `size` 字段有延迟，可能数小时后才更新；用 `git clone` 新建本地目录验证实际大小更准确
   - 此操作不可逆，提前告知用户
+- **First filter-branch misses secret patterns (incomplete rewrite)**: Initial filter-branch pass using a narrow pattern (e.g., only `sk-` and `gho_`) still leaves `gsk_` (Groq), `nvapi-` (NVIDIA), `AIzaSy` (Google) in history → GH013 fires again on push. Fix: run a second `sed`-based filter-branch pass targeting all known prefixes. Verify with `git show HEAD:<file> | grep -c "gsk_\|nvapi-\|AIzaSy"` before pushing.
+- **Secrets in history + OAuth lacks delete_repo scope**：完整解决方案见 `references/github-rebuild-secrets.md` — 包含OAuth vs PAT区别、rebuild from scratch完整步骤、API key patterns触发列表
 - **Merging two unrelated repos**: Use `git fetch <remote>` first, then `git merge <remote>/<branch> --allow-unrelated-histories`. Conflicts in `.gitignore` are common — combine both versions (OR the contents together), then `git add .gitignore` and commit. After merge, push with `--force` if needed.
 - **Extracting a remote branch's files without switching**: Use `git archive <remote>/<branch> --prefix=<dir>/ | tar -xf - -C .` — this pulls files directly from the remote without creating a local branch or worktree. Useful when a branch (e.g., `obsidian-backup`) exists on remote but not locally. After extraction, `git add` the new directory and commit.
 - **Fetching a remote branch that has no local tracking**: `git ls-tree <remote>/<branch>` shows what's in that branch without fetching. Use `git archive <remote>/<branch> --prefix=<dir>/ | tar -xf - -C .` to extract files from a remote branch into a local directory without switching branches.
