@@ -123,6 +123,12 @@ Top Scores（2026-05-29）：
 
 **核心结论**：Planner（GPT-4o/Claude 3.7/Gemini 2.5 Pro）已成熟，**Grounder（视觉 grounding）是瓶颈所在**，开源栈已追上甚至超越闭源前沿。
 
+**⚠️ V2P（Valley-to-Peak）补充（2026-05-30 发现）**：
+- V2P 是浙江大学+蚂蚁集团的**训练方法论**，不是可直接使用的模型（arxiv 2508.13634）
+- 92.3% ScreenSpot-v2 成绩来自 V2P **训练出来的新模型**，需追踪该模型是否公开
+- 基于 Fitts' Law 建模 2D Gaussian 热图做注意力校准，中心权重高、边缘权重低
+- 当前 V2P 方法论本身是开源的，但基于它训练出的具体模型需单独确认是否发布
+
 **2026 SOTA benchmark 核心数据**：
 | 模型 | 参数量 | ScreenSpot-V2 | ScreenSpot-Pro | OSWorld-G | AndroidWorld |
 |------|--------|---------------|---------------|-----------|--------------|
@@ -151,7 +157,7 @@ Top Scores（2026-05-29）：
 - smolvlm2-agentic-gui ✅ 在用（1.85GB，7-64s响应）
 - qwen3-vl:2b ✅ 在用（1.9GB）
 - qwen3-vl:4b ❌ 不存在（not found 404）
-- blaifa/InternVL3_5:4b ✅ 可测试（~3GB，基于Qwen2.5）
+- blaifa/InternVL3_5:4b ⚠️ **Mac上有图片理解Bug（Issue #12166），暂缓部署**（~3GB，基于Qwen3）
 - blaifa/InternVL3_5:8b ✅ 可测试（~5GB）
 - **ui-venus ❌ Ollama不存在**（页面404，搜索无结果）
 

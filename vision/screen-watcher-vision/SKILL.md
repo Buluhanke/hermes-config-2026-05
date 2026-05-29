@@ -51,18 +51,16 @@ CLEANED: "final_answer(''The i..."
 
 **验证方法**：日志中 "场景类型:" 应为英文单词（如 "calculator"），而非代码片段（"type('seconds')"）。
 
-## 视觉模型选型（2026-05-30 实测修正）
+## 两模型分工（2026-06-02 更新）
 
-**当前在用**：smolvlm2-agentic-gui（1.85GB Q4_K_M，ahmadwaqar/smolvlm2-agentic-gui:latest）
+| 函数 | 模型 | 速度 | 用途 |
+|------|------|------|------|
+| `get_scene_type()` | qwen3-vl:2b | ~46s（慢，但准确）| 场景分类，触发 auto_execute |
+| `ask_screen()` | smolvlm2-agentic-gui | 7-10s（快）| GUI 内容分析 + 操作规划 |
 
-| 指标 | smolvlm2-agentic-gui | qwen3-vl:2b（对比参考）|
-|------|---------------------|----------------------|
-| 模型大小 | 1.85GB | 1.76GB |
-| 响应时间 | **7.7s**（原生1920x1080）| **46.6s**（需缩到900x900）|
-| 原生分辨率 | ✅ 1920x1080直接处理 | ❌ 超时，需预处理缩图 |
-| 适用场景 | **实时GUI监控** | 离线精确OCR分析 |
+**重要**：smolvlm2-agentic-gui 在纯分类任务上会产生 `final_answer(''...)` 乱码，**必须**用 qwen3-vl:2b 做场景分类。
 
-**结论**：smolvlm2 速度快6倍+原生分辨率，是 screen_watcher 实时分析的正确选择。qwen3-vl:2b OCR能力更强但不适用于实时场景，保留为离线分析备选。
+注意：`ask_screen()` 仍用 smolvlm2，因为 GUI 操作规划正是 smolvlm2 的强项。
 
 **Ollama 可用模型**（2026-05-30 实测确认）：
 | 模型 | 大小 | 状态 | 适用场景 |
@@ -70,7 +68,7 @@ CLEANED: "final_answer(''The i..."
 | smolvlm2-agentic-gui | 1.85GB | ✅ 在用 | 实时GUI监控（7-64s响应）|
 | qwen3-vl:2b | 1.9GB | ✅ 在用 | 离线OCR分析（需缩图）|
 | qwen3-vl:4b | 3.3GB | ❌ 不存在 | — |
-| blaifa/InternVL3_5:4b | ~3GB | ✅ 可pull | 通用视觉，潜在升级候选 |
+| blaifa/InternVL3_5:4b | ~3GB | ⚠️ Mac上有图片理解Bug（Issue #12166），暂缓部署 | 基于Qwen3架构，通用视觉 |
 | blaifa/InternVL3_5:8b | ~5GB | ✅ 可pull | 更高精度 |
 | ui-venus | — | ❌ Ollama无 | 页面404，搜索无结果 |
 
@@ -261,6 +259,7 @@ ACTION_WHITELIST = {
 - `references/screen-watcher-handler-lock-2026-05-26.md` — Handler 重复 spawn 修复
 - `references/qwen3vl-vs-smolvlm2-2026-05-30.md` — qwen3-vl:2b vs smolvlm2 实测对比（速度、分辨率、适用场景）
 - `references/scene-classification-model-fix-2026-06-02.md` — ⚠️ 重要：get_scene_type() 从 smolvlm2 切换到 qwen3-vl:2b，smolvlm2 在纯分类任务上会产生 final_answer 乱码
+- `references/captchas-auto-execute-security-2026-05-30.md` — CAPTCHA agent 检测研究，DRY_RUN=False 时需考虑的 anti-detection 对策
 
 ## 温度参数
 ```json

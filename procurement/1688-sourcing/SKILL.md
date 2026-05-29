@@ -273,3 +273,4 @@ python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py extract "https://det
 - `1688-open-platform-api` — 官方API（需企业资质，不适合纯买家）
 - `references/1688-search-postmessage.md` — 搜索数据postMessage拦截法的完整技术细节和数据结构
 - `references/ai-agents-1688-knowledge.md` — AI网站智囊（Gemini/智谱清言/豆包）关于1688自动化方案的问答记录
+- `references/1688-captcha-analysis.md` — 1688验证码深度分析（阿里自研滑块 + NopeCHA兼容性 + 自研思路）

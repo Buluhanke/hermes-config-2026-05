@@ -164,4 +164,49 @@ smart_click("发送")
 
 > ⚠️ **github blocked 期间**，FastVLM、SmolVLM2-2.2B、moondream2 等候选模型无法 pull 测试。网络恢复后优先测试 Apple FastVLM（CVPR 2025，85x faster TTFT，MLX版本在HuggingFace可用）。
 
+## 新一代屏幕感知模型（2026-05 进展）
+
+### UI-TARS-1.5-7B（ByteDance）— 最高优先级
+- **OSWorld SOTA**：24.6@50步，超越 Claude Computer Use（22.0@50步）
+- **架构**：端到端VLM（感知+推理+定位+记忆一体化），比 smolvlm2 的分离式更优
+- **部署**：
+  - Electron桌面应用（macOS支持）：UI-TARS Desktop
+  - MCP server：`sandraschi/uitars-mcp`（★1）
+  - vLLM本地部署：见 deepwiki.com/bytedance/UI-TARS/4.2-local-deployment
+- **VRAM需求**：官方推荐RTX 4090级别，M4 24GB统一内存 borderline
+- **行动**：测试UI-TARS Desktop macOS版，评估M4兼容性
+
+### OmniParser v2.0（Microsoft）★24,823
+- **能力**：纯视觉GUI解析器，截图→结构化元素
+- **最新**：v2.0.1（2025-09-12），60%延迟改善
+- **ScreenSpot Pro**：39.6% grounding准确率
+- **定位**：分离式感知层，适合与smolvlm2组合使用
+- **局限**：不是端到端agent，只是解析层
+
+### ZonUI-3B（WACV 2026）— 轻量化方向
+- **参数**：3B（RTX 4090单卡可训）
+- **性能**：接近大型模型GUI grounding水平
+- **意义**：M4 Mac可能可以流畅运行
+- **状态**：研究阶段，关注进展
+
+### 屏幕感知架构演进方向
+```
+现状（分离式）：
+AX树(20ms) → 元素结构
+  ↓ 失败时
+Vision LLM smolvlm2(2-5s) → 语义理解 → 坐标输出
+
+进化后（端到端）：
+UI-TARS端到端(1-2s) → 直接操作指令
+  或
+OmniParser v2.0(500ms) → 结构化元素 → 更快解析
+```
+
+### 决策建议
+| 场景 | 推荐方案 | 理由 |
+|------|---------|------|
+| M4流畅运行 | ZonUI-3B（待验证） | 轻量化，3B参数 |
+| 追求最强能力 | UI-TARS Desktop | OSWorld SOTA |
+| 快速集成 | OmniParser v2.0 | 已有pip安装，延迟改善 |
+
 分层感知原则：能用底层 API 解决的不上高级模型，日常 80% 点击走 OCR 瞬发。定位参考：`hermes-fast-ocr-ssim`
