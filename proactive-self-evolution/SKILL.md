@@ -79,10 +79,24 @@ grep -E "error|ERROR|exception" ~/.hermes/logs/gateway.log | tail -20
 
 ### 当前状态追踪
 `~/.hermes/current_context.json` — 跨会话JSON追踪文件
-
 ## 参考资料
+
 - [Cron Jobs 配置](./references/cron-jobs-config.md)
 - [Matt Pocock Skills + EvoMap 参考](./references/mattpocock-evomap.md)
+- [Web搜索后端配置](./references/web-search-backend-config.md)
+
+---
+
+## 已发现坑（2026-05-29补充）
+
+- **Firecrawl需付费API**：web搜索后端应优先用ddgs（免费本地），不要默认装firecrawl
+- **Honcho provider需信用卡**：honcho未注册时应切回内置memory（`provider: ''`）
+- **Gateway重启多PID**：旧进程可能不完全退出，kill时需用`kill -9`并确认只剩一个
+
+## 自动执行原则（2026-05-29确立）
+
+当Hermes判断某步骤是可执行的正确动作时，**直接执行，不询问**。
+例外：涉及付款/删除重要数据才询问。
 - [深度进化发现(2026-05-28)](./references/deep_evolution_findings_20260528.md) — OmniParser/CloakBrowser/Agent-S/CUA
 
 ## Cron Job 调试（2026-05-27）

@@ -29,6 +29,23 @@ Honcho provides AI-native cross-session user modeling. It learns who the user is
 
 ## Setup
 
+### Prerequisites
+
+**Two separate packages must be installed — in this order:**
+
+```bash
+# Step 1: install honcho (the CLI manager)
+pip3 install honcho
+# Step 2: install honcho-ai (the Python SDK)
+pip3 install honcho-ai
+```
+
+`honcho` alone is insufficient — it is the console manager. `honcho-ai` is the Python SDK that Hermes actually uses.
+
+**Credit card required for cloud**: Honcho's managed cloud at app.honcho.dev requires a credit card to sign up (new accounts get $100 free credits). If credit card is a blocker, use self-hosted Honcho via Docker instead (free, no card needed).
+
+If packages are not installed in the correct order, `hermes honcho setup` will appear to run but produce "No Honcho config found" errors.
+
 ### Cloud (app.honcho.dev)
 
 ```bash
@@ -390,6 +407,9 @@ This fix addresses edge cases where raw user conclusions containing markup or sp
 
 ### "Honcho not configured"
 Run `hermes honcho setup`. Ensure `memory.provider: honcho` is in `~/.hermes/config.yaml`.
+
+### "No Honcho config found" / honcho-ai not installed
+Symptom: `hermes honcho status` returns "No Honcho config found at /Users/aimac/.honcho/config.json" even after setup appears to run. Cause: the `honcho-ai` Python package is not installed. Fix: `pip3 install honcho-ai`, then rerun setup.
 
 ### Memory not persisting across sessions
 Check `hermes honcho status` -- verify `saveMessages: true` and `writeFrequency` isn't `session` (which only writes on exit).
