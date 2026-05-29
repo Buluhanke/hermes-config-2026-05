@@ -1,70 +1,47 @@
-# 场景分类模型切换：smolvlm2 → qwen3-vl:2b（2026-06-02）
+# 场景分类模型实测（2026-05-30 更新）
 
-## 问题描述
+## 结论（已验证，正确）
 
-`get_scene_type()` 使用 `smolvlm2-agentic-gui` 做场景分类，但持续输出乱码：
+`get_scene_type()` 使用 `smolvlm2-agentic-gui` ✅
 
-```
-RAW: "final_answer(''The i..."
-CLEANED: "final_answer(''The i..."
-```
+| 测试项 | qwen3-vl:2b | smolvlm2-agentic-gui |
+|--------|-------------|---------------------|
+| 900x506 缩略图响应时间 | 60s+ 超时 | **17.9s** ✅ |
+| scene classification 输出 | 未测（超时） | "browser" ✅ |
+| 结论 | 不适合实时场景分类 | 适合 |
 
-导致 `auto_execute()` 永远无法触发（`[AUTO-EXEC-DRY]` 日志始终为 0）。
-
-## 根因分析
-
-smolvlm2-agentic-gui 是 GUI 操作特化微调模型，专为 `click/type/scroll` 结构化 action 设计。
-在**纯分类任务**（多选一、无 action 输出）上，会强制将选项包裹在 `final_answer('')` 格式中，
-即使 prompt 明确要求"只回答一个英文单词"也无济于事。
-
-qwen3-vl:2b 是通用视觉模型，在场景分类任务上表现正常：`"desktop"` → 直接匹配 whitelist ✅
-
-## 修复方案
-
-修改 `~/.hermes/scripts/screen_trigger_handler.py` 的 `get_scene_type()`：
-
-```python
-# 改用 qwen3-vl:2b + 英文 prompt
-prompt = (
-    "What is shown in this screenshot? Choose ONE from:\n"
-    "browser, wechat, desktop, calculator, jingdong, 1688, dingtalk, telegram, other\n"
-    "Reply with ONLY the word, nothing else."
-)
-
-payload = {
-    "model": "qwen3-vl:2b",          # 从 MODEL (smolvlm2) 改为 qwen3-vl:2b
-    "prompt": prompt,
-    "images": [img_b64],
-    "stream": False,
-    "options": {"temperature": 0.0}
-}
-
-# timeout 60s → 120s（qwen3-vl:2b 响应慢）
-```
-
-## 两模型分工
-
-| 函数 | 模型 | 速度 | 用途 |
-|------|------|------|------|
-| `get_scene_type()` | qwen3-vl:2b | ~46s（慢，但准确）| 场景分类，触发 auto_execute |
-| `ask_screen()` | smolvlm2-agentic-gui | 7-10s（快）| GUI 内容分析 + 操作规划 |
-
-注意：`ask_screen()` 仍用 smolvlm2，因为 GUI 操作规划正是 smolvlm2 的强项。
-
-## Trade-off
-
-- 场景分类从"永远失败"变为"46s 后成功"
-- 场景分类每 60s 最多 1 次（cooldown 机制），所以影响有限
-- qwen3-vl:2b 的高延迟是模型本身特性，非 bug
-
-## 验证方法
+## 实测命令
 
 ```bash
-tail -5 ~/.hermes/logs/screen_trigger.log
-# 应出现：场景类型: desktop（或其他英文单词）
-# 以及：[AUTO-EXEC-DRY] Would execute: wininfo for scene=desktop
+python3 /tmp/test_scenetype.py
+# 输出：Scene type: 'browser', Time: 17.9s
 ```
 
-## 备份
+## 测试脚本
 
-修复前已备份：`~/.hermes/scripts/screen_trigger_handler.py.bak.20260602`
+```python
+# /tmp/test_scenetype.py
+import sys
+sys.path.insert(0, '/Users/aimac/.hermes/scripts')
+from screen_trigger_handler import get_scene_type
+import time
+start = time.time()
+result = get_scene_type('/tmp/test_idle_screen.png')
+elapsed = time.time() - start
+print(f"Scene type: '{result}', Time: {elapsed:.1f}s")
+```
+
+## 已执行的修复（2026-05-30）
+
+`~/.hermes/scripts/screen_trigger_handler.py` 的 `get_scene_type()`：
+- 模型：`qwen3-vl:2b` → `ahmadwaqar/smolvlm2-agentic-gui:latest`
+- timeout：`120s` → `30s`
+- temperature：`0.0` → `0.1`
+- prompt：直接内联，不再用独立变量
+
+备份：`~/.hermes/scripts/screen_trigger_handler.py.bak.20260530_0616`
+
+## 历史（仅供追踪）
+
+- 2026-06-02：曾切换到 qwen3-vl:2b（误判为正确）
+- 2026-05-30 实测推翻：smolvlm2 17.9s 成功，qwen3-vl:2b 60s+ 超时

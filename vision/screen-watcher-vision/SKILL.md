@@ -12,57 +12,77 @@ trigger: screen_watcher触发screen_trigger_handler后调用
 ## 已知问题：smolvlm2 幻觉
 smolvlm2 是一个小模型，存在明显幻觉问题，尤其在简单场景（计算器、空白桌面）上会生成不存在的湖光山色等描述。
 
-### 关键发现：smolvlm2 不适合场景分类（2026-06-02 修正）
+### 关键发现：smolvlm2 适合场景分类（2026-05-30 修正）
 
-**症状（2026-06-02 实测）**：`get_scene_type()` 中 smolvlm2 输出：
+**⚠️ 2026-06-02 切换回 qwen3-vl:2b 的结论已被推翻（2026-05-30 实测）**
+
+**症状（2026-05-30 实测）**：`get_scene_type()` 使用 smolvlm2-agentic-gui：
 ```
-RAW: "final_answer(''The i..."   # 乱码，无法匹配任何 whitelist key
-CLEANED: "final_answer(''The i..."
-```
-
-同一截图，qwen3-vl:2b 输出：`"desktop"` → 直接匹配 `"desktop" in ACTION_WHITELIST` ✅
-
-**根因**：smolvlm2 是一个 GUI 特化微调模型，在**纯场景分类**（无GUI操作任务、多选一）任务上持续产生结构化输出幻觉。即使 prompt 明确要求"只回答一个英文单词"，smolvlm2 仍然输出 `final_answer(''...)` 形式的完整回答。
-
-**结论**：smolvlm2 适合 `ask_screen()`（GUI 内容分析和操作规划），**不适合** `get_scene_type()`（快速场景分类）。
-
-### 缓解策略
-1. **强制选项 prompt**：给出明确的选项列表，限制回答范围
-2. **低温参数**：temperature=0.0 减少随机性
-3. **场景前缀**：在 prompt 开头加场景描述，强制模型聚焦
-4. **时间戳验证**：提示"这是截图而不是风景照"
-5. **英文选项**：使用英文单词（browser/wechat/desktop...）而非中文，避免模型输出中文时混入代码片段
-6. **明确禁止代码**：prompt 中加 "不要代码" 指令
-7. **场景分类专用模型**：使用 qwen3-vl:2b 而非 smolvlm2 做场景分类
-
-### ⚠️ 场景分类幻觉 bug（2026-05-30 实测）
-
-**症状**：get_scene_type() 对手机计时器界面输出 "type('seconds')" 等 Python 代码片段。
-
-**根因**：smolvlm2 将中文选项 "浏览器/微信/桌面/..." 理解为代码语法，输出类似 "type('seconds')" 的代码片段。
-
-**修复后 prompt（已验证）**：
-```
-[这是macOS系统截图，不是照片]
-看这张截图，判断这是什么场景？
-选项：browser/wechat/desktop/calculator/jingdong/1688/dingtalk/telegram/other
-只回答一个选项，写作对应英文单词。不要其他文字，不要代码。
+python3 /tmp/test_scenetype.py → Scene type: 'browser', Time: 17.9s ✅
 ```
 
-**验证方法**：日志中 "场景类型:" 应为英文单词（如 "calculator"），而非代码片段（"type('seconds')"）。
+同一截图 qwen3-vl:2b 响应超时（60s+，Read timeout）。
 
-## 两模型分工（2026-06-02 更新）
+**根因**：qwen3-vl:2b 在 900x506 缩略图上仍需 46s+ 响应，远超 cron 60s 限制。
+smolvlm2-agentic-gui 在相同分辨率下 17.9s 返回准确分类结果。
+
+**结论**：smolvlm2 适合 `get_scene_type()`（场景分类），qwen3-vl:2b 因延迟过高无法在此场景使用。
+
+### 重要更正：两模型分工（2026-05-30 实测）
 
 | 函数 | 模型 | 速度 | 用途 |
 |------|------|------|------|
-| `get_scene_type()` | qwen3-vl:2b | ~46s（慢，但准确）| 场景分类，触发 auto_execute |
+| `get_scene_type()` | smolvlm2-agentic-gui | ~18s（快且准）| 场景分类，触发 auto_execute ✅ |
 | `ask_screen()` | smolvlm2-agentic-gui | 7-10s（快）| GUI 内容分析 + 操作规划 |
 
-**重要**：smolvlm2-agentic-gui 在纯分类任务上会产生 `final_answer(''...)` 乱码，**必须**用 qwen3-vl:2b 做场景分类。
+**注意**：`ask_screen()` 和 `get_scene_type()` 共用 smolvlm2，因为：
+1. smolvlm2 响应快（18s vs qwen3-vl:2b 的 60s+）
+2. smolvlm2 在 scene classification 任务上实测准确（返回 "browser" 等英文单词）
+3. qwen3-vl:2b 仅适合离线 OCR 场景，不适合实时分析
 
-注意：`ask_screen()` 仍用 smolvlm2，因为 GUI 操作规划正是 smolvlm2 的强项。
+⚠️ **qwen3-vl:2b 已知限制**：原生 1920x1080 截图超时（>60s），必须缩图到 ~900x900 但响应仍达 46s+
+⚠️ **get_scene_type()** 中 smolvlm2 响应 17.9s（900x506 缩略图），满足实时要求
 
-**Ollama 可用模型**（2026-05-30 确认，`http://127.0.0.1:11434/api/tags` 返回）：
+### ⚠️ 场景分类 smolvlm2 幻觉缓解（2026-05-30 实测有效）
+
+**验证有效的 prompt**（smolvlm2 输出 "browser" 等英文单词，无乱码）：
+```python
+"What is shown in this screenshot? Choose ONE from: browser, wechat, desktop, calculator, jingdong, 1688, dingtalk, telegram, other. Reply with ONLY the word."
+```
+
+温度 0.1，30s timeout，smolvlm2 在 scene classification 任务上实测无幻觉。
+
+**模型状态（2026-05-30 实测确认）**：
+| 函数 | 模型 | 速度 | 状态 |
+|------|------|------|------|
+| `get_scene_type()` | smolvlm2-agentic-gui | ~18s ✅ | **在用**，场景分类首选 |
+| `ask_screen()` | smolvlm2-agentic-gui | 7-10s ✅ | **在用**，GUI内容分析 |
+| qwen3-vl:2b | — | 60s+ ❌ | 仅离线OCR备选，不适合实时分析 |
+
+⚠️ qwen3-vl:2b 在 900x506 缩略图上响应 46s+，1920x1080 原生截图超时（>60s）。screen_watcher 实时分析 **只用 smolvlm2-agentic-gui**。
+
+**场景分类 prompt**（smolvlm2 输出英文单词，无乱码）：
+```python
+"What is shown in this screenshot? Choose ONE from: browser, wechat, desktop, calculator, jingdong, 1688, dingtalk, telegram, other. Reply with ONLY the word."
+```
+
+**已确认本地 Ollama 模型**（`http://127.0.0.1:11434/api/tags`，2026-05-30实测）：
+```
+ahmadwaqar/smolvlm2-agentic-gui:latest  ✅ 在用
+qwen3-vl:2b                            ✅ 离线OCR
+qwen2.5:1.5b                           ✅ 小型文本
+nomic-embed-text:latest                ✅ 嵌入
+```
+
+**⚠️ 已知 Mac Bug**：blaifa/InternVL3_5:4B（GitHub Issue #12166），Mac 图片理解错误，暂缓部署。
+
+**⚠️ qwen3-vl:4b 不存在**：`ollama pull qwen3-vl:4b` 返回 404，不要尝试。
+
+**待验证项**：
+- Edge TTS 是否正常工作（execute_code 里测）
+- UI-TARS Desktop Mac M4 安装（github.blocked 无法下载 .dmg）
+
+**下次学习方向**：执行层 — 坐标校准，准备 DRY_RUN=False 切换
 | 模型 | 大小 | 状态 | 适用场景 |
 |------|------|------|----------|
 | smolvlm2-agentic-gui | 1.85GB | ✅ 在用 | 实时GUI监控（7-64s响应）|
@@ -257,6 +277,7 @@ ACTION_WHITELIST = {
 ## 参考文件
 
 - `references/ollama-api-endpoint-chat-vs-generate-2026-05-30.md` — ⚠️ 重要：/api/chat vs /api/generate 性能差异，错误端点导致120s超时
+- `references/response-normalization-2026-06-02.md` — ⚠️ 重要：get_scene_type() response 标准化，取第一行+小写+trim标点
 - `references/screen-trigger-handler-telegram-fix-2026-05-30.md` — Telegram推送失败修复（hermes_tools → 直接Bot API）+ 场景分类prompt幻觉bug修复
 - `references/smolvlm2-structured-json-2026-05-29.md` — smolvlm2 JSON 输出测试详情（响应时间、清理函数、可靠性评估）
 - `references/screen-trigger-handler-auto-execute-2026-05-28.md` — Auto-Execute 集成设计文档
@@ -265,6 +286,7 @@ ACTION_WHITELIST = {
 - `references/scene-classification-model-fix-2026-06-02.md` — ⚠️ 重要：get_scene_type() 从 smolvlm2 切换到 qwen3-vl:2b，smolvlm2 在纯分类任务上会产生 final_answer 乱码
 - `references/internvl3_5_4b_mac_bug_2026-06-02.md` — ⚠️ Issue #12166 已关闭（2025-09），可重测验证是否仍有问题
 - `references/captchas-auto-execute-security-2026-05-30.md` — CAPTCHA agent 检测研究，DRY_RUN=False 时需考虑的 anti-detection 对策
+- `references/hermes-desktop-rpa-osascript-timeout-2026-06-02.md` — osascript 超时是 cron 环境限制（非 PATH 问题），DRY_RUN=False 切换必须在有活跃桌面 session 的环境
 
 ## 温度参数
 ```json

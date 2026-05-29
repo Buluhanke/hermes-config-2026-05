@@ -231,6 +231,25 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - screen_trigger_handler.py 新增 auto_execute() 函数 + ACTION_WHITELIST
   - DRY_RUN=True 安全模式，6个场景预配置（浏览器/微信/1688/ChatGPT/钉钉/Telegram）
   - 详见 `screen-watcher-vision` skill 的 [Auto-Execute 自动执行] 章节
+
+### ⚠️ auto_execute DRY_RUN 日志为空的根因（2026-06-02 发现）
+
+**症状**：`grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log` 返回 0。
+
+**根因**：场景分类器（get_scene_type）持续输出 `"unknown"`，但 ACTION_WHITELIST 中没有 `"unknown"` key：
+```python
+def auto_execute(scene_type, answer):
+    if scene_type not in ACTION_WHITELIST:  # "unknown" 不在白名单
+        return None  # 直接返回，DRY_RUN 日志永远到不了
+    if DRY_RUN:
+        log(f"[AUTO-EXEC-DRY] Would execute...")  # 这行永不触发
+```
+
+**修复**：在 ACTION_WHITELIST 中添加 `"unknown": ("wininfo", None)`，使 unknown 场景也能记录 dry-run 日志。备份：`~/.hermes/scripts/screen_trigger_handler.py.bak.20260530_0600`
+
+**验证**：修复后日志应出现 `[AUTO-EXEC-DRY] Would execute: wininfo for scene=unknown`
+
+**⚠️ 注意**：这是**设计问题而非 bug**。unknown 场景本就不应该触发真实动作。日志为空说明场景分类器持续输出 unknown，需从根源改善场景分类准确率，而非简单加入白名单。
 - **smolvlm2 结构化 JSON 输出实测**（2026-05-29）：
   - JSON prompt 可行，输出始终包裹 `<code>...</code>` 标签
   - 场景分类 ~13s，结构化 JSON ~2s（可能缓存）
@@ -408,11 +427,10 @@ nomic-embed-text:latest                ✅
 
 **候选模型对比**（优先测试可 Ollama 直接拉取的，HF 镜像可用 hf-mirror.com 替代 huggingface.co）：
 
-- **⭐ qwen3-vl:2b vs smolvlm2-agentic-gui 实测（2026-05-30）**：
-  - smolvlm2-agentic-gui：**7.7s**原生1920x1080，GUI专项，screen_watcher实时分析首选
-  - qwen3-vl:2b：**46.6s**（需缩到900x900），通用视觉，OCR更强但不适用实时场景
-  - qwen3-vl:4b：**不存在**（not found 404）— 不要尝试 pull ⚠️ 已确认
-  - 结论：screen_watcher 实时分析继续用 smolvlm2，qwen3-vl:2b 保留为离线OCR备选
+- **⭐ qwen3-vl:2b vs smolvlm2-agentic-gui 实测（2026-05-30，实测推翻早期结论）**：
+  - smolvlm2-agentic-gui：**17.9s**（900x506缩略图），scene classification 准确返回 "browser"
+  - qwen3-vl:2b：**60s+ 超时**（900x506缩略图），不适合实时场景分类
+  - **结论**：screen_watcher 实时分析用 smolvlm2，get_scene_type() 共用 smolvlm2；qwen3-vl:2b 保留为离线OCR备选
 
 - **⭐ Holo1.5-3B（2026-05-30 实测）** — ScreenSpot 91.7%，M4 24GB 可用，3B参数
   - Desktop 95.0分（超过大多数7B模型）
@@ -559,6 +577,8 @@ PYEOF
 - [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
 - [HN Top 热点文章 2026-06-02](./references/hn-top-2026-06-02.md) — HN 热门文章列表，重点关注 Tiny-vLLM/LFM2.5-8B
+- [Idle Learning 2026-06-02 Session](./references/idle-learning-2026-06-02-session.md) — response 标准化修复，screen_watcher 链路实测
+- [Idle Learning 2026-06-02 发现：auto_execute DRY_RUN 日志为空根因](./references/idle-learning-2026-06-02-dryrun-log-empty.md) — unknown 场景不在 ACTION_WHITELIST 导致 dry-run 永不触发，修复方案
 
 ---
 

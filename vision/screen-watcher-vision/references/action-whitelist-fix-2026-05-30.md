@@ -33,4 +33,11 @@ ACTION_WHITELIST = {
 
 ## 遗留问题
 
-wininfo 命令不在 PATH，DRY_RUN 模式只记录不执行所以未暴露。切换 DRY_RUN=False 前需将 wininfo 替换为实际存在的命令（如 cliclick），或在 hermes_desktop_rpa.py 中确保 wininfo 子命令可用。
+### 1. wininfo 命令不在 PATH
+wininfo 不在 PATH，DRY_RUN 模式只记录不执行所以未暴露。切换 DRY_RUN=False 前需将 wininfo 替换为实际存在的命令（如 `cliclick`），或在 hermes_desktop_rpa.py 中确保 wininfo 子命令可用。
+
+### 2. osascript 超时（cron 环境限制）
+详见 `references/hermes-desktop-rpa-osascript-timeout-2026-06-02.md` — osascript 超时是**环境限制**，前台桌面 session 外无法解决。DRY_RUN=False 切换必须在有活跃桌面 session 的环境。
+
+### 3. RPA_SCRIPT 路径已修正（2026-06-02）
+`screen_trigger_handler.py` 中 RPA_SCRIPT 路径已从 `skills/autonomous-ai-agents/` 改为 `autonomous-ai-agents/`。
