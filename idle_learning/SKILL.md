@@ -300,6 +300,7 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - `ollama list` CLI 和 `ollama.list()` Python API 在 cron 环境均超时（15s+）
 - **根本原因**：Ollama API 内部连接池初始化卡顿，非 script-execution 策略拦截
 - ✅ **正确 workaround**：直接调 `curl http://127.0.0.1:11434/api/tags`（返回 ~1.4KB，正常）
+- ⚠️ **curl 偶尔也超时**：即使 Ollama 正常，`curl` 在 10s 内返回但 15s+ 可能超时；建议用 `timeout=10` 的 curl 调用
 - ✅ `ollama.chat()` 正常工作（不受影响）
 - 检查模型时必须用 curl 方式，不能直接调用 ollama.list() CLI 或 Python API
 
@@ -614,8 +615,9 @@ echo "建议添加每日凌晨2点自学任务，是否确认？"
 
 **HN Firebase API 稳定调用脚本（cron 环境必备）**：
 
+⚠️ **必须用时间戳文件名**，否则多个 cron session 并行运行时文件会被覆盖：
 ```python
-# /tmp/hn_top.py — 写入文件后调用
+# /tmp/hn_top_YYYYMMDD_HHMMSS.py — 必须用时间戳
 import urllib.request
 import json
 
@@ -638,9 +640,9 @@ for i, story_id in enumerate(ids[:10]):
         print(f"Error: {e}")
 ```
 
-执行：`python3 /tmp/hn_top.py`（⚠️ 不要用 `python3 -c "..."` 或 heredoc，会被 cron 拦截）
+执行：`python3 /tmp/hn_top_20260530_1430.py`（⚠️ 不要用 `python3 -c "..."` 或 heredoc，会被 cron 拦截）
 
-**⚠️ /tmp 路径竞争注意**：cron/scheduled-job 环境下，`execute_code` 和 `terminal` 共享 `/tmp`。同时运行的多个 cron job 可能相互覆盖同名文件（如 `/tmp/hn_top.py`）。用带时间戳的文件名（`/tmp/hn_top_20260528.py`）可避免。
+**⚠️ /tmp 路径竞争**：cron/scheduled-job 环境下，`execute_code` 和 `terminal` 共享 `/tmp`。同时运行的多个 cron job 会相互覆盖同名文件（如 `/tmp/hn_top.py`）。**必须**用带时间戳的文件名（`/tmp/hn_top_20260528_143022.py`）可避免。
 
 **⚠️ 马拉松脚本修复（2026-05-28）**：
 `idle-marathon-core.sh` 原本使用 `python3 << 'PYEOF'` heredoc，已修复为写 .py 文件调用模式。

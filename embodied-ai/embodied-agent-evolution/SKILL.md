@@ -209,9 +209,9 @@ FSM多智能体架构，用于复杂桌面自动化：
 - 持续质量评估+自适应重规划
 - 环境状态记忆（World Model）
 
-### 9. Process Turing Test — AI能力进化 ≠ 人类化进化（2026-05-30 新增）
+### 9. Process Turing Test — AI能力进化 ≠ 人类化进化（2026-05-30 更新）
 
-**论文来源**：Roundtable Research，CogCAPTCHA30（CAPTCHA + 29项认知心理学任务）
+**论文来源**：Roundtable Research，CogCAPTCHA30（CAPTCHA + 29项认知心理学任务），HN得分41pts
 
 **核心发现**：
 - 经典图灵测试：测输出是否与人无法区分（Output Turing Test）
@@ -222,7 +222,7 @@ FSM多智能体架构，用于复杂桌面自动化：
   - 小模型（Qwen 1.5B、Centaur 70B）过程更像人
   - Centaur表现最好，推测因为大规模输出微调（10M+人类选择，160项认知实验）
 
-**Process Humanness 三层模型（新增）**：
+**Process Humanness 三层模型**：
 | 层级 | 描述 | 当前Hermes状态 |
 |------|------|--------------|
 | System 1 | 快思考，直觉反应 | ✅ 简单重复任务 |
@@ -233,9 +233,21 @@ FSM多智能体架构，用于复杂桌面自动化：
 - 当前auto_execute生成action是纯机器速度，没有人类操作的"节律感"
 - 可以在vision分析prompt中增加"你会怎么点击"的推理步骤（让模型先想再做）
 - 考虑在执行层加入延迟/随机性，模拟人类操作节奏（避免纯机器的瞬时性）
+- 未来 DRY_RUN=False 时需考虑 anti-CAPTCHA 对策：
+  - 行为过程扰动（process-level perturbation）比输出伪装更有效
+  - 鼠标轨迹扰动（mouseMoved 前置 + CGEventTap）
+  - 操作延迟（避免瞬时完成多个动作）
 - 这个发现解释了为什么能力强的VLM不一定做出更像人的桌面Agent
 
-**论文地址**：https://research.roundtable.ai/captchas-detect-ai/（2026-05-30HN 12pts）
+**论文地址**：https://research.roundtable.ai/captchas-detect-ai/（2026-05-30 HN 41pts）
+
+**⚠️ CAPTCHAs 检测 AI Agent 的研究新发现（2026-05-30）**：
+- Roundtable Research（roundtable.ai），CogCAPTCHA30 论文
+- 核心发现：Claude/GPT/Gemini 等前沿模型在**行为过程**上与人类差距大（小模型如 Qwen/Centaur 更像人类）
+- 检测方法：测量决策/记忆/感知/推理四个维度的过程特征，而非输出等价性
+- 对 Hermes auto_execute 的影响：如果 screen_watcher 触发 auto_execute 时遇到 CAPTCHA，可能被检测为 bot
+- 当前 DRY_RUN=True 不执行真实动作，不受影响
+- 未来 DRY_RUN=False 时需考虑 anti-CAPTCHA 对策
 
 ### 10. UI-TARS Desktop/MobileAgent 生态更新（2026-05-30）
 
