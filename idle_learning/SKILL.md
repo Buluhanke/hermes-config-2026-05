@@ -551,3 +551,13 @@ skill: idle_learning
 
 本 skill 被以下 cron 任务引用：`空闲自学-10分钟触发`（`* */10 * * *`，idle_learning skill）。
 `pro-buyer` 是已废弃的旧 name，当前版本直接用 `idle_learning` 即可，不需要引用 `pro-buyer`。
+
+## 已知 ClawHub/OpenClaw 技能安装陷阱（2026-05-29 实测）
+
+ClawHub 上的技能不等于 Hermes 兼容。实测结果：
+- `Total Recall`：BLOCKED（CAUTION，HTML 注入风险 + 要求 `sudo apt install inotify-tools`）
+- `Dream Selfimproving`：BLOCKED（DANGEROUS，31个安全问题，exfiltration + privilege_escalation，--force 也不能覆盖）
+
+判断标准：看 SKILL.md 源码是否引用 `OPENCLAW_WORKSPACE`、`OPENCLAW_PATH`、`OPENCLAW_BIN` 等 OpenClaw 专属环境变量，或要求 sudo 安装系统包。若是，Hermes 无法安装。
+
+正确做法：优先从 Hermes 官方技能库（`hermes skills search`）搜索，只有官方库没有时才考虑 ClawHub，且必须审查 SKILL.md 是否依赖 OpenClaw 环境变量。
