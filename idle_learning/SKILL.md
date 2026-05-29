@@ -60,7 +60,29 @@ description: >
 
 ### 第一步：评估当前状态 + 网络预检
 
-⚠️ **网络预检必须在 `terminal` 里跑，不能在 `execute_code` 沙盒里跑！**
+**⚠️ Ollama API 端点区分（2026-05-30 重大发现）**：
+- `https://api.ollama.com/api/tags` → 返回**远程库**（你可以 pull 什么模型）
+- `http://127.0.0.1:11434/api/tags` → 返回**本地已安装**模型
+- 两者完全不同的数据！用远程库判断本地是否安装会导致误判
+- **正确做法**：检查本地模型时必须用 `127.0.0.1:11434`，不能用公网 API
+
+**已确认本地 Ollama 模型（2026-05-30 实测）**：
+```
+ahmadwaqar/smolvlm2-agentic-gui:latest  ✅（screen_trigger_handler 在用）
+qwen3-vl:2b                            ✅
+qwen2.5:1.5b                           ✅
+nomic-embed-text:latest                ✅
+```
+⚠️ 注意：上述是 `127.0.0.1:11434` 返回的本地安装模型，不是 api.ollama.com 的远程库
+
+**候选新模型：maternion/lfm2.5:8b-a1b（2026-05-28 新发布）**：
+- Liquid AI LFM2.5-8B-A1B，MoE架构（8.3B total / 1.5B active）
+- H100 吞吐：18.5K tok/s，Mac M4 实测：~50 tok/s
+- 质量 ≈ 3-4B dense model，速度比 Qwen3-1.7B 更快
+- ✅ Ollama 直接可用：`ollama pull maternion/lfm2.5:8b-a1b`
+- 潜在价值：作为通用推理备选，替换 qwen2.5:1.5b
+
+**⚠️ 网络预检必须在 `terminal` 里跑，不能在 `execute_code` 沙盒里跑！**
 `execute_code` 运行时是网络隔离的沙盒环境，curl 到外部会超时；
 `terminal` 工具调用真实 shell，网络正常。
 
@@ -285,6 +307,7 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 **搜索降级：当 web_search 402 时**
 - 优先用 HN Firebase API + ddgs 组合（ddgs 格式：`ddgs text -q "query" -m 5`）
 - HN Firebase API 获取高分文章 URL，ddgs 补充精准搜索
+- **⚠️ ddgs 超时问题（2026-06-02 实测）**：ddgs CLI 在 20s 超时下返回空，适合快速关键词搜索，不适合批量扫描
 - 获取文章内文时用 **browser_navigate + browser_console JS提取** 替代 web_extract
   - `browser_console(expression='document.querySelector("article").innerText')`
   - 需要大段截取时分片：`.slice(0,5000)` → `.slice(5000,10000)`
@@ -365,6 +388,23 @@ print(response['message']['content'])
 screencapture -x /tmp/test_screen.png
 python3 /tmp/test_smolvlm.py
 ```
+
+**候选新模型：maternion/lfm2.5:8b-a1b（2026-05-28 HN Show，18pts）**：
+- Liquid AI LFM2.5-8B-A1B，MoE架构（8.3B total / 1.5B active per token）
+- H100 吞吐：18.5K tok/s（高并发），Mac M4 实测：~50 tok/s
+- 质量：≈ 3-4B dense model，速度比 Qwen3-1.7B 更快
+- ✅ Ollama 直接可用：`ollama pull maternion/lfm2.5:8b-a1b`
+- 潜在价值：作为通用推理备选（替换 qwen2.5:1.5b）
+- ⚠️ Tiny-vLLM（同一 HN Show 项目）细节获取失败，未能验证性能数据
+
+**已确认本地 Ollama 模型（2026-05-30 实测）**：
+```
+ahmadwaqar/smolvlm2-agentic-gui:latest  ✅（screen_trigger_handler 在用）
+qwen3-vl:2b                            ✅
+qwen2.5:1.5b                           ✅
+nomic-embed-text:latest                ✅
+```
+⚠️ 注意：上述是 `127.0.0.1:11434` 返回的本地安装模型，不是 api.ollama.com 的远程库
 
 **候选模型对比**（优先测试可 Ollama 直接拉取的，HF 镜像可用 hf-mirror.com 替代 huggingface.co）：
 
@@ -499,6 +539,7 @@ PYEOF
 
 ## 支持文件
 
+- [Ollama API 端点区分：本地 vs 远程库](./references/ollama-api-endpoint-local-vs-remote-2026-05-30.md) — api.ollama.com vs 127.0.0.1:11434 区别，实测4个本地模型
 - [搜索降级方案](./references/search-fallback.md) — 当 web_search 不可用时的 ddgs 降级流程
 - [网络与代理诊断](./references/network-proxy-debugging.md) — 代理故障排查，HN/HN Firebase/github 分项检测
 - [HN Firebase API 安全调用脚本](./references/hn-firebase-api-cron-safe.md) — Cron 环境专用（避免 60s 超时卡死）
@@ -517,6 +558,7 @@ PYEOF
 - [Ollama Vision 模型测试方法论](./references/ollama-vision-testing.md) — cron环境下测试VLM的API调用、图像大小限制、预热策略和超时处理
 - [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
+- [HN Top 热点文章 2026-06-02](./references/hn-top-2026-06-02.md) — HN 热门文章列表，重点关注 Tiny-vLLM/LFM2.5-8B
 
 ---
 

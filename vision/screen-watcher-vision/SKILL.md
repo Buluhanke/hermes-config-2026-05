@@ -62,15 +62,18 @@ CLEANED: "final_answer(''The i..."
 
 注意：`ask_screen()` 仍用 smolvlm2，因为 GUI 操作规划正是 smolvlm2 的强项。
 
-**Ollama 可用模型**（2026-05-30 实测确认）：
+**Ollama 可用模型**（2026-05-30 确认，`http://127.0.0.1:11434/api/tags` 返回）：
 | 模型 | 大小 | 状态 | 适用场景 |
 |------|------|------|----------|
 | smolvlm2-agentic-gui | 1.85GB | ✅ 在用 | 实时GUI监控（7-64s响应）|
-| qwen3-vl:2b | 1.9GB | ✅ 在用 | 离线OCR分析（需缩图）|
-| qwen3-vl:4b | 3.3GB | ❌ 不存在 | — |
-| blaifa/InternVL3_5:4b | ~3GB | ⚠️ Mac上有图片理解Bug（Issue #12166），暂缓部署 | 基于Qwen3架构，通用视觉 |
+| qwen3-vl:2b | 1.9GB | ✅ 在用 | 场景分类 + 离线OCR分析（需缩图）|
+| qwen2.5:1.5b | ~1GB | ✅ 在用 | 小型文本模型 |
+| nomic-embed-text | ~274MB | ✅ 在用 | 嵌入模型 |
+| blaifa/InternVL3_5:4b | ~3GB | ⚠️ Mac上有图片理解Bug（Issue #12166），暂缓 | 基于Qwen3架构，通用视觉 |
 | blaifa/InternVL3_5:8b | ~5GB | ✅ 可pull | 更高精度 |
 | ui-venus | — | ❌ Ollama无 | 页面404，搜索无结果 |
+
+⚠️ **重要**：必须用 `http://127.0.0.1:11434/api/tags` 检查本地模型，不能用 `https://api.ollama.com/api/tags`（后者返回远程库，不等于本地安装）
 
 **qwen3-vl:2b 已知限制**（Ollama）：
 - 原生1920x1080截图会超时（>60s）
@@ -260,6 +263,7 @@ ACTION_WHITELIST = {
 - `references/screen-watcher-handler-lock-2026-05-26.md` — Handler 重复 spawn 修复
 - `references/qwen3vl-vs-smolvlm2-2026-05-30.md` — qwen3-vl:2b vs smolvlm2 实测对比（速度、分辨率、适用场景）
 - `references/scene-classification-model-fix-2026-06-02.md` — ⚠️ 重要：get_scene_type() 从 smolvlm2 切换到 qwen3-vl:2b，smolvlm2 在纯分类任务上会产生 final_answer 乱码
+- `references/internvl3_5_4b_mac_bug_2026-06-02.md` — ⚠️ Issue #12166 已关闭（2025-09），可重测验证是否仍有问题
 - `references/captchas-auto-execute-security-2026-05-30.md` — CAPTCHA agent 检测研究，DRY_RUN=False 时需考虑的 anti-detection 对策
 
 ## 温度参数
