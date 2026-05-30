@@ -204,63 +204,42 @@ FSM多智能体架构，用于复杂桌面自动化：
 - 胼胝体：动态通信slot交换信息
 - 启发：Hermes的vision_agent和humanization_core可以类比这个架构
 
-### 执行层：Chrome实例体系重大发现（2026-05-30）
+### 执行层：Chrome双Profile体系（2026-06-01 修正）
 
-**结论：所有Chrome进程都是同一个chrome-debug实例！**
+**结论：browser工具的Chrome（chrome-debug profile）和用户日常Chrome是独立的！**
+
 ```
-ps aux | grep Chrome
-# 所有进程都是: --user-data-dir=/Users/aimac/.hermes/chrome-debug
-# 没有找到任何 ~/Library/Application Support/Google/Chrome/Default 相关的进程
-```
-
-**Chrome实例架构**：
-- `~/.hermes/chrome-debug` = Hermes专用Chrome（9333调试端口，所有Chrome Helper进程都是这个profile）
-- `~/Library/Application Support/Google/Chrome/Default` = 用户日常Chrome profile目录（没有被任何当前进程使用）
-
-**browser工具(MCP chrome bridge) vs computer_use**：
-- 两者操作的是**同一个Chrome实例**（PID 43132，chrome-debug profile）
-- browser工具通过CDP/MCP协议操作
-- computer_use通过cua-driver的AX API操作
-- AppleScript通过Carbon Events操作同一实例
-
-**Cookie状态（2026-05-30验证）**：
-```
-sqlite3 ~/.hermes/chrome-debug/Default/Cookies "SELECT host_key, name, datetime(creation_utc/1000000-11644473600,'unixepoch') FROM cookies WHERE name='AEC' OR name='COMPASS' ORDER BY creation_utc DESC LIMIT 5;"
-```
-- AEC cookie: creation_utc = 今天03:23 ✅ 有会话cookie
-- 但`length(value)=0`是因为Mac Keychain加密，不影响实际使用
-- COMPASS cookie存在且是今天创建
-
-**页面显示"未登录"的可能原因**：
-1. Keychain解密失败 → cookie值显示为0但实际有效
-2. 需要重新触发会话验证流程
-3. 跨设备同步延迟（Google账号多设备状态）
-
-**实测确认可用的操作流**：
-```
-1. AppleScript导航URL（不依赖调试端口，不需要窗口可见）
-   osascript -e 'tell application "Google Chrome" to set URL of active tab of window 1 to "https://gemini.google.com/app"'
-
-2. computer_use执行页面操作（即使窗口在另一Space也能通过AX API工作）
-   computer_use(action="type", app="Google Chrome", text="Hello")
-   computer_use(action="key", app="Google Chrome", keys="Return")
+~/.hermes/chrome-debug/  = Hermes专用Chrome（9333调试端口）
+~/Library/Application Support/Google/Chrome/Default/  = 用户日常Chrome
 ```
 
-**关键验证**：
-- `computer_use(type="...", app="Google Chrome")` → ✅ 成功插入51字符到AXTextField，PID 43132
-- AppleScript `set URL` → ✅ screencapture验证URL变更有效（example.com内容变化可见）
-- Chrome窗口bounds (22,22,1302,742) → 窗口存在且有尺寸，但可能在另一Space不可见
+**Cookie不共享问题**：
+- AI网站登录状态存在Default profile，不在chrome-debug
+- browser工具操作chrome-debug → AI网站显示"未登录"
+- 用户需在chrome-debug中重新登录一次，cookies才会保存
 
-**osascript陷阱**：
-- ❌ 链式调用 `osascript -e '...' && osascript -e '...'` → 语法错误
-- ❌ heredoc `osascript <<'EOF'...EOF` → 编码错误
-- ✅ 正确：分开执行多个osascript命令
+**已验证的AI网站登录状态（2026-06-01）**：
+- ✅ 豆包：已登录，可直接对话
+- ❌ 智谱GLM：滑动验证拦截
+- ❌ DeepSeek：需手机验证码
+- ❌ ChatGPT：cookies未在chrome-debug保存
+- ⚠️ Grok：未登录
 
-**⚠️ JS 注入打标签 DOM 解析（2026-06-02 实测验证）**：
-- 原理：JS 在浏览器内给所有可交互元素打 `data-hermes-id` 标签，Playwright 用 `[data-hermes-id='X']` 精准定位
-- 优势：毫秒级注入、Token 节省 10x（500 vs 50000）、视觉盲区过滤（getBoundingClientRect）
-- 实测：httpbin 表单页 13 个元素提取成功，fill/click 100% 精准；百度因验证 UI 遮挡搜索框不适用
-- 脚本位置：`/Users/aimac/hermes_dom_parser.py`
+**解决方案**：在chrome-debug profile完成AI网站登录授权，cookies保存后browser工具即可使用。
+
+**computer_use vs browser工具**：
+- browser工具：通过CDP/MCP协议操作chrome-debug
+- computer_use：通过cua-driver的AX API操作chrome-debug（窗口可在后台/Space）
+- AppleScript：通过Carbon Events操作同一chrome-debug实例
+- 三者操作同一个Chrome实例（PID 43132，chrome-debug profile）
+
+**⚠️ screencapture在Chrome GPU合成层的限制（2026-06-01确认）**：
+- `CGWindowListCreateImage` / `screencapture` 截取Chrome内内容会空白
+- 原因：Chrome使用GPU合成层，macOS安全限制阻止直接读取
+- 解决方案：**不需要截屏**——DOM读取（browser_snapshot，8ms）完全够用
+- 截图仅用于VLM分析非Chrome内容（如桌面截图、Finder等）
+- 实测：`screencapture -x` + Vision OCR 对Chrome页面返回空白，但browser工具的DOM读取完全正常
+- 结论：真人化闭环可以完全依赖DOM感知：`browser_snapshot(DOM) → LLM决策 → browser_click/type执行`
 
 ### 8. 执行层：AppleScript + computer_use 双重控制用户Chrome（2026-05-30实测）
 
@@ -417,6 +396,7 @@ Cronjob `自我进化-夜间学习`（job_id: 8834c6edfa07）执行结果：
 - **推荐技能/工具/方案时 → 立刻开始执行第一条，推荐清单=执行令，不需要任何确认** ← 最高优先级
 - 需要决策 → 自己判断选最优方案执行；如果全部执行时间过长，选最重要的先做，**做完后继续下一项，不停顿**
 - 收到compaction summary → 先快速扫描`## Active State`和`## Pending User Asks`，直接继续执行，不需要问"要我继续吗"
+- **等待时间 → 必须并行其他任务，绝不能闲着** ← 2026-06-01新强化
 
 **⚠️ 推荐清单=执行令（核心铁律，2026-06-01凌晨强化）**：
 > 用户原话：\"你反思一下自己23点36到现在一直不动，纯浪费资源浪费时间，这种情况你以上任务全部做也花不了多少时间，以后这类问题不要停下来，当有多个选择的时候优先按你推荐做，而不是停下来等我，谨记\"

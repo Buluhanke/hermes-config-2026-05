@@ -19,15 +19,23 @@ description: >
  Vision     理解        规划        执行
 ```
 
-## AI专家网站咨询方法论（2026-05-29确立）
+**AI专家网站咨询方法论（2026-05-29确立，2026-06-01修正）**
 
 遇到不熟悉的领域/问题，直接去AI网站客户端"请教"，像员工请教专家：
 
-**可用站点（按优先级）**：
-1. **智谱清言**（chatglm.cn）✅ 免登录，直接用，首选
-2. **Gemini**（gemini.google.com）✅ 免登录，多模态强，可上传文件
-3. **豆包**（doubao.com）✅ 免登录，字节跳动，响应快
-4. ❌ ChatGPT/Claude/DeepSeek — 需要登录，跳过
+**可用站点（按优先级，2026-06-01实测）**：
+1. **Gemini**（gemini.google.com）✅ 免登录，多模态强，可上传文件，首选
+2. **豆包**（doubao.com）✅ 免登录，字节跳动，响应快（**但browser工具的chrome-debug profile需要单独登录**）
+3. ❌ 智谱清言 — 滑动验证拦截，无法自动登录，跳过
+4. ❌ DeepSeek — 手机验证码，无法自动登录，跳过
+5. ❌ ChatGPT — cookies未在chrome-debug保存，跳过
+6. ⚠️ Grok — 未登录，需要注册
+
+**⚠️ Chrome双Profile隔离问题（2026-06-01发现）**：
+- browser工具专用：`~/.hermes/chrome-debug/`
+- 用户日常Chrome：`~/Library/Application Support/Google/Chrome/Default/`
+- 两者Cookie不共享！AI网站登录状态存在用户日常Chrome，不在chrome-debug
+- **解决方案**：在chrome-debug中打开目标网站，手动登录一次，cookies保存后即可使用
 
 **AI专家网站咨询方法论**：详见 `embodied-agent-evolution/references/ai-expert-websites-methodology.md`
 （智谱清言/Gemini/豆包三站免登录验证结论+使用场景对照）

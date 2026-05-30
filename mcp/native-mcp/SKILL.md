@@ -265,6 +265,24 @@ Then `hermes gateway restart`. Verify with `grep "registered" ~/.hermes/logs/age
 
 The client retries up to 5 times with exponential backoff (1s, 2s, 4s, 8s, 16s, capped at 60s). If the server is fundamentally unreachable, it gives up after 5 attempts. Check the server process and network connectivity.
 
+**Keepalive failure pattern** — When you see this in logs:
+```
+MCP server 'chrome' keepalive failed, triggering reconnect
+MCP server 'chrome' is unreachable after N consecutive failures
+```
+The MCP server process is still running (stdio transport) but the session has dropped. The gateway stops retrying after 6 consecutive failures and the tools become unusable. **Fix: restart the gateway** to force reconnection and tool re-registration:
+
+```bash
+hermes gateway restart
+```
+
+Check if it recovered:
+```bash
+grep "registered.*tool.*from chrome" ~/.hermes/logs/agent.log | tail -3
+```
+
+If the binary and Chrome extension are both healthy (stdio works standalone), the keepalive drop is an internal MCP session issue — restarting the gateway re-spawns the stdio subprocess and re-registers all tools.
+
 ### MCP server wraps REST API but tool calls fail with "Connection refused"
 
 If your MCP server is a wrapper around a REST API (common pattern: Python/Node script that forwards MCP tool calls to a local REST service), the underlying REST service **must stay running**. The MCP server process itself can stay alive while the backend REST API dies silently.

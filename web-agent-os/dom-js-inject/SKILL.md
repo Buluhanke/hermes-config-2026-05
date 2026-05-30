@@ -106,12 +106,6 @@ export BROWSER_CDP_URL=ws://127.0.0.1:9333
 ```
 写入 `~/.zshrc` 后新session生效。**注意**：`config.yaml` 受保护，不能通过 `browser.cdp_url` 配置。
 
-```python
-# 工具文件位置
-~/.hermes/hermes-agent/tools/dom_tools.py   # 注册工具（16KB）
-~/.hermes/hermes-agent/tools/browser_cdp_tool.py  # 架构参考：async/sync桥接模式
-```
-
 ### 方式2：独立脚本（测试/原型）
 
 ```bash
@@ -122,19 +116,13 @@ python3 cdp_ws_client.py <url>         # 提取指定URL元素
 
 ---
 
-## 已知坑（重要）
+## 已知坑
 
 ### target_id 截断问题
 `Target.getTargets` 返回的 `targetId` 被截断为 **15字符**，实际 CDP 操作需要 **32字符完整ID**。
 
-**症状**：`dom_tabs()` 显示的 target_id 只有15位，但传给 CDP 的必须是完整32位。
-
-**解法**：查询 HTTP 端点获取完整 ID，优先用 `/json` 而非 `Target.getTargets`：
+**解法**：直接从 `/json` HTTP 端点获取完整 target_id 和 ws_url：
 ```python
-# 错误：Target.getTargets 返回截断ID
-targets = await cdp.invoke("Target.getTargets")
-
-# 正确：直接从 /json HTTP 端点获取完整 target_id 和 ws_url
 async with aiohttp.ClientSession() as sess:
     async with sess.get(f"http://127.0.0.1:9333/json") as resp:
         targets = await resp.json()
@@ -142,34 +130,26 @@ async with aiohttp.ClientSession() as sess:
         # targets[i]['webSocketDebuggerUrl'] = 完整ws:// URL
 ```
 
----
-
-## 文件位置
-## 文件位置
-
-- **生产工具**: `~/.hermes/hermes-agent/tools/dom_tools.py`
-- **验证脚本**: `~/.hermes/hermes-dom-extractor/cdp_ws_client.py`（独立测试用，与 skills/scripts/cdp_ws_client.py 相同）
-- **旧版参考**: `~/hermes_dom_parser.py`（已废弃，Playwright版）
-
-## 已知坑（重要）
-
 ### websockets 版本必须用 15.x
 browser_supervisor.py（browser_dialog_tool）依赖 `websockets.asyncio`，需要 **websockets==15.0.1**。
-hermes-agent 的 `.venv` (Python 3.13) 最初没装这个依赖，需手动装：
+hermes-agent 的 `.venv` (Python 3.13) 需手动安装：
 ```bash
 uv pip install websockets==15.0.1 -p ~/.hermes/hermes-agent/.venv/bin/python
 ```
-若版本不对，`browser_dialog_tool` 加载失败（报错 `No module named 'websockets.asyncio'`），但 `dom_tools` 仍正常工作（dom_tools 用自己的 WS 连接，兼容 12-16 任意版本）。
-
-### target_id 截断问题
-`Target.getTargets` 返回的 `targetId` 被截断为 **15字符**，实际 CDP 操作需要 **32字符完整ID**。解法：直接从 `/json` HTTP 端点获取完整 target_id 和 ws_url（dom_tools.py 已用此方式）。
+dom_tools 用自己的 WS 连接，兼容 12-16 任意版本，不受此影响。
 
 ### dispatch() 空参数测试说明
 registry.dispatch() 在独立进程中调用工具，环境变量（如 BROWSER_CDP_URL）不传递。因此 `dom_snapshot()` 空跑会报"No CDP endpoint"，但实际 Agent 对话调用时参数会注入，正常工作。这是进程隔离机制，不是故障。
 
+### MCP Chrome 工具 vs dom_tools
+MCP chrome (`mcp_chrome_*`) 提供了27个工具，但需要 Chrome 扩展启动端口 12306 的 HTTP 服务器。扩展必须装在 chrome-debug profile 并手动点击 Connect 按钮。
+
+**当前状态**: MCP chrome 工具注册成功但 tool call 失败（端口 12306 无响应）。dom_tools 已覆盖其核心功能，建议优先使用。详细排障过程见 `references/mcp-chrome-debugging.md`。
+
+---
+
 ## 文件位置
 
-- **生产工具**: `~/.hermes/hermes-agent/tools/dom_tools.py`（已注册为内置工具，dom_snapshot/click/fill/tabs）
-- **参考脚本**: `~/.hermes/hermes-dom-extractor/cdp_ws_client.py`（独立验证脚本，与 skills/scripts/cdp_ws_client.py 相同）
-- **参考文档**: `~/.hermes/hermes-dom-extractor/SKILL.md`（旧版，可忽略）
-### target_id 截断问题
+- **生产工具**: `~/.hermes/hermes-agent/tools/dom_tools.py`
+- **验证脚本**: `~/.hermes/hermes-dom-extractor/cdp_ws_client.py`
+- **排障参考**: `references/mcp-chrome-debugging.md`

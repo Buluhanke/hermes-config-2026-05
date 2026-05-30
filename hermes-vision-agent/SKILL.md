@@ -64,11 +64,43 @@ from vision_agent import find_and_open_app
 find_and_open_app("Safari")
 ```
 
-## 已知局限
+## ⚠️ Chrome GPU合成层截屏限制（2026-06-01实测）
 
+**问题**：`CGWindowListCreateImage`截不到Chrome内容——Chrome渲染到GPU合成层，不画到屏幕缓冲区。
+
+**现象**：
+- `screencapture -x` 或 `Quartz.CGWindowListCreateImage` 对Chrome窗口返回空白/RGBA(0,0,0,0)
+- `computer_use` capture也会失败（底层同用CGWindowListCreateImage）
+- Vision OCR对Chrome永远返回空
+
+**实测验证**：
+- 激活Chrome窗口后screencapture → PNG存在但内容为空白或浏览器UI
+- 即使前台窗口正确，CGWindowListCreateImage也截不到Chrome网页内容
+
+**影响范围**：
+| 方案 | 对Chrome可用？ | 替代方案 |
+|------|---------------|----------|
+| screencapture + Vision OCR | ❌ 失效 | 无需替代 |
+| computer_use capture | ❌ 失效 | 使用browser工具 |
+| browser_snapshot (DOM) | ✅ 完美 | 主感知方案 |
+| mcp_chrome截图 | ❌ MCP不可用 | 用browser_snapshot |
+
+**结论**：Chrome GPU合成层是macOS安全限制，无法绕过。**正确做法是不截Chrome屏，用DOM/AX Tree读内容**。
+
+**正常工作的组合**：
+```
+browser_snapshot(DOM 8ms) → LLM分析 → browser_click/type执行
+```
+这本身就是完整闭环，无需截图OCR兜底。
+
+---
+
+## 已知局限
 - smolvlm2 响应约 **10-13秒**（实测，M4 24GB），不是30-60秒，需要耐心等待
 - 找元素需要描述尽量具体："发送按钮" 比 "按钮" 效果好
 - 文件对话框目前需要手动介入（VLM无法操作 macOS 原生文件选择器）
+- Chrome GPU合成层 → 截屏方案全部失效，用browser_snapshot替代
+
 
 ## 闭环验证（2026-05-31）
 
@@ -112,6 +144,20 @@ Vision 返回归一化坐标，原点在**左下角**。需转换：
 ```python
 cx = (bbox.origin.x + bbox.size.width / 2) * screen_width
 cy = (1 - bbox.origin.y - bbox.size.height / 2) * screen_height
+```
+
+### ⚠️ PaddleOCR `show_log` 参数已废弃（2026-06-01 实测）
+
+新版本 PaddleOCR（pip安装的v3.x）已移除 `show_log` 参数，直接删除：
+
+```python
+# ❌ 旧写法（报错：Unknown argument: show_log）
+ocr = PaddleOCR(use_angle_cls=True, lang='ch', show_log=False)
+
+# ✅ 正确写法
+ocr = PaddleOCR(use_angle_cls=True, lang='ch')
+# 或完全省略
+ocr = PaddleOCR()
 ```
 
 ### 已知局限
