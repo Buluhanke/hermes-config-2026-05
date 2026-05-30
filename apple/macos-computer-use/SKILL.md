@@ -189,6 +189,79 @@ your conversation context.
   that matches the dangerous-pattern block list (`curl ... | bash`,
   `sudo rm -rf`, etc.). Break the command up or reconsider.
 
+## Chrome profile 分离问题（重要）
+
+browser工具(MCP chrome bridge)用的Chrome profile是 `~/.hermes/chrome-debug`，**不是用户日常Chrome (`~/Library/Application Support/Google/Chrome/Default`)**。两个profile的cookies不共享。
+
+**解决方案：**
+
+1. **AppleScript控制用户日常Chrome**（推荐）：
+```bash
+osascript -e '
+tell application "Google Chrome"
+    activate
+    delay 0.5
+    if (count of windows) = 0 then make new window
+    set URL of active tab of window 1 to "https://example.com"
+    delay 2
+end tell
+'
+```
+AppleScript可以直接操作用户日常Chrome，不需要调试端口，不需要窗口在前台。
+
+2. **确认Chrome窗口是否可见**：
+```bash
+osascript -e '
+tell application "Google Chrome"
+    set winCount to count of windows
+    return "Windows: " & winCount
+end tell
+'
+```
+
+3. **Chrome窗口Bounds**：
+```bash
+osascript -e '
+tell application "Google Chrome"
+    set b to bounds of window 1
+    return "x:" & (item 1 of b) & " y:" & (item 2 of b) & " w:" & (item 3 of b) & " h:" & (item 4 of b)
+end tell
+'
+```
+如果bounds是 (22,22,1302,742) 说明窗口存在且有尺寸。
+
+4. **browser工具 vs AppleScript/computer_use**：browser工具更可靠（带截图、DOM解析），但受限于hermes chrome profile（`~/.hermes/chrome-debug`）。AppleScript+computer_use可以操作用户日常Chrome（Default profile），两者互补。
+
+**重要发现（2026-05-30）：所有Chrome进程都是chrome-debug profile！**
+- `ps aux | grep Chrome` 看到的进程全部是 `--user-data-dir=/Users/aimac/.hermes/chrome-debug`
+- 用户"日常Chrome"和Hermes Chrome实际上是**同一个Chrome实例**（chrome-debug）
+- 不是两个profile的问题，是**同一个profile的登录状态认知问题**
+- chrome-debug的Cookies里AEC会话cookie值显示为0是因为Mac Keychain加密，但cookie本身是有效的（creation_utc是今天）
+
+**验证方法：查chrome-debug的Cookies**
+```bash
+sqlite3 ~/.hermes/chrome-debug/Default/Cookies "SELECT host_key, name, datetime(creation_utc/1000000-11644473600,'unixepoch') as created FROM cookies WHERE name='AEC' OR name LIKE '%SID%' ORDER BY creation_utc DESC LIMIT 10;"
+```
+如果AEC的creation_utc是最近的，说明已登录。值是0是Keychain加密显示问题，不影响功能。
+
+**AppleScript操作日常Chrome的两种模式（重要）：**
+
+a) **URL导航**（osascript直接调用，无需heredoc）：
+```bash
+osascript -e 'tell application "Google Chrome" to activate'
+osascript -e 'tell application "Google Chrome" to set URL of active tab of window 1 to "https://example.com"'
+```
+注意：多个osascript命令不要用`&&`链式调用，会报语法错误。必须分开执行。
+
+b) **computer_use操作已导航页面**：AppleScript导航URL后，computer_use可以操作页面元素（点击、输入、按键），即使Chrome窗口不在当前Space也能工作（通过AX API）。
+
+**实测确认可用的操作：**
+- `computer_use(type="Hello", app="Google Chrome")` → 成功插入文字到AXTextField
+- `computer_use(key="Return", app="Google Chrome")` → 成功发送
+- AppleScript `set URL of active tab` → URL变更已确认（但窗口可能不在可见Space）
+
+**screencapture验证**：截图中内容变化（从Gemini变成example.com）证明AppleScript导航有效，但截图显示的是当前Space的内容，Chrome窗口可能在其他Space。
+
 ## When NOT to use `computer_use`
 
 - Web automation you can do via `browser_*` tools — those use a real

@@ -330,11 +330,20 @@ browser = cloakbrowser.launch(human=True)  # TypeError!
 browser = cloakbrowser.launch(humanize=True, human_preset="default")
 ```
 
-**关键发现2：CDP Chrome 9333是Hermes专属浏览器，与用户Chrome隔离**
-- 端口9333的Chrome实例 = `~/.hermes/chrome-debug` + MCP扩展 → 只有扩展，无用户cookies
-- 用户平时用的Chrome = 另一个独立进程 → 1688登录态在这里
-- **两者是物理隔离的Chrome进程，cookies不共享**
-- cloakbrowser.launch()会启动全新浏览器，也无法继承用户登录态
+**关键发现2：CDP Chrome 9333的实际情况**
+
+端口9333的Chrome进程（PID 43132）实际就是用户日常Chrome的进程，但用了一个独立的user-data-dir：
+```
+/Applications/Google Chrome.app/... --user-data-dir=/Users/aimac/.hermes/chrome-debug --remote-debugging-port=9333
+```
+
+这意味着：
+- browser工具控制的是用户Chrome进程本身，不是独立进程
+- 但profile是隔离的（`.hermes/chrome-debug` vs `~/Library/Application Support/Google/Chrome/Default`）
+- **用户已登录的cookies在Default profile，不在chrome-debug profile**
+- 因此browser工具访问的网站都显示未登录（即便用户Chrome已登录）
+
+**解决方案：见上方"关键坑2（2026-05-31）"**
 
 **可用方案对比**：
 
@@ -365,6 +374,37 @@ Chrome进程启动但端口不监听的根因：
 用户明确说："你完全可以按你的思路两个或者多个方向去试试"。这条原则写入工作流：
 - 多个方向并行尝试时，不问用户确认，直接同时执行
 - 只在有明确选择且影响不可逆时，才问用户
+
+**关键坑2（2026-05-31）：browser工具用Hermes专属Chrome，与用户Chrome隔离**
+
+```
+用户Chrome（日常）: ~/Library/Application Support/Google/Chrome/Default → 已登录所有AI网站
+Hermes Chrome: /Users/aimac/.hermes/chrome-debug (PID 43132) → browser工具控制，无登录态
+```
+
+**browser工具(MCP chrome_bridge)连接的是Hermes Chrome，不是用户Chrome。**
+- 症状：browser_navigate打开gemini.com显示"未登录"，但用户日常Chrome已登录
+- 确认方法：`ps aux | grep "user-data-dir"` 看Chrome进程的实际data-dir路径
+
+**解决方案（按优先级）：**
+
+A. **在Hermes Chrome重新登录一次**（最简单）
+   - 登录后cookies保存，以后直接用
+   - browser工具直接操作，无需额外配置
+
+B. **用AppleScript操作用户Chrome**（绕过调试端口限制）
+   ```bash
+   osascript -e 'tell application "Google Chrome" to open location "https://gemini.google.com/app"'
+   ```
+   - AppleScript可以直接操作用户Chrome，不需要调试端口
+   - 但速度慢、需要窗口可见，适合偶发操作
+
+C. **把你日常Chrome的Cookies复制到Hermes Chrome profile**
+   - 找到两个Chrome的Cookie文件路径
+   - 用SQLite导出导入Cookie
+   - 复杂度高，不推荐
+
+**推荐：方案A（简单直接）+ 方案B（备用）**
 
 **已知坑：computer_use无法看到Chrome窗口**
 

@@ -204,7 +204,63 @@ FSM多智能体架构，用于复杂桌面自动化：
 - 胼胝体：动态通信slot交换信息
 - 启发：Hermes的vision_agent和humanization_core可以类比这个架构
 
-### 8. 关键能力缺口（对照Hermes现状）
+### 执行层：Chrome实例体系重大发现（2026-05-30）
+
+**结论：所有Chrome进程都是同一个chrome-debug实例！**
+```
+ps aux | grep Chrome
+# 所有进程都是: --user-data-dir=/Users/aimac/.hermes/chrome-debug
+# 没有找到任何 ~/Library/Application Support/Google/Chrome/Default 相关的进程
+```
+
+**Chrome实例架构**：
+- `~/.hermes/chrome-debug` = Hermes专用Chrome（9333调试端口，所有Chrome Helper进程都是这个profile）
+- `~/Library/Application Support/Google/Chrome/Default` = 用户日常Chrome profile目录（没有被任何当前进程使用）
+
+**browser工具(MCP chrome bridge) vs computer_use**：
+- 两者操作的是**同一个Chrome实例**（PID 43132，chrome-debug profile）
+- browser工具通过CDP/MCP协议操作
+- computer_use通过cua-driver的AX API操作
+- AppleScript通过Carbon Events操作同一实例
+
+**Cookie状态（2026-05-30验证）**：
+```
+sqlite3 ~/.hermes/chrome-debug/Default/Cookies "SELECT host_key, name, datetime(creation_utc/1000000-11644473600,'unixepoch') FROM cookies WHERE name='AEC' OR name='COMPASS' ORDER BY creation_utc DESC LIMIT 5;"
+```
+- AEC cookie: creation_utc = 今天03:23 ✅ 有会话cookie
+- 但`length(value)=0`是因为Mac Keychain加密，不影响实际使用
+- COMPASS cookie存在且是今天创建
+
+**页面显示"未登录"的可能原因**：
+1. Keychain解密失败 → cookie值显示为0但实际有效
+2. 需要重新触发会话验证流程
+3. 跨设备同步延迟（Google账号多设备状态）
+
+**实测确认可用的操作流**：
+```
+1. AppleScript导航URL（不依赖调试端口，不需要窗口可见）
+   osascript -e 'tell application "Google Chrome" to set URL of active tab of window 1 to "https://gemini.google.com/app"'
+
+2. computer_use执行页面操作（即使窗口在另一Space也能通过AX API工作）
+   computer_use(action="type", app="Google Chrome", text="Hello")
+   computer_use(action="key", app="Google Chrome", keys="Return")
+```
+
+**关键验证**：
+- `computer_use(type="...", app="Google Chrome")` → ✅ 成功插入51字符到AXTextField，PID 43132
+- AppleScript `set URL` → ✅ screencapture验证URL变更有效（example.com内容变化可见）
+- Chrome窗口bounds (22,22,1302,742) → 窗口存在且有尺寸，但可能在另一Space不可见
+
+**osascript陷阱**：
+- ❌ 链式调用 `osascript -e '...' && osascript -e '...'` → 语法错误
+- ❌ heredoc `osascript <<'EOF'...EOF` → 编码错误
+- ✅ 正确：分开执行多个osascript命令
+
+### 执行层：AppleScript + computer_use 双重控制用户Chrome（2026-05-30实测）
+
+**背景**：之前以为有两个Chrome实例（browser工具用chrome-debug，用户日常用Default），实测发现是同一个。
+
+**实测确认可用的操作流**：
 - 多步骤复杂任务规划（需要Manager模块）
 - 持续质量评估+自适应重规划
 - 环境状态记忆（World Model）
@@ -339,10 +395,12 @@ Cronjob `自我进化-夜间学习`（job_id: 8834c6edfa07）执行结果：
 - 反检测已解决（Camofox+patchright+nodriver），平台关注身份而非行为
 - MCP Catalog为空是fork差异，非功能损坏
 
-## 风格高压线
-- 不要问用户"怎么做"，直接说"做什么"
+## 风格高压线（2026-05-30强化）
+- **多选择场景 → 优先自主执行，不等确认。** 收到任务立即执行，只报告结果+问题+建议，不汇报过程。
 - 不解释过程，只说结果+建议
 - 用户发语音→语音回复；用户发文字→文字回复
+- 中小问题AI自主决定；重要决策和改动才问老板
+- "要记得落实" = 必须验证+量化汇报，不能放空炮
 
 ## 实践路径
 1. 先让眼睛（屏幕感知）和手脚（桌面控制）稳定工作
