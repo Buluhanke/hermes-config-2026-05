@@ -6,7 +6,7 @@ triggers:
   - 自我进化
   - 主动成长
   - 不等授权
-version: 2026-05-25
+version: 2026-05-30
 ---
 
 # Proactive Self-Evolution
@@ -55,11 +55,11 @@ grep -E "error|ERROR|exception" ~/.hermes/logs/gateway.log | tail -20
 ---
 
 ## LTM 三层记忆框架（2026-05-26 落地）
-
-`~/.hermes/scripts/ltm.py` — 基于 arXiv:2410.15665v4 Long Term Memory 论文：
-- **Episodic Memory**：`~/.hermes/ltm/episodic/` — 会话事件存档
-- **Semantic Memory**：`~/.hermes/ltm/semantic.json` — 抽取的知识事实
-- **Procedural Memory**：`~/.hermes/ltm/procedural.json` — 学会的技能流程
+### LTM 三层记忆框架（已简化，2026-05-30）
+当前直接使用 Hindsight（Docker容器，端口8899）作为长期记忆，替代旧版 ltm.py 方案。
+- **Episodic Memory**：`Hindsight bank=hermes` 自动叙事化
+- **Semantic Memory**：`Hindsight recall` 语义检索
+- **Procedural Memory**：Skills + Brain_Lab 文件系统
 
 ### Screen Trigger 紧急度分流
 `~/.hermes/scripts/screen_trigger_handler.py` 已实现三档分流：
@@ -92,9 +92,6 @@ result = client.recall(bank_id="hermes", query="搜索query")
 - Recall响应字段：`.text` 不是 `.content`，`.type` 不是 `.type_`
 - qwen3-vl:2b 太慢（30s+），换 qwen2.5:1.5b
 
-### Context Loader
-`~/.hermes/scripts/evolution_core.py` — 整合 personality + LTM + 当前上下文，下次对话自动加载
-
 ### 性格文件
 `~/.hermes/hermes-agent/personality.md` — 口头禅/情绪触发/主动原则/沟通偏好
 
@@ -106,13 +103,13 @@ result = client.recall(bank_id="hermes", query="搜索query")
 - [Matt Pocock Skills + EvoMap 参考](./references/mattpocock-evomap.md)
 - [Web搜索后端配置](./references/web-search-backend-config.md)
 - [深度进化发现(2026-05-28)](./references/deep_evolution_findings_20260528.md)
+- [系统深层检查清单](./references/deep_audit_workflow.md) — 2026-05-30 实战总结
 - [深度进化发现(2026-05-30)](./references/self_optimization_findings_20260530.md)
+- [系统深层检查清单(2026-05-30)](./references/deep_check_audit_20260530.md)
 
 ## 脚本
 
 - [self_optimization.py](./scripts/self_optimization.py) — Autoresearch风格自我优化循环，每天凌晨2点自动执行
-
----
 
 ## 已发现坑（2026-05-29补充）
 
@@ -209,12 +206,29 @@ result = client.recall(bank_id="hermes", query="搜索query")
 - 指标：`~/.hermes/logs/self_optimization/metrics.json`
 - 归档：`~/Brain_Lab/self_optimization_round1.md`
 - 搜索降级链：GitHub API → ddgs → curl
+- 评估函数：基于关键词打分过滤，过滤后结果写入metrics.json
+
+**自我优化闭环已完整：**
+```
+定义目标 → 执行搜索(GitHub API/ddgs) → 评估打分 → 保留改进 → 记录指标 → 归档Brain_Lab
+```
 
 **⚠️ 已知反模式（2026-05-30教训）：**
 - **停下来等命令是浪费时间**。多选择场景下，AI应自主选择最优方案执行，不等用户确认。
 - 症状：用户说"你一直在等命令" → 说明已违反此原则。
 - 修复：任何纯执行类任务（安装脚本、运行优化、修复错误）直接做，不汇报过程。
 - 原则：汇报只说结果+问题+建议，不说"我在做X"。
+
+**⚠️ 追踪闭环铁律（2026-05-30强化）：**
+- 用户说"要记得落实" = 任务完成后必须验证并汇报结果，不能止于"已执行"
+- 验证方法：检查进程状态、日志、Cron任务列表、端口监听等可量化指标
+- 汇报格式："✅ 完成 + 关键指标（如Cron任务数、进程PID、文件数）"
+- 典型错误：只执行不验证，或验证了不汇报
+
+**用户明确指示（2026-05-30，铁律）：**
+- 出现"要不要处理"类反问 → 默认执行AI推荐的方案，不需要等确认
+- 除非涉及付款或删除重要数据，否则不问
+- 决策风格：中小问题AI自主决定，重要决策和改动才问老板
 
 **例外（才询问）：**
 - 涉及付款
