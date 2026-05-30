@@ -334,10 +334,150 @@ curl -X DELETE -H "X-N8N-API-KEY: <key>" \
 16. **Bypass onboarding 表单**：数据库中 `user` 表的 `settings` 字段控制 onboarding，设为 `{"userActivated":true}` + 填入 `email` 可直接跳过引导流程。
 17. **API Key 的 scopes 是 JSON 数组字符串**：从数据库读出的 `scopes` 字段格式为 JSON 数组字符串（如 `'["workflow:read","workflow:activate"]'`），不是逗号分隔字符串。
 
-## 相关技能
+---
 
-- `hermes-rpa` — Hermes 桌面代理核心能力
-- `desktop-control` — 桌面操控具体方法
+## Hermes MCP Catalog 手动安装（catalog 为空时）
+
+### 问题现象
+
+```bash
+hermes mcp catalog      # 输出空，无条目
+hermes mcp install n8n  # 报错 not in the catalog
+```
+
+**原因**：本机 Hermes 是 Buluhanke/hermes-config-2026-05 fork，不含 `optional-mcps/` 目录（上游 NousResearch/hermes-agent 有 n8n、linear 两个条目）。
+
+### 手动安装 n8n MCP（绕过 catalog）
+
+n8n MCP 本质是 Python stdio bridge，连到本地 n8n 实例（`http://127.0.0.1:5678`）。
+
+```bash
+# 1. 克隆仓库到临时目录
+cd /tmp && git clone https://github.com/CyberSamuraiX/hermes-n8n-mcp.git hermes-n8n-mcp --depth=1
+
+# 2. 创建 venv 并安装依赖
+cd /tmp/hermes-n8n-mcp
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 3. 验证 health（会返回 401 如果 n8n 没有 API Key）
+N8N_BASE_URL=http://127.0.0.1:5678 N8N_API_KEY=*** .venv/bin/python -c "from server import health; print(health())"
+```
+
+### 配置到 Hermes config.yaml
+
+```yaml
+mcp_servers:
+  chrome:
+    command: mcp-chrome-stdio
+  n8n:
+    command: /tmp/hermes-n8n-mcp/.venv/bin/python
+    args:
+      - /tmp/hermes-n8n-mcp/server.py
+```
+
+环境变量通过 `~/.hermes/.env` 注入：
+```
+N8N_BASE_URL=http://127.0.0.1:5678
+N8N_API_KEY=<your-n8n-api-key>
+```
+
+### n8n API Key 配置状态
+
+- **n8n 容器已运行**：`hermes-ai-n8n-1`，端口 5678 就绪
+- **加密 key 存在**：`encryptionKey: WxCtRXmaJvXVhSAsdgc9h1p4bpT+iA5a`（在容器内 `/home/node/.n8n/config`）
+- **API Key 状态**：未配置（health check 返回 `api_status_code: 401`）
+- **解决**：进 n8n UI → Settings → API → Create an API Key
+
+### Linear MCP（更简单，无需安装）
+
+Linear MCP 是远程 HTTP + OAuth，Hermes 自动处理 PKCE，无需本地安装：
+
+```bash
+hermes mcp install linear
+```
+
+首次连接会打开浏览器进行 OAuth 认证。
+
+### 相关陷阱
+
+- catalog 为空不代表 MCP 功能坏，只是 upstream 目录不在本机 fork
+- `/tmp` 安装重启后会丢，重启后需重新执行克隆步骤
+
+## 参考文档
+
+16. **Bypass onboarding 表单**：数据库中 `user` 表的 `settings` 字段控制 onboarding，设为 `{"userActivated":true}` + 填入 `email` 可直接跳过引导流程。
+17. **API Key 的 scopes 是 JSON 数组字符串**：从数据库读出的 `scopes` 字段格式为 JSON 数组字符串（如 `'["workflow:read","workflow:activate"]'`），不是逗号分隔字符串。
+
+---
+
+## Hermes MCP Catalog 手动安装（catalog 为空时）
+
+### 问题现象
+
+```bash
+hermes mcp catalog      # 输出空，无条目
+hermes mcp install n8n  # 报错 not in the catalog
+```
+
+**原因**：本机 Hermes 是 Buluhanke/hermes-config-2026-05 fork，不含 `optional-mcps/` 目录（上游 NousResearch/hermes-agent 有 n8n、linear 两个条目）。
+
+### 手动安装 n8n MCP（绕过 catalog）
+
+n8n MCP 本质是 Python stdio bridge，连到本地 n8n 实例（`http://127.0.0.1:5678`）。
+
+```bash
+# 1. 克隆仓库到临时目录
+cd /tmp && git clone https://github.com/CyberSamuraiX/hermes-n8n-mcp.git hermes-n8n-mcp --depth=1
+
+# 2. 创建 venv 并安装依赖
+cd /tmp/hermes-n8n-mcp
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 3. 验证 health（会返回 401 如果 n8n 没有 API Key）
+N8N_BASE_URL=http://127.0.0.1:5678 N8N_API_KEY=*** .venv/bin/python -c "from server import health; print(health())"
+```
+
+### 配置到 Hermes config.yaml
+
+```yaml
+mcp_servers:
+  chrome:
+    command: mcp-chrome-stdio
+  n8n:
+    command: /tmp/hermes-n8n-mcp/.venv/bin/python
+    args:
+      - /tmp/hermes-n8n-mcp/server.py
+```
+
+环境变量通过 `~/.hermes/.env` 注入：
+```
+N8N_BASE_URL=http://127.0.0.1:5678
+N8N_API_KEY=<your-n8n-api-key>
+```
+
+### n8n API Key 配置状态
+
+- **n8n 容器已运行**：`hermes-ai-n8n-1`，端口 5678 就绪
+- **加密 key 存在**：`encryptionKey: WxCtRXmaJvXVhSAsdgc9h1p4bpT+iA5a`（在容器内 `/home/node/.n8n/config`）
+- **API Key 状态**：未配置（health check 返回 `api_status_code: 401`）
+- **解决**：进 n8n UI → Settings → API → Create an API Key
+
+### Linear MCP（更简单，无需安装）
+
+Linear MCP 是远程 HTTP + OAuth，Hermes 自动处理 PKCE，无需本地安装：
+
+```bash
+hermes mcp install linear
+```
+
+首次连接会打开浏览器进行 OAuth 认证。
+
+### 相关陷阱
+
+- catalog 为空不代表 MCP 功能坏，只是 upstream 目录不在本机 fork
+- `/tmp` 安装重启后会丢，重启后需重新执行克隆步骤
 
 ## 参考文档
 

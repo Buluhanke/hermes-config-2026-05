@@ -50,14 +50,28 @@ description: >
 发现问题 → 立刻解决 → 再继续。不等授权，不问用户，不跳过。
 网络不通 = 阻塞事件，必须优先修复。发现 github/HN 不通，立即诊断代理/DNS/防火墙，不能"切降级路径绕过继续学"。
 
-**⚠️ 自主执行原则（2026-05-29 确立，2026-05-30 强化）：**
+**⚠️ Skills 目录结构（2026-05-30 新发现）：**
+Skills 采用 `category/skill-name/` 子目录结构，`hermes skills list` 显示扁平名称但实际路径在各 category 下。验证技能是否存在不能用扁平路径直接检查，必须用 `find ~/.hermes/skills/ -name "skill-name" -type d`。详见 `references/skills-directory-structure-2026-05-30.md`
+
+**⚠️ 自主执行原则（2026-05-29 确立，2026-05-30 强化，2026-05-30 晚间重审）：**
 空闲学习时，完全自主操作，不等待用户授权。发现可改进点：
 1. 直接执行（配置修改、脚本运行、文件编辑）
 2. 非破坏性操作为主（改配置、整理文件、优化代码）
 3. 持续执行直到任务完成，不中途停下等用户
 4. 完成后记录结果到 memory，不打扰用户
 5. 破坏性操作（删文件、停进程、改系统设置）需保守，优先备份再操作
-6. **多选择场景优先自主执行，不停下来等确认**（2026-05-30 强化）：推荐列表任务直接执行，不等用户命令
+6. **多选择场景优先自主执行，不停下来等确认（2026-05-30 强化，2026-05-30 晚间重审）：**
+   - 推荐列表任务 → 直接执行，**不等用户命令**
+   - 执行完成后汇报结果，不中途停下来问"要不要做"
+   - 用户决策风格已确立：**中小问题AI自主决定执行，不需要汇报。重要决策和改动才问老板。**
+   - 本原则覆盖所有多选择场景（技能推荐、工具选择、供应商比价等）
+   - ⚠️ 违反示例：列出3个方案后问"需要我先联系询价吗？"→ 应直接执行第一个最优方案
+7. **⚠️ 用户明确指令：技能推荐类任务（"这个也要做"），直接执行不需要停下来问。执行完成后汇报结果即可。**
+
+**⚠️ 昨夜死机根因（screen_trigger_handler 进程堆积，2026-05-30 诊断）：**
+凌晨02:50开始，screen_watcher 检测到屏幕变化后触发 screen_trigger_handler，但 handler 处理慢（smolvlm2分析10-15秒/次），新触发持续进入导致"Handler仍在运行"堆积。屏幕被锁定时 `screencapture -x` 超时，02:50-03:10期间297次失败，系统进入异常循环。
+**风险**：handler进程堆积 + Ollama runner内存持续占用 → 系统变慢但不会直接死机。
+**防护**：冷却时间已设置为60s；若日志出现连续"Handler仍在运行"超过10次，idle_learning应立即停止screen_watcher并重置lock文件。
 
 ### 第一步：评估当前状态 + 网络预检
 
@@ -98,7 +112,7 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 
 ⚠️ **重要区分**：检查 HN.com 和 Firebase API 是独立测试 — 它们是不同的域名：
 - `news.ycombinator.com` 失败 ≠ `hacker-news.firebaseio.com` 也失败
-- 今天巡检结果：hn:blocked（HN.com）但 Firebase API 仍可用
+- 实测（2026-06-02）：github:blocked + hn:blocked，但 firebase:ok（Firebase API 仍可访问）
 - 预检只验证 HN.com，Firebase API 的可用性需实际调用才知道
 
 **网络异常时的降级策略（已验证稳定）**：
@@ -125,6 +139,8 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 curl -s --max-time 5 "https://api.firecrawl.dev/v0/search?q=test" -o /dev/null -w "%{http_code}"
 # 返回 402 说明 credits 耗尽，切 ddgs
 ```
+
+**实测（2026-06-02）**：web_search 成功返回结果（未 402），可能 credits 有刷新。ddgs 超时返回空（20s超时时返回空，非错误码）。
 
 **HN Firebase API 用法**（免费稳定，无需认证）：
 ```bash
@@ -340,6 +356,18 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - 需要大段截取时分片：`.slice(0,5000)` → `.slice(5000,10000)`
 - 适合深度文章（得分>500），不适合批量抓取
 
+**⚠️ 工具落地实测结论（2026-05-30）**：
+以下工具经过实测验证，记录结论避免重复踩坑：
+
+| 工具 | 安装 | 运行 | 结论 |
+|------|------|------|------|
+| NopeCHA SDK | ✅ 已装 | ⚠️ 需要API key | 免费额度仅插件，SDK需付费；1688自研滑块不在支持列表 |
+| Agent TARS CLI | ✅ 已装0.3.0 | ✅ 可用 | Node.js版，npx即可跑，需配置VLM后端 |
+| patchright | ✅ 已装 | ❌ greenlet/pipe架构问题 | 放弃，改用DrissionPage |
+| DrissionPage | ✅ 已装 | ✅ 可用 | 成功驱动Chromium访问1688，1688首页无需验证码 |
+| playwright（官方） | ✅ 已装chromium | ✅ 可用 | 官方headless正常，patchright有架构问题 |
+| UI-TARS Desktop | ❌ 无.dmg | N/A | 无macOS预编译包，GitHub下载超时，只能用Agent TARS CLI替代 |
+
 ---
 
 ### 第三步：本地模型测试（如有新发现）
@@ -460,9 +488,10 @@ nomic-embed-text:latest                ✅
   - benchmark 数据来源：InsiderLLM + Codersera 2026
   - **结论**：本地已有 qwen3-vl:2b（通用视觉）和 smolvlm2-agentic-gui（GUI专用），llama3.2-vision:11b 无安装必要；如需通用视觉升级，优先考虑 qwen3-vl:4b（如 Ollama 可用）或 GGUF 导入 Holo1.5-3B（91.7%）
 - **InternVL3.5（2026-05 更新）** — Ollama 社区版已可用
-  - **blaifa/InternVL3_5:4B** ✅ Ollama 可拉取（**3.4GB**，Q4_K_M，基于 **Qwen3** 架构，4.41B params）
-  - **blaifa/InternVL3_5:8B** ✅ Ollama 可拉取（~5GB）
-  - ⚠️ 2026-05-30 搜索发现 `ui-venus` 在 Ollama **不存在**（页面 404）
+  - ⚠️ 2026-05-30 实测：`blaifa/InternVL3_5:4B` 在 Ollama 远程库 **未找到**（api.ollama.com 查询仅返回 gemma3:27b/12b/4b、qwen3-vl:235b-instruct）
+  - 本地模型仍可通过 GGUF 导入方式部署（参考 `references/internvl3_5_4b_2026_05_30.md`）
+  - ⚠️ 2026-05-30 发现：InternVL3_5:4B 在 Mac 上图片描述结果错误（GitHub Issue #12166），受影响平台 macOS 15
+  - **结论**：Mac 图片理解任务暂停 InternVL3_5:4B，等 Ollama 修复后再评估
   - InternVL3 系列基于 Qwen2.5（InternVL3）或 Qwen3（InternVL3_5），多模态能力强，支持 GUI agents、工具使用
   - **新增候选（2026-05-30）**：blaifa/InternVL3_5:4B（基于Qwen3，screen_watcher实时分析潜在升级）
   - HuggingFace: OpenGVLab/InternVL3-78B（完整版）
@@ -530,11 +559,22 @@ nomic-embed-text:latest                ✅
 
 把本次学习结果追加到学习日志文件 `~/.hermes/memory/idle_learning_log.md`：
 
-⚠️ 禁止用 `cat >> file << 'EOF'` 写法（terminal foreground 模式会报 `&` 错误）。正确做法：
-1. 用 `write_file` 把新内容写入 `/tmp/idle_log_entry.md`
-2. 再用 `terminal` 执行 `cat /tmp/idle_log_entry.md >> ~/.hermes/memory/idle_learning_log.md`
+⚠️ **禁止用 `cat >> file << 'EOF'` 写法**（terminal foreground 模式会报 `&` 错误）。
+✅ **正确做法（两种任选）**：
+1. `read_file` + `patch` 在文件末尾追加（推荐，无 shell 解析风险）
+2. `write_file` 写到 `/tmp/idle_log_YYYYMMDD_HHMMSS.md`，再用 `terminal` 执行 `cat /tmp/... >> ~/.hermes/memory/idle_learning_log.md`
 
-或直接用 `read_file` + `patch` 在文件末尾追加。
+```python
+# 方法1（推荐）：patch 追加
+from your_tool import read_file, patch
+
+log = read_file(path='~/.hermes/memory/idle_learning_log.md', limit=5, offset=1800)  # 读末尾几行
+# 用 patch 在最后一个空行后追加新内容
+patch(mode='replace', old_string='**下次学习方向**：...', 
+      new_string='**下次学习方向**：...\n\n## 2026-06-02 空闲学习记录\n\n...')
+```
+
+⚠️ `/tmp` 路径竞争：必须用时间戳文件名（`/tmp/idle_log_20260602_0700.md`），不能用 `/tmp/idle_log_entry.md`（会被并行 cron 覆盖）
 
 ---
 
@@ -582,14 +622,18 @@ PYEOF
 - [ScreenSpot-V2 Leaderboard 2026-05-30](./references/screenspot-v2-leaderboard-2026-05-30.md) — 实际抓取 top-24 模型排名，Holo1.5-3B(91.7%)/Qwen2.5-VL-7B(86.5%) 可作为 M4 升级候选
 - [Holo1.5-3B GGUF Import Guide](./references/holo1.5-3b-ollama-import.md) — 2026-05-30 实测：ollama pull 失败，需手动 GGUF 导入
 - [InternVL3_5:4B 新模型发现](./references/internvl3_5_4b_2026_05_30.md) — 2026-05-30 发现：blaifa/InternVL3_5:4B（3.4GB，基于Qwen3架构，未安装）
+- [本地 Ollama 模型状态 2026-05-30](./references/local-ollama-models-2026-05-30.md) — 本地4模型确认 + Ollama远程库vision查询结果
 - [Ollama Vision 模型测试方法论](./references/ollama-vision-testing.md) — cron环境下测试VLM的API调用、图像大小限制、预热策略和超时处理
 - [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
-- [HN Top 热点文章 2026-06-02](./references/hn-top-2026-06-02.md) — HN 热门文章列表，重点关注 Tiny-vLLM/LFM2.5-8B
+- [Awesome Computer Use Agents 资源（2026-06-02）](./references/awesome-computer-use-agents-2026-06-02.md) — GitHub ranpox，综合资源汇总含视频/papers/项目
+- [HN Top 热点文章 2026-06-02](./references/hn-top-2026-06-02.md) — HN 热门文章列表，重点关注 Tiny-vLLM/LFM2.5-8B，screen_watcher 链路巡检结果
+- [HN Top 2026-05-30](./references/hn-top-2026-05-30.md) — 本次学习发现的 15 条 HN 热门，含 Tiny-vLLM(235 stars)/LFM2.5-8B(277pts)
 - [HN Top 2026-05-30](./references/hn-top-2026-05-30.md) — 本次学习发现的 15 条 HN 热门，含 Tiny-vLLM(235 stars)/LFM2.5-8B(277pts)
 - [Tiny-vLLM C++/CUDA 推理引擎调研](./references/tiny-vllm-2026-06-02.md) — HN 559分项目，从零构建 vLLM 精简版，含 30+ 章节课程大纲
 - [Idle Learning 2026-06-02 Session](./references/idle-learning-2026-06-02-session.md) — response 标准化修复，screen_watcher 链路实测
 - [Idle Learning 2026-06-02 发现：auto_execute DRY_RUN 日志为空根因](./references/idle-learning-2026-06-02-dryrun-log-empty.md) — unknown 场景不在 ACTION_WHITELIST 导致 dry-run 永不触发，修复方案
+- [昨夜系统冻结诊断（2026-05-30）](./references/screen-watcher-freeze-diagnosis-2026-05-30.md) — 凌晨02:50-03:10 handler进程堆积297次screencapture失败，根因+防护+诊断命令
 
 ---
 
@@ -679,7 +723,14 @@ echo "建议添加每日凌晨2点自学任务，是否确认？"
 | heredoc `<< EOF` 被拦截 | 脚本内的 inline Python | 写 .py 文件再执行 |
 | Firecrawl web_search 经常 402 | 搜索不可用 | 默认走 HN Firebase API 降级 |
 | GitHub API 偶发 pending_approval | 搜索受限 | 降级用 HN Firebase API |
-| ddgs CLI 返回空 | 备选搜索不可用 | 依赖 HN Firebase API |
+| ddgs CLI 返回空 | 备选搜索不可用 | 依赖 HN Firebase API（top 5，30s 内完成） |
+
+**⚠️ ddgs 超时行为实测（2026-06-02）**：
+- ddgs CLI 在 20s 超时时**返回空**（不是错误码，是空结果）
+- 适合快速关键词搜索（5条结果内）
+- **不适合批量扫描**（获取多条文章摘要时会超时返回空）
+- 获取 HN 文章内文时用 `browser_navigate + browser_console JS` 替代 ddgs
+- 格式：`ddgs text -q "query" -m 5`
 
 **屏幕分析日志污染 gateway.log（2026-05-29 发现）**：
 - `screen_trigger_handler` 的 screen_watch 分析结果正在写入 `gateway.log`（2553 条记录，1.1MB）
