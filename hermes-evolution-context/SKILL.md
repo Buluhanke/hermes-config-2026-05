@@ -5,7 +5,7 @@ triggers:
   - Hermes启动时
   - 用户问"你记得"
   - 主动行为完成后记录
-version: 2026-05-28
+version: 2026-05-31
 ---
 
 # Hermes Evolution Context Loader
@@ -51,17 +51,27 @@ version: 2026-05-28
 - 不要解释过程，只说结论+问题+建议
 ```
 
-## LTM 三层记忆
-- Episodic Memory: `~/.hermes/ltm/episodic/` — 会话事件存档
-- Semantic Memory: `~/.hermes/ltm/semantic.json` — 知识事实
-- Procedural Memory: `~/.hermes/ltm/procedural.json` — 学会的技能
+## LTM 三层记忆（已重建 2026-05-31）
 
-## 文件位置
-- LTM框架: `~/.hermes/scripts/ltm.py`
-- Context Loader: `~/.hermes/scripts/evolve_context.py`
-- 性格文件: `~/.hermes/hermes-agent/personality.md`
-- 当前状态: `~/.hermes/current_context.json`
-- 进化日志: `~/.hermes/logs/evolution.log`
+实际文件位置：
+- `~/.hermes/personality.md` — 性格设定（重建）
+- `~/.hermes/ltm/episodic/` — 情景记忆（事件存档）
+- `~/.hermes/ltm/concepts/` — 概念记忆
+- `~/.hermes/ltm/skills/` — 程序记忆
+- `~/.hermes/ltm/semantic.json` — `{"facts": []}`
+- `~/.hermes/ltm/procedural.json` — `{"procedures": []}`
+- `~/.hermes/scripts/ltm.py` — LTM框架（remember/recall/memorize/learn）
+
+API:
+```python
+from ltm import remember, recall, memorize, learn
+remember("完成采购", context="1688询价")
+recall("纸箱")
+memorize("义乌星火包装价格最优惠", tags=["1688","纸箱"])
+learn("CDP拦截法", "1688不需要AK即可提取数据", tags=["1688","爬虫"])
+```
+
+CLI: `python ~/.hermes/scripts/ltm.py [remember|memorize|learn|recall] [args...]`
 
 ## 已知陷阱：Cron "error" 状态未必是真错
 
@@ -72,16 +82,20 @@ Hermes scheduler 的 `last_status: error` 可能是**误报**。检查步骤：
 
 真实错误信号：`last_delivery_error` 非空，或脚本自己的err.log有内容。
 
-## 已知陷阱：用户问什么就直接答什么，不要确认授权
-
-用户问"都是什么报错"，正确做法：直接列出错误，不要先说"直接说结论"然后列清单然后问"重启吗？"。这是典型的过度中介动作——解释过程+要求确认都是多余。
+## 已知陷阱：用户授权"你判断一下"就直接执行，不请示
 
 正确模式：
-- 用户问具体问题 → 直接答，不解释
-- 用户说"你判断一下" → 直接干，干完汇报结果
-- 用户说"好讨厌" → 闭嘴，不列清单不讲技术细节
+- 用户授权"你判断一下" → 直接执行推荐列表，不问确认
+- 用户说"你反思一下自己" → 收到后立即执行，不停下来等指示
+- 遇到多个选择 → 优先按推荐执行，不等用户说"去做"
 
-反面教材（这次）：用户问报错，我只说了结论性的话然后问"重启吗？"——还是在等授权，不是直接执行。
+反面教材：用户说"你反思一下自己23点36到现在一直不动"——收到后应该直接执行推荐清单，不是停下来等确认。
+
+正确行动准则：
+- **中小问题/多选择场景** → AI自主决定执行，不等确认
+- **重要决策和改动** → 才问老板
+- 执行后要落实，不放空炮
+- **不要解释过程**，只说结果+问题+建议
 
 ## Gateway 调试关键发现（2026-05-27）
 

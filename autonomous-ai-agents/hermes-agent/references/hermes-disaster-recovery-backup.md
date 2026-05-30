@@ -53,51 +53,67 @@ python3.11 -m venv venv
 venv/bin/pip install -e . -i https://pypi.tuna.tsinghua.edu.cn/simple
 ```
 
-## 自动备份脚本
+## GitHub Push Protection Blocking Backup (2026-05-31)
 
-```bash
-#!/bin/bash
-# sync-hermes-backup.sh — 同步 lean backup 到 GitHub
+When `.env`, `auth.json`, `channel_directory.json` are already tracked by git, adding them to `.gitignore` does NOT prevent their content from being pushed — git history still contains them. GitHub's Push Protection blocks any push containing secrets in history, regardless of `.gitignore`.
 
-SRC=~/.hermes
-TMP=/tmp/hermes-lean-backup
-REPO=https://github.com/Buluhanke/hermes-backup-v2.git
-
-rm -rf $TMP
-mkdir -p $TMP
-
-# 精选文件（不备份 venv/cache/logs/sessions）
-cp $SRC/config.yaml $TMP/
-cp $SRC/SOUL.md $TMP/
-cp $SRC/channel_directory.json $TMP/
-cp -r $SRC/memories/ $TMP/
-cp -r $SRC/supplier_memory/ $TMP/
-cp -r $SRC/cron/ $TMP/
-cp -r $SRC/autonomous-ai-agents/ $TMP/
-cp -r $SRC/scripts/ $TMP/
-
-# 写入 .gitignore
-cat > $TMP/.gitignore << 'EOF'
-__pycache__/
-*.pyc
-venv/
-venv311/
-.env
-auth.json
-1688_cookies.json
-*.local.json
-credentials.*
-logs/
-cache/
-replays/
-chrome-debug/
-EOF
-
-cd $TMP && git init -b main && git add .
-git commit -m "Lean backup $(date +%Y-%m-%d_%H-%M)"
-git remote add origin $REPO
-git push -u origin main --force
+**Symptoms:**
 ```
+remote: error: GH013: Repository rule violations found for refs/heads/master.
+remote: — Push cannot contain secrets
+```
+
+**Immediate fix — stop sensitive files from being re-added:**
+```bash
+# Remove from git index but keep local file
+git rm --cached .env auth.json channel_directory.json
+git add .gitignore
+git commit -m "stop tracking secrets"
+git push  # still blocked on old commits in history
+```
+
+**Full resolution — rewrite git history:**
+```bash
+# 1. Remove from git index (keep local)
+git rm --cached .env auth.json channel_directory.json
+
+# 2. Rewrite all history to expunge the files
+git filter-branch --force --index-filter \
+  'git rm --cached --ignore-unmatch .env auth.json channel_directory.json' \
+  --prune-empty --tag-name-filter cat -- --all
+
+# 3. Force push (required — history rewritten)
+git push origin --force --all
+```
+
+**Correct hermes-git-backup.sh pattern (pathspec exclusion):**
+```bash
+HERMES_HOME="/Users/aimac/.hermes"
+cd "$HERMES_HOME" || exit 1
+
+# Check for changes excluding sensitive files
+if git diff --quiet HEAD -- \
+  ':(exclude).env' ':(exclude)auth.json' ':(exclude)channel_directory.json' \
+  ':(exclude)*.log' ':(exclude).gitignore'; then
+  exit 0
+fi
+
+# Add only non-sensitive files
+git add -- \
+  ':!.env' ':!auth.json' ':!channel_directory.json' \
+  ':!gateway_state.json' ':!feishu_seen_message_ids.json' \
+  ':!1688_cookies.json' ':!aliyundrive_token.json' ':!*.log'
+git add -f .gitignore
+
+if git diff --cached --quiet; then exit 0; fi
+git commit -m "auto backup $(date '+%Y-%m-%d %H:%M')" > /dev/null 2>&1
+git pull --rebase origin master > /dev/null 2>&1
+git push origin master > /dev/null 2>&1
+```
+
+**⚠️ Critical pitfall:** `git add -A` captures everything including `.env` and `auth.json` regardless of `.gitignore`. Always use pathspec exclusions with `:!` patterns and `--` separator.
+
+---
 
 ## Aliyun Drive 自动同步（rclone）
 
@@ -215,18 +231,6 @@ git push -u origin main
 ```
 
 **注意：** `gh repo create --source` 要求已有 commit，先 commit 再 push。
-
-## GitHub 大文件清除（如已误提交）
-
-```bash
-# 移除大文件历史
-git filter-branch --tree-filter 'rm -f path/to/large-file' HEAD
-# 或用 BFG Repo-Cleaner
-bfg --delete-big-files --blade 100M
-
-# 强制推送
-git push origin main --force
-```
 
 ## 定时备份 cron
 

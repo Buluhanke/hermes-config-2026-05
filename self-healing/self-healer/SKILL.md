@@ -199,13 +199,57 @@ web:
 
 ### Cron引用了不存在的Skill
 
-**症状**：cron job 状态 `error`，prompt中引用了已删除的 skill（如 `pro-buyer`）
+**症状**：cron job 状态 `error`，prompt中引用了已删除的 skill（如 `pro-buyer`）或SKILL.md存在但核心脚本文件丢失
 
 **排查**：`cronjob list` → 检查每个job的 `skills` 字段 → 验证 `~/.hermes/skills/<skill-name>/SKILL.md` 是否存在
 
 **自动修复**：
 - skill存在但路径错误 → 更新cron job的skills字段
 - skill已删除 → `cronjob remove <job_id>`（不再空转浪费token）
+- SKILL.md存在但核心脚本/框架文件丢失 → 重建缺失文件（见下）
+
+**Skill框架文件完整性检查**：
+```
+hermes-evolution-context/
+  ✅ SKILL.md（必有）
+  ❌ ltm.py（框架核心）
+  ❌ personality.md（性格设定）
+  ❌ ltm/semantic.json（语义记忆）
+  ❌ ltm/procedural.json（程序记忆）
+  ❌ ltm/episodic/（情景记忆目录）
+```
+当SKILL.md存在但`scripts/ltm.py`缺失时，重建方法：
+1. 从SKILL.md的LTM三层设计提取结构
+2. 创建`~/.hermes/scripts/ltm.py`（三层CRUD + recall）
+3. 创建缺失的LTM目录和JSON文件
+4. 验证：`python3 ~/.hermes/scripts/ltm.py recall test`
+
+### Cron脚本PATH问题（exit 127）
+
+**症状**：`bash sync-skills.sh: No such file or directory`，但手动运行同一脚本正常。
+
+**根因**：cron环境PATH不包含git/homebrew路径。脚本内部`cd ~/.hermes/skills`后找不到git。
+
+**诊断**：
+```bash
+# 手动运行（正常）vs cron运行（失败）
+bash ~/.hermes/scripts/sync-skills.sh && echo "manual ok"  # ✅
+# cron下会exit 127
+```
+
+**修复**：脚本头部加PATH export：
+```bash
+#!/bin/bash
+export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:$HOME/bin"
+```
+
+**验证修复**：
+```bash
+# 用最小环境测试（模拟cron的干净PATH）
+env -i HOME=$HOME PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin bash ~/.hermes/scripts/sync-skills.sh
+```
+
+**覆盖范围**：所有cron脚本（sync-skills.sh、hermes-git-backup.sh等）均需此修复。
 
 ### Git Push被GitHub Secret Scanning拦截
 

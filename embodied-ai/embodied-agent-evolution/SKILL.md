@@ -95,11 +95,16 @@ tags: [embodied-ai, desktop-automation, self-evolution, hermes]
 
 **关键瓶颈**：4K截图成本高 + 长序列任务容错率低。当前最优解是混合模式。
 
-### 4. OSWorld Benchmark 关键洞察（2026-05-29 更新）
+**OSWorld Benchmark 关键洞察（2026-05-31 更新）**
 
 **OSWorld（ NeurIPS 2024 ）：369个真实桌面任务，评测视觉Agent**
 
-Top Scores（2026-05-29）：
+**Current SOTA（2026-05-31）**:
+- **Kimi K2.6: 73.1%** — First model to cleanly beat 72.4% human-expert baseline (April 2026)
+- Claude Sonnet 4.5: 62.9%
+- Human-expert baseline: 72.4%
+
+**Historical（2026-05）**:
 - Claude Opus 4.6: 72.7% | Claude Sonnet 4.6: 72.5% | **Qwen3 VL 235B A22B: 66.7%（开源第一）**
 
 **⚠️ 核心发现：75% 的失败是 visuomotor grounding errors（看见但做不到），而非 reasoning 失败**
@@ -116,6 +121,30 @@ Top Scores（2026-05-29）：
 - Auto-execute 的核心挑战不是理解场景，而是精确定位 UI 元素
 - Vocaela-500M（85.8% ScreenSpotV2）方向正确，但 Ollama 集成有问题
 - Smol2Operator 归一化坐标（0-1）比像素坐标好 20x，Hermes 未来应采用归一化坐标
+
+### GUIDE Benchmark — 用户行为理解（CVPR 2026）
+
+**论文**：GUIDE: A Benchmark for Understanding and Assisting Users in Open-Ended GUI Tasks
+**arXiv**：2603.25864 | **Code**：https://guide-bench.github.io/
+
+**三层递进任务**：
+1. **Behavioral State Detection**（9类分类）— 最难，最强模型仅44.6%
+2. **Intent Prediction**（4选项MCQ）— 较易，最强71.39%
+3. **Assistance Prediction**（二分类+类型）— 关键，Gemini-2.5-Pro达69.82%
+
+**核心发现**：结构化上下文是关键催化剂
+- GPT-4o-mini assistance need detection：无上下文46% → 加行为上下文82%（**+36pp**）
+- GPT-4o assistance F1：47.73 → 90.19（**+42pp**）
+- 结论：瓶颈不是模型能力，而是缺乏结构化用户上下文
+
+**错误模式**：把"沮丧/调试"误分类为"执行动作"——错过用户遇到困难的信号
+
+**对 Hermes auto_execute 的直接改进方向**：
+- 当前 ACTION_WHITELIST 只有 scene 级别（browser/wechat），缺少**用户困难检测层**
+- 未来扩展为：scene classification → behavior state（confusion/frustration）→ intent → assistance
+- auto_execute 未来应能检测用户是否在"挣扎"，而非只响应明确指令
+
+**详见**：`references/guide-benchmark-cvpr2026.md`
 
 ### 4.1 Perea.AI GUI Grounding Models 2026（SOTA 权威报告，2026-05-30 新增）
 
@@ -153,9 +182,11 @@ Top Scores（2026-05-29）：
 - **AndroidWorld进展最快**：Aria-UI 44.8%（2024-12）→ UI-Venus-1.5 77.6%（2026-02），一年内+32.8%
 - **WebVoyager仍是OpenAI CUA最强**：87.0%，但差距在缩小
 
-**Ollama 可用模型**（2026-05-30确认）：
+**Ollama 可用模型**（2026-05-30确认，2026-06-03更新kimi-k2.6）：
 - smolvlm2-agentic-gui ✅ 在用（1.85GB，7-64s响应）
 - qwen3-vl:2b ✅ 在用（1.9GB）
+- **kimi-k2.6 ✅ 已发布**（Moonshot AI，1T-param MoE，OSWorld 73.1%，可测试）
+- kimi-k2:1t / kimi-k2.5 / kimi-k2-thinking ✅ 均可通过ollama pull安装
 - qwen3-vl:4b ❌ 不存在（not found 404）
 - blaifa/InternVL3_5:4b ⚠️ **Mac上有图片理解Bug（Issue #12166），暂缓部署**（~3GB，基于Qwen3）
 - blaifa/InternVL3_5:8b ✅ 可测试（~5GB）
@@ -503,14 +534,28 @@ EOF
 ### patchright v2
 - greenlet架构在M4 Mac有兼容问题（SyncBase.__init__() missing impl_obj）
 - playwright官方已够用，patchright作备选
-| references/ui-tars-desktop-research.md | UI-TARS Desktop研究 |
+| references/perea-ai-gui-grounding-2026.md | Perea.ai GUI Grounding 2026 SOTA 权威报告，UI-Venus-1.5 四阶段训练流程 |
+| references/guide-benchmark-cvpr2026.md | GUIDE CVPR 2026 — 用户行为理解benchmark，三层递进（behavior detection 44.6% → intent → assistance），结构化上下文提升GPT-4o达+36pp |
 | references/js-inject-dom-labeling-2026-06-02.md | JS注入打标签DOM解析（2026-06-02实测） |
 | references/perception_loop_verification_20260531.md | 感知层闭环验证（2026-05-31实测） |
 | references/agent-tars-cli实测-20260530.md | Agent TARS CLI实测记录 |
 | references/1688-captcha-automation-20260530.md | 1688自动化验证码瓶颈 |
+| references/computer-use-agents-leaderboard-2026-05-31.md | Computer Use Agents 2026 live leaderboard — Kimi K2.6(73.1%) beats human baseline(72.4%), Anthropic #1 HN, Playwright MCP, SWE-Agent |
 | references/computer-use-agents-2026-06-02.md | Computer Use & GUI Agents 2026 SOTA — trycua/cua, Agent-S, benchmarks, hybrid architectures |
 | references/ai-websites-evolution-advice-20260531.md | 6个AI网站第一轮建议 + 已实现组件 |
-| references/ai-websites-browser-automation-survey-20260601.md | 6平台第二轮browser自动化建议汇总（Browser-Use/Stagehand/CrewAI/Steel） |
+| references/1688-captcha-automation-20260530.md | 1688自动化验证码瓶颈 |
+
+## AI Computer Use 三层架构（2026-05-31 新增）
+
+详见 `references/ai-computer-use-three-levels-2026-05-31.md`。
+
+| Level | 名称 | 可靠性 | 代表 |
+|-------|------|--------|-----|
+| 1 | API integration | 95%+ | Zapier/Make |
+| 2 | Browser automation | 85-95% | OpenAI Operator |
+| 3 | OS-level desktop control | 70-90% | Claude Computer Use, **Hermes** |
+
+**对 Hermes 的启发**：1688 采购等 web-based 任务优先用 browser automation（Level 2），可靠性高 15-25pp。双轨并行：browser automation + OS-level dry-run 互补。
 
 ## 2026-05-30 夜间学习产出记录
 

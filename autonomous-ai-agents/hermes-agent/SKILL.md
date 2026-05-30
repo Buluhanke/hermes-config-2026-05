@@ -851,20 +851,23 @@ Common gateway problems:
 - **Slack bot only works in DMs**: Must subscribe to `message.channels` event. Without it, the bot ignores public channels.
 - **Windows-specific issues** (`Alt+Enter` newline, WinError 10106, UTF-8 BOM config, test suite, line endings): see the dedicated **Windows-Specific Quirks** section above.
 
-### Upgrade via pip (Dual venv Pitfall)
+### Upgrade via pip (Dual venv Pitfall — Mac M4, 2026-05-31)
 
-Hermes Agent has a **dual venv architecture**:
-- `.venv` (Python 3.13): Gateway + agent process → `~/.hermes/hermes-agent/.venv/`
-- `venv` (Python 3.11): dashboard process → `~/.hermes/hermes-agent/venv/`
+**⚠️ The running venv is `venv` (Python 3.11), NOT `.venv` (Python 3.13)**
 
-**Pip upgrade pitfall:** `pip3 install hermes-agent --upgrade` installs to whichever Python you run. System pip → Python 3.14 site-packages. venv pip → Python 3.11 site-packages. After upgrading via system pip, `which hermes` may show the new version but the Gateway process (running on venv) stays on the old one.
+Hermes Agent has a **dual venv architecture** on this Mac M4:
+- `venv` (Python 3.11): Gateway + agent process → `~/.hermes/hermes-agent/venv/`
+- `.venv` (Python 3.13): May not exist or may be empty
+
+**Pip upgrade pitfall:** `pip3 install hermes-agent --upgrade` installs to whichever Python you run. System pip → Python 3.14. `.venv` pip → Python 3.13. After upgrading via system pip, `which hermes` may show the new version but the Gateway process (running on `venv`) stays on the old one.
 
 **Correct upgrade path:**
 ```bash
-# Best: upgrade both at once
+# Upgrade the ACTUAL running venv
 ~/.hermes/hermes-agent/venv/bin/pip install hermes-agent --upgrade
+
 # Then restart gateway
-kill <gateway_pid>  # e.g. PID 7761
+kill $(pgrep -f "hermes_cli.main gateway")
 ~/.hermes/hermes-agent/venv/bin/hermes gateway run --replace &
 ```
 
@@ -873,7 +876,17 @@ kill <gateway_pid>  # e.g. PID 7761
 - Recreate: `ln -s ~/.hermes/hermes-agent/venv/bin/hermes ~/.local/bin/hermes`
 - Verify: `which hermes && hermes version`
 
-**`hermes update` limitation:** Requires git checkout of hermes-agent. Pip-installed Hermes cannot self-upgrade via this command. Use pip instead.
+**Adding dependencies to the running venv (Mac M4, 2026-05-31):**
+```bash
+# ⚠️ Correct venv is `venv`, NOT `.venv`
+uv pip install --python ~/.hermes/hermes-agent/venv/bin/python <package1> <package2>
+
+# Verified installed (2026-05-31):
+# pyautogui, mss, pynput, cloakbrowser (humanization-core)
+# edge-tts, faster-whisper, chromadb (voice-module + memory-hpc)
+```
+
+**⚠️ faster-whisper blocks ~60s on first import** — downloads Whisper model (~300MB). Expected, not an error. Models cached at `~/.cache/huggingface/`.
 
 ### Ollama Memory Management
 
@@ -883,6 +896,72 @@ Ollama runs as a resident background service (`ollama serve`, ~98MB RSS). Models
 - Models loaded = +~2-3GB RSS per model
 - Models unloaded = 0MB (memory released)
 **Recommendation:** Keep Ollama resident. Cold start latency (a few seconds) is worse than the ~98MB baseline cost. No need for idle-exit/auto-reap setup.
+
+### Adding Dependencies to hermes-agent venv (Mac M4, 2026-05)
+
+**⚠️ The correct venv is `venv`, NOT `.venv`**
+
+The actual running venv is `~/.hermes/hermes-agent/venv` (Python 3.11), NOT `.venv`. The `.venv` directory may not exist or be empty.
+
+**Correct install command:**
+```bash
+uv pip install --python ~/.hermes/hermes-agent/venv/bin/python <package1> <package2>
+```
+
+**Verified packages installed (2026-05-31):**
+- pyautogui, mss, pynput, cloakbrowser (humanization-core deps)
+- edge-tts, faster-whisper (voice-module deps)
+- chromadb (memory-hpc dependency)
+
+**⚠️ faster-whisper import blocks for ~60s on first use**
+First `import faster_whisper` downloads the Whisper model (~300MB) and blocks the process. This causes `execute_code` and terminal timeouts on initial load. This is expected behavior, not an error. Models are cached at `~/.cache/huggingface/`.
+
+**⚠️ Cron script PATH issue**
+
+When scripts run under cron (vs terminal), the PATH may not include git/python binaries. Symptoms: `sync-skills.sh` fails with "No such file or directory" even though git exists. Fix: add explicit PATH export at the top of cron scripts:
+
+```bash
+#!/bin/bash
+export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:$HOME/bin"
+```
+
+**⚠️ Cron script HOME issue**
+
+Cron may set `$HOME` to `/var/empty` or empty string. Never use `$HOME` in cron scripts. Use absolute paths instead:
+
+```bash
+# ❌ WRONG
+cd "${HOME:-/Users/aimac}/.hermes/skills" || exit 0
+
+# ✅ CORRECT
+HERMES_HOME="/Users/aimac/.hermes"
+cd "$HERMES_HOME" || exit 1
+```
+
+**Known scripts with venv path bugs (fixed 2026-05-31):**
+- `hermes-dashboard-start.sh` — used `.venv` instead of `venv`
+- `run_vlm_loop.sh` — used `.venv` instead of `venv`
+- `self_evolution.sh` — used `.venv` instead of `venv`
+- `self-healer-watchdog.sh` — used non-existent MOSS-TTS-Nano path, rewritten to use venv edge-tts
+
+Always verify the actual venv location: `ls ~/.hermes/hermes-agent/ | grep venv`
+
+### Hermes-evolution-context Framework Restoration (2026-05-31)
+
+When the evolution-context skill's framework files are missing but SKILL.md exists, rebuild:
+
+```
+~/.hermes/personality.md           # personality traits (recreated from SKILL.md)
+~/.hermes/ltm/episodic/            # episode events
+~/.hermes/ltm/concepts/            # concept memories
+~/.hermes/ltm/skills/             # procedural memories
+~/.hermes/ltm/semantic.json        # {"facts": []}
+~/.hermes/ltm/procedural.json      # {"procedures": []}
+~/.hermes/scripts/ltm.py           # LTM framework (三层记忆 CRUD + recall)
+~/.hermes/current_context.json     # already existed
+```
+
+The ltm.py framework provides: `remember()`, `memorize()`, `learn()`, `recall()` functions callable from any Python context.
 
 ### Three-Tier Model Routing (Fallback Chain)
 ### Three-Tier Model Routing (Fallback Chain)
