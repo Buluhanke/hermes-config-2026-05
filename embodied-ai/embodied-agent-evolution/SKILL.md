@@ -203,10 +203,7 @@ tags: [embodied-ai, desktop-automation, self-evolution, hermes]
 - MoE架构（A3B）是 M4 24GB 的正确选择——30B参数只用3B激活
 - InternVL3_5（基于Qwen2.5，~3GB）是 smolvlm2 的潜在升级候选
 
-### 5. 本地视觉模型选型指南（InsiderLLM 2026-05 更新）
-screen_trigger_handler 的 ACTION_WHITELIST 用中文 key（浏览器/微信/桌面...），但 get_scene_type() 输出英文（browser/wechat/desktop...），导致 auto_execute() 永远 return None。详见 `screen-watcher-vision` skill 的"场景类型 key 不匹配 bug"章节。
-
-### 5. 本地视觉模型选型指南（InsiderLLM 2026-05 更新）
+### 5. Perea.AI GUI Grounding Models 2026（SOTA 权威报告，2026-05-30 新增）
 
 **VRAM tier 选型表（InsiderLLM 2026-05，insiderllm.com/guides/vision-models-locally）**：
 
@@ -481,7 +478,19 @@ EOF
 - 当前 DRY_RUN=True 不执行真实动作，不受影响
 - 未来 DRY_RUN=False 时需考虑 anti-CAPTCHA 对策
 
-## UI-TARS Desktop/MobileAgent 生态更新（2026-05-30）
+**UI-TARS Desktop/MobileAgent 生态更新（2026-05-30）**
+
+**⭐ ZJU-REAL/Awesome-GUI-Agents（2026-06-07 发现，浙江大学团队维护）**
+- GitHub: `ZJU-REAL/Awesome-GUI-Agents`（423 stars，228 commits）
+- 最全面的 GUI Agents 资源库，按四模块组织：**Perception / Exploration / Planning / Interaction**
+- 包含 2025-2026 年主流论文，有 benchmark 和数据集列表
+- **新论文发现**：UI-Voyager（自进化，失败经验学习）、AndroTMem（长程记忆）、UI-Copilot（Tool-Integrated RL）、LiteGUI（RL蒸馏小模型）、AQuaUI（四叉树token压缩）
+- **四模块框架对 Hermes 的启发**：
+  - Perception：smolvlm2/qwen3-vl 负责视觉感知
+  - Exploration：screen_watcher 触发 + 场景分类
+  - Planning：auto_execute dry-run + ACTION_WHITELIST
+  - Interaction：computer_use + Playwright JS 精准执行
+- **详见**：`references/awesome-gui-agents-2026-06-07.md`
 
 **⚠️ 重大修正（2026-05-30实测）**：
 - UI-TARS Desktop **无macOS预编译.dmg包** — GitHub release只有Linux/Windows Electron安装包
@@ -550,6 +559,7 @@ EOF
 ### patchright v2
 - greenlet架构在M4 Mac有兼容问题（SyncBase.__init__() missing impl_obj）
 - playwright官方已够用，patchright作备选
+| references/domain-expertise-moat-2026-05-31.md | Domain Expertise Moat — 行业知识是Hermes护城河，HN 109pts，领域专家+AI > 纯工程师+AI |
 | references/perea-ai-gui-grounding-2026.md | Perea.ai GUI Grounding 2026 SOTA 权威报告，UI-Venus-1.5 四阶段训练流程 |
 | references/guide-benchmark-cvpr2026.md | GUIDE CVPR 2026 — 用户行为理解benchmark，三层递进（behavior detection 44.6% → intent → assistance），结构化上下文提升GPT-4o达+36pp |
 | references/js-inject-dom-labeling-2026-06-02.md | JS注入打标签DOM解析（2026-06-02实测） |

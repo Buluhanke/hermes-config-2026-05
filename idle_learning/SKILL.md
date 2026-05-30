@@ -249,11 +249,21 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - HuggingFace: `Mininglamp-AI/Mano-P`；Cider SDK 提供 MLX INT8 加速
   - ⚠️ github.com + huggingface.co 均 blocked，需等网络恢复后部署
   - 详见 `references/mano-p-2026-05-31.md`
-- **⭐ OSWorld SOTA（2026-06-07 更新）**：
-  - GPT-5.4 在 OSWorld-Verified 达 **75.0%**，超越人类基准 72.4%
-  - GPT-5.4 在 WebArena-Verified 达 67.3%
-  - GPT-5.2 仅有 47.3%（差距巨大）
-  - 来源：ddgs 搜索 2026-06-07
+- **⭐ OSWorld-Verified SOTA（2026-05-31 更新）**：
+  - **完整 Top 20 排名**：详见 `references/osworld-verified-leaderboard-2026-05-31.md`
+  - **核心变化**：Claude Opus 4.8 以 **83.4%** 登顶（超越 GPT-5.5 的 78.7%）
+  - **开源最强**：Holo3-35B-A3B 以 **82.6%** 排名第二（开源，H Company）
+  - **GPT-5 家族内差距巨大**：5.5(78.7%) → 5.4(75.0%) → 5.4-mini(72.1%) → 5.2(47.3%) → 5.4-nano(39.0%)，最高低差 **40pp**
+  - **Qwen3.5 开源系列**：58.0% → 56.2% → 54.5%，全部在下半区
+  - **已验证超越人类**：GPT-5.4 的 75.0% > 人类基准 72.4%
+  - 来源：BenchLM.ai，2026-05-28 更新，browser_navigate 直接抓取
+
+- **⭐ OpenRouter Series B $113M（2026-05-31 更新）**：
+  - **规模**：CapitalG/NVIDIA/ServiceNow/MongoDB/Snowflake/Databricks 联合投资
+  - **关键指标**：周处理量从 5T → 25T tokens，年底预计 1Q tokens；8M+ 开发者，400+ 模型
+  - **战略意义**：企业投资方组合（基础设施和平台公司）= 路由层已成确定性基础设施
+  - **产品**：multi-modal 支持（image/audio/speech/transcription/embedding/video），Provider-level failover + cost/latency 优化
+  - 来源：browser_navigate 直接抓取 openrouter.ai/announcements/series-b
 
 - **⭐ Qwen3-VL（2026-05-29 发现，2026-05-29 实测成功）** — Qwen最新旗舰VLM
   - Ollama完整可用：qwen3-vl:2b（1.9GB）✅，qwen3-vl:8b（6.1GB）✅
@@ -294,7 +304,7 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - DRY_RUN=True 安全模式，6个场景预配置（浏览器/微信/1688/ChatGPT/钉钉/Telegram）
   - 详见 `screen-watcher-vision` skill 的 [Auto-Execute 自动执行] 章节
 
-### auto_execute DRY_RUN 状态确认（2026-05-30 实测）
+**auto_execute DRY_RUN 状态确认（2026-05-30 实测，2026-05-31 确认修复）**
 
 **症状（2026-06-02 旧报告）**：`grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log` 返回 0。
 
@@ -304,7 +314,21 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - 场景分类正常：browser/wechat/calculator 轮流
 - **结论**：之前日志为空是因为 screen_watcher 未运行；现在运行正常，dry-run 日志持续增长
 
-**ACTION_WHITELIST 场景覆盖**：browser, calculator, wechat 等场景均已覆盖。
+**2026-05-31 确认**：ACTION_WHITELIST 已修复为英文 key，dry-run 正常：
+- `grep -c "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log` → **468条**
+- 场景分布（2026-05-31 早6点快照）：
+  - `browser`: 233 (50%)
+  - `unknown`: 184 (40%) ⚠️ 分类器信心不足
+  - `desktop`: 42 (9%)
+  - `wechat`: 6, `calculator`: 3
+- **⚠️ unknown 40% 是已知问题**：qwen3-vl:2b 做场景分类时，对非典型界面返回 "unknown"。不影响 dry-run 触发（unknown 在 WHITELIST 中），但说明分类精度有提升空间。
+
+**诊断命令：分析场景分布**
+```bash
+grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log | sed 's/.*scene=//' | sort | uniq -c | sort -rn
+```
+
+**ACTION_WHITELIST 场景覆盖**：browser, calculator, wechat, desktop, unknown 等场景均已覆盖。
 - **smolvlm2 结构化 JSON 输出实测**（2026-05-29）：
   - JSON prompt 可行，输出始终包裹 `<code>...</code>` 标签
   - 场景分类 ~13s，结构化 JSON ~2s（可能缓存）
@@ -372,15 +396,21 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - 启动命令已验证：`python3 ~/.hermes/scripts/screen_watcher.py`（PID 会变，不需要追踪旧 PID）
 - **idle_learning 第一步检查清单**：进程 → 截图时间 → 模型列表，三个全检查才链路完整
 - ⚠️ **screen_watcher 目录不存在的情况（2026-05-29 发现）**：若 `ls ~/.hermes/screenshots/` 返回"No such file or directory"，说明 screen_watcher 从未启动过或已被清理。需要手动检查 screen_watcher 进程和启动脚本，确认目录会被正确创建。
-- **⚠️ Stale screenshot 诊断流程（2026-06-07 实测修复版）**：
+- **⚠️ "Handler仍在运行"日志但handler未启动（2026-06-07 实测）**：
+  - 症状：screen_watcher 日志大量 "Handler仍在运行，跳过本次触发"，但 `ps aux | grep screen_trigger` 无进程
+  - 根因：screen_trigger_handler 处理完后删除 `.handler_lock` 文件，但如果 handler 被强制终止（系统休眠/崩溃），lock 文件可能残留，导致 watcher 认为 handler 在运行
+  - 验证：`ls -la ~/.hermes/screenshots/.handler_lock` 存在 = 锁残留，需手动删除
+  - 解决：`rm ~/.hermes/screenshots/.handler_lock` 后 watcher 恢复正常触发
+- **⚠️ Stale screenshot 诊断流程（2026-06-07 实测修复版，2026-05-31 晨间巡检更新）**：
   1. `ls -lt ~/.hermes/screenshots/current.png` — 检查时间戳是否在最近 24h 内
   2. `md5 ~/.hermes/screenshots/current.png` — 连续两次 MD5 不同说明内容在更新，仅时间戳可能是 screencapture 行为，watcher 实际正常
   3. `ps aux | grep screen_watcher` 确认进程是否存活
-  4. **进程存活 + 截图 stale**：`pkill screen_watcher` 后用 `terminal(background=true)` 重启
+  4. **进程存活 + 截图 stale**：`pkill -f screen_watcher` 后用 `terminal(background=true)` 重启
      - ⚠️ **禁止**在 foreground command 里用 `nohup ... &` — 会报 `shell-level background wrappers` 错误
-     - ✅ **正确**：`terminal(background=true, command='python3 ~/.hermes/scripts/screen_watcher.py')`
-  5. 验证：`screencapture -x ~/.hermes/screenshots/test_manual.png && ls -lt ~/.hermes/screenshots/test_manual.png` + `md5` 比对
-  6. 验证 dry-run：`grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log`
+     - ⚠️ **禁止**跳过 pkill 直接"重启"（旧进程活着时会掩盖问题，截图继续不更新）
+     - ✅ **正确两步**：`pkill -f screen_watcher` → 等待 → `terminal(background=true, command='python3 ~/.hermes/scripts/screen_watcher.py')`
+     - 验证：`ls -lt ~/.hermes/screenshots/current.png` 时间戳应更新到最近分钟
+  5. 验证 dry-run：`grep -c "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log`（应 > 0）
 - CDP直连方案已知可用：原生Python WebSocket连接9333，不依赖mcp-chrome-stdio bridge
 - **重要底层限制（2026-05-28 发现）**：cua-driver/macOS CGEventTap 对某些应用（Blender等）的event loop只接受cghidEventTap且前面有mouseMoved事件，需要短暂前台激活。"不抢焦点"承诺对这类应用不可实现，Hermes computer_use同理
 - **执行层四级断链（2026-05-29 发现）**：全链路在 cron 环境断在 screen_watcher 不运行
@@ -711,8 +741,9 @@ PYEOF
 - [HN Top 热点文章 2026-06-02](./references/hn-top-2026-06-02.md) — HN 热门文章列表，重点关注 Tiny-vLLM/LFM2.5-8B，screen_watcher 链路巡检结果
 - [Microsoft Copilot Studio Computer Use GA (2026-06-02)](./references/copilot-studio-computer-use-ga-2026.md) — 首个生产级computer use平台，OpenAI CUA + Sonnet 4.5 GA，credit计费，企业特性详解
 - [HN Top 2026-06-07](./references/hn-top-2026-06-07.md) — SQLite durable workflows(628pts)/Mistral AI efficiency(427pts)/Zig build cache(251pts)
+- [OSWorld-Verified Leaderboard 2026-05-31](./references/osworld-verified-leaderboard-2026-05-31.md) — Top 20 完整排名，Claude Opus 4.8(83.4%)登顶，Holo3-35B-A3B(82.6%)开源第一
 - [HN Top 2026-05-31](./references/hn-top-2026-05-31.md) — Anthropic超越OpenAI成最高估值AI创业公司，Zig Build System Reworked，Openrsync
-- [HN Top 2026-05-30](./references/hn-top-2026-05-30.md) — 本次学习发现的 15 条 HN 热门，含 Tiny-vLLM(235 stars)/LFM2.5-8B(277pts)
+- [OpenRouter Series B $113M (2026-05-31)](./references/openrouter-series-b-2026-05-31.md) — CapitalG/NVIDIA/ServiceNow联合投资，周处理量25T tokens，路由层成确定性基础设施
 - [HN Top 2026-05-30](./references/hn-top-2026-05-30.md) — 本次学习发现的 15 条 HN 热门，含 Tiny-vLLM(235 stars)/LFM2.5-8B(277pts)
 - [Tiny-vLLM C++/CUDA 推理引擎调研](./references/tiny-vllm-2026-06-02.md) — HN 559分项目，从零构建 vLLM 精简版，含 30+ 章节课程大纲
 - [Idle Learning 2026-06-02 Session](./references/idle-learning-2026-06-02-session.md) — response 标准化修复，screen_watcher 链路实测

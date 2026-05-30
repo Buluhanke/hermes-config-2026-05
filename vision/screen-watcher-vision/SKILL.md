@@ -52,23 +52,27 @@ smolvlm2-agentic-gui 在相同分辨率下 17.9s 返回准确分类结果。
 
 温度 0.1，30s timeout，smolvlm2 在 scene classification 任务上实测无幻觉。
 
-**模型状态（2026-05-30 实测确认）**：
+**模型状态（2026-05-30 实测确认，2026-06-07 更新）：**
 | 函数 | 模型 | 速度 | 状态 |
 |------|------|------|------|
-| `get_scene_type()` | smolvlm2-agentic-gui | ~18s ✅ | **在用**，场景分类首选 |
-| `ask_screen()` | smolvlm2-agentic-gui | 7-10s ✅ | **在用**，GUI内容分析 |
-| qwen3-vl:2b | — | 60s+ ❌ | 仅离线OCR备选，不适合实时分析 |
+| `get_scene_type()` | qwen3-vl:2b | ~24s | **在用**（smolvlm2 已从 Ollama registry 下线，2026-06-02确认） |
+| `ask_screen()` | qwen3-vl:2b | ~24s | **在用**，GUI内容分析 |
+| smolvlm2-agentic-gui | — | — | ❌ 已从 Ollama registry 下线（pull 返回 404），不再可用 |
 
-⚠️ qwen3-vl:2b 在 900x506 缩略图上响应 46s+，1920x1080 原生截图超时（>60s）。screen_watcher 实时分析 **只用 smolvlm2-agentic-gui**。
+⚠️ **smolvlm2-agentic-gui 确认退役**（2026-06-07）：registry.ollama.ai 返回 404，模型已不在 Ollama 官方库。qwen3-vl:2b 已接管所有视觉分析任务。
+
+⚠️ **qwen3-vl:2b 在 900x506 缩略图上响应 ~24s**，虽比 smolvlm2 的 18s 慢，但 GUI 专用能力完整，且本地可用。
 
 **场景分类 prompt**（smolvlm2 输出英文单词，无乱码）：
 ```python
 "What is shown in this screenshot? Choose ONE from: browser, wechat, desktop, calculator, jingdong, 1688, dingtalk, telegram, other. Reply with ONLY the word."
 ```
 
-**⚠️ smolvlm2-agentic-gui 自动清理问题（重要！2026-05-31 更新）**：
+**⚠️ smolvlm2-agentic-gui 自动清理问题（重要！2026-05-31 更新，2026-06-07 确认退役）**：
 
-smolvlm2-agentic-gui 已从本地 Ollama 消失 **3次**（2026-05-30 × 2 + 2026-05-31）。疑似 Ollama 磁盘空间紧张时自动清理社区/非官方模型。
+smolvlm2-agentic-gui 已从 Ollama 消失 **6次**（2026-05-30 × 2 + 2026-05-31 + 2026-06-07 + 2026-06-02 registry下线）。**2026-06-02 确认已从 Ollama registry 永久下线**，pull 返回 EOF + 404，不再是自动清理问题。
+
+**结论**：smolvlm2-agentic-gui 已退役，qwen3-vl:2b 是当前唯一可用视觉模型。疑似 Ollama 磁盘空间紧张时自动清理社区/非官方模型。
 
 **现象**：`curl http://127.0.0.1:11434/api/tags` 返回的模型列表中找不到 `ahmadwaqar/smolvlm2-agentic-gui`。
 
@@ -98,12 +102,12 @@ print('Available:', names)
 
 ---
 
-**已确认本地 Ollama 模型**（`http://127.0.0.1:11434/api/tags`，2026-05-30实测）：
+**已确认本地 Ollama 模型**（`http://127.0.0.1:11434/api/tags`，2026-06-07实测）：
 ```
-ahmadwaqar/smolvlm2-agentic-gui:latest  ✅ 在用
-qwen3-vl:2b                            ✅ 离线OCR
-qwen2.5:1.5b                           ✅ 小型文本
-nomic-embed-text:latest                ✅ 嵌入
+qwen3-vl:2b                            ✅ 在用（接管所有视觉任务）
+qwen2.5:1.5b                           ✅ 在用（小型文本）
+smolvlm2-agentic-gui                   ❌ 已从 registry 下线（2026-06-02确认）
+nomic-embed-text:latest                ✅ 在用（嵌入模型）
 ```
 
 **⚠️ 已知 Mac Bug**：blaifa/InternVL3_5:4B（GitHub Issue #12166），Mac 图片理解错误，暂缓部署。
@@ -117,8 +121,7 @@ nomic-embed-text:latest                ✅ 嵌入
 **下次学习方向**：执行层 — 坐标校准，准备 DRY_RUN=False 切换
 | 模型 | 大小 | 状态 | 适用场景 |
 |------|------|------|----------|
-| smolvlm2-agentic-gui | 1.85GB | ✅ 在用 | 实时GUI监控（7-64s响应）|
-| qwen3-vl:2b | 1.9GB | ✅ 在用 | 场景分类 + 离线OCR分析（需缩图）|
+| qwen3-vl:2b | 1.9GB | ✅ 在用 | 实时GUI监控（~24s响应），所有视觉任务 |
 | qwen2.5:1.5b | ~1GB | ✅ 在用 | 小型文本模型 |
 | nomic-embed-text | ~274MB | ✅ 在用 | 嵌入模型 |
 | blaifa/InternVL3_5:4b | ~3GB | ⚠️ Mac上有图片理解Bug（Issue #12166），暂缓 | 基于Qwen3架构，通用视觉 |
@@ -297,15 +300,16 @@ ACTION_WHITELIST = {
 
 **可执行改进**：
 - **Bug 修复**：screen_trigger_handler.py 的 get_scene_type() 返回完整描述，但 auto_execute() 期望 app 名称。需要统一格式，或让 auto_execute 接受描述并做模糊匹配
-- **TTS 现状**：Edge TTS 已配置（hermes-voice-module），Noiz API 有配置但未实测
-- **模型状态**：smolvlm2-agentic-gui 稳定（实时分析首选），qwen3-vl:2b 可用（离线OCR）
+- **moondream cascade（优先级高）**：qwen3-vl:2b 的 24s 延迟过高，moondream:1.8b-v2-q4_K_M 作为 <5s 快速初筛，仅在信心不足时升级到 qwen3-vl:2b。详见 `references/moondream-cascade-2026-06-07.md`
+- **confusion_score（优先级高）**：基于 GUIDE Benchmark（CVPR 2026）发现，Frustration 检测比 Intent Prediction 更有价值。建议在 screen_trigger_handler 中增加：操作频率骤降检测、重复点击同一区域、鼠标静止时长。详见 `references/guide-benchmark-cvpr2026.md`
+- **Waiting 状态检测**：连续3帧截图相似度 > 95% + 操作频率低 → 跳过 auto_execute（避免在渲染等待时误触发）
 
 **待验证项**：
 - Edge TTS 是否正常工作（execute_code 里测，不用 terminal 走代理）
 - Noiz API key 是否已配置
 - UI-TARS Desktop Mac M4 安装可行性（github.blocked 无法下载 .dmg）
 
-**下次学习方向**：Vision — 检查 Edge TTS 可用性，测试 noiz_api_key 是否有效
+**下次学习方向**：Vision — 测试 moondream 场景分类性能，验证 cascade 架构可行性
 
 ## 参考文件
 
