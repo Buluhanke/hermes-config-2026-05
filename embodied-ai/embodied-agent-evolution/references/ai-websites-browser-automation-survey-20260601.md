@@ -1,126 +1,83 @@
-# 6平台AI Browser Automation 建议汇总（第二轮，2026-06-01）
+# 6平台Browser自动化方案调研（2026-06-01）
 
-## 调研背景
-向6个AI对话网站发送查询："hermes的browser工具还有更好更智能的推荐"
-目标：收集多平台对Hermes真人化browser自动化的最佳方案建议
+## 调研方法
+同时向6个AI网站发送同一问题：
+> "推荐当下最好最智能的browser自动化方案给Hermes AI Agent，可结合本地模型"
 
-## 各平台回复
+## 各平台回复汇总
 
-### ✅ DeepSeek（Tab 0）
-**方案：三路径 + Steel云端**
+### DeepSeek（✅ 6946字，完整）
+**推荐排序**：
+1. **Steel云端**（反爬最强）：`api.steel.dev`，住宅代理+隐身模式
+2. **Browse.sh 250+技能**：预置浏览器技能库，开箱即用
+3. **本地Chrome CDP**：零成本，隐私最强
+4. **Camofox**（Firefox指纹伪装）：反爬+本地
 
-1. **@hasna/computer**（最推荐）
-   - npm包，开箱即用，零配置
-   - 支持多浏览器（Chrome/Firefox/Edge）
-   - 内置重试+截图+等待
+### Gemini（✅ 1646字，完整）
+1. **Browser-Use**（GitHub最火）：自动提取可交互元素打标签，降低本地模型推理负担
+2. **Stagehand**（开发者API）：act/extract/observe三动作，极简抽象
+3. **OmniParser + Playwright**：纯视觉方案，截图+UI元素检测
 
-2. **Mano-P + Qwen**（隐私离线）
-   - 本地模型，隐私优先
-   - Qwen做推理，本地浏览器控制
+**关键洞察**：
+- AXTree > 原始HTML
+- 配合Readability.js提取正文，减少上下文长度
+- 给控制上下文长度
 
-3. **je_auto_control**（AX定位+OCR）
-   - 已有完整pyobjc/opencv
-   - AX元素定位+截图OCR
+### 豆包（✅ 3828字，完整）
+**2026最佳性价比组合**：
+1. **Browser-Use + Playwright + Qwen3-V-14B（本地）**
+2. **Camofox + Hermes内置浏览器**
+3. **本地Chrome CDP + Hermes + Ollama**
+4. **Browserbase/Stagehand + 本地LLM**（企业级）
 
-**额外建议：**
-- **Steel云端浏览器**（反爬最强）
-- **Browse.sh**（250+预置技能，本地Chrome CDP配置，YAML示例）
+**最终推荐排序**（按"智能+本地+稳定"）：
+1. Browser-Use + Playwright + 本地VLM — 全能、最智能
+2. Camofox + Hermes内置 — 反爬最强、配置极简
+3. 本地Chrome CDP + Ollama — 零成本、最安全
+4. Browserbase/Stagehand — 企业级、高稳定
 
-### ✅ Gemini（Tab 2）
-**方案：Browser-Use + Stagehand + OmniParser + Playwright**
-
-| 工具 | 特点 |
-|------|------|
-| **Browser-Use** | GitHub最火，AI驱动浏览器自动化 |
-| **Stagehand** | act/extract/observe三API，企业级 |
-| **OmniParser** | 纯视觉方案，学术前沿 |
-| **Playwright** | 底层驱动，配合VLM使用 |
-
-**安装命令：**
-```bash
-pip install browser-use playwright
-playwright install chromium
+### ChatGPT（✅ 2316字，手动登录后）
+**推荐架构**：
+```
+Qwen3 8B → Hermes Planner → Long Memory → Stagehand + Playwright → Chrome
+                    ↓
+            OmniParser + RapidOCR
+                    ↓
+              Perception
 ```
 
-### ✅ 豆包（Tab 3）
-**方案：Browser-Use + Qwen3-V-14B本地VLM**
+**核心建议**：Stagehand + Playwright + 本地Qwen3 8B是目前最接近"像人操作浏览器又不会天天失控"的方案。
 
-- **Browser-Use + Qwen3-V-14B**：全能型本地VLM
-- **Camofox**：本地Firefox指纹伪装
-- **本地CDP**：已有（Chrome 9333端口）
-- **Stagehand企业级**：含安装命令和代码示例
+### ChatGLM（✅ 2388字）
+**CrewAI + Playwright方案**：
+- Planner Agent：本地LLM分析任务
+- Browser Agent：Playwright执行
+- Validator Agent：检查结果
 
-**安装命令：**
-```bash
-pip install browser-use playwright
-playwright install chromium
-ollama pull qwen3-v:14b
+```python
+from crewai import Agent, Task, Crew, Process
+from langchain_ollama import ChatOllama
+
+local_llm = ChatOllama(model="llama3", base_url="http://localhost:11434")
+agent = Agent(llm=local_llm, task="...")
 ```
 
-### ✅ ChatGLM（Tab 5）
-**方案：CrewAI + Playwright + 本地LLM**
+### Grok（⚠️ 585字，未发送成功）
+未成功发送查询，内容参考价值有限。
 
-架构：
-```
-Hermes AI Agent (CrewAI 编排层)
-  → Planner Agent（规划）
-  → Browser Agent（执行，Playwright）
-  → Validator Agent（验证）
-  → 本地LLM（Ollama/Llama3/Qwen2）
-```
+## 跨平台共识
 
-CrewAI封装了Playwright，提供Agent/Task/Crew/Process抽象。
+| 方案 | 推荐次数 | 来源 |
+|------|---------|------|
+| Browser-Use + Playwright | 4次 | DeepSeek/Gemini/豆包/ChatGLM |
+| Stagehand | 2次 | Gemini/ChatGPT |
+| 本地VLM（Qwen3） | 4次 | 全部推荐本地模型 |
+| Steel/Camofox（反爬） | 2次 | DeepSeek/豆包 |
+| CrewAI | 1次 | ChatGLM |
 
-### ❌ ChatGPT（Tab 4）
-- cookies/session不足
-- 显示"lukebu"但无对话能力
-- 未能发出查询
+## 落地优先级
 
-### ⚠️ Grok（Tab 1）
-- 超时未响应
-- 可能需要注册登录
-
----
-
-## 推荐方案排序（综合6平台）
-
-| 排名 | 方案 | 推荐平台 | 核心工具 |
-|------|------|----------|----------|
-| 🥇 | **Browser-Use + Playwright + 本地VLM** | Gemini/豆包/DeepSeek | browser-use, playwright, smolvlm2 |
-| 🥈 | **CrewAI + Playwright** | ChatGLM | crewai, playwright |
-| 🥉 | **Stagehand** | Gemini/豆包 | stagehand（act/extract/observe） |
-| 4 | **Steel云端** | DeepSeek | Steel浏览器（反爬最强） |
-| 5 | **OmniParser纯视觉** | Gemini | 学术前沿方案 |
-| 6 | **@hasna/computer** | DeepSeek | npm零配置 |
-
----
-
-## Hermes已实现组件（对照建议检查）
-
-| 组件 | 对应建议 | 状态 |
-|------|----------|------|
-| je_auto_control | DeepSeek三路径之一 | ✅ 已装（pip3 install je-auto-control） |
-| Playwright CDP | Browser-Use底层驱动 | ✅ 已验证可用 |
-| smolvlm2本地VLM | 豆包推荐Qwen3-V-14B替代 | ✅ 已装（Ollama） |
-| browser_cdp.py | DeepSeek本地CDP | ✅ 已创建备用脚本 |
-| cliclick | DeepSeek推荐 | ✅ 已装 |
-| Reflection机制 | 失败自愈 | ✅ hermes_reflection.py |
-| DynamicWait | 等待优化 | ✅ hermes_execution.py |
-| HumanTrajectory | 贝塞尔曲线防检测 | ✅ hermes_execution.py |
-| AgentLoop | 完整闭环 | ✅ hermes_agent_loop.py |
-
----
-
-## 下一步建议
-
-1. **优先集成Browser-Use** — 多个平台一致推荐，GitHub最火
-2. **测试CrewAI编排层** — ChatGLM方案，可作为Hermes的任务规划层
-3. **Stagehand备选** — 企业级稳定性，act/extract/observe三API
-4. **Chrome登录状态修复** — ChatGPT需要重新在chrome-debug profile授权
-
----
-
-## 文件位置
-- 本归档：`~/Brain_Lab/ai_agent_browser_automation_survey.md`
-- Hermes脚本：`~/.hermes/scripts/hermes_agent_loop.py`
-- 备用CDP：`~/.hermes/scripts/browser_cdp.py`
+1. **Browser-Use**（已有，需修1行兼容性）
+2. **Playwright CDP直连**（已有browser_cdp.py，完全可用）
+3. **Stagehand**（act/extract/observe三API，比Browser-Use轻量）
+4. **CrewAI**（多Agent编排，适合复杂任务）

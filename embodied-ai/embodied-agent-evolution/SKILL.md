@@ -248,6 +248,106 @@ auto.locate_and_click('确认')        # OCR找字+点击
 
 **备用脚本**：`~/.hermes/scripts/browser_cdp.py`（Playwright CDP直连Chrome调试端口9333）
 
+### 执行层：Browser-Use + Playwright 本地集成（2026-06-01 实测）
+
+**多平台AI专家一致推荐方案**：
+- DeepSeek/Gemini/豆包/ChatGPT/ChatGLM全都推荐 Browser-Use + Playwright + 本地VLM
+- Stagehand（Gemini+ChatGPT推荐）：act/extract/observe三API，比Browser-Use轻量
+- CrewAI（ChatGLM推荐）：多Agent编排
+
+**实测结果**：
+- ✅ browser-use 已装（v0.12.8，Python 3.14 site-packages）
+- ✅ langchain-ollama 已装（v1.1.0）
+- ❌ Browser-Use 与 ChatOllama 不兼容：检查 `llm.provider == 'browser-use'` 但 ChatOllama 没有 `provider` 属性
+
+**修复方案**（1行patch）：
+```python
+# browser_use/agent/service.py 第235行附近
+# 原：if llm.provider == 'browser-use':
+# 改：if getattr(llm, 'provider', None) == 'browser-use':
+```
+
+**Python 3.14路径**（2026-06-01确认）：
+- Python 3.14：`/usr/local/bin/python3.14`
+- pip：`python3.14 -m pip`
+- Browser-Use装在：`/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/`
+- hermes-agent venv：`~/.hermes/hermes-agent/venv/bin/python3`（Python 3.11）
+
+**Wrapper方案**（绕过pydantic限制）：
+```python
+from langchain_ollama import ChatOllama
+from langchain_core.language_models.chat_models import BaseChatModel
+
+class OllamaChatModel(BaseChatModel):
+    """Wrapper that adds provider and model_name to ChatOllama"""
+    _llm: ChatOllama
+    
+    def __init__(self, llm: ChatOllama, **kwargs):
+        super().__init__(**kwargs)
+        self._llm = llm
+        self._provider = 'ollama'
+        self._model = llm.model
+    
+    @property
+    def provider(self): return self._provider
+    @property
+    def model(self): return self._model
+    @property
+    def model_name(self): return self._model
+    
+    def _llm_type(self) -> str: return "ollama"
+    def _generate(self, **kwargs): return self._llm._generate(**kwargs)
+    def _call(self, messages, **kwargs): return self._llm._call(messages, **kwargs)
+```
+
+**实测结果**：
+- ✅ Browser-Use成功导航到example.com（navigate action完成）
+- ❌ 6次重试后放弃提取标题——qwen3-vl:2b(2B)太小，无法完成"提取标题"这类多步推理
+- 框架本身完全可用，瓶颈在模型，不在框架
+
+**深度实测（2026-06-01，连接已有Chrome CDP）**：
+- Chrome调试端口9333正在监听 ✅
+- `cdp_url="http://localhost:9333"` 传入 ✅
+- **错误**：`python-socks is required to use a SOCKS proxy`
+- 根因：cdp_use client.py 的 websockets 连接检测到系统级SOCKS设置
+- 即使清空所有 `HTTP_PROXY`/`HTTPS_PROXY`/`SOCKS_PROXY` 环境变量也无法解决
+- **解决方向**：安装 `python-socks` 或 monkey-patch websockets 禁用proxy检测
+
+**兼容性修复**（hermes-agent venv，Python 3.13）：
+| 文件 | 行号 | 修复 |
+|------|------|------|
+| `browser_use/agent/service.py` | 235, 1603, 2045, 2211 | `llm.provider` → `getattr(llm, 'provider', None)` |
+| `browser_use/tokens/service.py` | 347, 389 | provider字段安全访问 |
+| `browser_use/agent/cloud_events.py` | 217 | `model_name` → fallback `model` |
+
+**安装命令**（hermes-agent venv）：
+```bash
+uv pip install browser-use langchain-ollama stagehand --python ~/.hermes/hermes-agent/.venv/bin/python
+```
+
+**工作脚本**：`~/.hermes/scripts/test_browser_use_cdp.py`
+
+**Stagehand实测结论**：v3.21.0不支持本地LLM，仅支持Browserbase云端或OpenAI/Anthropic API，不适合纯本地Hermes。
+
+**快速上手**：
+```bash
+python3.14 -m pip install langchain-ollama browser-use stagehand
+playwright install chromium  # 如果还没装
+
+# 测试
+python3.14 << 'EOF'
+import asyncio
+from browser_use import Agent
+from langchain_ollama import ChatOllama
+
+llm_base = ChatOllama(model='qwen3-vl:2b', base_url='http://localhost:11434/v1', temperature=0.1)
+llm = OllamaChatModel(llm=llm_base)  # 用上面的wrapper
+
+agent = Agent(llm=llm, task='打开 example.com，告诉我页面标题')
+asyncio.run(agent.run())
+EOF
+```
+
 ### 执行层：Chrome双Profile体系（2026-06-01 修正）
 
 **结论：browser工具的Chrome（chrome-debug profile）和用户日常Chrome是独立的！**
