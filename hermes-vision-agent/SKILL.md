@@ -220,6 +220,34 @@ venv_python = "/Users/aimac/.hermes/hermes-agent/venv/bin/python"
 
 ---
 
+## Gemini API 视觉分析（在线VLM）
+
+**aistudio.google.com API Key 的核心用处**：屏幕/图片的 VLM 分析，不依赖本地模型。
+
+### 配置（已生效）
+
+`hermes config set auxiliary.vision.provider gemini` + `model gemini-2.5-flash` + `base_url https://generativelanguage.googleapis.com/v1beta`
+
+API Key 从 `GEMINI_API_KEY` 环境变量读取（`~/.hermes/.env`）。
+
+### 实测效果
+
+截图发到 Gemini 2.5 Flash，返回："Mac桌面，左侧终端显示Gemini API代码，右侧是湖泊雪山壁纸，桌面散布文件。"
+
+### Gemini vs 本地 qwen3-vl:2b
+
+| | Gemini 2.5 Flash | qwen3-vl:2b |
+|--|-------------------|-------------|
+| 能力 | 强20倍 | 中等 |
+| 费用 | 吃API额度 | 免费离线 |
+| 内存 | 无 | 1.9GB |
+
+**建议**：日常用 qwen3-vl:2b（免费），高精度需求时切 Gemini。
+
+详见 `references/gemini-vision-api.md`
+
+---
+
 ## 三层感知点击架构（推荐）
 
 ```

@@ -851,6 +851,52 @@ Common gateway problems:
 - **Slack bot only works in DMs**: Must subscribe to `message.channels` event. Without it, the bot ignores public channels.
 - **Windows-specific issues** (`Alt+Enter` newline, WinError 10106, UTF-8 BOM config, test suite, line endings): see the dedicated **Windows-Specific Quirks** section above.
 
+### Upgrade via pip (Dual venv Pitfall)
+
+Hermes Agent has a **dual venv architecture**:
+- `.venv` (Python 3.13): Gateway + agent process → `~/.hermes/hermes-agent/.venv/`
+- `venv` (Python 3.11): dashboard process → `~/.hermes/hermes-agent/venv/`
+
+**Pip upgrade pitfall:** `pip3 install hermes-agent --upgrade` installs to whichever Python you run. System pip → Python 3.14 site-packages. venv pip → Python 3.11 site-packages. After upgrading via system pip, `which hermes` may show the new version but the Gateway process (running on venv) stays on the old one.
+
+**Correct upgrade path:**
+```bash
+# Best: upgrade both at once
+~/.hermes/hermes-agent/venv/bin/pip install hermes-agent --upgrade
+# Then restart gateway
+kill <gateway_pid>  # e.g. PID 7761
+~/.hermes/hermes-agent/venv/bin/hermes gateway run --replace &
+```
+
+**Post-upgrade cleanup:**
+- `rm ~/.local/bin/hermes` (old symlink) may remain after pip upgrade
+- Recreate: `ln -s ~/.hermes/hermes-agent/venv/bin/hermes ~/.local/bin/hermes`
+- Verify: `which hermes && hermes version`
+
+**`hermes update` limitation:** Requires git checkout of hermes-agent. Pip-installed Hermes cannot self-upgrade via this command. Use pip instead.
+
+### Ollama Memory Management
+
+Ollama runs as a resident background service (`ollama serve`, ~98MB RSS). Models are loaded on-demand and unloaded after inference, freeing memory. For Mac M4:
+- `qwen3-vl:2b` = 1.9GB model file
+- `qwen2.5:1.5b` = 986MB model file
+- Models loaded = +~2-3GB RSS per model
+- Models unloaded = 0MB (memory released)
+
+**Recommendation:** Keep Ollama resident. Cold start latency (a few seconds) is worse than the ~98MB baseline cost. No need for idle-exit/auto-reap setup.
+
+### Gemini API Key for Vision (aistudio.google.com)
+
+The `GEMINI_API_KEY` from aistudio.google.com can be used for Hermes vision analysis. Configure via:
+```bash
+hermes config set auxiliary.vision.provider gemini
+hermes config set auxiliary.vision.model gemini-2.5-flash
+hermes config set auxiliary.vision.base_url https://generativelanguage.googleapis.com/v1beta
+```
+`GEMINI_API_KEY` is read from `.env` automatically. Gemini 2.5 Flash supports 1M token context and is significantly stronger than local qwen3-vl:2b, but consumes API quota.
+
+Local alternative (no quota): qwen3-vl:2b via Ollama, already configured.
+
 ### Auxiliary models not working
 If `auxiliary` tasks (vision, compression, session_search) fail silently, the `auto` provider can't find a backend. Either set `OPENROUTER_API_KEY` or `GOOGLE_API_KEY`, or explicitly configure each auxiliary task's provider:
 ```bash

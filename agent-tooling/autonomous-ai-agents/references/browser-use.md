@@ -132,10 +132,11 @@ uv pip install python-socks --python ~/.hermes/hermes-agent/.venv/bin/python
 
 ## 已知限制
 
-1. **1688反爬**: 和Playwright一样被检测，返回虚假HTML。换Selenium或换平台。
-2. **本地VLM推理弱**: 即使qwen3-vl:7b，内容提取仍失败。需要更大参数模型。
-3. **页面ready timeout**: httpbin.org/html 等简单页面3s timeout可能不够，用 `max_steps` 控制重试。
-4. **Stagehand官方需付费**: 官网明确本地模式需额外配置MCP server，不是开箱即用
+1. **不支持自定义API endpoint**: browser-use是独立SaaS平台，内置GPT-4/Claude等模型。`api_key`配置是browser-use平台自身的key，不是AI模型key。**无法**接入aistudio.google.com/Gemini/第三方API。
+2. **1688反爬**: 和Playwright一样被检测，返回虚假HTML。换Selenium或换平台。
+3. **本地VLM推理弱**: 即使qwen3-vl:7b，内容提取仍失败。需要更大参数模型。
+4. **页面ready timeout**: httpbin.org/html 等简单页面3s timeout可能不够，用 `max_steps` 控制重试。
+5. **Stagehand官方需付费**: 官网明确本地模式需额外配置MCP server，不是开箱即用
 
 ---
 

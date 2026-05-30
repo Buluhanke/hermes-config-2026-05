@@ -580,12 +580,26 @@ Cronjob `自我进化-夜间学习`（job_id: 8834c6edfa07）执行结果：
 **结论**：smolvlm2-agentic-gui（7s/步）是当前Mac mini M4最优选择。
 
 **在线AI API卡点（2026-06-01实测）**：
-- GLM 4V（智谱）：429额度耗尽（余额不足），cogvlm-4v无法调用
-- DeepSeek：401 Authentication Fails，API Key无效
-- Gemini：DNS不通（generativelanguage.googleapis.com ping 100%丢包），本地网络问题
+- GLM 4V（智谱）：429额度耗尽
+- DeepSeek：401 Authentication Fails
+- Gemini：DNS不通（generativelanguage.googleapis.com ping 100%丢包）
 
-**建议**：
-- 本地VLM为主（smolvlm2，免费，7s响应）
+**aistudio.google.com API key的正确用途（2026-06-02实测）**：
+- `GEMINI_API_KEY=***` (AQ.Ab8RN6Ipxmy-...) 已配置在 `~/.hermes/.env`
+- 通过 `hermes config set auxiliary.vision.provider gemini` 成功配置
+- 通过 `hermes config set auxiliary.vision.model gemini-2.5-flash` 成功配置
+- 通过 `hermes config set auxiliary.vision.base_url https://generativelanguage.googleapis.com/v1beta` 成功配置
+- **验证方式**：`screencapture -x` 截图 + `curl` 直发Gemini API → 成功返回"Mac桌面，左侧终端显示Gemini API代码，右侧是湖泊雪山壁纸"
+- **用途**：VLM屏幕分析（vision工具走此配置）、通用LLM对话、长文本处理（Gemini 2.5 Pro支持100万token）
+- **不适用**：browser-use（独立SaaS，内置模型，不支持自定义API endpoint）
+- **config.yaml保护机制**："Write denied"是Hermes的文件保护，不影响`hermes config set`命令写入
+- **配置查询**：`grep -A10 'auxiliary:' ~/.hermes/config.yaml`
+
+**本地VLM（2026-06-02修正）**：
+- qwen3-vl:2b = 1.9GB（不是15GB，15GB是之前qwen3-vl:latest的误判）
+- Ollama驻留进程 = 98MB RSS（模型未加载时几乎不占内存）
+- Ollama保持驻留+监控内存是正确的方案（不自动退出）
+- 本地VLM与Gemini API并行：日常用qwen3-vl:2b（免费），高精度分析用Gemini 2.5 Flash
 - 在线API问题需老板确认充值或其他key
 
 ---
