@@ -204,6 +204,50 @@ FSM多智能体架构，用于复杂桌面自动化：
 - 胼胝体：动态通信slot交换信息
 - 启发：Hermes的vision_agent和humanization_core可以类比这个架构
 
+### 执行层：je_auto_control 实测（2026-06-01 新增）
+
+**安装**：`pip3 install je-auto-control`（装了完整pyobjc框架+opencv-python）
+
+**核心API**：
+```python
+import je_auto_control as auto
+
+# 屏幕
+auto.screen_size()                    # (1920, 1080)
+auto.pil_screenshot()                 # PIL Image, ~100ms
+auto.screenshot()                     # numpy.ndarray
+
+# 鼠标
+auto.get_mouse_position()             # (x, y)
+auto.click_mouse(x, y)              # 左键单击
+auto.press_mouse(x, y)              # 按下
+auto.release_mouse(x, y)              # 释放
+auto.mouse_scroll(delta_x, delta_y)  # 滚动
+
+# 键盘
+auto.press_keyboard_key('a')         # 按键
+auto.release_keyboard_key('a')       # 释放
+
+# AX元素
+tree = auto.dump_accessibility_tree() # AXTreeNode对象
+elements = auto.list_accessibility_elements()  # 所有可交互元素
+auto.click_accessibility_element(el)  # 点击AX元素
+auto.click_by_description('确定')     # 按描述点击
+auto.click_text('提交')              # 按文字点击
+
+# 截图找字+点击（联合操作）
+auto.locate_and_click('确认')        # OCR找字+点击
+```
+
+**AXTreeNode字段**：`name/role/bounds/children/attributes/app_name/process_id`
+
+**注意**：
+- Chrome渲染进程不在AX树里（macOS沙盒），浏览器内用Playwright CDP
+- 截图1920x1080约100ms
+- 需在系统设置 > 隐私与安全性 > 辅助功能 中授权Terminal/IDE
+
+**备用脚本**：`~/.hermes/scripts/browser_cdp.py`（Playwright CDP直连Chrome调试端口9333）
+
 ### 执行层：Chrome双Profile体系（2026-06-01 修正）
 
 **结论：browser工具的Chrome（chrome-debug profile）和用户日常Chrome是独立的！**
@@ -364,7 +408,8 @@ FSM多智能体架构，用于复杂桌面自动化：
 | references/perception_loop_verification_20260531.md | 感知层闭环验证（2026-05-31实测） |
 | references/agent-tars-cli实测-20260530.md | Agent TARS CLI实测记录 |
 | references/1688-captcha-automation-20260530.md | 1688自动化验证码瓶颈 |
-| references/ai-websites-evolution-advice-20260531.md | 6个AI网站真人化建议 + 已实现组件（Reflection/DynamicWait/HumanTrajectory） |
+| references/ai-websites-evolution-advice-20260531.md | 6个AI网站第一轮建议 + 已实现组件 |
+| references/ai-websites-browser-automation-survey-20260601.md | 6平台第二轮browser自动化建议汇总（Browser-Use/Stagehand/CrewAI/Steel） |
 
 ## 2026-05-30 夜间学习产出记录
 

@@ -118,17 +118,16 @@ python3 cdp_ws_client.py <url>         # 提取指定URL元素
 
 ## 已知坑
 
-### target_id 截断问题
-`Target.getTargets` 返回的 `targetId` 被截断为 **15字符**，实际 CDP 操作需要 **32字符完整ID**。
+### target_id 输出截断 vs /json端点获取
+有两种不同的 target_id 截断问题：
 
-**解法**：直接从 `/json` HTTP 端点获取完整 target_id 和 ws_url：
-```python
-async with aiohttp.ClientSession() as sess:
-    async with sess.get(f"http://127.0.0.1:9333/json") as resp:
-        targets = await resp.json()
-        # targets[i]['id'] = 完整32字符
-        # targets[i]['webSocketDebuggerUrl'] = 完整ws:// URL
-```
+**问题A（已修复）**：`dom_tabs()` 输出截断  
+`Target.getTargets` CDP 返回的 `targetId` 实际是完整32字符，但 `dom_tabs()` 用 `tid[:12]` 切片输出，导致 `dom_snapshot`/`dom_click` 接收到的ID不完整而报错 "No target with given id found"。
+
+**解法**：修 `dom_tools.py` line 380 附近，将 `[{tid[:12]}...]` 改为 `[{tid}]`。
+
+**问题B**（已在用解法）：`/json` HTTP 端点获取完整 ID  
+某些场景下通过 HTTP `http://127.0.0.1:9333/json` 获取 targets 列表，可以同时拿到完整 `id`（32字符）和 `webSocketDebuggerUrl`。
 
 ### websockets 版本必须用 15.x
 browser_supervisor.py（browser_dialog_tool）依赖 `websockets.asyncio`，需要 **websockets==15.0.1**。
