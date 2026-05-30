@@ -84,29 +84,18 @@ Skills 采用 `category/skill-name/` 子目录结构，`hermes skills list` 显�
 - `?models=vision` 参数无效
 - **结论**：搜索社区模型需用 `ollama search <name>` CLI；本地安装状态必须用 `curl http://127.0.0.1:11434/api/tags`
 
-**已确认本地 Ollama 模型（2026-06-02 实测，⚠️ 2026-06-02 重大更正）**：
+**⚠️ smolvlm2-agentic-gui 自动清理问题（2026-05-31 更新）：**
+smolvlm2-agentic-gui 已从本地 Ollama 消失 **3次**（2026-05-30 × 2 + 2026-05-31）。疑似 Ollama 磁盘空间紧张时自动清理社区/非官方模型。github.com blocked 导致无法重新 pull。
+**验证命令**：`curl -s --max-time 8 http://127.0.0.1:11434/api/tags | python3 -c "import sys,json; d=json.load(sys.stdin); print([m['name'] for m in d.get('models',[])])"`
+**备选模型**：richardyoung/smolvlm2-2.2b-instruct（通用版）、moondream:1.8b-v2-q4_K_M（约1GB）
+
+**已确认本地 Ollama 模型（2026-05-31 实测）：**
 ```
 qwen2.5:1.5b                           ✅ 0.92 GB
 qwen3-vl:2b                            ✅ 1.76 GB
-
-ahmadwaqar/smolvlm2-agentic-gui:latest ❌ 已从本地移除（两次发现：2026-05-30 + 2026-06-02）
+ahmadwaqar/smolvlm2-agentic-gui:latest ❌ 已从本地移除（第3次）
 nomic-embed-text:latest                ❌ 已从本地移除
 ```
-⚠️ 注意：上述是 `127.0.0.1:11434` 返回的本地安装模型，不是 api.ollama.com 的远程库
-⚠️ smolvlm2-agentic-gui 从本地消失两次（间隔不到48小时），可能是 Ollama 自动清理机制，需关注
-⚠️ github.com blocked，无法重新 pull；raw.githubusercontent.com 仍可访问但 Ollama pull 需要完整 github.com
-
-**已确认本地 Ollama 模型（2026-06-02 凌晨实测，⚠️ 2026-06-02 重大更正）**：
-```
-qwen2.5:1.5b                           ✅ 0.92 GB
-qwen3-vl:2b                            ✅ 1.76 GB
-
-ahmadwaqar/smolvlm2-agentic-gui:latest ❌ 已从本地移除（两次发现：2026-05-30 + 2026-06-02）
-nomic-embed-text:latest                ❌ 已从本地移除
-```
-⚠️ 注意：上述是 `127.0.0.1:11434` 返回的本地安装模型，不是 api.ollama.com 的远程库
-⚠️ smolvlm2-agentic-gui 从本地消失两次（间隔不到48小时），可能是 Ollama 自动清理机制，需关注
-⚠️ github.com blocked，无法重新 pull；raw.githubusercontent.com 仍可访问但 Ollama pull 需要完整 github.com
 
 **候选新模型：maternion/lfm2.5:8b-a1b（2026-05-28 新发布）**：
 - Liquid AI LFM2.5-8B-A1B，MoE架构（8.3B total / 1.5B active）
@@ -342,13 +331,21 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **如一切正常**：screen_watcher 链路完整，auto_execute dry-run 正在记录
   - **如 lock 文件残留**：`rm ~/.hermes/screenshots/.handler_lock` 后重试
 
-**⚠️ screen_watcher 进程存活周期（2026-06-02 新发现）**：
+**⚠️ screen_watcher 进程存活周期（2026-06-02 新发现，2026-06-07 更新 stale screenshot 问题）：**
 - screen_watcher 进程在长时间空闲后会死掉（本次发现：May 31 00:03 截图后停止，进程消失）
 - **根因**：cron job 每10分钟触发一次，但 screen_watcher 是后台 daemon，不受 cron 直接管理
-- idle_learning 每次执行时必须检查进程是否存活，死了就重启
+- **新发现（2026-06-07）**：进程存活但截图陈旧 — PID 3176 运行时，current.png 时间戳停在 May 31 01:01（约7天前）
+  - **可能原因**：screencapture 命令被系统拦截、屏幕未变化（冷却机制）、或进程进入休眠
+  - **判断标准**：截图时间戳超过 24h 视为 stale，需要重启 screen_watcher
+- idle_learning 每次执行时必须检查进程 **和** 截图新鲜度，两个都要查
 - 启动命令已验证：`python3 ~/.hermes/scripts/screen_watcher.py`（PID 会变，不需要追踪旧 PID）
 - **idle_learning 第一步检查清单**：进程 → 截图时间 → 模型列表，三个全检查才链路完整
 - ⚠️ **screen_watcher 目录不存在的情况（2026-05-29 发现）**：若 `ls ~/.hermes/screenshots/` 返回"No such file or directory"，说明 screen_watcher 从未启动过或已被清理。需要手动检查 screen_watcher 进程和启动脚本，确认目录会被正确创建。
+- **⚠️ Stale screenshot 诊断流程（2026-06-07 新增）**：
+  1. `ls -lt ~/.hermes/screenshots/current.png` — 检查时间戳
+  2. 如果超过 24h：`ps aux | grep screen_watcher` 确认进程是否存活
+  3. 进程存活但截图 stale → `rm ~/.hermes/screenshots/.handler_lock`（清除锁文件）+ 手动触发 `screencapture -x ~/.hermes/screenshots/current.png`
+  4. 如仍不更新 → `pkill screen_watcher` 后重新启动 `python3 ~/.hermes/scripts/screen_watcher.py`
 - CDP直连方案已知可用：原生Python WebSocket连接9333，不依赖mcp-chrome-stdio bridge
 - **重要底层限制（2026-05-28 发现）**：cua-driver/macOS CGEventTap 对某些应用（Blender等）的event loop只接受cghidEventTap且前面有mouseMoved事件，需要短暂前台激活。"不抢焦点"承诺对这类应用不可实现，Hermes computer_use同理
 - **执行层四级断链（2026-05-29 发现）**：全链路在 cron 环境断在 screen_watcher 不运行
@@ -677,6 +674,8 @@ PYEOF
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
 - [Awesome Computer Use Agents 资源（2026-06-02）](./references/awesome-computer-use-agents-2026-06-02.md) — GitHub ranpox，综合资源汇总含视频/papers/项目
 - [HN Top 热点文章 2026-06-02](./references/hn-top-2026-06-02.md) — HN 热门文章列表，重点关注 Tiny-vLLM/LFM2.5-8B，screen_watcher 链路巡检结果
+- [HN Top 2026-06-07](./references/hn-top-2026-06-07.md) — SQLite durable workflows(628pts)/Mistral AI efficiency(427pts)/Zig build cache(251pts)
+- [HN Top 2026-05-31](./references/hn-top-2026-05-31.md) — Anthropic超越OpenAI成最高估值AI创业公司，Zig Build System Reworked，Openrsync
 - [HN Top 2026-05-30](./references/hn-top-2026-05-30.md) — 本次学习发现的 15 条 HN 热门，含 Tiny-vLLM(235 stars)/LFM2.5-8B(277pts)
 - [HN Top 2026-05-30](./references/hn-top-2026-05-30.md) — 本次学习发现的 15 条 HN 热门，含 Tiny-vLLM(235 stars)/LFM2.5-8B(277pts)
 - [Tiny-vLLM C++/CUDA 推理引擎调研](./references/tiny-vllm-2026-06-02.md) — HN 559分项目，从零构建 vLLM 精简版，含 30+ 章节课程大纲

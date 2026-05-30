@@ -66,6 +66,38 @@ smolvlm2-agentic-gui 在相同分辨率下 17.9s 返回准确分类结果。
 "What is shown in this screenshot? Choose ONE from: browser, wechat, desktop, calculator, jingdong, 1688, dingtalk, telegram, other. Reply with ONLY the word."
 ```
 
+**⚠️ smolvlm2-agentic-gui 自动清理问题（重要！2026-05-31 更新）**：
+
+smolvlm2-agentic-gui 已从本地 Ollama 消失 **3次**（2026-05-30 × 2 + 2026-05-31）。疑似 Ollama 磁盘空间紧张时自动清理社区/非官方模型。
+
+**现象**：`curl http://127.0.0.1:11434/api/tags` 返回的模型列表中找不到 `ahmadwaqar/smolvlm2-agentic-gui`。
+
+**临时方案**：
+1. `ollama pull ahmadwaqar/smolvlm2-agentic-gui:latest`（需 github.com 恢复）
+2. 或改用备选模型（见下方备选表）
+
+**备选模型**（当 smolvlm2-agentic-gui 不可用时）：
+| 模型 | 命令 | 适用场景 |
+|------|------|---------|
+| richardyoung/smolvlm2-2.2b-instruct | `ollama pull richardyoung/smolvlm2-2.2b-instruct` | 通用 SmolVLM2，非 GUI 专用，需测试 |
+| moondream:1.8b-v2-q4_K_M | `ollama pull moondream:1.8b-v2-q4_K_M` | 通用视觉，约 1GB，响应快 |
+| qwen3-vl:2b | （已安装但 60s+ 超时，不适合实时） | 离线 OCR 备选 |
+
+**验证方法**：
+```bash
+curl -s --max-time 8 http://127.0.0.1:11434/api/tags | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+names = [m['name'] for m in d.get('models',[])]
+print('smolvlm2:', 'ahmadwaqar/smolvlm2-agentic-gui:latest' in names)
+print('Available:', names)
+"
+```
+
+**待解决问题**：找到阻止 Ollama 自动清理的方案，或将 smolvlm2 换成官方模型。
+
+---
+
 **已确认本地 Ollama 模型**（`http://127.0.0.1:11434/api/tags`，2026-05-30实测）：
 ```
 ahmadwaqar/smolvlm2-agentic-gui:latest  ✅ 在用
@@ -91,6 +123,7 @@ nomic-embed-text:latest                ✅ 嵌入
 | nomic-embed-text | ~274MB | ✅ 在用 | 嵌入模型 |
 | blaifa/InternVL3_5:4b | ~3GB | ⚠️ Mac上有图片理解Bug（Issue #12166），暂缓 | 基于Qwen3架构，通用视觉 |
 | blaifa/InternVL3_5:8b | ~5GB | ✅ 可pull | 更高精度 |
+| **Qwen 3.6-27B dense** | ~17GB Q4 | ⚠️ 待验证（Ollama支持待确认） | Vision内建于基座，M4 24GB "tight but doable" |
 | ui-venus | — | ❌ Ollama无 | 页面404，搜索无结果 |
 
 ⚠️ **重要**：必须用 `http://127.0.0.1:11434/api/tags` 检查本地模型，不能用 `https://api.ollama.com/api/tags`（后者返回远程库，不等于本地安装）
@@ -277,6 +310,7 @@ ACTION_WHITELIST = {
 ## 参考文件
 
 - `references/ollama-api-endpoint-chat-vs-generate-2026-05-30.md` — ⚠️ 重要：/api/chat vs /api/generate 性能差异，错误端点导致120s超时
+- `references/insiderllm-m4-2026-guide-2026-05-31.md` — InsiderLLM M4 2026 最新推荐：Qwen 3.6-27B dense（M4 24GB "tight but doable"），vision 内建于基座
 - `references/response-normalization-2026-06-02.md` — ⚠️ 重要：get_scene_type() response 标准化，取第一行+小写+trim标点
 - `references/screen-trigger-handler-telegram-fix-2026-05-30.md` — Telegram推送失败修复（hermes_tools → 直接Bot API）+ 场景分类prompt幻觉bug修复
 - `references/smolvlm2-structured-json-2026-05-29.md` — smolvlm2 JSON 输出测试详情（响应时间、清理函数、可靠性评估）

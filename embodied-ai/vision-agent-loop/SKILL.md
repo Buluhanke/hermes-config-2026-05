@@ -28,6 +28,12 @@ screencapture -x /tmp/agent_screen.png
 
 ### 2. VLM推理
 
+**⚠️ 必须用 `/api/chat`，不能用 `/api/generate`（screen-watcher-vision skill 实测验证）**：
+- `/api/generate`：1920x1080 截图需 41.6s，容易触发 120s 超时
+- `/api/chat`：相同截图只需 31.7s，快 24%，响应格式更干净
+- payload 格式差异：`prompt:` → `messages:[{role:'user',content:,images:}]`
+- response 格式差异：`data['response']` → `data['message']['content']`
+
 #### 本地Ollama（smolvlm2）✅ 主方案
 ```python
 import base64, json, urllib.request
@@ -37,29 +43,32 @@ with open('/tmp/agent_screen.png', 'rb') as f:
 
 payload = {
     'model': 'ahmadwaqar/smolvlm2-agentic-gui:latest',
-    'prompt': '网页截图。描述：1)页面标题 2)主要元素 3)功能',
-    'images': [img],
-    'stream': False
+    'messages': [{'role': 'user', 'content': '网页截图。描述：1)页面标题 2)主要元素 3)功能', 'images': [img]}],
+    'stream': False,
+    'options': {'temperature': 0.1}
 }
 req = urllib.request.Request(
-    'http://localhost:11434/api/generate',
+    'http://localhost:11434/api/chat',  # ⚠️ 用 /api/chat，不用 /api/generate
     data=json.dumps(payload).encode(),
     headers={'Content-Type': 'application/json'},
     method='POST'
 )
 with urllib.request.urlopen(req, timeout=60) as r:
-    response = json.loads(r.read())['response']
+    response = json.loads(r.read())['message']['content']
 ```
 
-**响应时间**：6-8秒（Mac本地，GPU加速）
+**响应时间**：6-11秒（Mac本地，取决于截图复杂度）
 
 #### 其他VLM备选
-| 模型 | 响应 | 状态 |
-|------|------|------|
-| qwen3-vl:2b | ~90s超时 | ❌ 太慢 |
-| qwen3-vl:8b | ~15s估计 | ✅ 可用 |
-| Gemini 1.5-flash | DNS不通 | ❌ 网络问题 |
-| GLM 4V | 429额度耗尽 | ❌ |
+| 模型 | 响应 | 状态 | 备注 |
+|------|------|------|------|
+| smolvlm2-agentic-gui | 6-11s | ✅ **主方案** | GUI专用，1.85GB，M4 24GB最优 |
+| qwen3-vl:2b | 60s+ 超时 | ❌ 不适合实时 | 已安装但太慢，仅适合离线OCR |
+| qwen3-vl:8b | ~15s 估计 | ⚠️ 未实测 | 需 github 恢复后 pull |
+| richardyoung/smolvlm2-2.2b-instruct | 未测 | ⚠️ 备选 | 通用 SmolVLM2，非GUI专用 |
+| moondream:1.8b-v2-q4_K_M | 未测 | ⚠️ 备选 | 通用视觉，约1GB |
+| Gemini 1.5-flash | DNS不通 | ❌ 网络问题 | 本地网络限制 |
+| GLM 4V | 429额度耗尽 | ❌ | API额度问题 |
 
 ### 3. Action解析
 VLM输出格式（smolvlm2示例）：
@@ -141,12 +150,17 @@ def screenshot(path, compress=False):
     if compress:
         subprocess.run(['sips', '-z', '800', '800', path, '--out', path], capture_output=True)
 
-def call_vlm(model, prompt, img_path, timeout=60):
+def call_vlm(prompt, img_path, timeout=60):
     with open(img_path, 'rb') as f:
         img = base64.b64encode(f.read()).decode()
-    payload = {'model': model, 'prompt': prompt, 'images': [img], 'stream': False}
+    payload = {
+        'model': VLM_MODEL,
+        'messages': [{'role': 'user', 'content': prompt, 'images': [img]}],
+        'stream': False,
+        'options': {'temperature': 0.1}
+    }
     req = urllib.request.Request(
-        'http://localhost:11434/api/generate',
+        'http://localhost:11434/api/chat',  # ⚠️ 必须用 /api/chat，不用 /api/generate
         data=json.dumps(payload).encode(),
         headers={'Content-Type': 'application/json'},
         method='POST'
@@ -154,7 +168,7 @@ def call_vlm(model, prompt, img_path, timeout=60):
     t0 = time.time()
     with urllib.request.urlopen(req, timeout=timeout) as r:
         res = json.loads(r.read())
-    return time.time() - t0, res.get('response', '')
+    return time.time() - t0, res.get('message', {}).get('content', '')
 
 # 主循环
 url = 'https://example.com'
