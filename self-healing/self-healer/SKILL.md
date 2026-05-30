@@ -335,17 +335,60 @@ grep "provider:" ~/.hermes/config.yaml | grep -v "auto"
 
 **aiohttp警告无害**：重启后旧进程的 aiohttp Event loop 警告会输出到前台，不影响新gateway运行
 
-### 浏览器CDP断开
+### 浏览器CDP断开（Chrome进程挂了）
 
-**症状**：浏览器操作工具全部失败
+**症状**：浏览器操作工具全部失败，port 9333无监听
+
+**诊断**：
+```bash
+lsof -i :9333 | grep LISTEN  # 空 → Chrome进程挂了
+ps aux | grep 'remote-debugging-port=9333' | grep -v grep  # 空 → Chrome不在
+```
 
 **自动修复流程**：
 ```
-1. 检查Chrome Helper进程是否存在
+1. 检查Chrome进程是否存在
 2. 若无 → chrome-launcher自动重启Chrome debug实例
 3. 验证：curl localhost:9333/json
 4. 恢复 → 报告"浏览器已重启"
 ```
+
+### MCP Chrome Bridge进程退出（Chrome活着但bridge死了）
+
+**症状**：port 9333监听正常，但MCP chrome工具全部报 `ClosedResourceError`
+或 `MCP server is unreachable after 3 consecutive failures`
+`hermes mcp test chrome` 显示 ✓ Connected（临时启动新bridge测试，假阳性）
+
+**诊断**：
+```bash
+ps aux | grep mcp-chrome-stdio | grep -v grep
+# 空 → bridge进程死了
+# ✗ 注意：hermes mcp test chrome报 ✓ Connected是假阳性
+#    它启动自己的临时进程测试，不代表gateway的bridge活着
+```
+
+**自动修复**：
+```
+1. 启动bridge：terminal(background=true) with "mcp-chrome-stdio"
+2. 验证：hermes mcp test chrome 确认 ✓ Connected
+3. 若bridge仍无法持久（启动后立即退出无报错），原因通常是：
+   - gateway持有的stdin/stdout句柄已关闭，新bridge无法attach
+   - 需gateway重启才能重建MCP连接
+4. 备选方案：Playwright CDP直连Chrome，不依赖bridge
+   脚本：~/.hermes/scripts/browser_cdp.py
+```
+
+**Playwright CDP备选命令**：
+```bash
+python3 ~/.hermes/scripts/browser_cdp.py nav "https://example.com"
+python3 ~/.hermes/scripts/browser_cdp.py screenshot /tmp/screen.png
+python3 ~/.hermes/scripts/browser_cdp.py click "button.submit"
+python3 ~/.hermes/scripts/browser_cdp.py type "#input" "text"
+```
+
+**已知问题**：Gateway不会自动重启 mcp-chrome-stdio 进程。
+Bridge退出后最快恢复方式是gateway重启（`/reload-mcp`或`hermes gateway restart`）。
+Playwright CDP直连更稳定，无需bridge。
 
 ### hermes-agent venv 损坏（venv/bin/hermes 不存在）
 

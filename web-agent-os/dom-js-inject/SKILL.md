@@ -116,6 +116,33 @@ python3 cdp_ws_client.py <url>         # 提取指定URL元素
 
 ---
 
+## 阿里云盘登录：browser工具 + Playwright CDP 混合用法
+
+**原则：browser_* 工具负责操作，Playwright CDP 负责读token。**
+
+### 正确流程
+
+1. `browser_navigate("https://www.alipan.com/")`
+2. `browser_click("登录")` → 弹窗出现（二维码在iframe里）
+3. 用户扫码
+4. 用 Playwright CDP 读 `localStorage.token` 验证
+
+### 登出并重新登录的正确姿势
+
+token过期时间**不会**因"重新打开登录页"而刷新！用户在已登录状态下再次点击"登录"，Chrome会直接复用旧token，`expire_time`保持不变。
+
+正确操作序列：
+1. Playwright 执行 `localStorage.removeItem('token')` + `context.clear_cookies()`
+2. `browser_navigate("https://www.alipan.com/")` → 自动跳转登录页
+3. 用户扫码
+4. 立刻用 Playwright 读token，验证 `expire_time` 是否为**未来时间**
+
+如果expire_time和之前完全一样 = 登录没有刷新token，需重来。
+
+### 阿里云盘iframe弹窗
+
+登录弹窗在iframe里，`browser_snapshot`只能看到iframe外壳，二维码在内部。无需强制进入iframe，等用户扫码即可。
+
 ## 已知坑
 
 ### target_id 输出截断 vs /json端点获取
@@ -147,8 +174,10 @@ MCP chrome (`mcp_chrome_*`) 提供了27个工具，但需要 Chrome 扩展启动
 
 ---
 
-## 文件位置
+## 相关文件
 
 - **生产工具**: `~/.hermes/hermes-agent/tools/dom_tools.py`
 - **验证脚本**: `~/.hermes/hermes-dom-extractor/cdp_ws_client.py`
 - **排障参考**: `references/mcp-chrome-debugging.md`
+- **阿里云盘token提取**: `references/aliyundrive-token-extraction.md`（Playwright CDP法，含过期判断和重新登录正确姿势）
+- **token验证脚本**: `scripts/get_aliyun_token.py`（直接运行，输出用户/过期时间/状态）

@@ -99,9 +99,84 @@ git remote add origin $REPO
 git push -u origin main --force
 ```
 
-## 大文件备份方案（云盘）
+## Aliyun Drive 自动同步（rclone）
 
-Hindsight Docker volume + mlops 数据走 rclone 到 Google Drive 或阿里云盘：
+### 概述
+目标：使用 rclone 将整个 Hermes 生态（约 41GB）同步到阿里云盘。
+组件：hermes 配置（~3.4GB lean）、ollama 模型（~2.7GB）、Docker 镜像+卷（~30GB）、浏览器缓存（可选，~5GB）。
+
+### 准备工作
+1. **安装 rclone：** `curl https://rclone.org/install.sh | bash`
+2. **获取阿里云盘 refresh_token：**
+   - 打开 https://www.aliyundrive.com/ 扫码登录
+   - 按 F12 打开开发者工具 → Application → Local Storage → 找 `refresh_token` 字段的值
+   - 发给 Hermes 配置
+
+### rclone 阿里云盘配置
+```bash
+rclone config
+# 选择: n (New remote) → name: aliyun → 83 (Aliyun Drive) → 粘贴 refresh_token
+```
+
+### 待同步内容（大小估算）
+
+| 路径 | 内容 | 大小 |
+|------|------|------|
+| `~/.hermes/` | config, skills, memories, state.db | ~3.4GB lean |
+| `~/.ollama/models/` | qwen2.5:1.5b + qwen3-vl:2b | ~2.7GB |
+| Docker volumes | hindsight, chromadb, n8n data | ~1.1GB |
+| `~/.hermes/chrome-debug/` | Chrome 浏览器缓存（可选） | ~4.9GB |
+
+总计（不含chrome）：~7-8GB，含chrome：~13GB。
+
+### 同步脚本
+
+```bash
+#!/bin/bash
+# sync-to-aliyun.sh — 增量同步到阿里云盘
+
+RCLONE_REMOTE="aliyun:hermes-backup"
+LOG="~/.hermes/logs/aliyun-sync.log"
+
+log() { echo "[$(date '+%Y-%m-%d %H:%M')] $*" | tee -a "$LOG"; }
+
+# 同步 hermes lean backup
+log "Syncing hermes config..."
+rclone sync ~/.hermes/config.yaml "$RCLONE_REMOTE/hermes/" --log-file "$LOG"
+rclone sync ~/.hermes/skills/ "$RCLONE_REMOTE/skills/" --exclude "*.pyc" --log-file "$LOG"
+
+# 同步 ollama 模型
+log "Syncing ollama models..."
+rclone sync ~/.ollama/models/ "$RCLONE_REMOTE/ollama-models/" --drive-chunk-size 64M --log-file "$LOG"
+
+# 同步 Docker volumes（停容器保证一致性）
+log "Syncing docker volumes..."
+docker stop hermes-hindsight searxng hermes-ai-n8n-1 hermes-ai-chromadb-1 2>/dev/null
+rclone sync /var/lib/docker/volumes/hermes-ai_chroma_data/_data "$RCLONE_REMOTE/chromadb/" --log-file "$LOG"
+rclone sync /var/lib/docker/volumes/hermes-ai-n8n_n8n_data/_data "$RCLONE_REMOTE/n8n/" --log-file "$LOG"
+docker start hermes-hindsight searxng hermes-ai-n8n-1 hermes-ai-chromadb-1 2>/dev/null
+
+log "Sync complete."
+```
+
+### 定时任务
+```bash
+# 每天凌晨 3 点自动同步
+hermes cron create "0 3 * * *" --name "daily-aliyun-backup" --prompt "Run: /Users/aimac/.hermes/scripts/sync-to-aliyun.sh"
+```
+
+### 注意事项
+- 阿里云盘免费版容量 2GB-100GB（视会员等级）
+- `rclone copy` vs `rclone sync`：copy=仅新增，sync=镜像同步（删除目标中源没有的文件）
+- 首次运行加 `--dry-run` 预览
+- Chrome 缓存变化频繁且体积大，建议单独排除或每周同步一次
+- rclone 阿里云盘 driver (id: 83) 需要 refresh_token，不支持账号密码登录
+
+### 获取 refresh_token 步骤（用户操作）
+1. 浏览器打开 https://www.aliyundrive.com/ 并登录
+2. F12 → Application → Local Storage → https://www.aliyundrive.com
+3. 找到 `refresh_token` 的值，复制给 Hermes
+4. Hermes 执行 `rclone config` 完成配置
 
 ```bash
 # 查 Docker volume 路径

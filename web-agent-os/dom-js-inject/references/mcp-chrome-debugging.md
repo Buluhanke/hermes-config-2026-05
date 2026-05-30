@@ -88,3 +88,52 @@ mcp-chrome-bridger register --detect
 6. tool calls 应该开始工作
 
 **更简单方案**: 用 dom_tools，它不需要任何扩展。
+
+---
+
+## 备选方案：Playwright CDP直连（2026-05-30新增）
+
+除了 dom_tools，还有第二个备选方案——Playwright CDP 直连 Chrome 调试端口：
+
+**脚本位置**：`~/.hermes/scripts/browser_cdp.py`
+
+**优势**：
+- 无需 MCP bridge，无需 Chrome 扩展
+- CDP WebSocket 直连 9333 端口，和 Chrome 是原生协议
+- Playwright 自动管理页面、context、selector
+- 比 dom_tools 更适合完整的页面导航和交互（支持 goto, click, fill, screenshot, keyboard press 等所有浏览器操作）
+- 稳定：不依赖任何 bridge 进程持久运行
+
+**用法**：
+```bash
+# 导航到URL
+python3 ~/.hermes/scripts/browser_cdp.py nav "https://example.com"
+
+# 截图当前页面
+python3 ~/.hermes/scripts/browser_cdp.py screenshot /tmp/screen.png
+
+# 查看可访问性快照
+python3 ~/.hermes/scripts/browser_cdp.py snapshot
+
+# 点击元素
+python3 ~/.hermes/scripts/browser_cdp.py click "button.submit"
+
+# 输入文字
+python3 ~/.hermes/scripts/browser_cdp.py type "#search-input" "关键词"
+
+# 按键
+python3 ~/.hermes/scripts/browser_cdp.py press "Enter"
+```
+
+**已知限制**：
+- 默认操作第一个 context 的第一个 page（大部分场景够用）
+- 多窗口场景需修改脚本指定 context index
+- 不支持 MCP chrome 的 history/bookmark/network capture 等辅助功能
+
+**何时用哪个**：
+| 场景 | 推荐工具 |
+|------|---------|
+| 表单填写/按钮点击 | dom_tools（更轻量，~500 Token） |
+| 完整页面交互/导航 | Playwright CDP（功能更全） |
+| MCP chrome 工具集（bookmark/history/network） | 需要先修复 bridge（见上方） |
+| 截图 + VLM 分析 | Playwright CDP screenshot |

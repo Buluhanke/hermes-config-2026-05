@@ -885,7 +885,7 @@ Ollama runs as a resident background service (`ollama serve`, ~98MB RSS). Models
 **Recommendation:** Keep Ollama resident. Cold start latency (a few seconds) is worse than the ~98MB baseline cost. No need for idle-exit/auto-reap setup.
 
 ### Three-Tier Model Routing (Fallback Chain)
-
+### Three-Tier Model Routing (Fallback Chain)
 The fallback chain provides prioritized fail-over when the primary model is unavailable or exhausted. The chain is configured via `fallback_providers` (list format) in `config.yaml`, read by `fallback_config.py::get_fallback_chain()`.
 
 **Verify the chain:**
@@ -893,12 +893,16 @@ The fallback chain provides prioritized fail-over when the primary model is unav
 hermes fallback list
 ```
 
-**Current working three-tier config (primary → MiniMax → DeepSeek direct):**
-- Primary: `deepseek/deepseek-v4-flash` via `custom` provider (`v2.aicodee.com` relay)
-- Fallback 1: `MiniMax-M2.7` via `minimax-cn`
-- Fallback 2: `deepseek/deepseek-v4-flash` via `deepseek` (`api.deepseek.com` direct)
+**Current working three-tier config (MiniMax relay → MiniMax direct):**
+- Primary: `MiniMax-M2.7-highspeed` via `custom` provider (`v2.aicodee.com` relay)
+- Fallback 1: `MiniMax-M2.7` via `minimax-cn` (direct)
 
-See `references/fallback-chain-config.md` for the exact working `config.yaml` block and the Python script used to write it.
+**⚠️ Pitfall: v2.aicodee.com model names differ from official names**
+The relay only exposes specific model names. Always query the relay's `/v1/models` endpoint first to confirm the exact model ID:
+```bash
+curl -s https://v2.aicodee.com/v1/models -H "Authorization: Bearer <key>" | python3 -c "import json,sys; [print(m['id']) for m in json.load(sys.stdin)['data']]"
+```
+Known relay model names: `MiniMax-M2.7-highspeed` (not `MiniMax-M2.7`), `MiniMax-M2.5-highspeed`.
 
 **⚠️ Pitfall: `hermes config set` corrupts YAML list values**
 
