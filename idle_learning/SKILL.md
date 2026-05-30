@@ -84,10 +84,31 @@ Skills 采用 `category/skill-name/` 子目录结构，`hermes skills list` 显�
 - `?models=vision` 参数无效
 - **结论**：搜索社区模型需用 `ollama search <name>` CLI；本地安装状态必须用 `curl http://127.0.0.1:11434/api/tags`
 
+**⚠️ smolvlm2-agentic-gui 从 Ollama registry 被删除（2026-06-02 发现，第5次消失）：**
+- 2026-06-02 github.com 恢复后，`ollama pull` 仍然失败（EOF + registry 404）
+- `curl https://registry.ollama.ai/v2/ahmadwaqar/smolvlm2-agentic-gui/latest/manifest` 返回 404
+- **结论**：模型已被 Ollama registry 下线或改名，不再是 github blocked 问题
+- qwen3-vl:2b 已接管场景分类任务（当前唯一可用视觉模型）
+- 如需恢复 GUI 专用能力，参考候选模型列表手动拉取替代品
+
 **⚠️ smolvlm2-agentic-gui 自动清理问题（2026-05-31 更新）：**
-smolvlm2-agentic-gui 已从本地 Ollama 消失 **3次**（2026-05-30 × 2 + 2026-05-31）。疑似 Ollama 磁盘空间紧张时自动清理社区/非官方模型。github.com blocked 导致无法重新 pull。
-**验证命令**：`curl -s --max-time 8 http://127.0.0.1:11434/api/tags | python3 -c "import sys,json; d=json.load(sys.stdin); print([m['name'] for m in d.get('models',[])])"`
-**备选模型**：richardyoung/smolvlm2-2.2b-instruct（通用版）、moondream:1.8b-v2-q4_K_M（约1GB）
+smolvlm2-agentic-gui 已从本地 Ollama 消失 **5次**（2026-05-30 × 2 + 2026-05-31 + 2026-06-07 + 2026-06-02 registry下线）。
+
+**⚠️ 静默失败模式（2026-06-07 发现）**：handler 硬编码 smolvlm2 做场景分类时，模型消失后 get_scene_type() 会超时/报错，但 handler 不会退出，只是返回 "unknown"。dry-run 日志 `"冷却中"` 掩盖了真实故障。
+
+**已确认的 qwen3-vl:2b 应急切换（2026-06-07 实测）**：
+- qwen3-vl:2b 场景分类响应 ~24s，"other" 分类可用
+- 超时需从 30s 改为 60s
+- 模型消失时自动切换步骤：
+  1. 检查：`curl http://127.0.0.1:11434/api/tags` 确认模型不在列表
+  2. 备份：`cp ~/.hermes/scripts/screen_trigger_handler.py ~/.hermes/scripts/screen_trigger_handler.py.bak.$(date +%Y%m%d)`
+  3. 替换：用 patch 将 `MODEL = "ahmadwaqar/smolvlm2-agentic-gui:latest"` 改为 `MODEL = "qwen3-vl:2b"`
+  4. 调超时：patch 将 `timeout=30` 改为 `timeout=60`（get_scene_type 和 ask_screen 两处）
+  5. 重启：`pkill -f screen_watcher; terminal(background=true) 启动`
+
+**备选模型**（优先测试可 Ollama 直接拉取的）：
+- moondream:1.8b-v2-q4_K_M（约1GB），通用视觉，非 GUI 专项
+- richardyoung/smolvlm2-2.2b-instruct（通用版）
 
 **已确认本地 Ollama 模型（2026-05-31 实测）：**
 ```
@@ -210,6 +231,10 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - ✅ 解决：用 IIFE 包装 JS 代码 `(function(){ ... })()`，每次都是新作用域
   - 示例：`document.querySelectorAll('table tbody tr').length` 可直接用，不用写循环变量
   - 分片提取长文本：`.slice(0, 5000)` → `.slice(5000, 10000)`
+- **⭐ LocateAnything-3B（Nvidia，2026-05 新发布）**：
+  - `nvidia/LocateAnything-3B` 在 HuggingFace
+  - GUI grounding benchmark 高分，arxiv 2605.27365v1（4天前发布）
+  - 详见 `references/locateanything-3b-2026-06-07.md`
 - 新方向（2026-05-28 发现）：Apple FastVLM（CVPR 2025，MLX版本在HuggingFace）+ Ollama v0.19 MLX集成
 - 新方向（2026-05-29 发现）：Ollama MLX backend 需要 32GB+ RAM，24GB 不支持；smolvlm2-agentic-gui 有 q8_0 (~1.9GB) 和 fp16 (~3.6GB) 变体可用；Qwen2.5VL 在 Ollama 上有 3b/7b/32b/72b 各变体
 - **⭐ ZonUI-3B（WACV 2026，2026-05-29 发现）** — 轻量级GUI grounding VLM，3B参数
@@ -224,6 +249,12 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - HuggingFace: `Mininglamp-AI/Mano-P`；Cider SDK 提供 MLX INT8 加速
   - ⚠️ github.com + huggingface.co 均 blocked，需等网络恢复后部署
   - 详见 `references/mano-p-2026-05-31.md`
+- **⭐ OSWorld SOTA（2026-06-07 更新）**：
+  - GPT-5.4 在 OSWorld-Verified 达 **75.0%**，超越人类基准 72.4%
+  - GPT-5.4 在 WebArena-Verified 达 67.3%
+  - GPT-5.2 仅有 47.3%（差距巨大）
+  - 来源：ddgs 搜索 2026-06-07
+
 - **⭐ Qwen3-VL（2026-05-29 发现，2026-05-29 实测成功）** — Qwen最新旗舰VLM
   - Ollama完整可用：qwen3-vl:2b（1.9GB）✅，qwen3-vl:8b（6.1GB）✅
   - ⚠️ **qwen3-vl:4b 不存在**（2026-05-30 实测：not found 404）— 不要尝试 pull
@@ -341,11 +372,15 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - 启动命令已验证：`python3 ~/.hermes/scripts/screen_watcher.py`（PID 会变，不需要追踪旧 PID）
 - **idle_learning 第一步检查清单**：进程 → 截图时间 → 模型列表，三个全检查才链路完整
 - ⚠️ **screen_watcher 目录不存在的情况（2026-05-29 发现）**：若 `ls ~/.hermes/screenshots/` 返回"No such file or directory"，说明 screen_watcher 从未启动过或已被清理。需要手动检查 screen_watcher 进程和启动脚本，确认目录会被正确创建。
-- **⚠️ Stale screenshot 诊断流程（2026-06-07 新增）**：
-  1. `ls -lt ~/.hermes/screenshots/current.png` — 检查时间戳
-  2. 如果超过 24h：`ps aux | grep screen_watcher` 确认进程是否存活
-  3. 进程存活但截图 stale → `rm ~/.hermes/screenshots/.handler_lock`（清除锁文件）+ 手动触发 `screencapture -x ~/.hermes/screenshots/current.png`
-  4. 如仍不更新 → `pkill screen_watcher` 后重新启动 `python3 ~/.hermes/scripts/screen_watcher.py`
+- **⚠️ Stale screenshot 诊断流程（2026-06-07 实测修复版）**：
+  1. `ls -lt ~/.hermes/screenshots/current.png` — 检查时间戳是否在最近 24h 内
+  2. `md5 ~/.hermes/screenshots/current.png` — 连续两次 MD5 不同说明内容在更新，仅时间戳可能是 screencapture 行为，watcher 实际正常
+  3. `ps aux | grep screen_watcher` 确认进程是否存活
+  4. **进程存活 + 截图 stale**：`pkill screen_watcher` 后用 `terminal(background=true)` 重启
+     - ⚠️ **禁止**在 foreground command 里用 `nohup ... &` — 会报 `shell-level background wrappers` 错误
+     - ✅ **正确**：`terminal(background=true, command='python3 ~/.hermes/scripts/screen_watcher.py')`
+  5. 验证：`screencapture -x ~/.hermes/screenshots/test_manual.png && ls -lt ~/.hermes/screenshots/test_manual.png` + `md5` 比对
+  6. 验证 dry-run：`grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log`
 - CDP直连方案已知可用：原生Python WebSocket连接9333，不依赖mcp-chrome-stdio bridge
 - **重要底层限制（2026-05-28 发现）**：cua-driver/macOS CGEventTap 对某些应用（Blender等）的event loop只接受cghidEventTap且前面有mouseMoved事件，需要短暂前台激活。"不抢焦点"承诺对这类应用不可实现，Hermes computer_use同理
 - **执行层四级断链（2026-05-29 发现）**：全链路在 cron 环境断在 screen_watcher 不运行
@@ -442,13 +477,12 @@ for m in d.get('models',[]):
 - response 格式：`/api/generate` → `data['response']`；`/api/chat` → `data['message']['content']`
 - 详见 `screen-watcher-vision/references/ollama-api-endpoint-chat-vs-generate-2026-05-30.md`
 
-**⚠️ smolvlm2 稳定性确认（多次实测汇总）**：
-- 2026-05-28 测试1（桌面浏览器+ChatGPT窗口）：响应时间 10.3s，准确识别浏览器tabs、chat窗口、navigation icons，无幻觉
-- 2026-05-28 测试2（移动端购物页面）：响应时间 11.1s，准确识别搜索框、商品卡片、价格、评分、移动端布局
-- 2026-05-28 测试3（桌面+状态栏）：响应时间 5.2s，准确识别时间、状态栏、FAB 按钮、壁纸
-- 2026-05-29 测试4（Chrome+弹窗+键盘+图标）：响应时间 10.5s，准确识别浏览器、弹窗、底部图标、搜索栏、键盘、标签页、通知图标
-- ScreenSpot-v2 基准分数：61.71%（来自 smolvlm2-agentic-gui 模型页面）
-- ✅ **结论**：smolvlm2 当前版本（ahmadwaqar/smolvlm2-agentic-gui，Q4_K_M，1.85GB）表现稳定，可信任用于GUI理解任务。响应时间 5-11s 取决于截图复杂度
+**⚠️ smolvlm2 稳定性参考（已退役，仅作历史记录）：**
+- 2026-05-28 ~ 2026-06-02 期间实测：响应时间 5-11s，GUI 元素识别准确，无幻觉
+- ScreenSpot-v2 基准分数：61.71%
+- **⚠️ 2026-06-02 已从 Ollama registry 下线**：pull 返回 EOF + 404，已非可用模型
+- qwen3-vl:2b 已接管场景分类（响应 ~24s，"other" 分类，通用能力更强）
+- 参考历史数据用于评估 smolvlm2 系模型恢复后的预期表现
 
 **⚠️ github.com vs raw.githubusercontent.com 区分**：
 - `github.com` 可能被 blocked，但 `raw.githubusercontent.com` 通常仍可访问
@@ -493,24 +527,24 @@ screencapture -x /tmp/test_screen.png
 - 潜在价值：作为通用推理备选（替换 qwen2.5:1.5b）
 - ⚠️ Tiny-vLLM（同一 HN Show 项目）细节获取失败，未能验证性能数据
 
-**已确认本地 Ollama 模型（2026-06-02 实测，⚠️ 2026-06-02 重大更正）**：
+**已确认本地 Ollama 模型（2026-06-02 实测）：**
 ```
 qwen2.5:1.5b                           ✅ 0.92 GB
 qwen3-vl:2b                            ✅ 1.76 GB
-
-ahmadwaqar/smolvlm2-agentic-gui:latest ❌ 已从本地移除（两次发现：2026-05-30 + 2026-06-02）
+ahmadwaqar/smolvlm2-agentic-gui:latest ❌ 已从 Ollama registry 下线（pull 返回 EOF + 404）
 nomic-embed-text:latest                ❌ 已从本地移除
 ```
-⚠️ 注意：上述是 `127.0.0.1:11434` 返回的本地安装模型，不是 api.ollama.com 的远程库
-⚠️ smolvlm2-agentic-gui 从本地消失两次（间隔不到48小时），可能是 Ollama 自动清理机制，需关注
-⚠️ github.com blocked，无法重新 pull；raw.githubusercontent.com 仍可访问但 Ollama pull 需要完整 github.com
 
+⚠️ 注意：上述是 `127.0.0.1:11434` 返回的本地安装模型，不是 api.ollama.com 的远程库
+⚠️ smolvlm2-agentic-gui 从本地消失 5 次（2026-05-30 × 2 + 2026-05-31 + 2026-06-07 + 2026-06-02 registry下线）
+⚠️ github.com 已恢复但 registry 404，模型已不在 Ollama 官方库
+⚠️ **当前 screen_trigger_handler 已使用 qwen3-vl:2b 作为默认视觉模型**
 **候选模型对比**（优先测试可 Ollama 直接拉取的，HF 镜像可用 hf-mirror.com 替代 huggingface.co）：
 
-- **⭐ qwen3-vl:2b vs smolvlm2-agentic-gui 实测（2026-05-30，实测推翻早期结论）**：
-  - smolvlm2-agentic-gui：**17.9s**（900x506缩略图），scene classification 准确返回 "browser"
-  - qwen3-vl:2b：**60s+ 超时**（900x506缩略图），不适合实时场景分类
-  - **结论**：screen_watcher 实时分析用 smolvlm2，get_scene_type() 共用 smolvlm2；qwen3-vl:2b 保留为离线OCR备选
+- **⭐ qwen3-vl:2b vs smolvlm2-agentic-gui 评估（2026-05-30，实测推翻早期结论）：**
+  - smolvlm2-agentic-gui：17.9s（900x506缩略图），scene classification 准确返回 "browser"
+  - qwen3-vl:2b：24s（600x900缩略图），返回 "other" 或场景描述，**当前已作为默认模型**
+  - **结论**：smolvlm2 已移除（github blocked + 自动清理）；qwen3-vl:2b 接管场景分类任务；smolvlm2 保留为未来网络恢复后的备选
 
 - **⭐ Holo1.5-3B（2026-05-30 实测）** — ScreenSpot 91.7%，M4 24GB 可用，3B参数
   - Desktop 95.0分（超过大多数7B模型）
@@ -673,7 +707,9 @@ PYEOF
 - [马拉松脚本](./scripts/idle-marathon.sh) — 马拉松学习模式脚本（用户指令触发，持续到指定时间）
 - [马拉松核心引擎](./scripts/idle-marathon-core.sh) — 后台实际执行版，每30分钟循环
 - [Awesome Computer Use Agents 资源（2026-06-02）](./references/awesome-computer-use-agents-2026-06-02.md) — GitHub ranpox，综合资源汇总含视频/papers/项目
+- [Hermes vs OpenClaw 竞品分析（2026-05-31）](./references/hermes-vs-openclaw-2026-05-31.md) — 163k vs 374k stars，自进化闭环 vs Live Canvas，OpenRouter 排名 #1
 - [HN Top 热点文章 2026-06-02](./references/hn-top-2026-06-02.md) — HN 热门文章列表，重点关注 Tiny-vLLM/LFM2.5-8B，screen_watcher 链路巡检结果
+- [Microsoft Copilot Studio Computer Use GA (2026-06-02)](./references/copilot-studio-computer-use-ga-2026.md) — 首个生产级computer use平台，OpenAI CUA + Sonnet 4.5 GA，credit计费，企业特性详解
 - [HN Top 2026-06-07](./references/hn-top-2026-06-07.md) — SQLite durable workflows(628pts)/Mistral AI efficiency(427pts)/Zig build cache(251pts)
 - [HN Top 2026-05-31](./references/hn-top-2026-05-31.md) — Anthropic超越OpenAI成最高估值AI创业公司，Zig Build System Reworked，Openrsync
 - [HN Top 2026-05-30](./references/hn-top-2026-05-30.md) — 本次学习发现的 15 条 HN 热门，含 Tiny-vLLM(235 stars)/LFM2.5-8B(277pts)

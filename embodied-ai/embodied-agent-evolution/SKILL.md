@@ -139,6 +139,12 @@ tags: [embodied-ai, desktop-automation, self-evolution, hermes]
 
 **错误模式**：把"沮丧/调试"误分类为"执行动作"——错过用户遇到困难的信号
 
+**CVPR 2026 其他 GUI 相关论文（2026-05-31 发现）**：
+- **GUI-Shift**（OpenReview）：增强 VLM-based GUI agents 的自监督学习方法，4个 VLM × 4个 GUI benchmark 验证
+- **GUI Grounding Sensitivity Benchmark**（ACL 2026 Findings）：专注于桌面环境，研究 GUI grounders 对多个 UI 元素属性的敏感性
+- **SenseSearch**（CVPR 2026）：高分辨率 Agentic Search-Reasoning via Reinforcement Learning
+- **VisionArena**（CVPR 2025）：230k 真实世界 User-VLM 对话数据集
+
 **对 Hermes auto_execute 的直接改进方向**：
 - 当前 ACTION_WHITELIST 只有 scene 级别（browser/wechat），缺少**用户困难检测层**
 - 未来扩展为：scene classification → behavior state（confusion/frustration）→ intent → assistance
@@ -235,7 +241,17 @@ FSM多智能体架构，用于复杂桌面自动化：
 - 胼胝体：动态通信slot交换信息
 - 启发：Hermes的vision_agent和humanization_core可以类比这个架构
 
-### 执行层：je_auto_control 实测（2026-06-01 新增）
+### 7. OpenRouter Series B — $113M, $1.3B Valuation（2026-05-31 新增）
+
+**融资详情**：CapitalG（Google Alphabet）领投，NVentures、ServiceNow Ventures、MongoDB Ventures 跟投
+**增长数据**：6个月内 usage 增长 5x，每周处理 25 万亿 tokens
+**战略意义**：multi-AI-model routing 成为主流，OpenRouter 作为"模型交易所"价值凸显
+
+**对 Hermes 的意义**：
+- OpenRouter $1.3B 估值验证 multi-model routing 路线，Hermes 多模型并行策略方向正确
+- 关注是否有更优惠的本地部署方案（降低 API 费用）
+
+### 7. 执行层：je_auto_control 实测（2026-06-01 新增）
 
 **安装**：`pip3 install je-auto-control`（装了完整pyobjc框架+opencv-python）
 
