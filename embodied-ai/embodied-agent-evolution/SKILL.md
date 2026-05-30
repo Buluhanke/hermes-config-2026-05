@@ -605,6 +605,8 @@ Cronjob `自我进化-夜间学习`（job_id: 8834c6edfa07）执行结果：
 | `hermes_execution.py` | DynamicWait(200ms轮询)+HumanTrajectory(贝塞尔曲线) | ✅ 已测试 |
 | `hermes_agent_loop.py` | 完整闭环Perception→Execution→Reflection→Memory | ✅ 已测试 |
 
+**Ollama 模型清理（2026-06-01）**：M4 24GB 不建议跑 >3GB 的 VLM，详见 `references/ollama-model-cleanup-20260601.md`
+
 全部位于 `~/.hermes/scripts/`
 
 ## 实践路径

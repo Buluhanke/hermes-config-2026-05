@@ -14,6 +14,46 @@ trigger: 当用户说"你生病了"/"你坏了"/"怎么不动了"/"你没反应"
 
 ---
 
+## 快速体检清单（定向探测，不走 hermes doctor）
+
+`hermes doctor` 全量跑要120秒（26个并发API检查全卡住），改用定向探测：
+
+```bash
+# 1. Docker容器状态
+docker ps -a --format '{{.Names}}\t{{.Status}}'
+
+# 2. MCP进程健康（查stale——同一binary多个PID）
+ps aux | grep -E 'mcp-chrome|mcp-server' | grep -v grep
+# stale特征：同一binary有2个以上PID，其中一个start time很旧
+
+# 3. 端口监听
+netstat -an | grep LISTEN | grep -E '3000|5678|8000|8888|8899|9333|11434'
+
+# 4. Chrome进程
+ps aux | grep 'Google Chrome' | grep 'remote-debugging-port=9333'
+
+# 5. Ollama模型
+ollama list 2>/dev/null || echo "ollama not running"
+
+# 6. cron jobs
+hermes cron list 2>/dev/null || echo "no cron"
+
+# 7. 内存状态（查wired是否过高）
+top -l 1 | grep PhysMem
+
+# 8. Gateway日志新鲜度
+tail -5 ~/.hermes/logs/gateway.log | grep -c "memory_monitor\|platform connected"
+# 返回0说明Gateway可能僵死
+```
+
+**自动修复项目**：
+- stale MCP进程（同一binary多个PID）→ kill最旧的
+- 容器down → `docker restart <name>`
+- Gateway日志超时 → 重启Gateway
+- Ollama占用过高 → `pkill -9 -f 'ollama'`
+
+---
+
 ## 健康检查清单（每次自我诊断必须执行）
 
 ```
@@ -195,6 +235,34 @@ web:
 1. 读取 `memory` 工具内容，识别可清理的过时上下文
 2. 归档到 Obsidian：`~/Obsidian/迅龙贸易/MEMORY_archive_<date>.md`
 3. 重置memory为关键持久信息（用户偏好+系统配置）
+
+---
+
+### Mac mini M4 24GB 内存爆掉（OOM卡死）
+
+**症状**：系统极卡，内存只剩100MB，Ollama runner占15GB+
+
+**根因**：Docker Linux VM（~9GB wired）+ Ollama qwen3-vl:latest（~15GB）同时运行，超出24GB上限
+
+**诊断**：
+```bash
+top -l 1 | grep PhysMem
+ps aux | sort -rn -k4 | head -5  # 看内存大户
+```
+
+**自愈流程**：
+```bash
+# 1. 识别Ollama runner
+ps aux | grep 'ollama runner' | grep -v grep
+
+# 2. 强制kill（pkill -f只kill一个不够，会自动重启）
+pkill -9 -f 'ollama'
+
+# 3. 验证：内存从22GB→5GB used
+sleep 1 && top -l 1 | grep PhysMem
+```
+
+**详细分析**：见 `references/mac-mini-ram-management.md`
 
 ---
 

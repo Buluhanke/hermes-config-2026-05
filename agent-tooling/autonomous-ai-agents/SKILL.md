@@ -66,6 +66,13 @@ This skill governs: agent frameworks, tool integrations that extend agent capabi
 2. Use raw Python WebSocket + CDP directly (see `references/cdp-raw-websocket.md`)
 3. Do NOT try to open a new Chrome window/instance — the existing Chrome profile is already logged in
 
+### browser-use + python-socks (2026-06-01)
+`browser-use` 连接已有Chrome时需要 `python-socks`，否则报 `python-socks is required to use a SOCKS proxy`：
+```bash
+uv pip install python-socks --python ~/.hermes/hermes-agent/.venv/bin/python
+```
+装完立即生效，不需要改代码。
+
 ### AppleScript JavaScript Execution in Chrome
 Chrome disables AppleScript-triggered JavaScript by default. To enable: Chrome menu → View → Developer → Allow JavaScript from Apple Events.
 - `references/turix-cua.md` — TuriX-CUA: macOS desktop CUA agent (screen capture → vision LLM → pyautogui). Install, config (OpenAI-compatible providers), permission setup, and pitfalls.

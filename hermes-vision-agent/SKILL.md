@@ -16,8 +16,20 @@ See(截屏) -> Think(VLM分析) -> Act(拟真点击)
 ## 依赖
 
 - `hermes-humanization-core`（必须先安装）
-- smolvlm2-agentic-gui（Ollama，本地视觉模型）
+- Ollama 本地视觉模型（见下方当前可用模型）
 - pyautogui + mss（系统控制）
+
+### 当前本地模型状态（2026-06-01，aimac清理后）
+
+| 模型 | 大小 | 状态 | 用途 |
+|------|------|------|------|
+| qwen2.5:1.5b | 986 MB | ✅ 可用 | 轻量文本推理 |
+| qwen3-vl:2b | 1.9 GB | ✅ 可用 | **主VLM**（轻量级视觉理解） |
+| qwen3-vl:latest | 6.1 GB | ❌ 已删 | 6GB太大，M4 24GB吃不消 |
+| smolvlm2-agentic-gui | 2.0 GB | ❌ 已删 | 占用资源 |
+
+> **内存原则（aimac）**：24GB Mac mini跑不动6GB模型+qwen3-vl:2b双VLM。优先保留轻量模型，释放内存优先于模型性能。
+> qwen3-vl:2b (1.9GB) 是当前唯一VLM，响应较快。
 
 ## 典型用法
 
@@ -96,10 +108,11 @@ browser_snapshot(DOM 8ms) → LLM分析 → browser_click/type执行
 ---
 
 ## 已知局限
-- smolvlm2 响应约 **10-13秒**（实测，M4 24GB），不是30-60秒，需要耐心等待
+- qwen3-vl:2b 响应约 **2-4秒**（1.9GB轻量模型，M4 24GB流畅）
 - 找元素需要描述尽量具体："发送按钮" 比 "按钮" 效果好
 - 文件对话框目前需要手动介入（VLM无法操作 macOS 原生文件选择器）
 - Chrome GPU合成层 → 截屏方案全部失效，用browser_snapshot替代
+- smolvlm2 和 qwen3-vl:latest 均已删除（内存优化）；VLM能力减弱但OCR仍正常
 
 
 ## 闭环验证（2026-05-31）
@@ -215,12 +228,13 @@ smart_click("发送")
     ├─ 1. 局部截图 -> Vision OCR (60-240ms)
     │       找到了 -> human_click + SSIM 心跳验证
     │
-    ├─ 2. 找不到 -> smolvlm2 视觉 (2-5s)
+    ├─ 2. 找不到 -> qwen3-vl:2b 视觉 (~2s)  [注意：qwen3-vl:latest太大已删，轻量模型优先]
     │       找到了 -> human_click + SSIM 心跳验证
     │
     └─ 3. VLM 也找不到 -> 打印警告，人工介入
 ```
-> **注意**：smolvlm2（ahmadwaqar/smolvlm2-agentic-gui:latest）是当前主模型，qwen2.5vl:7b 因未安装在 Ollama 中已降为备选。
+
+> **注意**：smolvlm2 和 qwen3-vl:latest 均已删除。当前VLM为 qwen3-vl:2b (1.9GB)，M4 24GB可流畅运行。
 
 > ⚠️ **github blocked 期间**，FastVLM、SmolVLM2-2.2B、moondream2 等候选模型无法 pull 测试。网络恢复后优先测试 Apple FastVLM（CVPR 2025，85x faster TTFT，MLX版本在HuggingFace可用）。
 

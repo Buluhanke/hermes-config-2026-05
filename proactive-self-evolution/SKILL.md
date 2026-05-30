@@ -106,6 +106,7 @@ result = client.recall(bank_id="hermes", query="搜索query")
 - [系统深层检查清单](./references/deep_audit_workflow.md) — 2026-05-30 实战总结
 - [深度进化发现(2026-05-30)](./references/self_optimization_findings_20260530.md)
 - [深度学习结果归档(2026-05-31)](./references/deep_learning_results_20260531.md)
+- [深度学习结果归档(2026-06-01)](./references/deep_learning_results_20260601.md)
 - [系统深层检查清单(2026-05-30)](./references/deep_check_audit_20260530.md)
 
 ## 脚本

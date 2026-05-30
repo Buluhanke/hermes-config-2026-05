@@ -2,138 +2,145 @@
 
 ## Overview
 GitHub: https://github.com/browser-use/browser-use (91K Stars)
-Category: AI agent web browsing / browser automation
-License: Open source (MIT)
+License: MIT, open source
+**Status (2026-06-01实测)**: 框架已完全修复可用，连接已有Chrome CDP需python-socks，本地VLM推理能力仍不足
 
-## What it does
-Makes websites accessible for AI agents — AI controls a real Chrome browser to click links, fill forms, scrape pages, navigate. No cloud API needed for local use.
+---
 
-## Installation
+## 完整安装与配置（2026-06-01实测）
 
-### Prerequisites
-- Python >= 3.11 (user has 3.14 ✓)
-- `uv` package manager (faster than pip)
-- Chromium browser (installed via `uvx browser-use install`)
+### 依赖路径（重要！）
+- **Hermes Agent venv**: `~/.hermes/hermes-agent/.venv` (Python 3.13)
+- **Browser-Use 安装**: 必须装到 Hermes Agent venv，不是系统Python
+- **Chrome 调试端口**: `localhost:9333` (手动启动的 chrome-debug profile)
 
-### Install uv
+### 安装步骤
+
 ```bash
-curl -LsSf https://astral.sh/uv/install.sh | sh
+# 1. 安装到正确venv
+cd ~/.hermes/hermes-agent && source .venv/bin/activate
+uv pip install browser-use langchain-ollama
+
+# 2. 安装python-socks（CDP WebSocket连接需要）
+uv pip install python-socks --python ~/.hermes/hermes-agent/.venv/bin/python
+
+# 3. 启动Chrome带调试端口（如果还没运行）
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9333 \
+  --user-data-dir="$HOME/.hermes/chrome-debug" &
 ```
 
-### Install browser-use
+### 兼容性修复（必须做，5处patch）
+
+Browser-Use 0.12.9 检查 `llm.provider` 和 `llm.model_name`，但 ChatOllama 没有这些属性。需要patch 5处：
+
+| 文件 | 原代码 | 修复 |
+|------|--------|------|
+| agent/service.py:235 | `if self.judge_llm.provider == 'browser-use':` | `if getattr(self.judge_llm, 'provider', None) == 'browser-use':` |
+| agent/service.py:1603 | `provider={self.llm.provider}` | `provider={getattr(self.llm, 'provider', 'unknown')}` |
+| agent/service.py:2045 | `model_provider=self.llm.provider` | `model_provider=getattr(self.llm, 'provider', None)` |
+| agent/service.py:2211 | `llm_model=agent.llm.model_name` | `llm_model=getattr(agent.llm, 'model_name', agent.llm.model) if hasattr(...) else ...` |
+| tokens/service.py:347,389 | `self.llm.provider` | `getattr(self.llm, 'provider', None)` |
+
+**自动化patch脚本**（保存到 `scripts/patch_browser_use.sh`）：
 ```bash
-uv init && uv add browser-use
+#!/bin/bash
+BASE="$HOME/.hermes/hermes-agent/.venv/lib/python3.13/site-packages/browser_use"
+
+sed -i "s/if self\.judge_llm\.provider == 'browser-use':/if getattr(self.judge_llm, 'provider', None) == 'browser-use':/g" $BASE/agent/service.py
+sed -i "s/provider={self\.llm\.provider}/provider={getattr(self.llm, 'provider', 'unknown')}/g" $BASE/agent/service.py
+# ... 完整脚本
 ```
 
-### Install Chromium driver
-```bash
-uvx browser-use install
-```
+### 使用示例
 
-## Key Capabilities
-- Local browser control (no API key required for local use)
-- Supports Ollama (local models) — user has qwen2.5:latest on macmini (192.168.0.4)
-- Integrates with OpenAI, Anthropic, Google GenAI, Groq, Ollama
-- Python >= 3.11 required
-
-## Hermes Integration
-已作为 MCP server 注册，工具前缀 `mcp_browser_use_`：
-
-| 工具 | 用途 |
-|------|------|
-| `browser_navigate` | 打开 URL |
-| `browser_get_state` | 获取页面状态+元素列表 |
-| `browser_screenshot` | 截图（返回 bytes，不写文件） |
-| `browser_click` / `browser_type` | 交互 |
-| `browser_scroll` | 滚动 |
-| `browser_extract_content` | 提取内容（当前版本不稳定，常返回 No content extracted） |
-| `browser_go_back` | 后退 |
-| `browser_list_tabs` / `browser_switch_tab` | 多标签页 |
-
-验证命令：
-```bash
-hermes mcp list                    # 确认 browser_use 状态
-hermes tools list | grep browser   # 确认 tools 已启用
-```
-
-### 截图的正确获取方式
-`browser_screenshot` 返回 JSON 含 `size_bytes` 和 `viewport` 信息，但**不写文件到磁盘**。
-
-若需截图内容用于 `vision_analyze`：
-- 调用 `browser_get_state(include_screenshot=true)` 获取 base64 编码截图
-- 截图数据直接在返回结果中，不经过文件系统
-
-### 与 Hermes 工具链配合
-1. `browser_navigate` → 打开目标页面
-2. `browser_get_state` → 查看元素和页面状态
-3. `browser_click` / `browser_type` → 交互
-4. `browser_get_state(include_screenshot=true)` → 获取截图供 vision 分析
-
-## 1688 反扒警告
-browser-use 的 Chrome CDP 自动化**仍被 1688 检测**，和 Playwright 一样返回虚假 HTML。需换 Selenium 或换平台（拼多多/淘宝）。
-
-## ChatOllama 兼容性修复（2026-06-01 实测）
-
-**问题**：Browser-Use 检查 `llm.provider == 'browser-use'` 但 ChatOllama 没有 `provider` 属性，导致 Agent 初始化失败。
-
-**Python 3.14 路径**（browser-use 装在这里）：
-```
-/usr/local/bin/python3.14
-/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/site-packages/
-```
-
-**方案A — 1行 patch**（推荐）：
 ```python
-# browser_use/agent/service.py 第235行
-# 原：if llm.provider == 'browser-use':
-# 改：if getattr(llm, 'provider', None) == 'browser-use':
-```
+import asyncio, os
+for k in ['HTTP_PROXY','HTTPS_PROXY','SOCKS_PROXY','ALL_PROXY']:
+    os.environ[k] = ''  # 清除代理，否则websockets报SOCKS错误
 
-**方案B — Python wrapper**：
-```python
-from langchain_ollama import ChatOllama
-from langchain_core.language_models.chat_models import BaseChatModel
-
-class OllamaWrapper(BaseChatModel):
-    def __init__(self, llm):
-        self._llm = llm
-        self.provider = 'ollama'  # 绕过兼容性检查
-    
-    def _generate(self, *args, **kwargs):
-        return self._llm._generate(*args, **kwargs)
-    def _call(self, *args, **kwargs):
-        return self._llm._call(*args, **kwargs)
-    @property
-    def model(self):
-        return self._llm.model
-    @property
-    def model_name(self):
-        return self._llm.model
-```
-
-**安装命令**：
-```bash
-python3.14 -m pip install langchain-ollama  # 已装 v1.1.0
-pip3 install browser-use                    # 已装 v0.12.8
-```
-
-**测试命令**：
-```python
-python3.14 << 'EOF'
 from browser_use import Agent
 from langchain_ollama import ChatOllama
+from browser_use.browser.profile import BrowserProfile
 
-llm = ChatOllama(model='qwen3-vl:2b', base_url='http://localhost:11434/v1', temperature=0.1)
-llm.provider = 'ollama'  # 绕过兼容性检查
+async def test():
+    profile = BrowserProfile(cdp_url='http://localhost:9333', is_local=True)
+    llm = ChatOllama(model='qwen3-vl:latest', keep_alive=300, temperature=0.0)
+    
+    agent = Agent(
+        task='Navigate to httpbin.org/html and extract the page title',
+        llm=llm,
+        browser_profile=profile,
+        max_steps=8,
+    )
+    result = await agent.run()
+    print(result.final_result)
 
-agent = Agent(llm=llm, task='打开 example.com，告诉我页面标题')
-import asyncio
-result = asyncio.run(agent.run())
-print(result)
-EOF
+asyncio.run(test())
 ```
 
-## Related
-- **Browser Use Cloud** (cloud.browser-use.com) — paid SaaS version, free tier = 10 requests only
-- **Playwright** (Microsoft) — lower-level browser control, more code needed
-- **Puppeteer** (Google) — lower-level Chrome control
+### CDP连接已有Chrome的正确方式
+
+1. **启动Chrome带调试端口**（只需做一次，以后Chrome常驻9333）：
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9333 \
+  --user-data-dir="$HOME/.hermes/chrome-debug" &
+```
+
+2. **确认端口监听**：
+```bash
+lsof -i :9333  # 看到 Google Chrome LISTEN 即成功
+```
+
+3. **传入正确cdp_url**：
+```python
+profile = BrowserProfile(cdp_url='http://localhost:9333', is_local=True)
+# 注意是 http:// 不是 ws://
+```
+
+### 模型能力测试结果（2026-06-01）
+
+| 模型 | 导航 | 内容提取 | 结论 |
+|------|------|----------|------|
+| qwen2.5:1.5b | ✅ | ❌ | 太小，推理循环不收敛 |
+| qwen3-vl:2b | ✅ | ❌ | 同上 |
+| qwen3-vl:latest (6.1GB) | ✅ | ❌ | 仍不够，6步内全部失败 |
+
+**结论**: Browser-Use 框架完全正常，瓶颈在本地VLM推理能力。需要更大参数模型（qwen3-vl:14b+）或云端GPT-4o。
+
+---
+
+## 核心坑（SOCKS Proxy — 2026-06-01解决）
+
+### 问题现象
+```
+ERROR: Failed to establish CDP connection to browser: python-socks is required to use a SOCKS proxy
+```
+
+### 根因
+`websockets` 库检测到系统级 SOCKS 代理设置，自动走 SOCKS 协议，但没装 `python-socks` 导致 ImportError。清空环境变量 `HTTP_PROXY` 等无效（因为是 SOCKS 不是 HTTP proxy）。
+
+### 解法
+```bash
+uv pip install python-socks --python ~/.hermes/hermes-agent/.venv/bin/python
+```
+
+装完立即生效，不需要改代码。
+
+---
+
+## 已知限制
+
+1. **1688反爬**: 和Playwright一样被检测，返回虚假HTML。换Selenium或换平台。
+2. **本地VLM推理弱**: 即使qwen3-vl:7b，内容提取仍失败。需要更大参数模型。
+3. **页面ready timeout**: httpbin.org/html 等简单页面3s timeout可能不够，用 `max_steps` 控制重试。
+4. **Stagehand官方需付费**: 官网明确本地模式需额外配置MCP server，不是开箱即用
+
+---
+
+## 相关工具
+
+- **Playwright** (Microsoft): 更底层浏览器控制，需要更多代码
+- **Stagehand**: 官方云端收费，本地MCP方案需额外配置
+- **cdp_use**: 直接Python WebSocket + CDP，控制更底层
