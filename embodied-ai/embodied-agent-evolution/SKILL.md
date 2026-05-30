@@ -256,7 +256,13 @@ sqlite3 ~/.hermes/chrome-debug/Default/Cookies "SELECT host_key, name, datetime(
 - ❌ heredoc `osascript <<'EOF'...EOF` → 编码错误
 - ✅ 正确：分开执行多个osascript命令
 
-### 执行层：AppleScript + computer_use 双重控制用户Chrome（2026-05-30实测）
+**⚠️ JS 注入打标签 DOM 解析（2026-06-02 实测验证）**：
+- 原理：JS 在浏览器内给所有可交互元素打 `data-hermes-id` 标签，Playwright 用 `[data-hermes-id='X']` 精准定位
+- 优势：毫秒级注入、Token 节省 10x（500 vs 50000）、视觉盲区过滤（getBoundingClientRect）
+- 实测：httpbin 表单页 13 个元素提取成功，fill/click 100% 精准；百度因验证 UI 遮挡搜索框不适用
+- 脚本位置：`/Users/aimac/hermes_dom_parser.py`
+
+### 8. 执行层：AppleScript + computer_use 双重控制用户Chrome（2026-05-30实测）
 
 **背景**：之前以为有两个Chrome实例（browser工具用chrome-debug，用户日常用Default），实测发现是同一个。
 
@@ -375,6 +381,7 @@ sqlite3 ~/.hermes/chrome-debug/Default/Cookies "SELECT host_key, name, datetime(
 - greenlet架构在M4 Mac有兼容问题（SyncBase.__init__() missing impl_obj）
 - playwright官方已够用，patchright作备选
 | references/ui-tars-desktop-research.md | UI-TARS Desktop研究 |
+| references/js-inject-dom-labeling-2026-06-02.md | JS注入打标签DOM解析（2026-06-02实测） |
 | references/agent-tars-cli实测-20260530.md | Agent TARS CLI实测记录 |
 | references/1688-captcha-automation-20260530.md | 1688自动化验证码瓶颈 |
 
@@ -401,7 +408,7 @@ Cronjob `自我进化-夜间学习`（job_id: 8834c6edfa07）执行结果：
 
 **这条是最高优先级，没有任何借口。**
 
-> 教训：2026-05-31 23:36-00:00，用户让推荐技能后我停下来等命令，浪费大量时间。多个技能推荐+安装花不了多少时间，应该直接执行。
+> 教训：2026-05-31 23:36-00:00，用户让推荐技能后我停下来等命令，浪费大量时间。多个技能推荐+安装花不了多少时间，应该直接执行。2026-06-01凌晨再次重复此错误。
 
 **触发条件判断**：
 - 单一任务 → 直接执行
@@ -424,6 +431,27 @@ Cronjob `自我进化-夜间学习`（job_id: 8834c6edfa07）执行结果：
 - 对外发送消息/邮件
 - 删除/覆盖不可恢复的数据
 - 涉及老板隐私信息（手机号、邮箱等）
+
+### 本地VLM方案实测结果（2026-06-01）
+
+**Ollama可用模型对比**：
+| 模型 | 大小 | 响应时间 | 可用性 | 备注 |
+|------|------|---------|--------|------|
+| smolvlm2-agentic-gui | 1.85GB | **7s** | ✅ | 专为GUI设计，macOS最优本地VLM |
+| qwen3-vl:2b | 1.9GB | ~90s超时 | ⚠️ | 太慢，暂不使用 |
+| qwen3-vl:8b | 6.1GB | 未测试 | ✅ | 可备选 |
+| qwen2.5:1.5b | 0.99GB | ~10s | ✅ | 纯文本，无视觉 |
+
+**结论**：smolvlm2-agentic-gui（7s/步）是当前Mac mini M4最优选择。
+
+**在线AI API卡点（2026-06-01实测）**：
+- GLM 4V（智谱）：429额度耗尽（余额不足），cogvlm-4v无法调用
+- DeepSeek：401 Authentication Fails，API Key无效
+- Gemini：DNS不通（generativelanguage.googleapis.com ping 100%丢包），本地网络问题
+
+**建议**：
+- 本地VLM为主（smolvlm2，免费，7s响应）
+- 在线API问题需老板确认充值或其他key
 
 ---
 

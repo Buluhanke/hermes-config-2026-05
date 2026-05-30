@@ -60,13 +60,8 @@ Skills 采用 `category/skill-name/` 子目录结构，`hermes skills list` 显�
 3. 持续执行直到任务完成，不中途停下等用户
 4. 完成后记录结果到 memory，不打扰用户
 5. 破坏性操作（删文件、停进程、改系统设置）需保守，优先备份再操作
-6. **多选择场景优先自主执行，不停下来等确认（2026-05-30 强化，2026-05-30 晚间重审）：**
-   - 推荐列表任务 → 直接执行，**不等用户命令**
-   - 执行完成后汇报结果，不中途停下来问"要不要做"
-   - 用户决策风格已确立：**中小问题AI自主决定执行，不需要汇报。重要决策和改动才问老板。**
-   - 本原则覆盖所有多选择场景（技能推荐、工具选择、供应商比价等）
-   - ⚠️ 违反示例：列出3个方案后问"需要我先联系询价吗？"→ 应直接执行第一个最优方案
-7. **⚠️ 用户明确指令：技能推荐类任务（"这个也要做"），直接执行不需要停下来问。执行完成后汇报结果即可。**
+7. **⚠️ 推荐清单 = 执行令**：用户说"以上任务也要做"或类似指令时，推荐列表是**直接执行的计划**，不是确认清单。列出推荐后立刻开始执行，不要问"需要我先联系询价吗？"、"要不要开始安装？"
+8. **⚠️ 用户纠正后立即执行，不要重审**：用户说"不要停下来等命令"后，下次再遇到多选择场景立刻执行，不需要再说"我执行第一条，你先确认"——直接做。
 
 **⚠️ 昨夜死机根因（screen_trigger_handler 进程堆积，2026-05-30 诊断）：**
 凌晨02:50开始，screen_watcher 检测到屏幕变化后触发 screen_trigger_handler，但 handler 处理慢（smolvlm2分析10-15秒/次），新触发持续进入导致"Handler仍在运行"堆积。屏幕被锁定时 `screencapture -x` 超时，02:50-03:10期间297次失败，系统进入异常循环。
@@ -327,6 +322,11 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   hermes_desktop_rpa.py (执行) → [断链：cron 无前台窗口/CDP 9222]
   ```
   修复顺序：screen_watcher 存活 → handler 触发 → dry-run 验证 → 坐标校准 → 切换 DRY_RUN=False
+
+**⚠️ 视觉Agent双轨方案（2026-06-01实测）**：
+- **Vision Agent Loop（截图→VLM→action）**：`vision-agent-loop` skill（新建）
+- **Playwright JS打标签（高精度DOM定位）**：详见 `vision-agent-loop/references/js-dom-labeling.md`
+- 两者结合：VLM识别目标 → JS标签精准执行（2026-06-02实测：httpbin表单13元素100%精准）
 
 **⚠️ 执行层性能优化 — Memory Bandwidth 瓶颈（2026-05-30 发现）**：
 - **Kog AI Inference Engine (KIE)**：3,000 tokens/s per request on 8× AMD MI300X，2,100 on 8× NVIDIA H200（FP16，无投机解码）
