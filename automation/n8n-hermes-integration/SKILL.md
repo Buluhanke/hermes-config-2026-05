@@ -311,7 +311,37 @@ curl -X DELETE -H "X-N8N-API-KEY: <key>" \
 3. **Mac Docker 宿主机访问**：用 `host.docker.internal`，不是 `127.0.0.1`
 4. **ddddocr pip 安装超时**：网络问题，可用 tesseract 替代或搭建 Host Flask API
 5. **n8n CODE_NODE_FUNCTION_ALLOW_EXTERNAL**：需要的环境变量记得加逗号分隔的包名
-6. **n8n API Key 401**：用户提供的 Key 返回 401 = 该实例从未在 UI 创建过 API Key，需要进入 Settings → n8n API 创建
+1. **n8n Local Instance 的 API Key 格式陷阱（重要！）**
+   - n8n 本地 Docker 实例的 API 认证**只接受原始字符串格式的 API Key**（UUID 字符串）
+   - `user_api_keys` 表里存储的 JWT（`eyJhbG...`格式）**不是 API Key**，而是 Web Session Token
+   - 无论用 `X-N8N-API-KEY: <JWT>` 还是 `Authorization: Bearer <JWT>`，都会返回 401
+   - **解决**：必须进 n8n UI → Settings → API → 点击 "Create an API Key" 生成原始 UUID 字符串
+   - n8n Cloud JWT（`iss: n8n, aud: public-api`）只对 Cloud 实例有效，本地 Docker 不认
+
+2. **`userActivated: false` 不影响 API 认证**
+   - n8n 自托管实例新建账号后 `userActivated: false` 是正常状态，不影响 Public API 使用
+   - 不要试图通过修改数据库 `userActivated` 字段来"激活"账号，这不会解决 API 401 问题
+
+3. **容器重启后的 API 恢复延迟**
+   - n8n 容器重启后，API 服务需要约 10-15 秒才能完全就绪
+   - 重启后前几次 API 调用可能遇到 `Connection reset by peer` 或 401，需要重试
+   - 验证方式：`curl http://127.0.0.1:5678` 返回 HTML 即为就绪
+
+4. **SQLite IOERR 修复流程**
+   - macOS Docker bind mount 与 SQLite fcntl 锁不兼容，导致 `SQLITE_IOERR: disk I/O error`
+   - 修复：将 `volumes: ./n8n_data:/home/node/.n8n` 改为 named volume `n8n_data:/home/node/.n8n`
+   - 切换后需重建管理员账号和 API Key（数据丢失）
+
+5. **n8n API Key 401 排查路径**
+   - Step 1: `curl -H "X-N8N-API-KEY: <key>" http://127.0.0.1:5678/api/v1/workflows?limit=1`
+   - 返回 `{"message":"unauthorized"}` = Key 格式不对（是JWT而非API Key）
+   - 返回 `{"message":"'X-N8N-API-KEY' header required"}` = 用了 Authorization Bearer 而非专用 header
+   - 返回 `{"message":"SQLITE_IOERR..."}` = 数据库损坏，先修 SQLite
+
+6. **hermes-n8n-mcp 的 .env 加载机制**
+   - 该工具按以下顺序查找 env 文件：`N8N_MCP_ENV` 环境变量 → `~/.config/n8n-mcp/env` → `./.env`
+   - 加载到第一个存在的文件后立即停止，不会合并多个文件
+   - 所以 `.env` 里同时放 `N8N_BASE_URL` 和 `N8N_API_KEY` 才能被正确读取
 7. **SQLite 在 MacOS 上 bind mount 损坏（SQLITE_IOERR）**：macOS Docker bind mount 与 SQLite 的 fcntl 锁不兼容，数据库文件会迅速损坏。修复方法：将 docker-compose.yml 的 `volumes:` 从 bind mount（`./n8n_data:/home/node/.n8n`）改为 **named volume**（`n8n_data:/home/node/.n8n` + `volumes:` 顶层声明）。切换后会丢失数据，需重新创建管理员账号和 API Key。
 8. **Internal REST API 有 CSRF 保护**：`/rest/` 路径需要 Session Cookie + CSRF token，直接用 urllib/curl 调用返回 401 即使已登录。如需程序化创建 Workflow，用 Public API（`/api/v1/`）配合 X-N8N-API-KEY header。
 9. **登录端点字段名**：n8n v2 的 `/rest/login` 用 `emailOrLdapLoginId` 字段（不是 `email`），密码字段是 `password`。返回 set-cookie 的 `n8n-auth` 头。
@@ -481,5 +511,6 @@ hermes mcp install linear
 
 ## 参考文档
 
-- `references/n8n-sqlite-direct-access.md` — n8n SQLite 数据库直接操作（绕过 UI/API 修复 onboarding、提取遮蔽的 API Key、激活 workflow、**备份与恢复**）
+- `references/n8n-sqlite-direct-access.md` — n8n SQLite 数据库直接操作（绕过 UI/API 修复 onboarding、提取遮蔽的 API Key、激活 workflow、备份与恢复）
+- `references/n8n-gateway-mcp-lifecycle.md` — Gateway + MCP 生命周期管理（Gateway 重启不丢 MCP、进程模型、正确验证方式）
 

@@ -105,6 +105,12 @@ result = client.recall(bank_id="hermes", query="搜索query")
 - [Cron Jobs 配置](./references/cron-jobs-config.md)
 - [Matt Pocock Skills + EvoMap 参考](./references/mattpocock-evomap.md)
 - [Web搜索后端配置](./references/web-search-backend-config.md)
+- [深度进化发现(2026-05-28)](./references/deep_evolution_findings_20260528.md)
+- [深度进化发现(2026-05-30)](./references/self_optimization_findings_20260530.md)
+
+## 脚本
+
+- [self_optimization.py](./scripts/self_optimization.py) — Autoresearch风格自我优化循环，每天凌晨2点自动执行
 
 ---
 
@@ -189,6 +195,41 @@ result = client.recall(bank_id="hermes", query="搜索query")
 ## ⚠️ 历史陷阱（2026-05-26）
 
 框架搭好了但没接入核心 = 白搭。今天建的 `evolution_core.py` 和 `personality.md` Hermes 并不会自动加载。需要找到 Hermes 启动流程的注入点（启动脚本或 system prompt 加载逻辑），把 evolution_core.py 的调用接进去，否则这套框架永远不生效。
+
+## ⚠️ 主动执行原则（2026-05-30确立）
+
+**多选择场景优先自主执行，不等命令。**
+- 推荐技能列表 → 直接安装，不需要等确认
+- 有多个选项 → 选最优方案执行，不停下来问
+- 纯执行任务（技能安装、脚本跑通）→ 直接做，做完汇报结果
+
+**自我优化循环（Autoresearch思路）已建立：**
+- 脚本：`~/.hermes/scripts/self_optimization.py`
+- Cron：每天凌晨2点执行，结果推送Telegram
+- 指标：`~/.hermes/logs/self_optimization/metrics.json`
+- 归档：`~/Brain_Lab/self_optimization_round1.md`
+- 搜索降级链：GitHub API → ddgs → curl
+
+**⚠️ 已知反模式（2026-05-30教训）：**
+- **停下来等命令是浪费时间**。多选择场景下，AI应自主选择最优方案执行，不等用户确认。
+- 症状：用户说"你一直在等命令" → 说明已违反此原则。
+- 修复：任何纯执行类任务（安装脚本、运行优化、修复错误）直接做，不汇报过程。
+- 原则：汇报只说结果+问题+建议，不说"我在做X"。
+
+**例外（才询问）：**
+- 涉及付款
+- 删除重要数据
+- 方向性抉择（非执行层面的）
+
+**Skill Review 的更新触发：**
+- 用户纠正风格/语气/格式 → 立刻更新相关skill
+- 用户纠正workflow → 更新对应skill的pitfall
+- 发现非 trivial 技术方案 → 当场写成 skill
+
+**执行原则：**
+- 深度学习跑通 = 优先找已有脚本/工具快速验证，不从零研究
+- 遇到多步骤任务 → 先 checkpoint，再执行
+- 简单任务30分钟内出结果，不要反复查日志
 
 ## 网络故障应急方案（已实战验证）
 
