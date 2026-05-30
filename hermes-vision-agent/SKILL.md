@@ -235,6 +235,8 @@ smart_click("发送")
 ```
 
 > **注意**：smolvlm2 和 qwen3-vl:latest 均已删除。当前VLM为 qwen3-vl:2b (1.9GB)，M4 24GB可流畅运行。
+>
+> ⚠️ **内存警示**：qwen3-vl:latest (6.1GB) 会导致24GB Mac mini系统瘫痪（Ollama runner占用15GB RAM）。诊断方法：`top -l 1 | grep PhysMem`。Docker Linux VM只占~600MB，不是内存瓶颈。及时清理不需要的模型。
 
 > ⚠️ **github blocked 期间**，FastVLM、SmolVLM2-2.2B、moondream2 等候选模型无法 pull 测试。网络恢复后优先测试 Apple FastVLM（CVPR 2025，85x faster TTFT，MLX版本在HuggingFace可用）。
 

@@ -138,10 +138,10 @@ def capture_region(x: int, y: int, w: int, h: int) -> str:
 
 
 # ─────────────────────────────────────────
-# 6. 本地 VLM（默认 qwen2.5vl:7b，备选 smolvlm2）
+# 6. 本地 VLM（默认 qwen2.5vl:7b，备选 qwen3-vl:2b 1.9GB）
 # ─────────────────────────────────────────
 VLM_MODEL_DEFAULT = "qwen2.5vl:7b"
-VLM_MODEL_FALLBACK = "ahmadwaqar/smolvlm2-agentic-gui:latest"
+VLM_MODEL_FALLBACK = "qwen3-vl:2b"
 
 def ask_vlm(image_path: str, question: str, model: str = VLM_MODEL_DEFAULT,
             num_ctx: int = 4096, timeout: int = 90) -> str:
