@@ -51,7 +51,8 @@ This skill governs: agent frameworks, tool integrations that extend agent capabi
 
 ## References
 - `references/browser-use.md` — Local browser automation for AI agents
-- `references/ai-website-login.md` — AI网站登录踩坑记录：browser工具Chrome profile隔离问题、Cloudflare反爬、各网站验证状态、解决方案
+- `references/ai-website-login.md` — AI网站登录踩坑记录（browser工具Chrome profile隔离问题）
+- `references/ai-website-login-2026-05-30.md` — 2026-05-30最新session：Chrome双实例隔离确认、批量JS开标签、CDP端口状态、各网站验证类型、唯一可行解法（用户在browser工具Chrome手动登录）
 - `references/hermes-voice-stt.md` — Hermes语音/STT架构：各平台ASR优先级、stt.local.model配置、faster-whisper模型选择（QQ走腾讯/Telegram走本地）
 - `references/cdp-raw-websocket.md` — Raw Python WebSocket + CDP control of local Chrome (fallback when MCP bridge is down, tab discovery, scroll/click/screenshot, frame encoding, pitfall: SOCKS proxy + websockets library)
 

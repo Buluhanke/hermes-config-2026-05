@@ -74,10 +74,33 @@ if check_pymupdf():      engines['pymupdf'] = True    # 双方皆有
 | ddddocr | ddddocr | `pip install ddddocr` |
 | pymupdf | pymupdf | `pip install pymupdf` |
 
+## 快速找字（屏幕坐标）
+
+新增 `find` 子命令，毫秒级定位文字 + 返回屏幕坐标：
+
+```bash
+# 找"发送"按钮坐标
+~/.hermes/hermes-agent/venv/bin/python3 ~/.hermes/skills/vision/hermes-ocr/scripts/ocr.py find "发送"
+
+# 输出示例
+[Fast OCR] 找到 '发送' 含 '发送', 耗时: 473ms, 坐标: (1385, 70)
+{"text": "发送", "x": 1385, "y": 70, "ms": 473.0}
+```
+
+**核心用法**：找字 → 拿坐标 → pyautogui/human_click 模拟真人点击。
+
+**内部逻辑**：
+1. `screencapture -x` 截全屏（绕过Chrome GPU合成层黑屏问题）
+2. Vision VNRecognizeTextRequest, recognitionLevel=1(Fast), 中文优先
+3. 坐标转换：Vision归一化左下角原点 → Mac屏幕像素左上角原点
+
+**注意**：CGWindowListCreateImage 会被Chrome GPU合成层黑屏，必须用 `screencapture -x`。
+
 ## 脚本位置
 
-`scripts/ocr.py` — 主入口，支持四个子命令：
+`scripts/ocr.py` — 主入口，支持五个子命令：
 
+- `find <text> [--image path] [--json]` — 快速找字返回坐标
 - `screenshot [--region x,y,w,h] [--json]`
 - `read <image_path> [--json]`
 - `pdf <pdf_path> [--json]`

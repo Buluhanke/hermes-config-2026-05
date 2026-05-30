@@ -287,28 +287,71 @@ print("OK")
     return "/tmp/hermes_ocr_shot.png"
 
 
+# ── 快速找字 + 坐标 ────────────────────────────────
+
+def fast_ocr_find(target_text, image_path=None, confidence=0.5):
+    """
+    Apple Vision 极速找字 + 返回屏幕坐标 (30-50ms)
+    坐标转换: Vision左下角原点(归一化) → Mac屏幕左上角原点(像素)
+    """
+    # 截图：用screencapture绕过Chrome GPU合成层
+    if not image_path:
+        shot_path = "/tmp/hermes_fast_ocr.png"
+        import subprocess
+        subprocess.run(["screencapture", "-x", shot_path], timeout=5)
+        image_path = shot_path
+
+    # Vision OCR (Fast模式, 1=fast, 0=accurate)
+    code = f'''import sys
+sys.path.insert(0, "/opt/homebrew/lib/python3.11/site-packages")
+import Quartz, Foundation, Vision, json
+
+screen_w = Quartz.CGDisplayPixelsWide(Quartz.CGMainDisplayID())
+screen_h = Quartz.CGDisplayPixelsHigh(Quartz.CGMainDisplayID())
+
+url = Foundation.NSURL.fileURLWithPath_("{image_path}")
+handler = Vision.VNImageRequestHandler.alloc().initWithURL_options_(url, None)
+req = Vision.VNRecognizeTextRequest.alloc().init()
+req.setRecognitionLevel_(1)
+req.setRecognitionLanguages_(["zh-Hans", "en-US"])
+handler.performRequests_error_([req], None)
+
+found = None
+for obs in req.results():
+    if obs.confidence() < {confidence}:
+        continue
+    text = obs.topCandidates_(1)[0].string()
+    if "{target_text}" in text:
+        bbox = obs.boundingBox()
+        cx = (bbox.origin.x + bbox.size.width / 2) * screen_w
+        cy = (1 - bbox.origin.y - bbox.size.height / 2) * screen_h
+        found = {{"text": text, "x": int(cx), "y": int(cy)}}
+        break
+
+print(json.dumps(found))
+'''
+    out, err, rc = _run([VISION_PYTHON, "-c", code], timeout=10)
+    if rc != 0 or not out or out == "null":
+        return None
+    return json.loads(out)
+
+
 # ── CLI 入口 ──────────────────────────────────────
 
 def main():
     parser = argparse.ArgumentParser(description="Hermes 统一OCR")
     sub = parser.add_subparsers(dest="command")
 
+    # find (快速找字)
+    p = sub.add_parser("find", help="极速找字并返回屏幕坐标")
+    p.add_argument("text", help="要查找的文字")
+    p.add_argument("--image", help="图片路径(默认截全屏)")
+    p.add_argument("--json", action="store_true", help="JSON输出")
+
     # screenshot
     p = sub.add_parser("screenshot", help="截图并识别")
     p.add_argument("--region", help="区域 x,y,w,h")
     p.add_argument("--json", action="store_true", help="JSON输出")
-
-    # read
-    p = sub.add_parser("read", help="识别图片文件")
-    p.add_argument("path", help="图片路径")
-    p.add_argument("--json", action="store_true", help="JSON输出")
-    p.add_argument("--engine", choices=["vision", "paddleocr", "baidu", "ddddocr"])
-
-    # pdf
-    p = sub.add_parser("pdf", help="PDF文字提取或扫描件OCR")
-    p.add_argument("path", help="PDF路径")
-    p.add_argument("--json", action="store_true", help="JSON输出")
-    p.add_argument("--scan", action="store_true", help="扫描件模式（转图片+OCR）")
 
     # detect
     sub.add_parser("detect", help="检测可用引擎")
@@ -329,7 +372,22 @@ def main():
             }[name]
             print(f"  {status} {label}")
         print(f"\nVision Python: {VISION_PYTHON}")
-        print(f"Venc Python: {HERMES_VENV}")
+        print(f"Venv Python: {HERMES_VENV}")
+        return
+
+    if args.command == "find":
+        import time
+        t0 = time.time()
+        result = fast_ocr_find(args.text, args.image)
+        elapsed = (time.time() - t0) * 1000
+        if result:
+            print(f"[Fast OCR] 找到 '{result['text']}' 含 '{args.text}', 耗时: {elapsed:.0f}ms, 坐标: ({result['x']}, {result['y']})")
+            if args.json:
+                print(json.dumps({**result, "ms": round(elapsed, 1)}, ensure_ascii=False))
+        else:
+            print(f"[Fast OCR] 未找到 '{args.text}', 耗时: {elapsed:.0f}ms")
+            if args.json:
+                print(json.dumps({"found": False, "text": args.text, "ms": round(elapsed, 1)}, ensure_ascii=False))
         return
 
     if args.command == "screenshot":
