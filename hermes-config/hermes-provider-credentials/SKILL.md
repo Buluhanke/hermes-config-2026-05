@@ -265,6 +265,75 @@ Hermes 的模型降级按顺序走：**主模型 → fallback_model → fallback
 
 注意 `fallback_providers` 是列表，支持多个兜底按顺序尝试。
 
+### minimax-cn provider 的 BASE_URL 陷阱
+
+⚠️ **已踩坑教训**：`.env` 中的 `MINIMAX_CN_BASE_URL` 不能设为 `https://api.minimaxi.com/anthropic`（多了 `/anthropic` 后缀），这会导致 API 调用失败。
+
+正确配置：
+```bash
+# ~/.hermes/.env
+MINIMAX_CN_API_KEY=your_key_here
+MINIMAX_CN_BASE_URL=https://api.minimaxi.com/v1
+```
+
+这是 **minimax-cn** provider（从 .env 读取 env var）的 native base_url，与 v2.aicodee.com 中转不同。
+
+### 中转+直连双路由配置（MiniMax 示例）
+
+用户实际需求：中转额度用完 → 自动切直连。需要配置**主模型走中转**、**fallback 走直连**：
+
+```bash
+# config.yaml 修改（Python yaml 模块）
+cfg['model'] = {
+    'default': 'MiniMax-M2.7-highspeed',   # 中转可用模型（非 plain M2.7）
+    'provider': 'custom',                    # 走 v2.aicodee.com
+    'base_url': 'https://v2.aicodee.com/v1',
+    'api_key': 'your_key...',
+    'temperature': 0.7,
+    'top_p': 0.95,
+    'max_tokens': 8192
+}
+cfg['fallback_providers'] = [
+    {'provider': 'minimax-cn', 'model': 'MiniMax-M2.7'}  # 直连 plain M2.7
+]
+# 删除 fallback_model（避免双重兜底）
+cfg.pop('fallback_model', None)
+```
+
+验证命令：
+```bash
+hermes fallback list
+# 期望输出：
+# Primary:   MiniMax-M2.7-highspeed  (via custom)
+# Fallback chain (1 entry):
+#     1. MiniMax-M2.7  (via minimax-cn)
+```
+
+**关键区别**：中转平台 v2.aicodee.com 的 MiniMax 模型名是 `M2.7-highspeed`（带后缀），而 minimax-cn 直连的是 `MiniMax-M2.7`（plain）。
+
+### fallback_providers 写入格式（YAML 列表）
+
+⚠️ 用 `hermes config set fallback_providers "value"` 会把列表序列化为字符串写入，导致 Hermes 读取时变成字符串而非列表。
+
+正确做法：**直接用 Python yaml 模块写入 Python list 对象**，不要通过 hermes CLI 传字符串。
+
+```python
+import yaml
+with open('~/.hermes/config.yaml') as f:
+    cfg = yaml.safe_load(f)
+cfg['fallback_providers'] = [
+    {'provider': 'minimax-cn', 'model': 'MiniMax-M2.7'},
+    {'provider': 'deepseek', 'model': 'deepseek/deepseek-v4-flash', 'base_url': 'https://api.deepseek.com'}
+]
+with open('~/.hermes/config.yaml', 'w') as f:
+    yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+```
+
+**hermes fallback list** 输出里如果看到重复条目（如 deepseek-v4-flash 出现多次），说明旧的 `fallback_model` 没删干净，需要手动删除：
+```python
+cfg.pop('fallback_model', None)
+```
+
 ### 修改后必做 YAML 格式验证
 
 ```bash

@@ -50,7 +50,7 @@ Skills for building, deploying, and orchestrating autonomous AI agents — frame
 This skill governs: agent frameworks, tool integrations that extend agent capabilities (browser, code execution, APIs), multi-agent orchestration patterns, and delegation to external agent processes.
 
 ## References
-- `references/browser-use.md` — Local browser automation for AI agents
+- `references/hermes-model-routing.md` — Hermes模型路由配置：三层路由设置、fallback_providers格式、智能路由vs故障切换区别、v2.aicodee.com定位、额度触发切换正确路径
 - `references/ai-website-login.md` — AI网站登录踩坑记录（browser工具Chrome profile隔离问题）
 - `references/ai-website-login-2026-05-30.md` — 2026-05-30最新session：Chrome双实例隔离确认、批量JS开标签、CDP端口状态、各网站验证类型、唯一可行解法（用户在browser工具Chrome手动登录）
 - `references/hermes-voice-stt.md` — Hermes语音/STT架构：各平台ASR优先级、stt.local.model配置、faster-whisper模型选择（QQ走腾讯/Telegram走本地）

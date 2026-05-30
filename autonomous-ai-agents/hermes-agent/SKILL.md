@@ -882,7 +882,56 @@ Ollama runs as a resident background service (`ollama serve`, ~98MB RSS). Models
 - `qwen2.5:1.5b` = 986MB model file
 - Models loaded = +~2-3GB RSS per model
 - Models unloaded = 0MB (memory released)
+**Recommendation:** Keep Ollama resident. Cold start latency (a few seconds) is worse than the ~98MB baseline cost. No need for idle-exit/auto-reap setup.
 
+### Three-Tier Model Routing (Fallback Chain)
+
+The fallback chain provides prioritized fail-over when the primary model is unavailable or exhausted. The chain is configured via `fallback_providers` (list format) in `config.yaml`, read by `fallback_config.py::get_fallback_chain()`.
+
+**Verify the chain:**
+```bash
+hermes fallback list
+```
+
+**Current working three-tier config (primary → MiniMax → DeepSeek direct):**
+- Primary: `deepseek/deepseek-v4-flash` via `custom` provider (`v2.aicodee.com` relay)
+- Fallback 1: `MiniMax-M2.7` via `minimax-cn`
+- Fallback 2: `deepseek/deepseek-v4-flash` via `deepseek` (`api.deepseek.com` direct)
+
+See `references/fallback-chain-config.md` for the exact working `config.yaml` block and the Python script used to write it.
+
+**⚠️ Pitfall: `hermes config set` corrupts YAML list values**
+
+`hermes config set fallback_providers "[{'provider': 'minimax-cn', ...}]"` stores the value as a literal string (with quotes and braces intact), not a YAML list. The config parses as a string, not a list of dicts, and `fallback_config.py` silently skips it.
+
+**Correct approach — Python yaml module:**
+```python
+import yaml
+with open('/Users/aimac/.hermes/config.yaml') as f:
+    cfg = yaml.safe_load(f)
+cfg['fallback_providers'] = [
+    {'provider': 'minimax-cn', 'model': 'MiniMax-M2.7'},
+    {'provider': 'deepseek', 'model': 'deepseek/deepseek-v4-flash', 'base_url': 'https://api.deepseek.com'}
+]
+with open('/Users/aimac/.hermes/config.yaml', 'w') as f:
+    yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+```
+
+**⚠️ Pitfall: `fallback_model` legacy dict takes priority**
+
+If both `fallback_model` (dict, old format) and `fallback_providers` (list, new format) exist in config, `fallback_config.py::get_fallback_chain()` reads both, with `fallback_providers` entries first. Entries targeting the same provider/model/base_url are deduplicated. The legacy dict is migrated on first write to `fallback_providers` but is not auto-deleted.
+
+**Always delete legacy `fallback_model` when migrating:**
+```python
+if 'fallback_model' in cfg:
+    del cfg['fallback_model']
+```
+
+**⚠️ Pitfall: Primary model appears in fallback chain**
+
+`fallback_config.py` deduplicates by `(provider, model, base_url)`. If primary uses `custom` provider with `deepseek/deepseek-v4-flash` and fallback 2 also uses `deepseek` provider with the same model, they are different entries (different `base_url`). This is intentional — same model via different routes.
+
+If you want a distinct兜底 model, use `deepseek/deepseek-chat` or `deepseek-ai/DeepSeek-V3` for the direct endpoint instead of reusing `deepseek-v4-flash`.
 **Recommendation:** Keep Ollama resident. Cold start latency (a few seconds) is worse than the ~98MB baseline cost. No need for idle-exit/auto-reap setup.
 
 ### Gemini API Key for Vision (aistudio.google.com)
