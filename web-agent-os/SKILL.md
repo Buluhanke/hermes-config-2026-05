@@ -35,6 +35,7 @@ observe() → encode_state() → GoalController.filter() → UCB1.select()
 
 - `~/hermes_web_agent_os.py` — 完整30KB可运行版本（单文件，7组件全内置）
 - `~/hermes_v3_demo/` — 工程化项目（多模块，fake_site测试环境，可直接在主机终端运行）
+- `references/tool-inventory-check.md` — 68工具分类核查记录（快速验证命令）
 
 ## 运行
 
@@ -48,10 +49,24 @@ cd ~/hermes_v3_demo
 python3 start_demo.py --goal 登录 --goal 加入购物车
 ```
 
+## 已解决：CDP WebSocket 接入方案
+
+**问题**：execute_code 沙盒与主机 Chrome CDP 端口（9333）网络隔离，Playwright connect_over_cdp 也有 bug（context.pages 为空）。
+
+**解法**：不通过 Playwright，直接用 websockets 连接 `ws://127.0.0.1:9333`，由 Hermes Agent 工具层在 host 上下文执行。`dom_tools.py` 已注册为内置工具。
+
+```python
+# 复用已有 Chrome 登录态的正确方式
+BROWSER_CDP_URL=ws://127.0.0.1:9333  # 不修改 config.yaml，用环境变量
+```
+
+### 相关工具
+- `dom_tools.py`（`~/.hermes/hermes-agent/tools/`）— 生产级注册工具：`dom_snapshot`、`dom_click`、`dom_fill`、`dom_tabs`
+- 详见 `dom-js-inject` skill
+
 ## 已知限制
 
 1. subprocess超时：在sandbox环境不要用subprocess跑完整agent，直接terminal跑或execute_code内联测试。
-2. **沙盒网络隔离**：execute_code 沙盒与主机 Chrome CDP 端口（9333）网络隔离。HTTP `/json` 端点可访问（返回 target 列表），但 WebSocket 连接建立后响应回不来（超时）。CDP WebSocket 只在主机本地进程内直接调用时有效。
-3. **CDP Target 生命周期**：Chrome 每次 Page.navigate 后旧的 DevTools target 可能被 detach。`/json` 返回 0 targets ≠ Chrome 关闭（可能是所有标签页都关了），导航后 target ID 会更新。
-4. **Hermes 工具 + Python Agent 的正确架构**：多步 agent 循环中，用 Hermes `browser_navigate`/`browser_snapshot` 控制浏览器（工具层在 host 上下文），Agent 逻辑写在独立 Python 脚本里用 `terminal` 或直接在 host 终端跑。不要在 execute_code 里做跨多 CDP call 的长循环。
-5. **浏览器 snapshot 可能为空**：即使页面已加载，`browser_snapshot` 有时返回空列表（Chrome 渲染尚未完成）。bridge.py 已带重试。
+2. **CDP Target 生命周期**：Chrome 每次 Page.navigate 后旧的 DevTools target 可能被 detach。`/json` 返回 0 targets ≠ Chrome 关闭（可能是所有标签页都关了），导航后 target ID 会更新。
+3. **Hermes 工具 + Python Agent 的正确架构**：多步 agent 循环中，用 Hermes `browser_navigate`/`browser_snapshot` 控制浏览器（工具层在 host 上下文），Agent 逻辑写在独立 Python 脚本里用 `terminal` 或直接在 host 终端跑。不要在 execute_code 里做跨多 CDP call 的长循环。
+4. **浏览器 snapshot 可能为空**：即使页面已加载，`browser_snapshot` 有时返回空列表（Chrome 渲染尚未完成）。bridge.py 已带重试。

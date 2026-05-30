@@ -70,6 +70,20 @@ find_and_open_app("Safari")
 - 找元素需要描述尽量具体："发送按钮" 比 "按钮" 效果好
 - 文件对话框目前需要手动介入（VLM无法操作 macOS 原生文件选择器）
 
+## 闭环验证（2026-05-31）
+
+**浏览器表单提交任务：感知→执行→验证 完整跑通**
+
+- `browser_snapshot` AX Tree: 8ms, 19元素, ref索引精准
+- `browser_type`: 输入文本 "Hermes AI Agent" 
+- `browser_click`: 点击Submit按钮
+- 验证：页面更新为 "Submitted Form Data"
+
+**结论：**
+- 感知层(AX Tree 8ms) + 执行层(browser_click) 闭环成功
+- Hermes可作为真人化AI Agent执行桌面任务
+- 无需VLM兜底，CDP+AX Tree方案足够快且准
+
 ---
 
 ## 快眼 OCR（Apple Vision，原生极速）
