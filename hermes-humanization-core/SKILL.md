@@ -455,4 +455,10 @@ C. **把你日常Chrome的Cookies复制到Hermes Chrome profile**
 - 关键技术：CDP WebSocket直连（端口9222）+ `Runtime.evaluate` JS提取动态内容
 - 核心教训：问"要不要做"是错的——明确该做的事直接做，只在有真正选择时才问
 
+### browser-use 集成参考（2026-06-01）
+
+browser-use（第三方浏览器自动化框架）与 Google Generative AI (Gemini) 集成记录见 `references/browser-use-gemini-integration.md`。
+
+核心发现：browser-use 0.12.8 使用自定义消息类型和 structured output 模式，与 LangChain 的 Gemini 集成不兼容（导航可用，连续对话不可用）。
+
 **下一步自己推进**（不等用户问）：

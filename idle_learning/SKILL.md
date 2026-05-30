@@ -84,14 +84,16 @@ Skills 采用 `category/skill-name/` 子目录结构，`hermes skills list` 显�
 - 两者完全不同的数据！用远程库判断本地是否安装会导致误判
 - **正确做法**：检查本地模型时必须用 `127.0.0.1:11434`，不能用公网 API
 
-**已确认本地 Ollama 模型（2026-05-30 实测）**：
+**已确认本地 Ollama 模型（2026-05-30 实测，⚠️ 2026-05-30 重大更正）**：
 ```
-ahmadwaqar/smolvlm2-agentic-gui:latest  ✅（screen_trigger_handler 在用）
-qwen3-vl:2b                            ✅
-qwen2.5:1.5b                           ✅
-nomic-embed-text:latest                ✅
+qwen2.5:1.5b                           ✅ 0.92 GB
+qwen3-vl:2b                            ✅ 1.76 GB
+
+ahmadwaqar/smolvlm2-agentic-gui:latest ❌ 已从本地移除（2026-05-30 发现）
+nomic-embed-text:latest                ❌ 已从本地移除
 ```
 ⚠️ 注意：上述是 `127.0.0.1:11434` 返回的本地安装模型，不是 api.ollama.com 的远程库
+⚠️ smolvlm2-agentic-gui 从本地消失，screen_trigger_handler 无法正常执行场景分析，需等待 github.com 恢复后重新 pull
 
 **候选新模型：maternion/lfm2.5:8b-a1b（2026-05-28 新发布）**：
 - Liquid AI LFM2.5-8B-A1B，MoE架构（8.3B total / 1.5B active）
@@ -388,20 +390,26 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - ✅ **正确 workaround**：直接调 `curl http://127.0.0.1:11434/api/tags`（返回 ~1.4KB，正常）
 - ⚠️ **curl 偶尔也超时**：即使 Ollama 正常，`curl` 在 10s 内返回但 15s+ 可能超时；建议用 `timeout=10` 的 curl 调用
 - ✅ `ollama.chat()` 正常工作（不受影响）
-- 检查模型时必须用 curl 方式，不能直接调用 ollama.list() CLI 或 Python API
+- ⚠️ **Python ollama 模块位置**：Ollama Python SDK 不在 hermes-agent venv（Python 3.11），而在 `/usr/local/bin/python3`（系统 Python）
+  - hermes venv: `/Users/aimac/.hermes/hermes-agent/venv/bin/python3` → `ModuleNotFoundError: ollama`
+  - 系统 Python: `/usr/local/bin/python3` → `import ollama` ✅ 正常
+  - cron 脚本若用 hermes venv 的 python3 执行 `import ollama` 会失败
+  - **解决方法**：写 .py 文件后用 `/usr/local/bin/python3` 执行（已通过实测验证）
 
-**检查本地模型的正确方法（Ollama Python API + Pydantic v2）**：
-```python
-import ollama
-models = ollama.list()
-for m in models.models:
-    print(f"  {m.model}")
-    print(f"    size: {m.size / (1024**3):.2f} GB")
-    print(f"    params: {m.details.parameter_size}")
-    print(f"    format: {m.details.format}")
-    print(f"    quantization: {m.details.quantization_level}")
+**检查本地模型的正确方法（curl 方式，避免 Python API 超时）**：
+```bash
+# ✅ 正确：用 curl（快，稳，不超时）
+curl -s --max-time 8 http://127.0.0.1:11434/api/tags | python3 -c "
+import sys,json
+d=json.load(sys.stdin)
+for m in d.get('models',[]):
+    print(m['name'], '|', round(m['size']/(1024**3), 2), 'GB')
+"
+
+# ❌ 错误：用 ollama.list() Python API（hermes venv 无 ollama 模块）
+/usr/local/bin/python3 -c "import ollama; print(ollama.list())"  # 超时
 ```
-⚠️ **关键发现（2026-05-28）**：`ollama.list()` CLI 在 cron 环境被 script-execution 策略拦截，但 `ollama.chat()` 正常工作。检查模型时必须用 Python API 写文件方式，不能直接调用 CLI。
+⚠️ **重要**：ollama Python SDK 在系统 Python（`/usr/local/bin/python3`），不在 hermes-agent venv（`~/.hermes/hermes-agent/venv/bin/python3`）。直接调用 `python3` 用的是 hermes venv，会报 `ModuleNotFoundError: ollama`。
 
 **⚠️ Ollama API 端点关键陷阱（2026-05-30 实测）**：
 - `/api/generate` 处理 1920x1080 截图需 41.6s → 容易触发 120s 超时
@@ -426,6 +434,7 @@ for m in models.models:
 **测试 smolvlm2 的正确 cron 写法**：
 ```python
 # /tmp/test_smolvlm.py — 写入文件后调用
+# ⚠️ 必须用 /usr/local/bin/python3，不能用 hermes venv python3（无 ollama 模块）
 import ollama
 import time
 
@@ -449,7 +458,7 @@ print(response['message']['content'])
 ```bash
 # 执行步骤
 screencapture -x /tmp/test_screen.png
-python3 /tmp/test_smolvlm.py
+/usr/local/bin/python3 /tmp/test_smolvlm.py  # ⚠️ 用系统 Python，不是 hermes venv
 ```
 
 **候选新模型：maternion/lfm2.5:8b-a1b（2026-05-28 HN Show，18pts）**：
@@ -460,14 +469,16 @@ python3 /tmp/test_smolvlm.py
 - 潜在价值：作为通用推理备选（替换 qwen2.5:1.5b）
 - ⚠️ Tiny-vLLM（同一 HN Show 项目）细节获取失败，未能验证性能数据
 
-**已确认本地 Ollama 模型（2026-05-30 实测）**：
+**已确认本地 Ollama 模型（2026-05-30 实测，⚠️ 2026-05-30 重大更正）**：
 ```
-ahmadwaqar/smolvlm2-agentic-gui:latest  ✅（screen_trigger_handler 在用）
-qwen3-vl:2b                            ✅
-qwen2.5:1.5b                           ✅
-nomic-embed-text:latest                ✅
+qwen2.5:1.5b                           ✅ 0.92 GB
+qwen3-vl:2b                            ✅ 1.76 GB
+
+ahmadwaqar/smolvlm2-agentic-gui:latest ❌ 已从本地移除（2026-05-30 发现）
+nomic-embed-text:latest                ❌ 已从本地移除
 ```
 ⚠️ 注意：上述是 `127.0.0.1:11434` 返回的本地安装模型，不是 api.ollama.com 的远程库
+⚠️ smolvlm2-agentic-gui 从本地消失，screen_trigger_handler 无法正常执行场景分析，需等待 github.com 恢复后重新 pull
 
 **候选模型对比**（优先测试可 Ollama 直接拉取的，HF 镜像可用 hf-mirror.com 替代 huggingface.co）：
 
@@ -641,7 +652,8 @@ PYEOF
 - [Tiny-vLLM C++/CUDA 推理引擎调研](./references/tiny-vllm-2026-06-02.md) — HN 559分项目，从零构建 vLLM 精简版，含 30+ 章节课程大纲
 - [Idle Learning 2026-06-02 Session](./references/idle-learning-2026-06-02-session.md) — response 标准化修复，screen_watcher 链路实测
 - [Idle Learning 2026-06-02 发现：auto_execute DRY_RUN 日志为空根因](./references/idle-learning-2026-06-02-dryrun-log-empty.md) — unknown 场景不在 ACTION_WHITELIST 导致 dry-run 永不触发，修复方案
-- [昨夜系统冻结诊断（2026-05-30）](./references/screen-watcher-freeze-diagnosis-2026-05-30.md) — 凌晨02:50-03:10 handler进程堆积297次screencapture失败，根因+防护+诊断命令
+- [昨夜系统冻结诊断（2026-05-30）](./references/screen-watcher-freeze-diagnosis-2026-05-30.md)
+- [Hermes Agent 自我学习资源指南](./references/hermes-self-learning-resource-guide.md) — 用户固化：官方文档→GitHub→Discord→中文社区→技能市场 — 凌晨02:50-03:10 handler进程堆积297次screencapture失败，根因+防护+诊断命令
 
 ---
 

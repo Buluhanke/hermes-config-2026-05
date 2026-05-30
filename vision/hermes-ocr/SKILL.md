@@ -64,15 +64,42 @@ if check_pymupdf():      engines['pymupdf'] = True    # 双方皆有
 
 ## 安装依赖
 
-所有依赖已安装，无需额外操作。
+### 引擎环境分布
 
-| 引擎 | 依赖 | 安装命令 |
-|------|------|---------|
-| Vision OCR | macOS内置 | 无需安装 |
-| PaddleOCR | paddleocr | `pip install paddleocr` |
-| Baidu OCR | curl + .env | 已在.env配置 |
-| ddddocr | ddddocr | `pip install ddddocr` |
-| pymupdf | pymupdf | `pip install pymupdf` |
+| 引擎 | 位置 | Python路径 | 安装命令 |
+|------|------|-----------|---------|
+| Vision OCR | macOS内置 | `/opt/homebrew/bin/python3` | 无需安装 |
+| PaddleOCR | hermes-agent venv | `~/.hermes/hermes-agent/venv/bin/python3` | `uv pip install paddleocr --python <path>` |
+| ddddocr | Homebrew Python | `/opt/homebrew/bin/python3` | `/opt/homebrew/bin/python3 -m pip install ddddocr` |
+| pymupdf | hermes-agent venv | `~/.hermes/hermes-agent/venv/bin/python3` | `uv pip install pymupdf --python <path>` |
+| Baidu OCR | 云端API | .env配置 | 已配AppID 7699346 |
+
+### 验证命令
+
+```bash
+# 一键检测全部引擎
+~/.hermes/hermes-agent/venv/bin/python3 ~/.hermes/skills/vision/hermes-ocr/scripts/ocr.py detect
+
+# 或逐个验
+/opt/homebrew/bin/python3 -c "from Vision import VNRecognizeTextRequest; print('Vision: OK')"
+~/.hermes/hermes-agent/venv/bin/python3 -c "from paddleocr import PaddleOCR; print('PaddleOCR: OK')"
+/opt/homebrew/bin/python3 -c "import ddddocr; print('ddddocr: OK')"
+~/.hermes/hermes-agent/venv/bin/python3 -c "import fitz; print(f'pymupdf: {fitz.version}')"
+```
+
+### ⚠️ 恢复指南
+
+PaddleOCR和pymupdf装在hermes-agent venv里，如果清理/重建venv会丢失。恢复命令：
+
+```bash
+# PaddleOCR（~300MB依赖，需等几分钟）
+uv pip install paddleocr --python ~/.hermes/hermes-agent/venv/bin/python3
+
+# pymupdf
+uv pip install pymupdf --python ~/.hermes/hermes-agent/venv/bin/python3
+```
+
+**注意**：系统pip受PEP 668保护，不能用普通`pip install`。一律用 `uv pip install --system` 或 `uv pip install --python <venv_path>`。Vision OCR只能走Homebrew Python（有pyobjc）。
 
 ## 快速找字（屏幕坐标）
 

@@ -508,6 +508,7 @@ EOF
 | references/perception_loop_verification_20260531.md | 感知层闭环验证（2026-05-31实测） |
 | references/agent-tars-cli实测-20260530.md | Agent TARS CLI实测记录 |
 | references/1688-captcha-automation-20260530.md | 1688自动化验证码瓶颈 |
+| references/computer-use-agents-2026-06-02.md | Computer Use & GUI Agents 2026 SOTA — trycua/cua, Agent-S, benchmarks, hybrid architectures |
 | references/ai-websites-evolution-advice-20260531.md | 6个AI网站第一轮建议 + 已实现组件 |
 | references/ai-websites-browser-automation-survey-20260601.md | 6平台第二轮browser自动化建议汇总（Browser-Use/Stagehand/CrewAI/Steel） |
 
@@ -527,6 +528,35 @@ Cronjob `自我进化-夜间学习`（job_id: 8834c6edfa07）执行结果：
 - 1688验证码是阿里自研壁垒，NopeCHA不支持
 - 反检测已解决（Camofox+patchright+nodriver），平台关注身份而非行为
 - MCP Catalog为空是fork差异，非功能损坏
+
+## 2026 Computer Use SOTA（2026-06-02 新增）
+
+**来源**：`references/computer-use-agents-2026-06-02.md`（browser_console JS分片提取 Zylos Research 长文）
+
+**核心框架**：
+- **trycua/cua**（17.3k GitHub stars）：开源 CUA 基础设施，支持 macOS/Linux/Windows 沙箱
+- **Agent-S**（11.7k stars）：memory augmented hierarchical planning + grounding，架构与 Hermes auto_execute 高度相关
+
+**2026 技术共识：Hybrid 架构**：
+- Screenshot-Based（通用但 token 高、延迟高）
+- Accessibility Tree（高效精确但平台受限）
+- DOM/View Hierarchy（网页最精准但仅限 Web）
+- 生产系统默认 DOM/accessibility，vision 降级到非标准布局
+
+**Benchmark 关键数据**：
+- WebArena 最佳 71.2%，生产系统 50-60%
+- WebVoyager：Browser-Use(hybrid) 89.1% vs Agent-E(accessibility-only) 73.1%
+- OSWorld：人类 72.36%，最佳 Agent ~12.24%（grounding 差距大）
+- AndroidWorld：Mobile-use 达 100%
+
+**Hermes 改进方向**：
+1. **验证循环**：关键动作后 re-screenshot 确认（如点 Submit 后验证是否成功提交）
+2. **Accessibility Tree**：macOS Accessibility API 获取结构化元素列表（低 token + 快速）
+3. **Agent-S memory pattern**：episodic + narrative memory 整合
+
+**详见**：`references/computer-use-agents-2026-06-02.md`
+
+---
 
 ## 风格高压线（2026-05-30强化，2026-05-31再次强化）
 
@@ -569,15 +599,23 @@ Cronjob `自我进化-夜间学习`（job_id: 8834c6edfa07）执行结果：
 
 ### 本地VLM方案实测结果（2026-06-01）
 
-**Ollama可用模型对比**：
+**Ollama可用模型对比**（2026-05-30 实测修正）：
 | 模型 | 大小 | 响应时间 | 可用性 | 备注 |
 |------|------|---------|--------|------|
-| smolvlm2-agentic-gui | 1.85GB | **7s** | ✅ | 专为GUI设计，macOS最优本地VLM |
-| qwen3-vl:2b | 1.9GB | ~90s超时 | ⚠️ | 太慢，暂不使用 |
-| qwen3-vl:8b | 6.1GB | 未测试 | ✅ | 可备选 |
+| smolvlm2-agentic-gui | 1.85GB | **7s** | ❌ 已移除 | 2026-05-30 从本地 Ollama 消失，需重新 pull |
+| qwen3-vl:2b | 1.9GB | ~90s超时 | ⚠️ 慢 | 通用视觉，screen_trigger_handler 不适用 |
 | qwen2.5:1.5b | 0.99GB | ~10s | ✅ | 纯文本，无视觉 |
+| qwen3-vl:8b | 6.1GB | 未测试 | ✅ | 可备选，但 M4 24GB 内存压力 |
 
-**结论**：smolvlm2-agentic-gui（7s/步）是当前Mac mini M4最优选择。
+**⚠️ 2026-05-30 重大发现**：Ollama 服务正常运行（进程驻留），但 smolvlm2-agentic-gui 模型文件已从本地删除。当前仅剩 2 个模型：qwen2.5:1.5b 和 qwen3-vl:2b。
+
+**恢复方案**：
+```bash
+# github.com 恢复后执行
+ollama pull ahmadwaqar/smolvlm2-agentic-gui:latest
+```
+
+**结论**：smolvlm2-agentic-gui（7s/步）是当前 Mac mini M4 最优本地 VLM 方案，但已从本地消失，需等待 github.com 恢复后重新拉取。
 
 **在线AI API卡点（2026-06-01实测）**：
 - GLM 4V（智谱）：429额度耗尽

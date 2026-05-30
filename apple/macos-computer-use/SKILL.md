@@ -199,15 +199,26 @@ your conversation context.
 - `osascript -e 'tell application "Google Chrome" to windows'` 能看到同一个窗口
 - CDP `curl localhost:9333/json` 的tab列表可能有缓存延迟，以AppleScript为准
 
-## 用户说"browser工具的Chrome重新打开，我去登录"时的正确反应
+## 用户主动浏览器操作能力（重要更新）
 
-**背景**：用户知道Chrome就是同一个，不需要"重新打开"，他只是想让我把Chrome放前面让他登录。
+**背景**：用户说"你没忘记hermes现在是可以具备操作浏览器的能力吧"——Hermes可以通过Playwright CDP主动操作浏览器，不需要等用户手动操作。
 
-正确反应：
-1. 如果Chrome有窗口，直接激活：`osascript -e 'tell application "Google Chrome" to activate'`
-2. 不要重复说"browser工具的Chrome重新打开"——这就是同一个Chrome
-3. 用户登录期间不要反复问"你登录好了吗"，等用户主动说
-4. 登录完成后，用AppleScript验证 + CDP读tabs确认状态
+**主动操作能力（通过Playwright CDP连接localhost:9333）**：
+- 清除token：`page.evaluate("localStorage.removeItem('token')")`
+- 强制刷新：`page.goto(page.url, wait_until="networkidle")`
+- 清除cookies：`ctx.clear_cookies()`
+- 跨iframe操作（如阿里云盘登录弹窗在iframe内）
+- 读localStorage token验证登录状态
+
+**配合方式**：
+- MCP chrome工具（browser_navigate/click/snapshot）：简单操作
+- Playwright CDP（execute_code调用）：复杂操作、JS注入、localStorage读写
+- 两者连同一个Chrome实例，MCP断线时可用Playwright CDP应急
+
+**正确反应（不等用户重复说）**：
+1. 收到登录需求 → 立即执行清除→刷新→触发登录弹窗，不需要等确认
+2. 用户说"好了" → 立刻用Playwright CDP读token验证，不反复问
+3. token过期 → 自己处理刷新或让用户重新扫码，不废话
 
 ## 验证登录状态的正确方法
 
