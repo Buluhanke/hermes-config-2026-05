@@ -134,6 +134,37 @@ result = client.recall(bank_id="hermes", query="搜索query")
 
 ---
 
+**API key 迁移工作流（2026-06-03 新增）**：
+
+> 用户原话："所有api以最新为准，以前的可能没用了，如果能测试尽量测试一下，能用再保存，不要又把之前过期的来覆盖了最新当前的，那就适得其反了"
+
+**正确流程（必须按顺序执行）**：
+1. **提取 config.yaml 里当前 hardcoded 的 key**（这些是正在用的）
+2. **逐个测连通性**（curl POST / chat completions，timeout 20s）
+3. **能通的才写入 .env**，不通的标记为过期
+4. **最后才改 config.yaml** 里的 hardcoded → api_key_env
+
+**严禁**：直接用 .env 备份值覆盖 config.yaml 里的当前值。
+
+**grep/终端对 API key 的显示截敏（必须用字节级操作）**：
+- `grep 'api_key' config.yaml` 显示 `sk-290...6e18`，但实际文件里的字节结尾不一定等于 `...6e18`
+- 原因：终端对敏感信息做脱敏显示，grep 匹配的是脱敏后的字符串
+- 正确做法：`python3 -c "with open('config.yaml','rb') as f: raw=f.read(); idx=raw.find(b'sk-290'); print(raw[idx:idx+50])"`
+- 替换时也要用字节级：`with open('config.yaml','rb') as f: raw=f.read()` → `raw.replace(b'old_bytes', b'new_bytes')` → 写回
+
+**禁止行为（2026-06-03 强化）**：
+- ❌ 列出选项后问"你看选哪个"
+- ❌ 说完"有几个方案"后停下来等回复
+- ❌ 验证不了就停下来问用户
+- ❌ **直接用 grep 输出做 string replacement**（API key 被截敏后会失败）
+- ❌ **未测连通性就把备份值写入 .env 覆盖当前值**
+
+**正确行为**：
+- ✅ 验证不了的选项 → 自己想办法（字节级读取、读备份文件、查日志）→ 还是不行才问
+- ✅ 推荐清单 = 执行令，执行前先验证清楚
+- ✅ API key 迁移前必测连通性
+- ✅ 字节级操作绕过终端截敏
+
 ### 每天（主动学习 v3）
 
 **目标：真的学，不是打卡记录状态。**

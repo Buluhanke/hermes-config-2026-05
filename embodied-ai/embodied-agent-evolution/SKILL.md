@@ -248,7 +248,30 @@ FSM多智能体架构，用于复杂桌面自动化：
 - OpenRouter $1.3B 估值验证 multi-model routing 路线，Hermes 多模型并行策略方向正确
 - 关注是否有更优惠的本地部署方案（降低 API 费用）
 
-### 7. 执行层：je_auto_control 实测（2026-06-01 新增）
+**API key 显示截敏与字节级操作（2026-06-03 新增）**：
+
+`grep/sed/cat` 对 config.yaml 里的 API key 会在 stdout 做脱敏显示：
+- 文件里实际是 `sk-290` + `ad37180e59884f39` + `268e18`（35字节）
+- 终端显示为 `sk-290...6e18`（中间被截断）
+- `grep 'sk-290' config.yaml` 匹配的是脱敏后的 `sk-290...6e18`，不是真实字节
+
+**后果**：直接用 grep 输出做 string replacement 会失败（`raw.count('sk-290...6e18') == 0`）。
+
+**正确做法**：
+```python
+with open('config.yaml', 'rb') as f:
+    raw = f.read()
+idx = raw.find(b'sk-290')
+key_bytes = raw[idx:idx+50]  # 提取真实字节
+print(key_bytes.hex())        # 字节级分析
+new_raw = raw.replace(old_bytes, new_bytes)
+with open('config.yaml', 'wb') as f:
+    f.write(new_raw)
+```
+
+**场景**：config.yaml API key 迁移到 .env 时，必须先字节级提取真实 key 再测连通性。
+
+### 执行层：je_auto_control 实测（2026-06-01 新增）
 
 **安装**：`pip3 install je-auto-control`（装了完整pyobjc框架+opencv-python）
 

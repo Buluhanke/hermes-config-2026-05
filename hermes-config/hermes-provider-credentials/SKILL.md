@@ -216,6 +216,56 @@ sed -i '' '/^credential_pool_strategies:/,/^[a-z]/ {
 
 所有 API keys 统一存在 `~/.hermes/.env`，config.yaml 通过变量引用。禁止在 config.yaml 中出现明文 key。
 
+**黄金准则：config.yaml 里正在运行的 = 真实权威值。**
+
+当 .env 和 config.yaml 都有同一个 key 时，以 config.yaml 里正在被 Hermes 实际使用的为准。不要用 .env 里的旧值覆盖 config.yaml 正在用的值。
+
+### 正确流程：检查 → 测试 → 归集
+
+**场景：用户要求整理所有 API key**
+
+1. **从 config.yaml 提取当前正在用的 key**（这些是实际生效的）
+2. **用 curl 直接测试每个 key 的连通性**（HTTP 200 = 有效，403/429/401 = 过期/失效）
+3. **能通的才写入 .env**，失效的从 config.yaml 中移除 provider 条目
+4. **不要先入为主认为 .env 里的 key 是新的** — 必须逐个实测
+
+**典型错误**：用户给了新的 Cerebras key (csk-5859...)，但 .env 里存的是旧 Cerebras key。如果不加分辨地用 .env 旧值覆盖 config.yaml 里用户刚给的新值，就适得其反。
+
+**验证 Python 脚本（.env 里的 key 被 `***` 过滤了，直接读原始字节）：**
+```python
+import subprocess, json
+env = {}
+with open('/Users/aimac/.hermes/.env', 'rb') as f:
+    for line in f:
+        line = line.decode('utf-8', errors='replace').strip()
+        if '=' in line and not line.startswith('#'):
+            k, v = line.split('=', 1)
+            env[k] = v
+
+# 测试
+tests = [
+    ('AICODEE', 'https://v2.aicodee.com/v1/chat/completions', env.get('AICODEE_API_KEY',''), 'MiniMax-M2.7-highspeed'),
+    ('Groq', 'https://api.groq.com/openai/v1/chat/completions', env.get('GROQ_API_KEY',''), 'llama-3.3-70b-versatile'),
+    ('Cerebras', 'https://api.cerebras.ai/v1/chat/completions', env.get('CEREBRAS_API_KEY',''), 'llama-3.3-70b-versatile'),
+    ('DeepSeek', 'https://api.deepseek.com/chat/completions', env.get('DEEPSEEK_API_KEY',''), 'deepseek-chat'),
+    ('MiniMax-CN', 'https://api.minimaxi.com/v1/chat/completions', env.get('MINIMAX_CN_API_KEY',''), 'MiniMax-M2.7'),
+    ('OpenRouter', 'https://openrouter.ai/api/v1/chat/completions', env.get('OPENROUTER_API_KEY',''), 'deepseek/deepseek-v4-flash'),
+]
+for name, url, key, model in tests:
+    if not key:
+        print(f'{name}: 无KEY')
+        continue
+    r = subprocess.run(['curl', '-s', '-w', '\n%{http_code}', '-X', 'POST',
+        url, '-H', f'Authorization: Bearer {key}',
+        '-H', 'Content-Type: application/json',
+        '-d', json.dumps({'model': model, 'messages': [{'role':'user','content':'ping'}], 'max_tokens': 5})],
+        capture_output=True, text=True, timeout=20)
+    parts = r.stdout.strip().split('\n')
+    code = parts[-1]
+    ok = '✅' if code == '200' else f'❌ {code}'
+    print(f'{ok} {name}: HTTP {code}')
+```
+
 ### 三层引用方式
 
 ```yaml
