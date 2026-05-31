@@ -19,30 +19,34 @@ trigger: 当用户说"你生病了"/"你坏了"/"怎么不动了"/"你没反应"
 `hermes doctor` 全量跑要120秒（26个并发API检查全卡住），改用定向探测：
 
 ```bash
-# 1. Docker容器状态
-docker ps -a --format '{{.Names}}\t{{.Status}}'
+# 1. Gateway进程
+ps aux | grep "hermes_cli.main gateway" | grep -v grep
 
-# 2. MCP进程健康（查stale——同一binary多个PID）
-ps aux | grep -E 'mcp-chrome|mcp-server' | grep -v grep
-# stale特征：同一binary有2个以上PID，其中一个start time很旧
+# 2. Chrome CDP端口（browser工具依赖）
+curl -s --max-time 2 http://localhost:9333/json/version > /dev/null 2>&1 && echo "CDP ok" || echo "CDP down"
 
-# 3. 端口监听
-netstat -an | grep LISTEN | grep -E '3000|5678|8000|8888|8899|9333|11434'
+# 3. Playwright可用性
+cd ~/.hermes && hermes-agent/venv/bin/python3 -c "from playwright.sync_api import sync_playwright; print('pw ok')" 2>/dev/null
 
-# 4. Chrome进程
-ps aux | grep 'Google Chrome' | grep 'remote-debugging-port=9333'
+# 4. ddgs搜索
+cd ~/.hermes && hermes-agent/venv/bin/python3 -c "from ddgs import DDGS; print('ddgs ok')" 2>/dev/null
 
-# 5. Ollama模型
-ollama list 2>/dev/null || echo "ollama not running"
+# 5. DeepSeek API（关键LLM）
+cd ~/.hermes && hermes-agent/venv/bin/python3 -c "
+import httpx
+key = open('.env').read().split('DEEPSEEK_API_KEY=')[1].split()[0]
+r = httpx.post('https://api.deepseek.com/chat/completions', headers={'Authorization':f'Bearer {key}'}, json={'model':'deepseek-chat','messages':[{'role':'user','content':'ping'}],'max_tokens':5}, timeout=5)
+print('DeepSeek:', r.status_code)
+"
 
 # 6. cron jobs
 hermes cron list 2>/dev/null || echo "no cron"
 
-# 7. 内存状态（查wired是否过高）
+# 7. 内存状态
 top -l 1 | grep PhysMem
 
 # 8. Gateway日志新鲜度
-tail -5 ~/.hermes/logs/gateway.log | grep -c "memory_monitor\|platform connected"
+tail -5 ~/.hermes/logs/gateway.log | grep -c "memory_monitor\\|platform connected"
 # 返回0说明Gateway可能僵死
 ```
 
@@ -73,76 +77,7 @@ tail -5 ~/.hermes/logs/gateway.log | grep -c "memory_monitor\|platform connected
 
 ## 常见故障自动修复方案
 
-### TTS生成失败（最常见）
-
-**症状**：`TTS generation failed` 或 生成杂音
-
-**自愈流程（自动，无需用户下令）**：
-```bash
-# 步骤1：测试当前provider
-echo "测试" | tts命令
-
-# 步骤2：自动切换provider（moss → edge → openai → local 循环）
-# 切换后等待gateway重启，再测试
-
-# 步骤3：记录到自愈日志
-echo "[$(date)] TTS自愈: $from_provider → $to_provider" >> ~/Brain_Lab/self_healing_log.md
-```
-
-**watchdog守护进程已激活**：
-- 每5分钟自动执行 `~/.hermes/scripts/self-healer-watchdog.sh`
-- 脚本检测：Gateway进程 / TTS合成 / 定时任务错误 / 磁盘空间
-- 异常时自动修复，全程无需用户参与
-- 日志写入 `~/Brain_Lab/self_healing_log.md`
-
-**已知TTS Provider切换顺序**（2026-05-29更新）：
-```
-edge（zh-CN-XiaoxiaoNeural，中文主力）
-  → edge合成失败 → openai（兜底）
-  → 若仍失败 → local（faster-whisper备用）
-```
-
-**注意**：Kokoro和Moss TTS已删除（只有英文voice，不支持中文语音合成）
-
-**完全修复代码示例**：
-```python
-# 自动循环尝试所有可用TTS provider
-providers = ['edge', 'openai', 'local']
-for p in providers:
-    result = subprocess.run(['hermes', 'config', 'set', 'tts.provider', p], capture_output=True)
-    sleep(2)
-    subprocess.run(['hermes', 'gateway', 'restart'], capture_output=True)
-    sleep(5)
-    test = text_to_speech("测试")
-    if test.success:
-        return f"修复成功，当前provider={p}"
-```
-
-### TTS切换后Gateway重启策略
-
-**经验值（2026-05-28验证）**：
-- 切provider → 等 `2秒` + `hermes gateway restart` → 等 `5秒` 再测试
-- 重启太快会导致新provider还没加载完就测试，容易误判失败
-- 连续2次测试失败才判定该provider不可用，切下一个
-
-### watchdog防震荡逻辑（关键！）
-
-**问题**：TTS异常 → 切provider → 下次运行TTS仍异常 → 再次切回 → 形成震荡
-
-**解决方案**：在 `~/.hermes/.self-healer-state` 文件记录上次状态
-- `tts_ok`：TTS正常，本次正常则写`tts_ok`
-- `tts_flip`：上次已切换过，本次仍异常则跳过切换，改为记录告警
-
-**判断逻辑**（伪代码）：
-```
-if TTS正常: write_state("tts_ok"), log("✓ TTS正常")
-else:
-    last = read_state()
-    if last == "tts_flip": log("⚠️ 仍异常但上次已切换，跳过"); 写告警
-    else: 切换provider → 验证 → 成功则tts_ok，失败则tts_flip
-```
-
-### config.yaml YAML 语法错误导致 Hermes 全局崩溃（2026-06-02新发现）
+### config.yaml YAML 语法错误导致 Hermes 全局崩溃
 
 **症状**：Hermes 启动后 `/model` picker 看不到 V2.aicodee.com，或所有 custom provider 都消失。Gateway 进程存在但行为异常。
 
@@ -333,113 +268,16 @@ hermes cron update <job_id> --model deepseek-v4-flash --provider deepseek
 
 ---
 
-### Docker容器全部离线（2026-06-02新发现）
+### Docker/Ollama相关检查（已停用）
 
-**症状**：`docker ps -a` 返回空列表（无任何运行中容器）
+Docker（Colima）和Ollama已彻底停用。以下报警可以忽略：
+- Docker容器（hindsight/searxng/n8n/chromadb/open-webui）未运行 → 设计如此
+- TTS异常 → 已卸载，不需要
+- smolvlm2/qwen3-vl模型缺失 → 已停用本地VLM
 
-**说明**：Hindsight/n8n/SearXNG/ChromaDB 等容器可能被人为停止，或 colima 虚拟机重启后 Docker daemon 需要重新初始化。当前发现所有容器离线，但 colima 本身（Linux VM runtime）运行正常。
+如果持续出现这些报警，说明watchdog脚本需要更新到v4版本（位于~/.hermes/scripts/self-healer-watchdog.sh）。
 
-**快速自愈**：
-```bash
-# 检查colima状态
-colima list
-# 若running但docker ps空 → docker ps -a先看全部容器（含已停止）
-# 启动单容器
-docker start <container_name>
-# 或若compose文件存在
-docker compose up -d
-```
-
-**参考**：用户未要求重启所有容器（可能有意暂停以节省资源），自愈仅作记录不自动执行。
-
-### Hindsight 记忆降级（2026-06-02新发现）
-
-**症状**：`gateway.error.log` 持续报错：
-```
-No module named 'hindsight_client'
-version None, older than 0.5.0
-```
-
-**根因**：
-1. `hindsight_client` Python 包未安装（Gateway 的 Python 环境里缺这个依赖）
-2. Hindsight Docker 容器版本低于 0.5.0（`curl http://localhost:8899/health` 返回 `version None`）
-
-**自愈流程**：
-```bash
-# 1. 装 hindsight_client 到 hermes-agent venv
-cd ~/.hermes/hermes-agent
-./venv/bin/pip install hindsight_client -i https://pypi.tuna.tsinghua.edu.cn/simple
-
-# 2. 升级 Hindsight Docker 镜像（如果用户有 docker write 权限）
-docker pull ghcr.io/nousresearch/hindsight:latest
-
-# 3. 验证
-./venv/bin/python -c "from hindsight_client import Hindsight; print('OK')"
-curl -s http://localhost:8899/health
-```
-
-**降级影响**：记忆功能降级为进程级，每次重启丢失之前的会话记忆，无法跨进程/会话去重。
-
-### screen_watcher smolvlm2 缺失（2026-06-02新发现）
-
-**症状**：`gateway.error.log` 持续刷屏：
-```
-[screen_watch] 🚨 [VLM错误] model 'ahmadwaqar/smolvlm2-agentic-gui:latest' not found
-```
-
-**影响**：screen_watcher 不断重试，污染 gateway.log（每分钟约8-9条），但不阻塞主流程。
-
-**自愈方案**：
-```bash
-# 检查当前用的 VLM 模型
-grep -i "smolvlm\|VLM" ~/.hermes/config.yaml
-
-# 如果配置了 smolvlm2 但 Ollama 没有这个模型，切回 qwen3-vl:2b
-ollama list
-# 如果 qwen3-vl:2b 存在，修改 screen_watcher 配置使用它
-# 如果都不存在，重新拉取
-ollama pull qwen3-vl:2b
-```
-
-**清理日志**：
-```bash
-# 统计污染程度
-grep -c "smolvlm2-agentic-gui" ~/.hermes/logs/gateway.log
-# 超过1000行就截断
-tail -2000 ~/.hermes/logs/gateway.log > /tmp/_tail && mv /tmp/_tail ~/.hermes/logs/gateway.log
-```
-
----
-
-### Mac mini M4 内存爆掉（OOM卡死）
-
-**症状**：系统极卡，内存只剩100MB，Ollama runner占15GB+
-
-**根因**：Docker Linux VM（~9GB wired）+ Ollama qwen3-vl:latest（~15GB）同时运行，超出24GB上限
-
-**诊断**：
-```bash
-top -l 1 | grep PhysMem
-ps aux | sort -rn -k4 | head -5  # 看内存大户
-```
-
-**自愈流程**：
-```bash
-# 1. 识别Ollama runner
-ps aux | grep 'ollama runner' | grep -v grep
-
-# 2. 强制kill（pkill -f只kill一个不够，会自动重启）
-pkill -9 -f 'ollama'
-
-# 3. 验证：内存从22GB→5GB used
-sleep 1 && top -l 1 | grep PhysMem
-```
-
-**详细分析**：见 `references/mac-mini-ram-management.md`
-
----
-
-### 深度清理流程（用户说"深层清理"时执行）
+### 浏览器CDP断开（Chrome进程挂了）
 
 一次性执行全部：
 1. 清理空skill目录（api-integration, logging-best-practices, hermes-restart等）

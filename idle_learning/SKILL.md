@@ -319,6 +319,22 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 4. **HN Firebase API** — 热点技术文章
 - ⚠️ 已知限制：`OLLAMA_USE_MLX=1` 需要 32GB+ 统一内存（M4 24GB 不支持）
 
+**方向 C — 决策操作（Computer Use / 规划层）**
+- ⭐ **2026-06-01 新增：生产日志效能分析法**
+  从日志中提取 handler 时序数据的标准流程：
+  1. 提取 handler 日志中的 trigger → scene → dry-run → completed 时间戳，计算各阶段耗时
+  2. 统计 "Handler仍在运行" 次数，计算 watcher 抑制比（counts ÷ 15s interval = suppressed）
+  3. 计算 handler 处理周期 vs watcher cooldown 的比值（>1 = 堆积风险）
+  4. 用 `grep -c "AUTO-EXEC-DRY"` + `sed 's/.*scene=//' | sort | uniq -c -rn` 分析场景分布
+  5. 验证假阳性标记：检查 unknown/other 场景是否被误标 [urgent]
+  **落地案例**：2026-06-01 发现 qwen3-vl:2b 产线实际 scene classification 耗时 35-47s（非 24s），full cycle 70-84s，302 次 "Handler仍在运行"，所有 unknown/other 被误标 [urgent]
+- ⭐ **"Domain Expertise Has Always Been the Real Moat"（754pts HN, 2026-05-31）**
+  - 核心论点：Agentic AI 切断了"理解领域"和"生产代码"之间的绑定，约束从"能不能构建"变成了"能不能判断正确"
+  - 对 Hermes 的意义：screen_watcher handler 的最大瓶颈不是"能不能执行"，而是"能不能判断何时需要执行"
+  - 两角色类比：领域专家（知道正确输出长什么样）× 工程师（知道怎么构建）
+  - Hermes auto_execute 需要两种能力兼备
+- ⚠️ **SearXNG web_search 状态（2026-06-01 发现）**：SearXNG 返回 HTTP 502（网关错误），web_search 完全不可用。ddgs + HN Firebase API 为当前唯一可选降级路径。
+
 **方向 D — 执行（手眼配合）调研方向**
 - 本地工具链盘点：hermes-rpa（成熟）、computer_use、mcp_chrome_*（背景运行不抢焦点）
 - 已有能力：拟人化鼠标/点击/拖拽/打字/滚屏，依赖 cliclick
@@ -344,7 +360,17 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - `unknown`: 184 (40%) ⚠️ 分类器信心不足
   - `desktop`: 42 (9%)
   - `wechat`: 6, `calculator`: 3
-- **⚠️ unknown 40% 是已知问题**：qwen3-vl:2b 做场景分类时，对非典型界面返回 "unknown"。不影响 dry-run 触发（unknown 在 WHITELIST 中），但说明分类精度有提升空间。
+
+**2026-06-08 新的产线快照**（screen_watcher 已死，数据截止 6/1 00:40）：
+- `grep -c "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log` → **617条**
+- 场景分布：
+  - `unknown`: 301 (49%) ⚠️
+  - `browser`: 233 (38%)
+  - `desktop`: 42 (7%)
+  - `other`: 32 (5%)
+  - `wechat`: 6, `calculator`: 3
+- **所有 other/unknown 场景被误标 [urgent]**（handler 紧急权重否定检测修复前数据）
+- **修复后预期**：unknown/other 场景错误 urgent 标记降至接近 0%
 
 **诊断命令：分析场景分布**
 ```bash
@@ -383,6 +409,39 @@ grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log | sed 's/.*scene=//' | so
   - 架构：vision→action→verify 循环，与 hermes-rpa 规划一致
   - 详见 `references/mobileagent-2026-05-30.md`
   - ⚠️ M4 24G 适配待验证（qwen3-vl:2b 响应 46.6s，agent loop 成本高）
+
+- **⭐ POINTS-GUI-G-8B（arXiv 2602.06391, Feb 2026）** — ScreenSpot-v2 **95.7%** SOTA
+  - 三大成功因素：统一数据集格式 + 视觉编码器微调 + **RL with Verifiable Rewards**
+  - GUI grounding 天然适合 RL：奖励可验证、精度高
+  - 对 Hermes：auto_execute grounding 精度可通过 RL 持续提升
+
+- **⭐ RULER tokens + I-MRoPE（arXiv 2510.03230, Oct 2025）**
+  - 显式位置标记替代隐式坐标生成（类网格参考点）
+  - I-MRoPE 解决宽高维度不对称问题
+  - 最大改进在高分辨率界面 → 适用 Mac 大屏场景
+
+- **⭐ DRS-GUI（CVPR 2026）** — Dynamic Region Search, 无训练 GUI grounding
+  - ScreenSpot-Pro 提升 14%（无需训练的 grounding 方案）
+
+- **⭐ Qwen3-VL 坐标约定（GitHub #1560）** — 坐标系关键
+  - [x, y] on **1000×1000 相对坐标 canvas**（非像素绝对坐标）
+  - 像素映射：x_px = x/1000 × W, y_px = y/1000 × H
+  - 对 DRY_RUN=False 切换最关键：VLM 输出需要归一化映射
+
+- **⭐ The Website Specification（HN 346pts, 2026-06-01 发现）**
+  - https://specification.website/ — 平台无关网站规范，含 **Agent Readiness** 18 项标准
+  - 提供 MCP server + Agent Skill + llms.txt
+  - 对 Hermes auto_execute：可判断目标站点是否 agent-friendly
+
+- **⭐ Handler 优化模式（2026-06-01 实装，2026-06-08 补充否定检测）**：
+  从产线数据中提取的 handler 优化模式，可供未来的执行层巡检反复使用：
+  1. **暗屏检测**：10x10 缩略图体积判断 → 全黑/锁屏直接跳过分析（夜间 CPU 节省 ~98%）
+  2. **分类降速**：场景分类 resize 800→400px（分类精度不变，耗时减半）
+  3. **紧急权重降级**：unknown/other 场景仅匹配 CRITICAL_KEYWORDS，其余静默
+  4. **冷却自适应**：优化后 handler 更快 → 冷却时间减半（120→60s）
+  5. **否定词检测**（新增｜详见 `references/idle-learning-2026-06-08-session.md`）：关键词匹配时检查前12字符是否有"没有/无/未/不"，避免"没有...异常"等否定上下文误触发 urgent
+  **落地案例**：CRITICAL_KEYWORDS 中的"异常"在"没有需要处理的内容或异常"中误触发，49% 的 unknown/other 场景被误标 [urgent]。修复后预计降至接近 0%。
+  **✅ 2026-06-10 生产验证通过**：handler 重启后，scene=other 的"没有需要处理的内容或异常"正确标记 [silent]（旧日志标记 [urgent]）。详见 `references/idle-learning-2026-06-10-session.md`
 - **DesktopCtl**（yaroshevych, 34 stars）— Rust 桌面控制 CLI
   - tokenized screen output 思路：smolvlm2 做 UI 元素文本化而非只输出坐标
   - macOS-first, daemon+CLI 架构
@@ -406,15 +465,25 @@ grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log | sed 's/.*scene=//' | so
   - `ls ~/.hermes/scripts/ | grep -i "screen"` → 检查是否有 screen_* 脚本（screen_watcher.py 应在 scripts/）
   - **结论**：如果以上全部为空，说明整个 screen_watcher 机制从未部署，需手动启动验证
 
-**⚠️ screen_watcher 启动与验证流程（2026-05-30 实测，2026-06-02 确认失效）**：
+**⚠️ screen_watcher 启动与验证流程（2026-05-30 实测，2026-06-02 确认失效，2026-06-08 附加 hook 检查）**：
   1. `mkdir -p ~/.hermes/screenshots`（watcher 不会自动创建父目录）
   2. 启动 watcher：`terminal(background=true)` 执行 `python3 ~/.hermes/scripts/screen_watcher.py`
   3. 验证进程：`ps aux | grep screen_watcher | grep -v grep`
   4. 验证截图：`ls -lt ~/.hermes/screenshots/current.png`（应有 3MB+ 文件）
   5. 验证 handler 被触发：`cat ~/.hermes/logs/screen_trigger.log | tail -10`
   6. 验证 dry-run 记录：`grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log`
+  7. **（新增）检查 gateway.log 污染**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log` — 若 > 0 说明有 broken hook 写入错误，检查 `~/.hermes/hooks/` 中各 hook 的 HOOK.yaml
   - **如一切正常**：screen_watcher 链路完整，auto_execute dry-run 正在记录
   - **如 lock 文件残留**：`rm ~/.hermes/screenshots/.handler_lock` 后重试
+
+**✅ screen_watcher 复活验证清单（2026-06-10 实测版）**：当发现 screen_watcher 已死时，执行以下 6 步：
+  1. `pkill -f screen_watcher`（清旧进程）
+  2. `terminal(background=true)` 启动 `python3 ~/.hermes/scripts/screen_watcher.py`
+  3. `ps aux | grep screen_watcher` 确认 PID 存活
+  4. `ls -lt ~/.hermes/screenshots/current.png` 确认时间戳更新到当前分钟
+  5. `tail -10 ~/.hermes/logs/screen_trigger.log` 确认新 "触发！" 记录
+  6. 检查 scene=other 是否标记 [silent]（验证否定词检测生效）
+  完整链路验证耗时约 15-20s（截图 8s + handler 分析 7-12s）。详见 `references/idle-learning-2026-06-10-session.md`
 
 **⚠️ screen_watcher 进程存活周期（2026-06-02 新发现，2026-06-07 更新 stale screenshot 问题）：**
 - screen_watcher 进程在长时间空闲后会死掉（本次发现：May 31 00:03 截图后停止，进程消失）
@@ -426,7 +495,14 @@ grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log | sed 's/.*scene=//' | so
 - 启动命令已验证：`python3 ~/.hermes/scripts/screen_watcher.py`（PID 会变，不需要追踪旧 PID）
 - **idle_learning 第一步检查清单**：进程 → 截图时间 → 模型列表，三个全检查才链路完整
 - ⚠️ **screen_watcher 目录不存在的情况（2026-05-29 发现）**：若 `ls ~/.hermes/screenshots/` 返回"No such file or directory"，说明 screen_watcher 从未启动过或已被清理。需要手动检查 screen_watcher 进程和启动脚本，确认目录会被正确创建。
-- **⚠️ "Handler仍在运行"日志但handler未启动（2026-06-07 实测）**：
+- **⚠️ Hook 污染 Gateway 日志巡检（2026-06-08 新增）**：
+`~/.hermes/hooks/` 中的 gateway hook 如果引用了已删除的模块或已下线的模型，会在每次 gateway:startup / session:start / agent:end 时向 gateway.log 写入错误信息。实测 screen_watch hook 写入了 1332 条 "model not found"（占日志 26%）。
+- **检查**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log`
+- **根因**：hook 硬编码旧模型 + 引用已删除的 python 模块
+- **修复**：将 `HOOK.yaml` 的 events 置空 `events: []`，或直接删除 hooks 目录
+- **巡检命令**：`ls ~/.hermes/hooks/` + 对各 hook 的 `HOOK.yaml` 检查 events 列表有效性
+
+**⚠️ "Handler仍在运行"日志但handler未启动（2026-06-07 实测）**：
   - 症状：screen_watcher 日志大量 "Handler仍在运行，跳过本次触发"，但 `ps aux | grep screen_trigger` 无进程
   - 根因：screen_trigger_handler 处理完后删除 `.handler_lock` 文件，但如果 handler 被强制终止（系统休眠/崩溃），lock 文件可能残留，导致 watcher 认为 handler 在运行
   - 验证：`ls -la ~/.hermes/screenshots/.handler_lock` 存在 = 锁残留，需手动删除
@@ -817,6 +893,9 @@ PYEOF
 - [昨夜系统冻结诊断（2026-05-30）](./references/screen-watcher-freeze-diagnosis-2026-05-30.md)
 - [Hermes Agent 自我学习资源指南](./references/hermes-self-learning-resource-guide.md) — 用户固化：官方文档→GitHub→Discord→中文社区→技能市场 — 凌晨02:50-03:10 handler进程堆积297次screencapture失败，根因+防护+诊断命令
 - [2026-05-31 学习记录（方向C）](./references/idle-learning-2026-05-31-new-findings.md) — Cloudflare Turnstile WebGL 指纹强检、V100 SXM2 £200 家用推理验证 memory bandwidth 瓶颈、The Website Specification Agent Readiness 18 项规范
+- `references/idle-learning-2026-06-01-session.md` — Fara1.5/Cider SDK 状态、24GB backend shootout、Qwen Q4 quant 风险
+- [2026-06-10 学习记录（方向C+生产验证）](./references/idle-learning-2026-06-10-session.md) — Negation fix 生产验证通过、screen_watcher 复活验证清单、"Friction=Focus" auto_execute 设计哲学、场景分布快照
+- [DRY_RUN=False 切换准备条件](./references/dry-run-false-readiness-2026-06-10.md) — 6 个前置条件的完整评估（坐标映射/SafeGround/Guardrails）、handler lock 非残留发现、冷却竞争观测，供后续 idle_learning 执行和 auto_execute 开发参考
 
 ---
 
@@ -915,13 +994,11 @@ echo "建议添加每日凌晨2点自学任务，是否确认？"
 - 获取 HN 文章内文时用 `browser_navigate + browser_console JS` 替代 ddgs
 - 格式：`ddgs text -q "query" -m 5`
 
-**屏幕分析日志污染 gateway.log（2026-05-29 发现）**：
-- `screen_trigger_handler` 的 screen_watch 分析结果正在写入 `gateway.log`（2553 条记录，1.1MB）
-- **症状**：gateway.log 异常膨胀，Gateway 响应变慢
-- **根因**：screen_watch 日志用了平台通用 logger（写到 gateway.log）而不是专用 logger
-- **检查**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log`，结果 > 0 说明有污染
-- **修复**：详见 `screen-watcher-vision` skill 的 Bug 说明
-- **影响**：影响所有依赖 gateway.log 诊断的排查工作（正常日志被淹没）
+**屏幕分析日志污染 gateway.log（2026-05-29 发现，2026-06-08 确认修复）**：
+- 原根因：`screen_watch` hook 引用了已删除的 humanization_core + 已下线的 smolvlm2 模型
+- **2026-06-08 修复**：`~/.hermes/hooks/screen_watch/HOOK.yaml` events 置空，hook 不再被 gateway 触发
+- **当前状态**：gateway.log 不再增长 screen_watch 记录
+- **检查**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log` — 当前值 1352（历史遗留，已不再增加）
 
 ### idle_learning 执行过程中的 skill 引用注意
 

@@ -13,10 +13,15 @@ tags: [vision, agent-loop, desktop-automation, computer-use, screen-perception]
 ## 核心架构
 
 ```
-screencapture → [smolvlm2 / Gemini] → action解析 → [computer_use/playwright] → 执行验证
+screencapture → [qwen3-vl:2b / future CUA model] → action解析 → [computer_use/playwright/RPA] → 执行验证
 ```
 
-**M4 Mac最优方案**：smolvlm2-agentic-gui（本地，7s/步，1.85GB）
+**M4 Mac当前方案**：qwen3-vl:2b（本地，7-47s/步，1.76GB，scene classification 优先）
+
+**参考框架**：GUI Agents 三代架构演进（详见 references/fara1.5-and-three-generations.md）
+- Gen 1: Selector-Action (RPA) — 30-40% 维护 = selector 修复
+- Gen 2: Vision+LLM (Set-of-Marks) — **Hermes 当前位置**，open-loop，无验证
+- Gen 3: VLA Unified Model — 目标方向，closed-loop (perception→reason→action→verify)
 
 ## 执行流程
 
@@ -34,7 +39,7 @@ screencapture -x /tmp/agent_screen.png
 - payload 格式差异：`prompt:` → `messages:[{role:'user',content:,images:}]`
 - response 格式差异：`data['response']` → `data['message']['content']`
 
-#### 本地Ollama（smolvlm2）✅ 主方案
+#### 本地Ollama（qwen3-vl:2b）✅ 当前主方案
 ```python
 import base64, json, urllib.request
 
@@ -42,13 +47,13 @@ with open('/tmp/agent_screen.png', 'rb') as f:
     img = base64.b64encode(f.read()).decode()
 
 payload = {
-    'model': 'ahmadwaqar/smolvlm2-agentic-gui:latest',
-    'messages': [{'role': 'user', 'content': '网页截图。描述：1)页面标题 2)主要元素 3)功能', 'images': [img]}],
+    'model': 'qwen3-vl:2b',
+    'messages': [{'role': 'user', 'content': 'Classify this screenshot: browser, desktop, or other?', 'images': [img]}],
     'stream': False,
-    'options': {'temperature': 0.1}
+    'options': {'temperature': 0.0}
 }
 req = urllib.request.Request(
-    'http://localhost:11434/api/chat',  # ⚠️ 用 /api/chat，不用 /api/generate
+    'http://localhost:11434/api/chat',
     data=json.dumps(payload).encode(),
     headers={'Content-Type': 'application/json'},
     method='POST'
@@ -57,16 +62,20 @@ with urllib.request.urlopen(req, timeout=60) as r:
     response = json.loads(r.read())['message']['content']
 ```
 
-**响应时间**：6-11秒（Mac本地，取决于截图复杂度）
+**响应时间**：6.9-47s（scene classification ~7s，full screenshot analysis 19-47s，取决于复杂度）
+
+**⚠️ 注意**：smolvlm2-agentic-gui 已于 2026-06-02 从 Ollama registry 下线（pull 返回 404），qwen3-vl:2b 已接管全部视觉任务。
 
 #### 其他VLM备选
 | 模型 | 响应 | 状态 | 备注 |
 |------|------|------|------|
-| smolvlm2-agentic-gui | 6-11s | ✅ **主方案** | GUI专用，1.85GB，M4 24GB最优 |
-| qwen3-vl:2b | 60s+ 超时 | ❌ 不适合实时 | 已安装但太慢，仅适合离线OCR |
-| qwen3-vl:8b | ~15s 估计 | ⚠️ 未实测 | 需 github 恢复后 pull |
+| qwen3-vl:2b | 7-47s | ✅ **当前主方案** | 1.76GB，scene classification 7s，截图分析 19-47s |
+| qwen3-vl:8b | ~15s 估计 | ⚠️ 未实测 | 需 github 恢复后 pull，6.1GB |
+| Fara1.5-4B (Microsoft) | 未测 | ⚠️ 待评估 | 2026-05-21发布，Online-Mind2Web 57%，Qwen3.5基座 |
 | richardyoung/smolvlm2-2.2b-instruct | 未测 | ⚠️ 备选 | 通用 SmolVLM2，非GUI专用 |
 | moondream:1.8b-v2-q4_K_M | 未测 | ⚠️ 备选 | 通用视觉，约1GB |
+| Mano-P 4B (Mininglamp) | ~80 tok/s M5 | ⚠️ Cider SDK | Think-Act-Verify闭环，Apache-2.0，需github恢复 |
+| smolvlm2-agentic-gui | 6-11s (历史) | ❌ 已从registry下线 | 2026-06-02 404，非可用模型 |
 | Gemini 1.5-flash | DNS不通 | ❌ 网络问题 | 本地网络限制 |
 | GLM 4V | 429额度耗尽 | ❌ | API额度问题 |
 
@@ -134,9 +143,16 @@ await page.locator('[data-hermes-id="12"]').fill('张三')
 - 原因：本地网络限制（非工具问题）
 - 解决：用本地VLM替代
 
-### qwen3-vl:2b超时
-- 原因：模型太大（1.9GB），Mac GPU解码慢
-- 解决：用 smolvlm2-agentic-gui（更快）
+### qwen3-vl:2b 响应时间波动
+- 原因：模型 1.76GB，Mac GPU 解码速度受截图尺寸/复杂度影响
+- scene classification（400-800px 缩略图）：6.9-7s ✅ 适合实时
+- full screenshot analysis（1920x1080）：19-47s，高分辨率场景触发超时
+- 解决：缩小输入截图尺寸（sips -z 800 800），或用 `/api/chat` 替代 `/api/generate`（快 ~24%）
+- 注意：smolvlm2-agentic-gui 已从 Ollama registry 下线，qwen3-vl:2b 为当前唯一可用本地视觉模型
+
+### smolvlm2中文识别弱（已下线，历史记录）
+- smolvlm2-agentic-gui 已在 2026-06-02 从 Ollama registry 删除，pull 返回 404
+- qwen3-vl:2b 中文理解能力强于 smolvlm2
 
 ## 完整脚本模板
 
@@ -176,8 +192,8 @@ subprocess.run(['osascript', '-e', f'tell application "Google Chrome" to set URL
 time.sleep(1.5)
 
 screenshot('/tmp/agent_screen.png', compress=True)
-t, response = call_vlm('ahmadwaqar/smolvlm2-agentic-gui:latest',
-    '描述网页标题和主要元素',
+t, response = call_vlm('qwen3-vl:2b',
+    'Describe the web page and its main elements.',
     '/tmp/agent_screen.png')
 print(f'VLM耗时: {t:.1f}s')
 print(f'输出: {response[:300]}')
@@ -193,3 +209,27 @@ print(f'输出: {response[:300]}')
 - 验证码识别（1688滑块等自研CAPTCHA无解）
 - 需要精确坐标的复杂桌面操作（用Playwright DOM方案）
 - 网络依赖的在线VLM（本地网络限制时）
+
+---
+
+## 架构演进参考
+
+### 三代桌面自动化框架（详见 references/fara1.5-and-three-generations.md）
+
+| 世代 | 架构 | 代表 | 特征 |
+|------|------|------|------|
+| Gen 1 | Selector-Action | RPA (UiPath等) | 30-40%维护=selector修复，UI变化即断链 |
+| Gen 2 | Vision+LLM (open-loop) | Set-of-Marks, **Hermes当前** | 截图→坐标，无验证，无错误恢复 |
+| Gen 3 | VLA Unified Model (closed-loop) | Mano-P 4B, Fara1.5 | 统一感知-推理-动作-验证闭环 |
+
+### Fara1.5 (Microsoft, May 2026)
+- Qwen3.5 基座，4B/9B/27B 三尺寸
+- **Observe-Think-Act 循环**，每次输入最近 3 张截图 + 历史对话
+- Context management meta-actions: memorize/ask_user/verify
+- Online-Mind2Web 63% (9B), 72% (27B) — 超越 GPT-5.4 CUA 和 Gemini 2.5
+- FaraGen1.5: Copilot CLI 自动生成沙盒站点训练数据
+
+### 对 Hermes 的实践意义
+- DRY_RUN=False 切换 = Gen 2 → Gen 3 架构跨越
+- 当前 vision-agent-loop 缺少：verify 闭环、多帧上下文、context management actions
+- SafeGround + Fara1.5 insights 提供 Gen 3 过渡路径

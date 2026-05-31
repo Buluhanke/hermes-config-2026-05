@@ -54,12 +54,28 @@ grep -E "error|ERROR|exception" ~/.hermes/logs/gateway.log | tail -20
 
 ---
 
-## LTM 三层记忆框架（2026-05-26 落地）
-### LTM 三层记忆框架（已简化，2026-05-30）
-当前直接使用 Hindsight（Docker容器，端口8899）作为长期记忆，替代旧版 ltm.py 方案。
-- **Episodic Memory**：`Hindsight bank=hermes` 自动叙事化
-- **Semantic Memory**：`Hindsight recall` 语义检索
-- **Procedural Memory**：Skills + Brain_Lab 文件系统
+## 记忆系统（原生）
+
+当前使用 **holographic** 插件做长期记忆：
+- 数据存储在 `~/.hermes/memory_store.db`
+- 可用工具：`memory`（保存/检索）、`session_search`（FTS5全文搜索）
+- 已切换自hindsight（Docker容器，已停用）
+
+之前的hindsight方案已废弃（2026-06-01确认）：Docker停用，Ollama退出，hindsight容器不再重建。
+
+## 搜索后端（ddgs）
+
+当前使用 **ddgs**（DuckDuckGo搜索Python SDK）替代旧的SearXNG（Docker）：
+- 免费，无需API key
+- 安装：`pip install ddgs`
+- 搜索降级链：**ddgs → GitHub API（免认证）→ browser直接访问**
+- 旧方案（SearXNG、Firecrawl、任何search）已停用
+
+```python
+from ddgs import DDGS
+with DDGS() as ddgs:
+    results = list(ddgs.text("query", max_results=5))
+```
 
 ### Screen Trigger 紧急度分流
 `~/.hermes/scripts/screen_trigger_handler.py` 已实现三档分流：
@@ -71,26 +87,14 @@ grep -E "error|ERROR|exception" ~/.hermes/logs/gateway.log | tail -20
 `~/.hermes/scripts/screen_watcher.py` — HANDLER_LOCK 锁文件防止重复拉起handler
 **坑**：之前没锁机制，watcher多次触发导致多个handler并发跑，必须加锁文件+finally清理。
 
-### Hindsight 长期记忆（2026-05-29 已部署）
-Docker容器 `hermes-hindsight`，端口8899，API根路径 `http://localhost:8899`
-银行ID: `hermes`，observations模式开启（自动叙事化为AI视角经验）
-推理模型: `qwen2.5:1.5b`（Ollama本地推理，比qwen3-vl:2b快30x）
-Embedding模型: `nomic-embed-text:latest`
+### Docker状态（2026-06-01更新）
+Docker（Colima）已彻底停止，不再使用。
+- hindsight: ❌ 已停止，改用holographic插件
+- searxng: ❌ 已停止，改用ddgs搜索
+- chromadb: ✅ 原生uvicorn运行（端口8000）
+- n8n/open-webui: ❌ 已删除
 
-**接入方式**：
-```python
-from hindsight_client import Hindsight
-client = Hindsight(base_url="http://localhost:8899")
-client.retain(bank_id="hermes", content="记忆内容", tags=["标签"])
-result = client.recall(bank_id="hermes", query="搜索query")
-```
-
-**已知坑**：
-- `observations=true` 时内容被重写成AI视角，不是原始输入
-- API路径：`POST /v1/default/banks/{bank_id}/memories`（不是 `/memories/retain`）
-- Retain请求体：`{"items": [{"content": "...", "tags": [...]}]}`
-- Recall响应字段：`.text` 不是 `.content`，`.type` 不是 `.type_`
-- qwen3-vl:2b 太慢（30s+），换 qwen2.5:1.5b
+**架构变更**：所有依赖Docker的能力均已用原生替代。
 
 ### 性格文件
 `~/.hermes/hermes-agent/personality.md` — 口头禅/情绪触发/主动原则/沟通偏好
@@ -362,7 +366,7 @@ ChatGPT / Claude.ai / Perplexity 均返回"正在进行安全验证"，**无法�
 **网络异常处理（必须先于联网执行）**：
 1. 先 `curl --max-time 5 https://github.com` 预检连通性
 2. github.com 超时 → cron环境网络受限，改查本地 Brain_Lab 最新存档（`ls -t ~/Brain_Lab/*.md | head -3` 读最新记录）
-3. web_search Payment Required → 切换 `duckduckgo-search` skill 降级搜索
+3. web_search Payment Required → 切换 `ddgs` 降级搜索
 4. 所有外部网络均失败 → 本次标记为"SILENT"，只写巡检日志后静默退出，不重复尝试
 
 ### 每天（主动学习）
@@ -383,7 +387,7 @@ ChatGPT / Claude.ai / Perplexity 均返回"正在进行安全验证"，**无法�
   - 验证码对抗：CAPTCHA bypass / anti-detection / browser fingerprint
   - 类人操作节奏：humanization browser automation / behavioral simulation
   - 1688采购闭环：1688 API / procurement automation
-- **搜索降级链**：Firecrawl 402先后 → curl GitHub API搜索 → ddgs → browser直接访问
+- **搜索降级链**：ddgs → curl GitHub API搜索 → browser直接访问
 - **ChatGPT/Claude对话仅在用户会话中可行**，cron模式跳过（Cloudflare阻挡已确认）
 - **归档标准**：Vision_Lab（工具）+ Brain_Lab（思路）+ gaps_known.json更新
 - **通知标准**：已验证的重大突破→QQ；未验证的发现→静默存档等周五汇总

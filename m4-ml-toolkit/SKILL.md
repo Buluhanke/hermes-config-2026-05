@@ -32,7 +32,9 @@ GPU 加速:     MPS (Metal Performance Shaders) ✅
 | **PyTorch 2.12** | venv 自带 | — | ✅ MPS可用 |
 | **torchvision 0.27** | venv 自带 | — | ✅ |
 | **transformers** | venv 自带 | ~/.cache/huggingface/ | ✅ |
-| **YOLOv8** | venv 自带 | 当前目录 | ✅ 170ms |
+| **ddgs** | 系统 Python | DuckDuckGo 搜索，无需 API key | ✅ 免费 |
+| **playwright** | 系统 Python 3.14 | 浏览器自动化，chromium 已装 | ✅ |
+| **cua** | 系统 Python 3.14 | 电脑控制（cua-driver 接口） | ✅ |
 | **PaddleOCR** | 系统 Python 3.14 | ~/.paddleocr/ | ✅ |
 | **EasyOCR** | 系统 Python 3.14 | — | ✅ |
 | **u2net.onnx** | 手动下载 | ~/.u2net/ (168MB) | ✅ |
@@ -170,6 +172,7 @@ python3 -c "from rembg import remove; from PIL import Image; remove(Image.open('
 
 ## 参考资料
 
+- `references/system-state-20260601.md` — 当前系统能力快照（2026-06-01）
 - `references/provider-fallback-test-20260531.md` — Provider fallback chain test results (2026-05-31)
 - `references/session-specific.md` — 本次搭建的完整会话记录
 - `references/provider-history.md` — 模型提供商切换历史

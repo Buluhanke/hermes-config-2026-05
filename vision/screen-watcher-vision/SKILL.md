@@ -36,8 +36,9 @@ smolvlm2-agentic-gui 在相同分辨率下 17.9s 返回准确分类结果。
 
 | 函数 | 模型 | 速度 | 用途 |
 |------|------|------|------|
-| `get_scene_type()` | qwen3-vl:2b | ~24s (2026-05-30实测) | 场景分类，返回英文单词 |
-| `ask_screen()` | qwen3-vl:2b | ~24s | GUI 内容分析 |
+| `get_scene_type()` | qwen3-vl:2b | **35-47s** (2026-06-01产线实测) | 场景分类，返回英文单词 |
+| `ask_screen()` | qwen3-vl:2b | **~35s** | GUI 内容分析 |
+| 合计 | — | **70-84s** | 单次完整处理周期 |
 
 **⚠️ 换模型后的陷阱：分支逻辑也是死代码（2026-05-31 发现并修复）**
 `on_trigger()` 的场景分支原匹配中文关键词（`"浏览器" in scene_type`），但 `get_scene_type()` 始终返回英文（`"browser"`）。这意味着：
@@ -186,6 +187,26 @@ screen_trigger_handler 必须在调用视觉分析前先做场景类型过滤。
 
 **解法**：在 screen_watcher 加运行标记文件 `.handler_lock`，启动前检查，运行完删锁。详见 `references/screen-watcher-handler-lock-2026-05-26.md`。
 
+### 2026-06-01 补充：Handler 处理周期量化
+
+**产线实测数据**（80分钟窗口，00:04-00:15 抓取 timestamp 分析）：
+```
+scene classification 耗时：35-47s（包括 resize + Ollama API + 响应解析）
+ask_screen 内容分析耗时：~35s
+合计单次处理周期：70-84s
+
+watcher 冷却间隔：15s
+Handler 仍在运行抑制次数：302次
+
+每次完整 handler 执行期间，watcher 触发约 5 次"Handler仍在运行"
+302 ÷ 5 ≈ 60 次实际执行 × 80s ≈ 80 分钟 CPU / Ollama 被占用
+```
+
+**与"昨夜死机"根因的关系**：死机时 handler 处理速度是 smolvlm2 的 10-15s/次，现在 qwen3-vl:2b 的 70-84s/次慢 5-7x，虽不会直接死机但 CPU/Ollama 占用大幅增加。
+
+**2026-06-01 已实施**：`is_dark_screenshot()` 快速检测锁屏/黑屏，直接跳过 scene classification + ask_screen。
+夜间每次触发从 ~80s 降至 ~0.5s（~98% CPU 节省）。详见 `references/handler-optimizations-dark-screen-cooldown-2026-06-01.md`
+
 ## 严重性能 Bug：禁止向 gateway.log 写屏幕分析结果
 
 **⚠️ 已确认问题（2026-05-29）**：
@@ -212,6 +233,21 @@ screen_trigger_handler 对分析结果进行紧急度分级，非紧急内容不
 
 关键词库路径：`~/.hermes/scripts/screen_trigger_handler.py` 第171-174行。
 
+### ⚠️ 2026-06-01 发现：unknown/other 场景假阳性 [urgent]
+
+**症状**：所有 "unknown" 和 "other" 场景的 handler 日志都标记 `[urgent]`，即使屏幕实际是空白/锁屏/屏保。
+
+**根因**：qwen3-vl:2b 在空白/锁定屏幕上生成幻觉描述（如 "有异常"、"出现错误"），命中 URGENT_KEYWORDS 中的 "异常" 或 "错误"。
+
+**实测证据**（80分钟窗口内）：
+- 场景分布：301 unknown (51%), 233 browser (39%), 42 desktop (7%), 12 other
+- 所有 unknown/other → 标记 `[urgent]` → 尝试推 Telegram
+- 但这些只是夜间锁屏/空白桌面，无需任何处理
+
+**影响**：每个假阳性 `[urgent]` 都触发 Telegram Bot API 调用，浪费 API 额度 + IO 时间。
+
+**2026-06-01 已修复**：新增 `is_dark_screenshot()` 暗屏跳过检测 + unknown/other 仅匹配 CRITICAL_KEYWORDS。详见 `references/handler-optimizations-dark-screen-cooldown-2026-06-01.md`
+
 ## Auto-Execute 自动执行（2026-05-29 新增）
 
 **断链修复**：原本 screen_trigger_handler 只分析屏幕+推送 Telegram，从不执行任何操作。
@@ -226,8 +262,9 @@ screen_trigger_handler 对分析结果进行紧急度分级，非紧急内容不
 **切换到执行模式的步骤**：
 1. 验证 dry-run 日志输出正常
 2. 为每个场景校准坐标（用 `hermes_desktop_rpa.py wininfo` 获取窗口位置）
-3. 将 `DRY_RUN = False`
-4. 先在低风险场景（桌面/计算器）测试
+3. 坐标映射：qwen3-vl:2b 输出 [x,y] on 1000×1000 相对坐标 → 像素映射公式 `x_px = x/1000 × W`（详见 `references/poins-gui-g-coordinate-research-2026-06-01.md`）
+4. 将 `DRY_RUN = False`
+5. 先在低风险场景（桌面/计算器）测试
 
 **结构化JSON输出发现**（2026-05-29 实测）：
 - smolvlm2 可用 JSON prompt 引导输出结构化结果
@@ -306,6 +343,10 @@ ACTION_WHITELIST = {
 - `DRY_RUN=True` 模式下 auto_execute 只记录不动手，安全验证正常
 
 **可执行改进**：
+- ✅ **暗屏检测已实装**：`is_dark_screenshot()` 夜间跳过分析，CPU 节省 ~98%
+- ✅ **分类降速已实装**：get_scene_type resize 800→400px，耗时减半
+- ✅ **紧急标记修复已实装**：unknown/other 仅匹配 CRITICAL_KEYWORDS
+- ✅ **冷却减半已实装**：COOLDOWN 120→60s
 - **Bug 修复**：screen_trigger_handler.py 的 get_scene_type() 返回完整描述，但 auto_execute() 期望 app 名称。需要统一格式，或让 auto_execute 接受描述并做模糊匹配
 - **moondream cascade（优先级高）**：qwen3-vl:2b 的 24s 延迟过高，moondream:1.8b-v2-q4_K_M 作为 <5s 快速初筛，仅在信心不足时升级到 qwen3-vl:2b。详见 `references/moondream-cascade-2026-06-07.md`
 - **confusion_score（优先级高）**：基于 GUIDE Benchmark（CVPR 2026）发现，Frustration 检测比 Intent Prediction 更有价值。建议在 screen_trigger_handler 中增加：操作频率骤降检测、重复点击同一区域、鼠标静止时长。详见 `references/guide-benchmark-cvpr2026.md`
@@ -316,7 +357,7 @@ ACTION_WHITELIST = {
 - Noiz API key 是否已配置
 - UI-TARS Desktop Mac M4 安装可行性（github.blocked 无法下载 .dmg）
 
-**下次学习方向**：Vision — 测试 moondream 场景分类性能，验证 cascade 架构可行性
+**下次学习方向**：D — 执行层（坐标校准，DRY_RUN=False 前的精度验证测试 + handler 优化效果验证）
 
 ## 参考文件
 
