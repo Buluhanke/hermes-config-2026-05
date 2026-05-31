@@ -257,6 +257,74 @@ docker system prune -a --volumes       # EVERYTHING — named volumes too
 | Build cache not working | Layer order wrong in Dockerfile | Put rarely-changing layers first (deps before source code) |
 | Image too large | No multi-stage build, no .dockerignore | Use multi-stage builds, add `.dockerignore` |
 
+## macOS Docker 内存优化
+
+macOS 上的 Docker 有两种常见实现，行为不同：
+
+| 实现 | VM进程 | 停止命令 | 内存释放 |
+|------|--------|----------|----------|
+| **Docker Desktop** | `Virtualization.VirtualMachine` (~4.8GB) | `osascript -e 'quit app "Docker Desktop"'` | 完整释放 VM |
+| **Colima** | `limactl` (~2-4GB) | `colima stop` | 完整释放 VM |
+
+### Docker Desktop 释放顺序
+
+```bash
+# 1. 停止所有容器
+docker stop $(docker ps -q)
+
+# 2. 退出 Docker Desktop（释放 Linux VM）
+osascript -e 'quit app "Docker Desktop"'
+
+# 3. 验证
+ps aux | grep 'Virtualization.VirtualMachine' | grep -v grep
+# 应该没有输出
+```
+
+### Colima 释放顺序
+
+```bash
+# 1. 停止所有容器
+docker stop $(docker ps -q)
+
+# 2. 停止 Colima VM
+colima stop
+
+# 3. 验证 limactl 进程已退出
+ps aux | grep 'limactl' | grep -v grep
+# 应该没有输出
+
+# 4. 注意：privileged helper 会残留（无害）
+ps aux | grep 'com.docker.vmnetd' | grep -v grep
+# 这是 root 级系统服务，无法杀掉，正常
+```
+
+### Colima 与 Docker Desktop 的关键区分
+
+- `docker stop` — 只停容器进程，VM 还在
+- `colima stop` / 退出 Docker Desktop — VM 也关掉，释放 ~2-5GB
+- Colima 的 `limactl` 是 Lima VM 管理器，负责跑一个完整的轻量级 Linux
+- `com.docker.vmnetd` 是 Docker 网络服务，即使 Colima 退出也会残留，是正常现象
+- Colima 比 Docker Desktop 轻量，但两者在 Mac 上都需要 VM 来运行容器
+
+### 停止后验证内存
+
+```bash
+top -l 1 | grep PhysMem
+# 期望：unused 大幅增加（之前 237MB → 停后约 7GB）
+```
+
+### 识别当前跑的是哪种
+
+```bash
+# Docker Desktop
+ps aux | grep 'Virtualization.VirtualMachine' | grep -v grep
+
+# Colima
+ps aux | grep 'colima' | grep -v grep
+
+# 两个都停了才是真停干净
+```
+
 ## Verification
 
 After any Docker operation, verify the result:

@@ -558,11 +558,48 @@ with open(path, 'w') as f:
     yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 ```
 
-验证：
+**验证：**
 ```bash
 grep -n "aicodee-relay\|V2.aicodee\|custom_providers\|model_catalog.providers" ~/.hermes/config.yaml
 # 应该没有结果
 ```
+
+### 清理残留配置（bitwarden 等已禁用的服务）
+
+**场景**：某个服务已在 config.yaml 中禁用（`enabled: false`），但配置残留仍可能被读取。
+
+```python
+import yaml
+
+path = '/Users/aimac/.hermes/config.yaml'
+with open(path) as f:
+    cfg = yaml.safe_load(f)
+
+# 删除 bitwarden section（secrets.bitwarden 或顶层 bitwarden）
+if 'secrets' in cfg and 'bitwarden' in cfg['secrets']:
+    del cfg['secrets']['bitwarden']
+    print("已删除 secrets.bitwarden")
+if 'secrets' in cfg and cfg['secrets'] == {}:
+    del cfg['secrets']
+    print("已删除空的 secrets")
+
+with open(path, 'w') as f:
+    yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+# 验证
+with open(path) as f:
+    content = f.read()
+if 'bitwarden' in content.lower() or 'BWS' in content:
+    print("❌ 仍有残留")
+else:
+    print("✅ 清理干净")
+```
+
+**注意**：不要用 `sed` 批量删除 YAML 块（`/^secrets:$/,/^    auto_install: true$/d`），容易误伤相邻行导致 YAML 结构损坏。上例用 yaml 模块精准操作，是安全做法。
+
+**已踩坑教训**（2026-06-02）：用 sed 的 range delete 模式 `/^secrets:$/,/^    auto_install: true$/d` 删除 `secrets.bitwarden` 块，虽然只匹配了目标行，但 sed 的多行模式在某些 macOS sed 版本下会破坏相邻结构，导致 YAML 解析报错 "mapping values are not allowed here"。**永远不要用 sed 删除 YAML 块**，用 Python yaml 模块。
+
+### 删除 Provider（清理配置）
 
 ### 推荐的 config.yaml 编辑方式（防止 key 重排）
 
@@ -570,6 +607,7 @@ grep -n "aicodee-relay\|V2.aicodee\|custom_providers\|model_catalog.providers" ~
 
 **最佳实践：`read_file` + Python `str.replace()`**
 详见 [references/config-py-edit.md]
+详见 [references/config-yaml-block-edit.md] — 删除/重建配置区块（secrets/bitwarden等）、yaml.dump副作用修复
 详见 [references/v2-aicodee-gateway.md] — v2.aicodee.com API 聚合网关平台详情（可用模型、端点、API key 行为差异）
 详见 [references/clawrouter-gateway.md] — ClawRouter 云 API 网关详情（OpenAI 兼容、111+ 模型、Stripe 支付）
 
@@ -630,6 +668,26 @@ for cp in cfg.get('custom_providers', []):
 **为什么之前说不要用 yaml.dump** — 那是对**整个 config.yaml** 做 dump 会重排所有 key 破坏结构。但**只重建其中某个区块**是可以接受的，因为这个区块本身已经是 Python 对象，重序列化不会影响其他部分。
 
 **关键原则**：只对需要修复的那一小块用 `yaml.safe_load()` + `yaml.dump()`，不伤害文件其余部分。
+
+### V2.aicodee.com 在 /model picker 消失的根因
+
+**症状**：Telegram `/model` 命令看不到 V2.aicodee.com 条目（带 ✓ 的当前选中）。
+
+**根因**：/model picker 通过 `(base_url_norm, credential_identity, api_mode)` 分组选中项。V2.aicodee.com 的 live discovery 返回的模型列表是 `[MiniMax-M2.1, MiniMax-M2.5, MiniMax-M2.5-highspeed]`，**不包含当前模型 `MiniMax-M2.7-highspeed`**。Picker 无法匹配当前模型，导致同组内默认选中其他 provider。
+
+**修复**：在 `custom_providers` 的 V2.aicodee.com 条目中显式添加 `model: MiniMax-M2.7-highspeed`：
+
+```python
+cfg['custom_providers'] = [p for p in cfg['custom_providers'] if p.get('name') != 'V2.aicodee.com']
+cfg['custom_providers'].insert(0, {
+    'name': 'V2.aicodee.com',
+    'base_url': 'https://v2.aicodee.com/v1',
+    'api_key_env': 'AICODEE_API_KEY',
+    'model': 'MiniMax-M2.7-highspeed',  # ← 必须有，picker 靠这个显示当前
+})
+```
+
+**验证**：`hermes model list` 或 Telegram `/model` 应能看到 V2.aicodee.com ✓。
 
 ### credential 状态含义
 | 状态 | 含义 | 处理 |

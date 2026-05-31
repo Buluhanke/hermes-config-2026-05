@@ -59,6 +59,51 @@ curl -X POST http://localhost:11434/api/generate -d '{"model":"qwen3-vl:2b","kee
 
 **替代方案**: YOLOv8 (170ms) + rembg (2.2s) + PaddleOCR 组合已覆盖 VLM 的大部分功能，且总占用不到 500MB。
 
+### 🔥 Ollama 模型内存占用（实测）
+
+**qwen3-vl:2b 实际占用：**
+- Ollama runner 进程：~1.6GB RSS（不是 16.7GB，16.7GB 是 size_vram 字段）
+- Ollama 服务本身常驻：~75MB
+- 不加载模型时只占 75MB，**加载才到 1.6GB**
+
+**清理步骤：**
+```bash
+# 停止 Ollama（释放模型内存）
+pkill -f 'ollama' 2>/dev/null
+
+# 或只卸载模型（保留服务）
+ollama rm qwen3-vl:2b
+```
+
+**内存监控命令：**
+```bash
+ps aux | grep -E 'ollama|Virtualization' | grep -v grep | awk '{print $6/1024"MB  "$11}'
+```
+
+### Docker Desktop Linux VM 内存占用
+
+**Mac 版 Docker Desktop = Linux 虚拟机**，VM 本身就要 ~4.8GB，与跑不跑容器无关。
+
+| 进程 | 内存 | 说明 |
+|------|------|------|
+| Virtualization.VirtualMachine | 4.8GB | Docker Desktop Linux VM |
+| 容器（总计） | ~3.3GB | hindsight(1.7GB) + open-webui(1GB) + n8n(370MB) + searxng(180MB) |
+
+**完全释放 Docker 内存：**
+```bash
+# 1. 停所有容器
+docker stop $(docker ps -q)
+
+# 2. 退出 Docker Desktop
+osascript -e 'quit app "Docker Desktop"'
+
+# 3. 确认 VM 进程消失
+ps aux | grep Virtualization.VirtualMachine | grep -v grep
+# 应无输出
+```
+
+**停止后实测：23GB 机器空闲从 237MB → 7.2GB，降温明显。**
+
 ### Nous Portal deepseek-v4-flash 模型状态变化
 
 **背景**: 2026-05-21~22 期间，Nous Portal 的 `deepseek/deepseek-v4-flash` 免费可用（272 次会话记录，billing_provider=nous）。
@@ -94,7 +139,7 @@ M4 Mac 24GB 内存分配建议：
 | Ollama 服务 | 保留 (~75MB) | 常驻，但不要加载大模型 |
 | qwen3-vl:2b | **卸载** ⚠️ | 占用 16.7GB，用 YOLO/rembg 替代 |
 | qwen2.5:1.5b | 按需 | 986MB，Hindsight 记忆用 |
-| Docker Desktop | 无容器时影响小 | 可关释放 ~600MB |
+| Docker Desktop | 退出可释放 4.8GB | Linux VM，常驻 ~5GB |
 | Chrome | 常规使用 | ~500MB |
 
 ## 模型提供商对比
