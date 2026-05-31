@@ -320,6 +320,59 @@ top -l 1 | grep PhysMem
 ps aux | grep 'Virtualization.VirtualMachine' | grep -v grep
 
 # Colima
+ps aux | grep 'colima\|limactl' | grep -v grep
+
+# 两个都停了才是真停干净
+```
+
+### Ollama 是 Mac 上的内存杀手
+
+Ollama（本地模型推理）会偷偷自动启动并加载模型到内存，单个模型就能吃 15GB。
+
+```bash
+# 识别 Ollama 进程
+ps aux | grep ollama | grep -v grep
+
+# 停止 Ollama（释放全部模型内存）
+pkill -f ollama
+
+# 验证
+top -l 1 | grep PhysMem
+```
+
+**教训：** 每次 Mac 重启或 Ollama 被手动打开后，它会自动在后台加载模型。需要时再开，不用时立刻杀掉。
+
+### Docker Hub 被墙时的镜像拉取策略
+
+- `registry-1.docker.io` (Docker Hub) 被墙时 `ghcr.io` 可能仍畅通
+- 先测试：`ping -c 2 registry-1.docker.io` vs `ping -c 2 ghcr.io`
+- 如果 Docker Hub 不通，检查 ghcr.io 是否有替代镜像
+- 后台拉取用 `background=true`，完成后检查 `process(action='poll')`
+
+### 镜像下载监控
+
+Docker 镜像拉取没有进度条，用后台进程 + 日志监控：
+
+```bash
+# 后台拉取
+terminal(background=true, command='docker pull IMAGE', notify_on_complete=true)
+
+# 监控进度
+process(action='poll', session_id='proc_xxx')
+
+# 查看日志
+process(action='log', session_id='proc_xxx')
+```
+
+大镜像（包含模型的如 hindsight）可能需要 5-10 分钟，耐心等待即可。
+
+### 识别当前跑的是哪种
+
+```bash
+# Docker Desktop
+ps aux | grep 'Virtualization.VirtualMachine' | grep -v grep
+
+# Colima
 ps aux | grep 'colima' | grep -v grep
 
 # 两个都停了才是真停干净

@@ -69,14 +69,12 @@ Skills 采用 `category/skill-name/` 子目录结构，`hermes skills list` 显�
 4. 完成后记录结果到 memory，不打扰用户
 5. 破坏性操作（删文件、停进程、改系统设置）需保守，优先备份再操作
 7. **⚠️ 推荐清单 = 执行令**：用户说"以上任务也要做"或类似指令时，推荐列表是**直接执行的计划**，不是确认清单。列出推荐后立刻开始执行，不要问"需要我先联系询价吗？"、"要不要开始安装？"
-8. **⚠️ 用户纠正后立即执行，不要重审**：用户说"不要停下来等命令"后，下次再遇到多选择场景立刻执行，不需要再说"我执行第一条，你先确认"——直接做。
-
-**⚠️ 用户行为准则（2026-06-02 强化，核心铁律）：**
+**⚠️ 推荐清单 = 执行令（2026-06-02 强化，核心铁律）：**
 - 中小问题/多选择场景 → AI 自主决定执行，**不等确认，不废话**
 - 重要决策和改动 → 才问用户
 - 执行后要落实，不放空炮
-- **推荐清单 = 执行令**：列出推荐后立刻执行，不要问"需要我先联系询价吗？"
 - **用户说"不要停下来等命令"** = 收到多选任务后立即执行推荐清单，不等确认
+- **这条原则适用于所有任务类型**，不只是idle_learning
 
 **⚠️ 昨夜死机根因（screen_trigger_handler 进程堆积，2026-05-30 诊断）：**
 凌晨02:50开始，screen_watcher 检测到屏幕变化后触发 screen_trigger_handler，但 handler 处理慢（smolvlm2分析10-15秒/次），新触发持续进入导致"Handler仍在运行"堆积。屏幕被锁定时 `screencapture -x` 超时，02:50-03:10期间297次失败，系统进入异常循环。
@@ -103,15 +101,25 @@ smolvlm2-agentic-gui 已从本地 Ollama 消失 **5次**（2026-05-30 × 2 + 202
 
 **⚠️ 静默失败模式（2026-06-07 发现）**：handler 硬编码 smolvlm2 做场景分类时，模型消失后 get_scene_type() 会超时/报错，但 handler 不会退出，只是返回 "unknown"。dry-run 日志 `"冷却中"` 掩盖了真实故障。
 
-**已确认的 qwen3-vl:2b 应急切换（2026-06-07 实测）**：
-- qwen3-vl:2b 场景分类响应 ~24s，"other" 分类可用
-- 超时需从 30s 改为 60s
+**已确认的 qwen3-vl:2b 应急切换（2026-06-07 实测，2026-05-31 补充 branch logic 陷阱）**：
+- qwen3-vl:2b 场景分类响应 ~7s（2026-05-31 实测：6.9s 正确识别 "desktop"），"other" 分类可用
+- ⚠️ 性能波动大：2026-05-30 测出 24s，2026-05-31 测出 6.9s，差异可能与服务器负载/图像尺寸相关
+- 超时需从 30s 改为 60s（安全起见）
 - 模型消失时自动切换步骤：
   1. 检查：`curl http://127.0.0.1:11434/api/tags` 确认模型不在列表
   2. 备份：`cp ~/.hermes/scripts/screen_trigger_handler.py ~/.hermes/scripts/screen_trigger_handler.py.bak.$(date +%Y%m%d)`
   3. 替换：用 patch 将 `MODEL = "ahmadwaqar/smolvlm2-agentic-gui:latest"` 改为 `MODEL = "qwen3-vl:2b"`
   4. 调超时：patch 将 `timeout=30` 改为 `timeout=60`（get_scene_type 和 ask_screen 两处）
   5. 重启：`pkill -f screen_watcher; terminal(background=true) 启动`
+
+**⚠️ 2026-05-31 新增陷阱：仅换模型名不够！分支逻辑也是死代码**
+screen_trigger_handler.py `on_trigger()` 中的场景分支逻辑（~line 200）匹配**中文关键词**（`"浏览器" in scene_type`），但 `get_scene_type()` 返回**英文场景名**（`"browser"`）。smolvlm2 在时返回英文，qwen3-vl:2b 也返回英文 — 但分支逻辑写的是中文关键词，**从未生效过**。
+- 切换模型后必须同时将分支逻辑改为英文精确匹配：`if scene_type in ("browser", "jingdong", "1688")`
+- 验证方法：grep `[AUTO-EXEC-DRY]` 日志，看场景类型是否精准匹配分支条件
+- 底层原因：screen_trigger_handler 有**两个独立的模型引用位置**：
+  - `MODEL = "..."` 行 23 — 用于 `ask_screen()`（内容分析）
+  - `get_scene_type()` 内的 `"model": "..."` 行 144 — 用于场景分类
+  两者可能指向不同模型。切换时必须两处都改。
 
 **备选模型**（优先测试可 Ollama 直接拉取的）：
 - moondream:1.8b-v2-q4_K_M（约1GB），通用视觉，非 GUI 专项
@@ -279,10 +287,15 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - 2D grounding（绝对→相对坐标），256K上下文
   - **实测**：qwen3-vl:2b 500px截图19.3s响应，正确识别UI元素；1024px+超时
   - 限制：1024px+图像处理超时，需较小输入尺寸；900x900 缩略图 46.6s
-- **⭐ Gemma 4（Google DeepMind，2026-04-02 发布）** — Apache 2.0，多模态
-  - Ollama完整可用：gemma4:e2b（7.2GB）、gemma4:e4b（9.6GB）、gemma4:26b（18GB）
-  - vision benchmarks: MMMU Pro 52.6%/73.8%/76.9%
-  - e2b/e4b为边缘设备优化，128K上下文
+- **⭐ Gemma 4 — M4 24GB 最佳 Ollama 可用升级路径（2026-05-31 InsiderLLM 确认）**：
+  - `gemma4:26b`（~18 GB Q4, MoE 3.8B active）— MMMU Pro **73.8%**, MATH-Vision **82.4%** — 当前 Ollama 可用最强 vision
+    - M4 24GB 理论上可装（余量 ~6GB 给系统），18GB 下载需谨慎规划
+  - `gemma4:e4b`（~7.2 GB）— MMMU Pro 52.6%, MATH-Vision 59.5% — 轻量升级首选，下载快
+  - `gemma4:e2b`（~3.4 GB）— MMMU Pro 44.2% — 接近 qwen3-vl:2b 级别，替换收益有限
+  - ⚠️ 安装前需确认磁盘空间 + Ollama 版本兼容性
+- **⭐ PaddleOCR-VL 0.9B**（2026-05-31 发现）— 纯 CPU OCR，92.6% doc accuracy
+  - `pip install`，无需 GPU，适合 screen_watcher 文本提取
+  - 详见 `references/paddleocr-vl-0.9b.md`
 - **⭐ Qwen 3.6（2026-05）** — 视觉内建于基座模型（无独立VL分支）
   - Qwen 3.6-27B dense（~17GB Q4_K_M）— 新SOTA本地视觉
   - Qwen 3.6-35B-A3B MoE（~22GB）
@@ -299,8 +312,11 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - 限制：低分辨率（2048px 限制），ScreenSpotPro 仅 15.1%（高分辨率大屏+小按钮识别差）；无通用对话/推理能力
   - **HF 镜像可用**：hf-mirror.com（返回 302，可直接用 hf-mirror.com 替代 huggingface.co）
 - **Smol2Operator（2025-09）**：归一化坐标（0-1 范围）比像素坐标好 **20x**（41% vs 4% ScreenSpot-v2）。当前 find_element_by_vision() 要求像素坐标，可能在降级 smolvlm2 表现
-- 推荐来源：InsiderLLM（insiderllm.com）Mac LLM 指南（定期更新模型推荐和 tok/s 基准）；Qwen2.5VL Ollama 页面（ollama.com/library/qwen2.5vl）
-- 目标：找到 M4 24G 上跑得最好的免费视觉模型
+**推荐来源（按可靠性排序）**：
+1. **InsiderLLM（insiderllm.com）** ✅ 已验证（2026-05-31）：深度 Mac 指南，定期更新模型推荐和 tok/s 基准，browser_navigate 可直接抓取
+2. **Ollama 官方 library**（ollama.com/library/）— 确认模型是否在库中
+3. **ddgs CLI**（`ddgs text -q "query" -m 5`）— 快速关键词，超时返回空时忽略
+4. **HN Firebase API** — 热点技术文章
 - ⚠️ 已知限制：`OLLAMA_USE_MLX=1` 需要 32GB+ 统一内存（M4 24GB 不支持）
 
 **方向 D — 执行（手眼配合）调研方向**
@@ -371,6 +387,13 @@ grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log | sed 's/.*scene=//' | so
   - tokenized screen output 思路：smolvlm2 做 UI 元素文本化而非只输出坐标
   - macOS-first, daemon+CLI 架构
   - 太早期不推荐直接采用，但 selector-first 方法值得借鉴
+- **⭐ SafeGround (UCSB AI, Feb 2026)** — 不确定性校准框架，解决 GUI grounding "何时信任"的问题
+  - 空间不确定性量化 → patch-level 概率分布判断模型确信度
+  - 选择性预测 + 安全推迟：不确定时 defer 而非盲目执行
+  - 系统准确率最高提升 +5.38pp（vs Gemini-only）
+  - 🇨 MIT license，代码在 github.com/UCSB-AI/SAFEGROUND
+  - **关键价值**：为 auto_execute DRY_RUN=False 提供理论框架 — 用置信度阈值替代一刀切的 dry-run/all
+  - 详见 `references/safeground-2026-05-31.md`
 - **剩余步骤（⚠️ 2026-05-29 实测修正）**：整个 auto-execute 链路的关键前提是 **screen_watcher 本身在运行**。如果 screen_watcher 不工作，dry-run 日志永远为空。
   1. ✅ 先**检查 screen_watcher 是否存活**（`ls -lt ~/.hermes/screenshots/.changed`，最后修改时间应在最近24h内）
   2. 如果 screen_watcher 不运行 → 诊断原因（handler lock 残留？cron 未启动？进程被杀？）
@@ -453,6 +476,18 @@ grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log | sed 's/.*scene=//' | so
   - 检测器基于当前 agent 行为模式优化，未来可能升级需持续关注
 - **防御思路**：行为过程扰动（process-level perturbation）比输出伪装更有效
 
+**⚠️ Cloudflare Turnstile 强制 WebGL 指纹检测（2026-06-01 记录，源自 2026-05-30 上线）**：
+- 来源：HN [62pts] hacktivis.me — WebKitGTK 浏览器用户报告 Turnstile 无限循环
+- **核心变化**：Turnstile 自 2026-05-24 起要求 WebGL renderer fingerprint，独立于行为检测
+- 这是**第二条防线**（设备指纹），补充 CogCAPTCHA30 行为检测：两条独立运行
+- WebKitGTK 被整体封禁（Apple 默认屏蔽 WebGL fingerprinting）
+- Firefox 145 可过（privacy.resistfingerprinting 默认未开启）
+- **对 Hermes chrome-debug 的影响**：
+  - chrome-debug 的 bot 特征可能被放大检测
+  - 需要验证 chrome-debug 能否通过 Turnstile 保护站点
+  - 防御：WebGL spoofing via chrome flags 或 browserbase proxies
+- 详见 `references/idle-learning-2026-05-31-new-findings.md`
+
 **搜索降级：当 web_search 402 时**
 - 优先用 HN Firebase API + ddgs 组合（ddgs 格式：`ddgs text -q "query" -m 5`）
 - HN Firebase API 获取高分文章 URL，ddgs 补充精准搜索
@@ -507,18 +542,39 @@ for m in d.get('models',[]):
 ```
 ⚠️ **重要**：ollama Python SDK 在系统 Python（`/usr/local/bin/python3`），不在 hermes-agent venv（`~/.hermes/hermes-agent/venv/bin/python3`）。直接调用 `python3` 用的是 hermes venv，会报 `ModuleNotFoundError: ollama`。
 
+**⚠️ Ollama 进程被系统 force kill（2026-06-01 发现）**：
+- 两次发现 Ollama 退出日志为 `err="signal: killed"`（23:53 和 00:04），疑似 macOS 内存压力调度
+- 后果：Ollama 挂掉后 screen_watcher handler 场景分类失败（Connection refused → 返回 unknown），dry-run 日志被污染
+- **诊断**：`ps aux | grep -i ollama | grep -v grep` — 无输出 = 进程已挂
+- **修复**：`open -a Ollama && sleep 5 && curl -s --max-time 3 http://127.0.0.1:11434/api/tags`
+- **验证**：`curl -s --max-time 3 http://127.0.0.1:11434/api/tags` 返回模型列表即恢复
+- **连锁影响**：screen_watcher handler 场景分类全失败 → 全部返回 unknown → unknown 场景占比异常上升
+- **idle_learning 第一步检查清单必须新增**：`ps aux | grep ollama` 确认进程存活
+- **注意**：Ollama 是 macOS Login Item 自动启动的，但会在无活动后被杀，不是一次性故障
+
 **⚠️ Ollama API 端点关键陷阱（2026-05-30 实测）**：
 - `/api/generate` 处理 1920x1080 截图需 41.6s → 容易触发 120s 超时
 - `/api/chat` + `messages` 格式只需 31.7s → 快 24%，响应格式更干净
 - **所有 Ollama Vision 集成必须用 `/api/chat`**，不能用 `/api/generate`
-- response 格式：`/api/generate` → `data['response']`；`/api/chat` → `data['message']['content']`
+- ⚠️ **`/api/chat` 默认返回 streaming JSON**，必须显式设置 `"stream": false`，否则 json.loads() 会报 "Extra data" 错误
+- response 格式：`/api/generate` → `data['response']`；`/api/chat` → `data['message']['content']`（stream=false 时）
+- 完整 payload 示例：
+  ```python
+  payload = {
+      "model": "qwen3-vl:2b",
+      "stream": False,  # ⚠️ 必须！否则返回 streaming chunks
+      "messages": [{"role": "user", "content": "Classify this screenshot"}],
+      "images": [img_b64],
+      "options": {"temperature": 0.0, "max_tokens": 20}
+  }
+  ```
 - 详见 `screen-watcher-vision/references/ollama-api-endpoint-chat-vs-generate-2026-05-30.md`
 
 **⚠️ smolvlm2 稳定性参考（已退役，仅作历史记录）：**
 - 2026-05-28 ~ 2026-06-02 期间实测：响应时间 5-11s，GUI 元素识别准确，无幻觉
 - ScreenSpot-v2 基准分数：61.71%
 - **⚠️ 2026-06-02 已从 Ollama registry 下线**：pull 返回 EOF + 404，已非可用模型
-- qwen3-vl:2b 已接管场景分类（响应 ~24s，"other" 分类，通用能力更强）
+- qwen3-vl:2b 已接管场景分类（响应 ~7s-24s 波动，"desktop"/"browser"/"other" 分类，通用能力更强）
 - 参考历史数据用于评估 smolvlm2 系模型恢复后的预期表现
 
 **⚠️ github.com vs raw.githubusercontent.com 区分**：
@@ -580,7 +636,8 @@ nomic-embed-text:latest                ❌ 已从本地移除
 
 - **⭐ qwen3-vl:2b vs smolvlm2-agentic-gui 评估（2026-05-30，实测推翻早期结论）：**
   - smolvlm2-agentic-gui：17.9s（900x506缩略图），scene classification 准确返回 "browser"
-  - qwen3-vl:2b：24s（600x900缩略图），返回 "other" 或场景描述，**当前已作为默认模型**
+  - qwen3-vl:2b：6.9s（1920x1080 全屏截图 3.3MB），正确识别 "desktop"，**当前已作为默认模型**
+  - ⚠️ 性能波动大（6.9s ~ 24s），与图像尺寸和服务器负载相关
   - **结论**：smolvlm2 已移除（github blocked + 自动清理）；qwen3-vl:2b 接管场景分类任务；smolvlm2 保留为未来网络恢复后的备选
 
 - **⭐ Holo1.5-3B（2026-05-30 实测）** — ScreenSpot 91.7%，M4 24GB 可用，3B参数
@@ -720,6 +777,7 @@ PYEOF
 
 ## 支持文件
 
+- [PaddleOCR-VL 0.9B (2026-05-31)](./references/paddleocr-vl-0.9b.md) — CPU-only OCR, 92.6% doc accuracy, pip install, complements screen_watcher text extraction
 - [Ollama API 端点区分：本地 vs 远程库](./references/ollama-api-endpoint-local-vs-remote-2026-05-30.md) — api.ollama.com vs 127.0.0.1:11434 区别，实测4个本地模型
 - [GUIDE Benchmark CVPR 2026](./references/guide-benchmark-cvpr2026.md) — 用户行为理解benchmark，三层递进（behavior detection 44.6% → intent prediction → assistance），结构化上下文提升GPT-4o达+36pp
 - [搜索降级方案](./references/search-fallback.md) — 当 web_search 不可用时的 ddgs 降级流程
@@ -758,6 +816,7 @@ PYEOF
 - [Idle Learning 2026-06-02 发现：auto_execute DRY_RUN 日志为空根因](./references/idle-learning-2026-06-02-dryrun-log-empty.md) — unknown 场景不在 ACTION_WHITELIST 导致 dry-run 永不触发，修复方案
 - [昨夜系统冻结诊断（2026-05-30）](./references/screen-watcher-freeze-diagnosis-2026-05-30.md)
 - [Hermes Agent 自我学习资源指南](./references/hermes-self-learning-resource-guide.md) — 用户固化：官方文档→GitHub→Discord→中文社区→技能市场 — 凌晨02:50-03:10 handler进程堆积297次screencapture失败，根因+防护+诊断命令
+- [2026-05-31 学习记录（方向C）](./references/idle-learning-2026-05-31-new-findings.md) — Cloudflare Turnstile WebGL 指纹强检、V100 SXM2 £200 家用推理验证 memory bandwidth 瓶颈、The Website Specification Agent Readiness 18 项规范
 
 ---
 

@@ -32,96 +32,72 @@ GPU 加速:     MPS (Metal Performance Shaders) ✅
 | **PyTorch 2.12** | venv 自带 | — | ✅ MPS可用 |
 | **torchvision 0.27** | venv 自带 | — | ✅ |
 | **transformers** | venv 自带 | ~/.cache/huggingface/ | ✅ |
-| **Ultralytics YOLOv8** | venv 自带 | 当前目录 | ✅ 170ms |
-| **rembg** | venv 自带 | ~/.u2net/ (176MB) | ✅ 2.2s |
-| **PaddleOCR** | venv 自带 | ~/.paddleocr/ | ✅ |
-| **OpenCV 4.13** | 系统 Python 3.14 | — | ✅ (但有dylib冲突警告) |
-| **je_auto_control** | 系统 Python 3.14 | — | ✅ (不在venv) |
-| **pytesseract** | 系统 Python 3.14 | — | ✅ (不在venv) |
+| **YOLOv8** | venv 自带 | 当前目录 | ✅ 170ms |
+| **PaddleOCR** | 系统 Python 3.14 | ~/.paddleocr/ | ✅ |
+| **EasyOCR** | 系统 Python 3.14 | — | ✅ |
+| **u2net.onnx** | 手动下载 | ~/.u2net/ (168MB) | ✅ |
+| **holographic** | hermes-agent 插件 | ~/.hermes/memory_store.db | ✅ 记忆系统 |
 
-### ❌ 缺失
-- **hindsight_client**: 必须手动安装 → `~/.hermes/hermes-agent/venv/bin/pip install hindsight_client`
+### ✅ 记忆系统现状
+
+**已切换到 holographic**（原生 Python 插件，不依赖 Docker）：
+- 数据库：`~/.hermes/memory_store.db`
+- 工具：`fact_store add` / `fact_store list`
+- chromadb：原生 uvicorn 端口 8000（heartbeat 正常）
 
 ## 已知问题
 
-### 🔥 qwen3-vl:2b Ollama 模型 占用 16.7GB 内存
+### 🔥 Ollama App 关窗口不退出（内存杀手）
 
-**症状**: Ollama 进程 RSS 达 16.5GB，系统只剩 20% 空闲内存，开始使用 swap。
+**症状**: Ollama app 窗口关闭后，`ollama serve` 进程继续运行，加载模型时 RSS 可达 15GB。
 
-**根因**: qwen3-vl:2b 在 Ollama 中加载后占用 size_vram=16.7GB（实测 RSS 16.5GB）。
+**根因**: Ollama Electron app 默认"关窗口不退出服务"。
 
-**解法**: 不需要时卸载：
+**清理步骤（实测有效）:**
 ```bash
-ollama rm qwen3-vl:2b          # 彻底删除
-# 或
-curl -X POST http://localhost:11434/api/generate -d '{"model":"qwen3-vl:2b","keep_alive":0}'   # 仅卸载
+# 1. 先杀 Electron 守护父进程
+kill -9 $(ps aux | grep 'ollama' | grep -v grep | awk 'NR==1 {print $2}')
+
+# 2. 再杀 ollama serve 和 runner
+pkill -9 -f ollama
+
+# 验证
+ps aux | grep ollama | grep -v grep  # 应无输出
 ```
 
-**替代方案**: YOLOv8 (170ms) + rembg (2.2s) + PaddleOCR 组合已覆盖 VLM 的大部分功能，且总占用不到 500MB。
-
-### 🔥 Ollama 模型内存占用（实测）
-
-**qwen3-vl:2b 实际占用：**
-- Ollama runner 进程：~1.6GB RSS（不是 16.7GB，16.7GB 是 size_vram 字段）
-- Ollama 服务本身常驻：~75MB
-- 不加载模型时只占 75MB，**加载才到 1.6GB**
-
-**清理步骤：**
+**设置开机不自动启动:**
 ```bash
-# 停止 Ollama（释放模型内存）
-pkill -f 'ollama' 2>/dev/null
-
-# 或只卸载模型（保留服务）
-ollama rm qwen3-vl:2b
+defaults write com.ollama.ollama OLLAMA_AUTO_START -bool false
 ```
+注意：这只阻止开机自启，**不阻止 app 关闭后服务继续运行**。
 
-**内存监控命令：**
+**彻底解决方案（选一个）:**
+1. 卸载 Ollama app — 最干净
+2. 改用命令行版 `ollama serve`（不装 app）— 按需启动
+3. 保留 app + 用完手动 `pkill -9 -f ollama`
+
+**实测内存:** 杀后 23GB 机器空闲从 96MB → 17GB。
+
+### Docker/Colima 内存占用
+
+**实际使用 Colima（非 Docker Desktop）**，VM 本身占 ~50MB，比 Docker Desktop 的 4.8GB 轻量很多。
+
+**完全释放 Docker 内存:**
 ```bash
-ps aux | grep -E 'ollama|Virtualization' | grep -v grep | awk '{print $6/1024"MB  "$11}'
+colima stop   # 释放 VM 内存
+colima start  # 需要时再启动
 ```
 
-### Docker Desktop Linux VM 内存占用
+**hindsight 已废弃** — 已切换到 holographic（原生 Python 插件，不依赖 Docker）。
+当前记忆系统：holographic（memory_store.db）+ chromadb（原生 uvicorn 端口 8000）。
 
-**Mac 版 Docker Desktop = Linux 虚拟机**，VM 本身就要 ~4.8GB，与跑不跑容器无关。
+**停止后实测：** Colima stop 后 23GB 机器空闲从 237MB → 8GB。
 
-| 进程 | 内存 | 说明 |
-|------|------|------|
-| Virtualization.VirtualMachine | 4.8GB | Docker Desktop Linux VM |
-| 容器（总计） | ~3.3GB | hindsight(1.7GB) + open-webui(1GB) + n8n(370MB) + searxng(180MB) |
+### Nous Portal 模型状态变化
 
-**完全释放 Docker 内存：**
-```bash
-# 1. 停所有容器
-docker stop $(docker ps -q)
+**背景**: 2026-05-21~22 期间，Nous Portal 的 `deepseek/deepseek-v4-flash` 免费可用。但 2026-05-31 测试时返回 404 "requires available credits"。
 
-# 2. 退出 Docker Desktop
-osascript -e 'quit app "Docker Desktop"'
-
-# 3. 确认 VM 进程消失
-ps aux | grep Virtualization.VirtualMachine | grep -v grep
-# 应无输出
-```
-
-**停止后实测：23GB 机器空闲从 237MB → 7.2GB，降温明显。**
-
-### Nous Portal deepseek-v4-flash 模型状态变化
-
-**背景**: 2026-05-21~22 期间，Nous Portal 的 `deepseek/deepseek-v4-flash` 免费可用（272 次会话记录，billing_provider=nous）。
-但到 2026-05-31 测试时，该模型返回 404 "requires available credits"。
-
-**教训**: 模型定价会变化。测试前不要假设收费策略与历史配置一致。
-
-**验证方法**: 
-```python
-# 用 OAuth token 直接测试
-auth = json.load(open("~/.hermes/shared/nous_auth.json"))
-resp = urllib.request.urlopen(
-    urllib.request.Request("https://inference-api.nousresearch.com/v1/chat/completions",
-        data=json.dumps({"model":"deepseek/deepseek-v4-flash","messages":[{"role":"user","content":"ping"}],"max_tokens":5}).encode(),
-        headers={"Authorization":f"Bearer {auth['access_token']}","Content-Type":"application/json"},
-        method="POST"))
-# 200=免费可用, 404=需付费, 401=认证过期
-```
+**教训**: 模型定价会变化，测试前不要假设收费策略与历史配置一致。
 
 ### 包安装到不同 Python 环境
 
@@ -136,11 +112,12 @@ M4 Mac 24GB 内存分配建议：
 
 | 进程 | 建议状态 | 说明 |
 |------|---------|------|
-| Ollama 服务 | 保留 (~75MB) | 常驻，但不要加载大模型 |
-| qwen3-vl:2b | **卸载** ⚠️ | 占用 16.7GB，用 YOLO/rembg 替代 |
-| qwen2.5:1.5b | 按需 | 986MB，Hindsight 记忆用 |
-| Docker Desktop | 退出可释放 4.8GB | Linux VM，常驻 ~5GB |
-| Chrome | 常规使用 | ~500MB |
+| hermes-agent | 常驻 | ~250MB，核心进程 |
+| chromadb | 常驻 | ~300MB（原生 uvicorn） |
+| colima | 按需启动 | ~50MB，轻量 VM |
+| Ollama app | **用完即杀** ⚠️ | 加载模型时可达 15GB，关窗口不退出 |
+| qwen3-vl:2b / qwen2.5 | 按需 | 卸载后不占内存 |
+| Docker 容器 | 不使用 | 已废弃，改用原生方案 |
 
 ## 模型提供商对比
 

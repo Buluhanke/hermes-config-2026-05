@@ -1,35 +1,33 @@
-# Provider Fallback Chain Test — 2026-05-31
+# Provider Fallback Chain — 2026-06-01
 
-## 测试方法
+## 当前配置（已验证可用）
 
-使用 Python 脚本直接调用各提供商 API（读取 ~/.hermes/.env 获取密钥），测试 `deepseek/deepseek-v4-flash` 模型连通性。
+| Provider | 模型 | 状态 | 说明 |
+|----------|------|------|------|
+| V2.aicodee.com (custom) | MiniMax-M2.7-highspeed | ✅ 主用 | 中转，额度充足 |
+| deepseek | deepseek-v4-flash | ✅ 备用 | 直连 |
+| OpenRouter | deepseek-v4-flash | ✅ 备用 | 免费额度 |
 
-## 结果
+## 失效 Provider（已清理）
 
-| # | 提供商 | URL | HTTP | 结论 |
-|---|--------|-----|------|------|
-| 1 | v2.aicodee.com (custom) | https://v2.aicodee.com/v1 | 403 | 额度不足 ($0.00) |
-| 2 | minimax-cn | https://api.minimaxi.com/v1 | 429 | 速率超限 (2056) |
-| 3 | **DeepSeek 直连** | https://api.deepseek.com | **200** | ✅ 正常, deepseek-v4-flash |
-| 4 | **OpenRouter** | https://openrouter.ai/api/v1 | **200** | ✅ 正常, deepseek/deepseek-v4-flash-20260423 |
-| 5 | **Nous Portal** | https://inference-api.nousresearch.com/v1 | 404 | 模型需付费充值 |
-
-## 当前配置
-
-2026-05-31 最终配置: OpenRouter → deepseek/deepseek-v4-flash (走用户 DeepSeek 直连渠道扣费)
+- **Groq** — key 失效（403）
+- **Cerebras** — 账号问题（403/1009）
+- **MiniMax-CN** — 额度耗尽（429），key 有效
+- **Nous Portal** — 模型需付费（404）
 
 ## 历史记录
 
-- 2026-05-21: Nous Portal + deepseek/deepseek-v4-flash (免费, 272次会话)
-- 2026-05-30: v2.aicodee.com + MiniMax-M2.7-highspeed (额度用尽前)
-- 2026-05-31: 切到 OpenRouter + deepseek/deepseek-v4-flash:free
-- 2026-05-31: 改为 OpenRouter + deepseek/deepseek-v4-flash (走直连渠道)
+- 2026-05-21: Nous Portal + deepseek/deepseek-v4-flash (免费)
+- 2026-05-30: V2.aicodee.com + MiniMax-M2.7-highspeed
+- 2026-05-31: API key 全面归集，清理失效 provider
+- 2026-06-01: V2.aicodee.com 重新上线（picker 消失问题已修复，添加显式 model 字段）
 
-## OAuth 令牌位置
+## .env 中实际有效的 Key
 
-Nous Portal: `~/.hermes/shared/nous_auth.json`
 ```
-access_token: JWT token (自动续期)
-expires_at: 2026-05-31T01:50:40+00:00 (当时)
-inference_base_url: https://inference-api.nousresearch.com/v1
+AICODEE_API_KEY     ✅ sk-290...6e18
+DEEPSEEK_API_KEY    ✅ sk-7d7...f076
+OPENROUTER_API_KEY  ✅ sk-or-...87b6
+MINIMAX_CN_API_KEY  ⚠️ 额度429，key有效
+GEMINI_API_KEY      ⚠️ 网络超时，配置正确
 ```

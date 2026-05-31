@@ -7,7 +7,8 @@ trigger: screen_watcher触发screen_trigger_handler后调用
 # Screen Watcher Vision Handler
 
 ## 核心能力
-使用 smolvlm2-agentic-gui 分析屏幕截图，进行场景分类和内容理解。
+使用 qwen3-vl:2b 分析屏幕截图，进行场景分类和内容理解。
+（2026-06-02：smolvlm2-agentic-gui 从 Ollama registry 下线，完全切换到 qwen3-vl:2b）
 
 ## 已知问题：smolvlm2 幻觉
 smolvlm2 是一个小模型，存在明显幻觉问题，尤其在简单场景（计算器、空白桌面）上会生成不存在的湖光山色等描述。
@@ -28,20 +29,24 @@ smolvlm2-agentic-gui 在相同分辨率下 17.9s 返回准确分类结果。
 
 **结论**：smolvlm2 适合 `get_scene_type()`（场景分类），qwen3-vl:2b 因延迟过高无法在此场景使用。
 
-### 重要更正：两模型分工（2026-05-30 实测）
+### 重要说明：单模型架构（2026-06-02 确认，2026-05-31 实测完善）
+
+**smolvlm2-agentic-gui 已从 Ollama registry 永久下线**（pull 返回 404，2026-06-02 确认），
+两个函数已统一使用 qwen3-vl:2b：
 
 | 函数 | 模型 | 速度 | 用途 |
 |------|------|------|------|
-| `get_scene_type()` | smolvlm2-agentic-gui | ~18s（快且准）| 场景分类，触发 auto_execute ✅ |
-| `ask_screen()` | smolvlm2-agentic-gui | 7-10s（快）| GUI 内容分析 + 操作规划 |
+| `get_scene_type()` | qwen3-vl:2b | ~24s (2026-05-30实测) | 场景分类，返回英文单词 |
+| `ask_screen()` | qwen3-vl:2b | ~24s | GUI 内容分析 |
 
-**注意**：`ask_screen()` 和 `get_scene_type()` 共用 smolvlm2，因为：
-1. smolvlm2 响应快（18s vs qwen3-vl:2b 的 60s+）
-2. smolvlm2 在 scene classification 任务上实测准确（返回 "browser" 等英文单词）
-3. qwen3-vl:2b 仅适合离线 OCR 场景，不适合实时分析
+**⚠️ 换模型后的陷阱：分支逻辑也是死代码（2026-05-31 发现并修复）**
+`on_trigger()` 的场景分支原匹配中文关键词（`"浏览器" in scene_type`），但 `get_scene_type()` 始终返回英文（`"browser"`）。这意味着：
+- smolvlm2 时代：分支逻辑从未生效，全部走 `else` 分支
+- 换模型后：必须把分支逻辑改为英文精确匹配才能生效
+- 修复方式：`if scene_type in ("browser", "jingdong", "1688"):` 替代 `if "浏览器" in scene_type:`
 
-⚠️ **qwen3-vl:2b 已知限制**：原生 1920x1080 截图超时（>60s），必须缩图到 ~900x900 但响应仍达 46s+
-⚠️ **get_scene_type()** 中 smolvlm2 响应 17.9s（900x506 缩略图），满足实时要求
+**过去的两模型对照（历史记录，不再适用）：**
+之前曾尝试 qwen3-vl:2b（ask_screen）+ smolvlm2（get_scene_type）的分工架构，但 smolvlm2 已永久下线，此分工已废弃。
 
 ### ⚠️ 场景分类 smolvlm2 幻觉缓解（2026-05-30 实测有效）
 
@@ -52,7 +57,7 @@ smolvlm2-agentic-gui 在相同分辨率下 17.9s 返回准确分类结果。
 
 温度 0.1，30s timeout，smolvlm2 在 scene classification 任务上实测无幻觉。
 
-**模型状态（2026-05-30 实测确认，2026-06-07 更新）：**
+**模型状态（2026-05-31 实测更新 — 修复了 get_scene_type 仍指向已下线 smolvlm2 的 bug）：**
 | 函数 | 模型 | 速度 | 状态 |
 |------|------|------|------|
 | `get_scene_type()` | qwen3-vl:2b | ~24s | **在用**（smolvlm2 已从 Ollama registry 下线，2026-06-02确认） |
@@ -63,16 +68,16 @@ smolvlm2-agentic-gui 在相同分辨率下 17.9s 返回准确分类结果。
 
 ⚠️ **qwen3-vl:2b 在 900x506 缩略图上响应 ~24s**，虽比 smolvlm2 的 18s 慢，但 GUI 专用能力完整，且本地可用。
 
-**场景分类 prompt**（smolvlm2 输出英文单词，无乱码）：
+**场景分类 prompt**（qwen3-vl:2b 使用，temperature 0.0 确保确定性输出）：
 ```python
-"What is shown in this screenshot? Choose ONE from: browser, wechat, desktop, calculator, jingdong, 1688, dingtalk, telegram, other. Reply with ONLY the word."
+"Classify this screenshot into EXACTLY ONE of: browser, wechat, desktop, calculator, jingdong, 1688, dingtalk, telegram, other. Reply with ONLY the single word."
 ```
 
-**⚠️ smolvlm2-agentic-gui 自动清理问题（重要！2026-05-31 更新，2026-06-07 确认退役）**：
+**⚠️ 2026-05-31 修复**：原 smolvlm2 prompt 在代码中仍被使用，但模型已不存在。同时 prompt 输出格式（英文单词）与分支逻辑的中文关键词不匹配——两个 bug 叠加导致分支逻辑形同虚设。修复后全链路统一使用英文场景名。
 
-smolvlm2-agentic-gui 已从 Ollama 消失 **6次**（2026-05-30 × 2 + 2026-05-31 + 2026-06-07 + 2026-06-02 registry下线）。**2026-06-02 确认已从 Ollama registry 永久下线**，pull 返回 EOF + 404，不再是自动清理问题。
-
-**结论**：smolvlm2-agentic-gui 已退役，qwen3-vl:2b 是当前唯一可用视觉模型。疑似 Ollama 磁盘空间紧张时自动清理社区/非官方模型。
+**⚠️ smolvlm2-agentic-gui 永久下线（2026-06-02 确认退役）**：
+smolvlm2-agentic-gui 已从 Ollama registry 永久删除，pull 返回 EOF + 404。
+**结论**：smolvlm2 不再可用。qwen3-vl:2b 是当前唯一可用视觉模型，已接管所有视觉分析任务。
 
 **现象**：`curl http://127.0.0.1:11434/api/tags` 返回的模型列表中找不到 `ahmadwaqar/smolvlm2-agentic-gui`。
 
@@ -80,25 +85,22 @@ smolvlm2-agentic-gui 已从 Ollama 消失 **6次**（2026-05-30 × 2 + 2026-05-3
 1. `ollama pull ahmadwaqar/smolvlm2-agentic-gui:latest`（需 github.com 恢复）
 2. 或改用备选模型（见下方备选表）
 
-**备选模型**（当 smolvlm2-agentic-gui 不可用时）：
+**备选模型**（当 qwen3-vl:2b 不够用时）：
 | 模型 | 命令 | 适用场景 |
 |------|------|---------|
 | richardyoung/smolvlm2-2.2b-instruct | `ollama pull richardyoung/smolvlm2-2.2b-instruct` | 通用 SmolVLM2，非 GUI 专用，需测试 |
 | moondream:1.8b-v2-q4_K_M | `ollama pull moondream:1.8b-v2-q4_K_M` | 通用视觉，约 1GB，响应快 |
-| qwen3-vl:2b | （已安装但 60s+ 超时，不适合实时） | 离线 OCR 备选 |
+| qwen3-vl:2b | （已安装，~24s 响应，当前在用） | 所有视觉任务（场景分类+内容分析） |
 
 **验证方法**：
 ```bash
 curl -s --max-time 8 http://127.0.0.1:11434/api/tags | python3 -c "
 import sys,json
 d=json.load(sys.stdin)
-names = [m['name'] for m in d.get('models',[])]
-print('smolvlm2:', 'ahmadwaqar/smolvlm2-agentic-gui:latest' in names)
-print('Available:', names)
+for m in d.get('models',[]):
+    print(m['name'], '|', round(m['size']/(1024**3), 2), 'GB')
 "
 ```
-
-**待解决问题**：找到阻止 Ollama 自动清理的方案，或将 smolvlm2 换成官方模型。
 
 ---
 
@@ -124,8 +126,7 @@ nomic-embed-text:latest                ✅ 在用（嵌入模型）
 | qwen3-vl:2b | 1.9GB | ✅ 在用 | 实时GUI监控（~24s响应），所有视觉任务 |
 | qwen2.5:1.5b | ~1GB | ✅ 在用 | 小型文本模型 |
 | nomic-embed-text | ~274MB | ✅ 在用 | 嵌入模型 |
-| blaifa/InternVL3_5:4b | ~3GB | ⚠️ Mac上有图片理解Bug（Issue #12166），暂缓 | 基于Qwen3架构，通用视觉 |
-| blaifa/InternVL3_5:8b | ~5GB | ✅ 可pull | 更高精度 |
+| blaifa/InternVL3_5:4b | ~3GB | ⚠️ Mac上有图片理解Bug，暂缓 | 基于Qwen3架构，通用视觉 |
 | **Qwen 3.6-27B dense** | ~17GB Q4 | ⚠️ 待验证（Ollama支持待确认） | Vision内建于基座，M4 24GB "tight but doable" |
 | ui-venus | — | ❌ Ollama无 | 页面404，搜索无结果 |
 
@@ -136,7 +137,7 @@ nomic-embed-text:latest                ✅ 在用（嵌入模型）
 - 必须缩图到~900x900才能在46s内响应
 - 4B版本（3.3GB，90% ScreenSpot）待验证
 
-**smolvlm2 响应时间实测范围（2026-05-30 更新）**：
+**qwen3-vl:2b 响应时间实测范围（2026-05-30 更新，smolvlm2 已退役）**：
 - 简单桌面/壁纸：~5-8s
 - 中等复杂度（浏览器tabs+导航）：~10-13s
 - 高复杂度（移动端UI+商品卡片）：~20-25s
@@ -291,6 +292,12 @@ ACTION_WHITELIST = {
 - 无 `screen_watcher` 进程 → 手动启动 `python3 ~/.hermes/scripts/screen_watcher.py &`（用 background=true）
 - `.handler_lock` 永久存在（进程被 kill） → 手动 `rm ~/.hermes/screenshots/.handler_lock`
 - handler 重复 spawn → 检查 `.handler_lock` 是否正确创建/删除（见 2026-05-26 修复）
+- **Ollama 进程被系统 kill → handler Connection refused**（2026-06-01 发现）：
+  - 症状：handler 日志显示 `Failed to establish a new connection: [Errno 61] Connection refused`
+  - 根因：Ollama 被系统内存压力调度 kill（日志 `err="signal: killed"`），两次发现（23:53 和 00:04）
+  - 排查：`ps aux | grep -i ollama | grep -v grep` — 无输出 = 已挂
+  - 修复：`open -a Ollama && sleep 5 && curl -s --max-time 3 http://127.0.0.1:11434/api/tags`
+  - 注意：handler 本身正常，是上游 Ollama 服务挂了。scenario unknown 激增（超过正常40%基线）时优先查 Ollama
 - **dry-run 日志从无 `[AUTO-EXEC-DRY]`** → 检查 scene_type 格式是否与 ACTION_WHITELIST key 匹配（见上方场景类型 key 不匹配 bug）
 
 **启动后状态**：
@@ -336,7 +343,7 @@ ACTION_WHITELIST = {
 - 分析缓存：`/tmp/hermes_trigger_vision.jpg`
 - 日志：`~/.hermes/logs/screen_analysis.log`
 - Ollama地址：`http://localhost:11434/api/chat`（⚠️ 必须用 `/api/chat`，不能用 `/api/generate`）
-- 模型：`ahmadwaqar/smolvlm2-agentic-gui:latest`
+- 模型：`qwen3-vl:2b`（smolvlm2-agentic-gui 已从 Ollama registry 永久下线）
 
 ## ⚠️ Ollama API 端点关键陷阱（2026-05-30 实测）
 

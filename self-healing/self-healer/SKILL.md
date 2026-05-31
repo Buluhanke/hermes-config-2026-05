@@ -648,6 +648,18 @@ cd /Users/aimac/.hermes/hermes-agent
 
 ---
 
+## 支持文件
+
+| 文件 | 内容 |
+|------|------|
+| `references/api-key-centralization.md` | API Key 集中化管理流程、key 状态总表 |
+| `references/docker-hindsight-recovery.md` | Docker Hub 网络阻断诊断、Hindsight 容器恢复流程 |
+| `references/mac-mini-ram-management.md` | M4 Mac 内存控制、Colima vs Docker Desktop 选型 |
+| `references/hermes-repo-rebuild-plan.md` | Hermes 源码重建方案 |
+| `references/github-push-block-large-repo.md` | GitHub Push Protection 拦截修复 |
+
+---
+
 ## 执行模板（自检流程）
 
 ```
