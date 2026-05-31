@@ -301,6 +301,63 @@ docker compose up -d
 
 **参考**：用户未要求重启所有容器（可能有意暂停以节省资源），自愈仅作记录不自动执行。
 
+### Hindsight 记忆降级（2026-06-02新发现）
+
+**症状**：`gateway.error.log` 持续报错：
+```
+No module named 'hindsight_client'
+version None, older than 0.5.0
+```
+
+**根因**：
+1. `hindsight_client` Python 包未安装（Gateway 的 Python 环境里缺这个依赖）
+2. Hindsight Docker 容器版本低于 0.5.0（`curl http://localhost:8899/health` 返回 `version None`）
+
+**自愈流程**：
+```bash
+# 1. 装 hindsight_client 到 hermes-agent venv
+cd ~/.hermes/hermes-agent
+./venv/bin/pip install hindsight_client -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# 2. 升级 Hindsight Docker 镜像（如果用户有 docker write 权限）
+docker pull ghcr.io/nousresearch/hindsight:latest
+
+# 3. 验证
+./venv/bin/python -c "from hindsight_client import Hindsight; print('OK')"
+curl -s http://localhost:8899/health
+```
+
+**降级影响**：记忆功能降级为进程级，每次重启丢失之前的会话记忆，无法跨进程/会话去重。
+
+### screen_watcher smolvlm2 缺失（2026-06-02新发现）
+
+**症状**：`gateway.error.log` 持续刷屏：
+```
+[screen_watch] 🚨 [VLM错误] model 'ahmadwaqar/smolvlm2-agentic-gui:latest' not found
+```
+
+**影响**：screen_watcher 不断重试，污染 gateway.log（每分钟约8-9条），但不阻塞主流程。
+
+**自愈方案**：
+```bash
+# 检查当前用的 VLM 模型
+grep -i "smolvlm\|VLM" ~/.hermes/config.yaml
+
+# 如果配置了 smolvlm2 但 Ollama 没有这个模型，切回 qwen3-vl:2b
+ollama list
+# 如果 qwen3-vl:2b 存在，修改 screen_watcher 配置使用它
+# 如果都不存在，重新拉取
+ollama pull qwen3-vl:2b
+```
+
+**清理日志**：
+```bash
+# 统计污染程度
+grep -c "smolvlm2-agentic-gui" ~/.hermes/logs/gateway.log
+# 超过1000行就截断
+tail -2000 ~/.hermes/logs/gateway.log > /tmp/_tail && mv /tmp/_tail ~/.hermes/logs/gateway.log
+```
+
 ---
 
 ### Mac mini M4 内存爆掉（OOM卡死）

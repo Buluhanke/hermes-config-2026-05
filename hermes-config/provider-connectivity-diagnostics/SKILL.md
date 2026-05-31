@@ -18,15 +18,19 @@ Test which Hermes model providers can connect, diagnose common errors, and switc
 
 - Language: **Chinese** (`language: zh` in config). All system prompts (approval messages, tool notes) should use Chinese.
 - **"Test before switching"** — never switch the active model provider/config first. Always test the target model via direct API call, verify it responds, THEN switch config. User explicitly wants verification before activation.
+- **"只调顺序，不删配置"** — 用户明确约束：改模型优先级只能调整现有配置顺序，不允许删除 provider 条目、不允许改动 base_url、不允许改变配置结构。只做顺序调换和API key更新。
 - Cost preference: free models first, then direct-billed provider models.
 
 ## Provider Testing Workflow
 
-### Golden Rule — Test Before You Switch
+### Golden Rule — Test Before You Switch + Check Current Session First
 
 User repeatedly corrects: **don't change config first and hope it works.** Always:
-1. Test the target provider:model via direct API call from a temp script
-2. Only if the test succeeds, update config.yaml
+1. **First** — check which model/provider this conversation is actually using (look at gateway logs or `hermes fallback list`)
+2. Test the target provider:model via direct API call from a temp script
+3. Only if the test succeeds, update config.yaml
+
+**Critical**: The conversation context header (e.g., "Model: MiniMax-M2.7 via MiniMax") is authoritative for THIS session. Do NOT assume a model from a previous session is still primary — always verify by checking `tail gateway.error.log | grep "provider=.* model="` or `hermes fallback list`.
 
 ### Step 1 — Check Current Fallback Chain
 
@@ -173,8 +177,75 @@ See `references/free-model-scan-results.md` for the latest full scan output.
 | qwen/qwen3-coder:free | 1M | ❌ 429 rate-limited |
 
 ## June 2026 Update (2026-06-02)
-- **Groq** still primary: `llama-3.3-70b-versatile` via `custom:clawrouter` (provider: custom)
-- **MiniMax CN key invalid**: `{"base_resp":{"status_code":2049,"status_msg":"invalid api key"}}` — key `sk-cp-pjty...` format OK but auth rejected, needs regen
+
+### 当前可用性实测结果（2026-06-02晚，经实测）
+
+| Provider | 模型 | 状态 | 错误码 | 说明 |
+|----------|------|------|--------|------|
+| MiniMax CN | MiniMax-M2.7 | ❌ | 429 usage limit exceeded (2056) | 额度耗尽，等待刷新 |
+| DeepSeek 直连 | deepseek-v4-flash | ❌ | 401 Authentication Fails | API Key无效需重新获取 |
+| Cerebras | llama-3.3-70b | ❌ | 401 Wrong API Key | Key已失效 |
+| Groq | llama-3.3-70b-versatile | ❌ | 403 Forbidden | 模型名格式错，应为 `cerebras/llama-3.3-70b` |
+| **OpenRouter** | **deepseek/deepseek-v4-flash** | ✅ | 正常 | 成本$0.0000013173/call，极低 |
+| **OpenRouter** | **google/gemma-4-31b-it:free** | ✅ | 正常 | 免费，262K context |
+
+**结论**：当前唯一可靠可用选项是 OpenRouter + DeepSeek（非free版，free版被限流）。
+
+**当前Gateway活跃连接**（lsof法）：
+```
+192.168.0.4:62772->61.151.231.145:443 (ESTABLISHED)
+```
+61.151.231.145 是 api.minimaxi.com 的IP，说明当前 gateway 确实在连 MiniMax（即使429）。
+
+**Gateway API Server**（端口8642）拒绝所有无key请求，说明 api_server 的 allowed_keys 走的是另一套机制，不是 config.yaml 里的 api_key。
+
+### 关键教训
+
+- **401 不只是 key 过期**：DeepSeek 直连 401 = API key 本身无效（已确认 key 格式 sk-7d775eb 存在但认证失败），需要重新获取
+- **Groq 403 原因**：模型名 `llama-3.3-70b-versatile` 对 Groq 是 403，实际应该用 `cerebras/llama-3.3-70b` 格式（见上方已记录）
+- **用户明确约束：只调顺序，不删配置**：用户说"只能改模型顺序和查询什么的"——不要重构 custom_providers、不要删除 provider 条目、不要改 base_url。只能在现有结构内调换优先级或更新API key
+- **Gateway 的 config.yaml + auth.json 是分离的**：config.yaml 的 `api_key` 只影响主模型路由，auth.json 的 credential_pool 存储各 provider 的实际凭证。清理 aicodee 相关配置时需要同时清理两处
+- **fallback 不覆盖 429 quota 耗尽**：gateway error.log 显示 MiniMax 三次重试全部 429 失败，但 fallback 没有触发到 DeepSeek（可能 fallback 配置指向的也是耗尽 provider）
+- **credential_pool 有残留脏数据**：`custom:v2.aicodee.com` 和 `custom:aicodee-relay` 在 auth.json 的 credential_pool 里还有条目（base_url 存在但 last_status=None），不影响连接但应该清理
+
+### 当前 Gateway 状态（2026-06-02晚）
+
+- **PID**: 91042，RSS 485MB，uptime ~1小时
+- **进程**: `python -m hermes_cli.main` (PID 91042) + 2个 `hermes` 子进程 (PID 97094, 97671)
+- **端口**: *:8642 (LISTEN)
+- **外部连接**: 192.168.0.4:62772 → 61.151.231.145:443（MiniMax API，代理7897出口）
+- **日志**: gateway.log 和 gateway.error.log 均正常，无崩溃
+- **Gateway API Server**（端口8642）：require_api_key=true，拒绝无key请求，但 config.yaml 里 api_server 配置为空 dict — key 校验机制待查
+- **lsof 查 external connection**: `lsof -p <gateway_pid> 2>/dev/null | grep "ESTABLISHED" | grep -v "127.0.0.1\|localhost"`
+
+### 快速定向探测命令（不走 hermes doctor）
+
+```bash
+# Gateway 存活
+ps aux | grep "hermes_cli.main gateway" | grep -v grep
+
+# 最近的 provider 错误（过滤掉 screen_watch 噪音）
+tail -200 ~/.hermes/logs/gateway.error.log | grep -v "screen_watch\|smolvlm\|VLM" | tail -20
+
+# 各 provider 实际连接状态（从 lsof）
+lsof -p <gateway_pid> 2>/dev/null | grep "ESTABLISHED" | grep -v "127.0.0.1\|localhost"
+
+# Docker 容器（可能全离线）
+docker ps -a --format '{{.Names}}\t{{.Status}}'
+
+# Hindsight 状态
+curl -s --max-time 3 http://localhost:8899/health
+
+# credential_pool 残留检查
+cat ~/.hermes/auth.json | python3 -c "
+import json,sys
+d=json.load(sys.stdin)
+for p,creds in d.get('credential_pool',{}).items():
+    for c in creds:
+        if c.get('base_url') and 'aicodee' in p:
+            print(f'残留: {p} -> {c[\"base_url\"]}')
+"
+```
 
 ## Periodic Free Model Scanning
 
