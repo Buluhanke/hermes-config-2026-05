@@ -39,26 +39,50 @@ trigger: 每天9点daily进化 或 每周一weekly进化 时更新
 ### hermes-evolution-status ✅ 文档存活
 
 ## 系统架构
-
 ### 核心进程
 ```
-hermes gateway (PID 27863/27922)
-├── mcp-chrome-stdio x2 (PID 27923, 27870)
-├── n8n (Docker, PID 990, :5678)
-└── Dashboard (PID 29352, :9119) ✅
+hermes gateway (PID 91042)
+├── Chrome CDP (PID 1531, :9333)
+├── Ollama (PID 1655, :11434)
+└── MCP Chrome Bridge (PID 91503)
 ```
 
 ### 浏览器
-- Chrome with `--remote-debugging-port=9333`（chrome-debug profile）
-- MCP Chrome Extension loaded
-- CUA Driver v0.2.0 installed at /Applications/CuaDriver.app
-- **Playwright CDP脚本** `~/.hermes/scripts/browser_cdp.py` 可用（MCP bridge掉线时的备用方案）
+- Chrome with `--remote-debugging-port=9333`（chrome-debug profile）✅
+- MCP Chrome Extension loaded ✅
+- CUA Driver v0.2.0 at /Applications/CuaDriver.app ✅
+- **Playwright CDP** `~/.hermes/scripts/browser_cdp.py` 可用（备用方案）✅
 
-### 端口状态
-- 5678: n8n ✓
-- 8888: SearXNG本地Docker ✓（但当前切回公共searx.be了）
-- 9333: Chrome CDP ✓
-- 9119: Dashboard ✅ 已启动
+### Docker 容器（全部运行）
+- hermes-hindsight (8899) ✅
+- searxng (8888) ✅
+- n8nio/n8n (5678) ✅
+- chromadb/chroma (8000) ✅
+
+**注意**：Docker Desktop 需手动启动，容器不会自动跟随系统启动。
+
+### 端口状态（2026-06-02 确认）
+- 9333: Chrome CDP ✅
+- 11434: Ollama ✅
+- 8899: Hindsight ✅
+- 8888: SearXNG ✅
+- 5678: n8n ✅
+- 8000: ChromaDB ✅
+
+### venv 路径（⚠️ 注意）
+文档说 `.venv`，**实际是 `venv`**（无前缀点）：
+```bash
+ls ~/.hermes/hermes-agent/venv/bin/python  # 存在
+ls ~/.hermes/hermes-agent/.venv/bin/python  # 不存在
+```
+激活命令：`source ~/.hermes/hermes-agent/venv/bin/activate`（不是 `.venv`）
+
+### je_auto_control 安装位置
+安装在 `/usr/local/bin/python3` (Python 3.14)，hermes-agent venv 是 Python 3.11。
+如需在 hermes-agent venv 里调用，需单独安装：
+```bash
+~/.hermes/hermes-agent/venv/bin/pip install je-auto-control
+```
 
 ### 磁盘/内存
 - 磁盘: 241GB空闲 (7% used)
@@ -137,17 +161,30 @@ hermes gateway (PID 27863/27922)
 - memory_char_limit: 200000 → 40000
 - user_char_limit: 10000 → 20000
 
+### 17. Hindsight 插件断开 (2026-06-02 新增)
+- 症状：`No module named 'hindsight_client'`，Hindsight Docker (8899) 本身正常运行
+- 根因：`hindsight_client` Python 库未装在 hermes-agent venv
+- 修复：`~/.hermes/hermes-agent/venv/bin/pip install hindsight_client`
+- 相关 cron job 的自我修复脚本未包含此库安装步骤
+
+### 18. Git 备份 Cron Job 持续 Error (2026-06-02)
+- `hermes-config-backup` 和 `skills-sync` 两个 cron job 持续 error
+- 根因：git add -A 仍包含敏感文件，GitHub Push Protection 阻止推送
+- 静默失败：脚本用 `> /dev/null 2>&1` 吞掉所有输出，错误不可见
+- 待处理：需确认 .gitignore 规则是否真正生效
+
 ## 当前Cron Jobs状态
 
-| 任务 | 频率 | 状态 |
-|------|------|------|
-| Hermes配置备份 | 每60分钟 | OK（但推送被GitHub拦截） |
-| Skills同步 | 每60分钟 | 已修复 |
-| 语音缓存清理 | 每天3:00 | OK |
-| n8n工作流备份 | 每天4:00 | OK |
-| 健康守护-自我修复 | 每5分钟 | OK |
-| 夜间强化学习 | 23:00-07:00 | OK |
-| Hermes自我优化循环 | 每天2:00 | 待首次执行 |
+| 任务 | 频率 | 状态 | 备注 |
+|------|------|------|------|
+| Hermes配置备份 | 每60分钟 | ⚠️ error | Push Protection拦截，静默失败 |
+| Skills同步 | 每60分钟 | ⚠️ error | Push Protection拦截，静默失败 |
+| 语音缓存清理 | 每天3:00 | ✅ OK | |
+| n8n工作流备份 | 每天4:00 | ✅ OK | |
+| 健康守护-自我修复 | 每5分钟 | ✅ OK | 未包含hindsight_client修复 |
+| 夜间强化学习 | 23:00-07:00 | ⚠️ error | idle_learning skill |
+| Hermes自我优化循环 | 每天2:00 | ✅ OK | |
+| 免费模型扫描报告 | 每天9:00 | 🆕 待首次 | |
 
 ## Hermes版本
 - 本地: 27d1e1c（2026-05-26最新）

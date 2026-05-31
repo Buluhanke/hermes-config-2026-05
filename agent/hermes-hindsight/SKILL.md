@@ -109,6 +109,14 @@ memory:
 
 ## ⚠️ 关键坑点
 
+### hindsight_client Python 库必须单独安装
+hermes-agent 的 Python venv 不自带此库，每次插件启动时报 `No module named 'hindsight_client'`。
+```bash
+# 安装到 hermes-agent venv（venv 不是 .venv！）
+~/.hermes/hermes-agent/venv/bin/pip install hindsight_client
+```
+验证：`~/.hermes/hermes-agent/venv/bin/python -c "from hindsight_client import Hindsight; print('OK')"`
+
 ### 模型速度决定响应时间
 `qwen3-vl:2b` 太慢（30s+/次推理），每次 retain/recall 都调 LLM 生成。**用小模型**：`ollama pull qwen2.5:1.5b`
 

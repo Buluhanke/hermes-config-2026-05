@@ -19,23 +19,28 @@ M4 Mac (24GB RAM) 的本地深度学习工具箱。所有推理跑在 Apple Sili
 
 ```
 系统 Python:  /usr/local/bin/python3 (3.14.4)
-ML 运行环境:  ~/.hermes/hermes-agent/venv (Python 3.11)
+ML 运行环境:  ~/.hermes/hermes-agent/venv (Python 3.11, 注意: 是 venv 不是 .venv)
 GPU 加速:     MPS (Metal Performance Shaders) ✅
 ```
 
-激活命令: `source ~/.hermes/hermes-agent/venv/bin/activate`
+激活命令: `source ~/.hermes/hermes-agent/venv/bin/activate`（不是 `.venv`）
 
 ## 已安装的工具链
 
 | 工具 | 安装命令 | 模型缓存位置 | 状态 |
 |------|---------|-------------|------|
-| **PyTorch 2.12** | venv 自帶 | — | ✅ MPS |
-| **torchvision 0.27** | `uv pip install torchvision` | — | ✅ |
-| **transformers 5.9** | `uv pip install transformers` | ~/.cache/huggingface/ | ✅ |
-| **Ultralytics YOLOv8** | `uv pip install ultralytics` | 当前目录 | ✅ 170ms |
-| **rembg 2.0** | `uv pip install rembg` | ~/.u2net/ (176MB) | ✅ 2.2s |
-| **PaddleOCR** | hermes-agent 已有 | ~/.paddleocr/ | ✅ |
-| **scikit-image** | `uv pip install scikit-image` | — | ✅ |
+| **PyTorch 2.12** | venv 自带 | — | ✅ MPS可用 |
+| **torchvision 0.27** | venv 自带 | — | ✅ |
+| **transformers** | venv 自带 | ~/.cache/huggingface/ | ✅ |
+| **Ultralytics YOLOv8** | venv 自带 | 当前目录 | ✅ 170ms |
+| **rembg** | venv 自带 | ~/.u2net/ (176MB) | ✅ 2.2s |
+| **PaddleOCR** | venv 自带 | ~/.paddleocr/ | ✅ |
+| **OpenCV 4.13** | 系统 Python 3.14 | — | ✅ (但有dylib冲突警告) |
+| **je_auto_control** | 系统 Python 3.14 | — | ✅ (不在venv) |
+| **pytesseract** | 系统 Python 3.14 | — | ✅ (不在venv) |
+
+### ❌ 缺失
+- **hindsight_client**: 必须手动安装 → `~/.hermes/hermes-agent/venv/bin/pip install hindsight_client`
 
 ## 已知问题
 
