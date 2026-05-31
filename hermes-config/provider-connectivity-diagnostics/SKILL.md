@@ -343,6 +343,8 @@ cd ~/.hermes/hermes-agent && . venv/bin/activate && python3 ~/.hermes/scripts/sc
 - **Chrome cookies not shared**: browser tool uses `~/.hermes/chrome-debug` profile, separate from user's daily Chrome. Login state doesn't carry over.
 - **config.yaml is protected file**: patch/write_file tools block writes. Use `sed -i ''` via terminal.
 - **Fallback only triggers on errors** (429/5xx/connection), not on 403 quota errors. Some providers return 403 instead of 429 for exhaustion — test each provider individually.
+- **⚠️ Groq Fallback 未触发问题**：MiniMax 额度耗尽（429）后直接报 "💀 Final error"，未触发 Groq fallback。Groq 直连验证可用（llama-3.3-70b-versatile 直连200 OK），但 fallback chain 在 429 后没有执行到 Groq。可能原因：credential pool 在额度耗尽后锁定 chain，或 429 触发的 fallback 路径与 503/403 不同。需真实额度耗尽场景日志确诊。
+- **credential pool 残留脏数据**：`custom:v2.aicodee.com` 和 `custom:aicodee-relay` 在 auth.json 的 credential_pool 里有条目（base_url 存在但 last_status=None），不影响连接但应清理。
 - **Nous Portal OAuth token expiry**: Token stored in `~/.hermes/shared/nous_auth.json`. Has `expires_at` and `refresh_token`. Check status with `hermes auth status nous`. If expired, re-auth via `hermes setup --portal` in interactive terminal.
 - **Same API key length issue across different auth schemes**: OpenRouter uses `sk-or-v1-...`, DeepSeek uses `sk-...`, MiniMax uses `sk-cp-pj-...` format. Scripts reading `.env` must handle variable names, not hardcode key prefixes.
 - **Don't trust which models appear in OpenRouter console UI** — API may serve models not visible in the console, and vice versa. Always test via API, not by what the dashboard shows.

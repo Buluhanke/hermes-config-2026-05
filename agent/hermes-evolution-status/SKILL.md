@@ -198,9 +198,42 @@ ls ~/.hermes/hermes-agent/.venv/bin/python  # 不存在
 | Hermes自我优化循环 | 每天2:00 | ✅ OK | |
 | 免费模型扫描报告 | 每天9:00 | 🆕 待首次 | |
 
-## Hermes版本
-- 本地: 27d1e1c（2026-05-26最新）
-- 远程: 27d1e1c ✅ 已是最新
+## 用户能力总览（2026-06-02深夜复盘）
+
+### 联网搜索
+- SearXNG 本地 Docker（127.0.0.1:8888）✅
+- ddgs 聚合搜索 ✅
+- anysearch skill ✅
+
+### 电脑控制
+- 终端命令（terminal tool）✅
+- 语音对话（TTS+STT）✅
+- 屏幕监控+操作（computer_use + je_auto_control）✅
+- browser-use 浏览器控制 ✅（需配合 Playwright CDP）
+
+### 模型与AI
+- 固定模型路由（fallback chain 5层）✅
+- Groq 直连验证可用（llama-3.3-70b-versatile）✅
+- OpenRouter deepseek-v4-flash 可用 ✅
+- DeepSeek 直连额阻（401待修复）
+
+### OCR与视觉
+- Apple Vision OCR（60ms）✅
+- PaddleOCR（高精度中文）✅
+- ddddocr（验证码）✅
+- YOLOv8 物体检测（M4 MPS加速）✅
+- 图片精确识别 ✅
+
+### 系统自动化
+- 开机自动启动（cron job）✅
+- 密码免登启动 ✅
+- 通讯渠道（Telegram 等）✅
+- 电脑内存管理 ✅（Ollama 模型卸载、Docker 监控）
+
+### 未解决问题
+- Fallback 未触发 Groq（MiniMax 429 后直接终态，待查）
+- DeepSeek 直连 401（key无效）
+- credential pool 残留脏数据
 
 ## 进化方向
 
