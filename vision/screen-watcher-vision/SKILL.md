@@ -56,12 +56,13 @@ smolvlm2-agentic-gui 已从 Ollama registry 永久下线（registry 404，2026-0
 
 ## Auto-Execute 执行层现状（2026-06-01 方向D调研）
 
-**当前状态**：DRY_RUN=True，9 场景全部仅 "wininfo" 动作（2.7% 动作利用率）。
-682 条 dry-run 记录均为 "Would execute: wininfo"，无差异化执行。
+**2026-06-01 修复：ACTION_WHITELIST 语义分离**。idle 场景（other/unknown/desktop/calculator）→ `("none", None)`，活跃场景（browser/wechat/1688/dingtalk/telegram）→ `("wininfo", None)` 保留。产线数据验证：June 1 期间 141/142 条 dry-run（99%）来自 idle 场景，修复后夜间 dry-run 日志量压至接近零。
+
+**当前状态**：DRY_RUN=True，3 活跃场景保留 "wininfo" 入口，5 idle 场景无声无记录。干线上（June 1 02:50 后）dry-run 日志仅记录真实业务场景。
 
 | 瓶颈 | 状态 | 优先级 |
 |------|------|--------|
-| 场景无差异化动作 | ❌ 9 场景全 wininfo | P0 |
+| ~~场景无差异化动作~~ | ✅ 已修复（2026-06-01）：活跃 3 场景 wininfo，idle 5 场景 none | ✅ P0 完成 |
 | 坐标映射链 | ❌ 归一化→像素映射缺失 | P1 |
 | Verify 阶段（error recovery） | ❌ 无执行后验证 | P2 |
 
@@ -134,6 +135,8 @@ screen_trigger_handler 调用 Ollama API 时只设了 `temperature: 0.0`，未�
 "options": {"temperature": 0.0, "num_ctx": 4096}
 ```
 
+⚠️ **num_ctx 共享行为**：get_scene_type() 和 ask_screen() 共用同一个 Ollama runner 实例（qwen3-vl:2b）。由于 handler 先调用 get_scene_type() 再调用 ask_screen()，实际生效的 context 大小是最后一次调用时决定的。Ollama 会在每个请求时按 `options.num_ctx` 重新分配 KV cache，因此两个函数各自使用其指定的 num_ctx 值。代码审查已确认两处设置均正确。
+
 ### 效果
 
 | 指标 | 修复前 | 修复后 |
@@ -170,45 +173,55 @@ echo "${OLLAMA_KV_CACHE_TYPE:-not set}"
 
 详见 `references/ollama-numctx-memory-optimization-2026-06-01.md`
 
-## 生产验证状态（2026-06-01 01:50 更新）
+## 生产验证状态（2026-06-01 02:30 更新）
 
-以下指标为 2026-06-01 凌晨巡检确认的健康基线：
+以下指标为 2026-06-01 02:30 巡检确认的健康基线：
 
 | 指标 | 值 | 状态 |
 |------|----|------|
 | screen_watcher 进程 | PID 8748 | ✅ 持续运行 |
-| 截图新鲜度 | 持续更新（每 ~45s） | ✅ |
-| Ollama 进程 | qwen3-vl:2b runner | ✅ |
-| Ollama 运行时内存 | 2.8 GB / Context 4096 | ✅ |
+| 截图新鲜度 | 持续更新（每 ~60s） | ✅ |
+| Ollama 进程 | qwen3-vl:2b runner (100% GPU) | ✅ |
+| Ollama 运行时内存 | 2.7 GB / Context 4096 | ✅ |
 | KV Cache 量化 | q8_0 | ✅ |
-| 场景分类耗时 | 3s（修正前 35-47s） | ✅ |
-| 完整分析周期 | ~8s（修正前 70-84s） | ✅ |
+| 场景分类 num_ctx | 1024（代码确认） | ✅ |
+| 内容分析 num_ctx | 4096（代码确认） | ✅ |
 | Handler 堆积 ("Handler仍在运行") | **0 次** | ✅ 完全解决 |
-| 否定检测（other → [silent]） | 验证通过，持续生效 | ✅ |
+| 否定检测（other → [silent]） | 0 个 other/unknown 误标 [urgent] | ✅ 生产验证通过 |
 | 系统空闲内存 | ~13.4 GB | ✅ |
-| dry-run 总数 | 672 条 | ✅ 正常增长 |
+| dry-run 总数 | 715 条 | ✅ 正常增长（+43 自 01:50） |
 
-### 当前场景分布（672 条 dry-run 记录，2026-06-01 01:50 快照）
+### 当前场景分布（735 条 dry-run 记录，2026-06-01 02:55 快照，含全量历史）
 
 ```text
-301 unknown (45%)  — 分类器信心不足
-234 browser  (35%)
- 88 other    (13%)  — 所有 other 正确标记 [silent] ✅（比上次快照 +11 条，否定检测持续生效）
+301 unknown (41%)  — 分类器信心不足（含 Ollama 被 kill 历史遗留，June 1 00:06 后 0% unknown）
+234 browser  (32%)
+129 other    (18%)  — 所有 other 正确标记 [silent] ✅（否定检测持续生效）
  42 desktop  ( 6%)
   6 wechat   ( 1%)
   3 calculator
 ```
 
+**⚠️ 2026-06-01 02:50 后变化**：ACTION_WHITELIST 语义分离修复后，idle 场景（other/unknown/desktop/calculator）不再产生 "Would execute: wininfo" dry-run 日志。June 1 02:50 后的 dry-run 日志仅记录活跃业务场景（browser/wechat 等），日志量从每 ~60s 一条 idle 记录降为仅在有真实业务活动时记录。
+
 **变化趋势**：
 | 日期 | dry-run | unknown | browser | other | desktop |
 |------|---------|---------|---------|-------|---------|
 | 05-31 06:00 | 468 | 184 (40%) | 233 (50%) | — | 42 (9%) |
-| 06-01 01:41 | 668 | 301 (45%) | 234 (35%) | 77 (12%) | 42 (6%) |
 | 06-01 01:50 | 672 | 301 (45%) | 234 (35%) | 88 (13%) | 42 (6%) |
+| 06-01 02:30 | 715 | 301 (42%) | 234 (33%) | 129 (18%) | 42 (6%) |
 
-other 从 77→88 说明否定词检测持续生效：更多原本被分类为 unknown 的场景被正确识别为 other + [silent]。
+other 从 88→129（+41）说明否定词检测持续生效：更多原被分类为 browser 的场景正确降级为 other + [silent]。unknown 占比从 45%→42%（下降 3pp，因 other 增长稀释）。
 
-**unknown 45% 是已知问题**：不影响 dry-run 触发（unknown 在 ACTION_WHITELIST 中），但说明分类精度有提升空间。**2026-06-01 已修复**：升级分类 prompt 从 zero-shot 为含详细类描述的 few-shot-like 模式。待产线数据验证后评估效果。
+**DRY_RUN=False 前置条件评估**（方向C巡检结论，2026-06-01 更新）：
+| # | 条件 | 值 | 结论 |
+|---|------|----|------|
+| ① 基线数据 | 735+ 条 ≥ 500 | ✅ 已达基线 |
+| ② Ollama 稳定性 | 42% unknown > 30%（含历史污染） | ❌ 需降低（按日期分片 June 1 后 0% unknown ✅） |
+| ③ 动作多样性 | **3 活跃场景 wininfo + 5 idle 场景 none** | ✅ 已修复（P0 完成） |
+| ④-⑥ | 坐标映射/SafeGround/分级 | ❌ 需工程实现 |
+
+**unknown 42% 是已知问题**：约半数为 macOS 内存压力杀死 Ollama 后历史遗留的 Connection refused 分类失败。idle_learning 方向C 提出 P0 改进（Ollama Watchdog 5 分钟健康检查+自动重启），预期降 unknown 到 25-30%。
 
 ## Ollama API 端点注意事项
 

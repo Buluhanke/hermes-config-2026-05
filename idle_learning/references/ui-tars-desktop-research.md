@@ -1,7 +1,12 @@
-# UI-TARS Desktop 执行层调研（2026-05-29）
+# UI-TARS Desktop 执行层调研（2026-05-29，2026-06-01 更新）
 
-> 来源：ByteDance UI-TARS Desktop（bytedance/UI-TARS-desktop，35.6k stars）
+> 来源：ByteDance UI-TARS Desktop（bytedance/UI-TARS-desktop，35.8k stars）
 > 相关：Agent TARS CLI v0.3.0, UI-TARS SDK
+>
+> ⚠️ **2026-06-01 更新：项目正在关停（Sunsetting）**。最后活动提交 "chore: license (#1895)" 为仅 license 修复（2周前）。
+> 仓库中存在 "chore: sunsetting agent tars desktop (#840)" 和 "feat(ui-tars): sunset UI-TARS-desktop remote operator (#1135)" 
+> 等关停相关提交。Agent TARS CLI (npx @agent-tars/cli, Node.js 22+) 是活跃维护的替代项目，但 CLI 非桌面应用形态。
+> **结论**：不再作为 Hermes 执行层的候选替代方案，仅保留历史参考。
 
 ## 概览
 
