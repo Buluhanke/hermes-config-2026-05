@@ -25,57 +25,56 @@ grep -rn "sk-[a-zA-Z0-9]\{20,\}" . --include="*.md"
 GIT_TERMINAL_PROMPT=0 git push --force origin main 2>&1 | grep "——"
 
 # 3. 检查secret scanning alerts（可能为空但push仍被拦）
-gh api repos/{owner}/{repo}/secret-scanning/alerts
-# 如果返回[]，说明alert已处理，拦截来自Push Protection
+gh api repos/{owner}/{repo}/secret-scanning/push-protections
 ```
 
-**注意**：`secret-scanning/alerts` API返回空 ≠ push没被拦。Push Protection和Secret Scanning Alerts是两个独立系统。拦截发生在push时，不是在alerts页面显示。
+**注意**：`secret-scanning/push-protections` API返回空 ≠ push没被拦。Push Protection和Secret Scanning Alerts是两个独立系统。拦截发生在push时。
 
-**修复流程（git filter-branch）**：
+**修复流程（filter-branch）**：
 ```bash
-# 适用于：git版本 < 2.22（无法使用git-filter-repo）
-# 适用于：不想安装额外工具的情况
-
 cd /path/to/repo
 
-# 0. 先stash当前未提交的变更
-git stash 2>&1 && git stash drop
-
-# 1. 执行历史重写（替换所有API key模式）
+# 执行历史重写
 git filter-branch --force \
-  --tree-filter 'find . -type f \( -name "*.md" -o -name "*.txt" -o -name "*.json" \) \
-    -exec sed -i "" \
-      "s/sk-[a-zA-Z0-9]*/YOUR_API_KEY/g; \
-       s/gsk_[a-zA-Z0-9]*/GRSK_REDACTED/g; \
-       s/nvapi-[a-zA-Z0-9]*/NVIDAPI_REDACTED/g; \
-       s/AIzaSy[a-zA-Z0-9]*/GOOGLE_AI_KEY_REDACTED/g; \
-       s/gho_[a-zA-Z0-9]*/GH_TOKEN_REDACTED/g" {} +' \
-  --tag-name-filter cat -- --all
+  --index-filter 'git rm --cached --ignore-unmatch config.yaml .env scripts/test_keys.py .hermes_history' \
+  --prune-empty --tag-name-filter cat -- --all
 
-# 2. 验证HEAD中不再有真实key
+# 验证HEAD中不再有真实key
 git show HEAD:path/to/suspect/file.md | grep -c "sk-"
 
-# 3. 强制推送
-GIT_TERMINAL_PROMPT=0 git push --force origin main
+# 强制推送
+GIT_TERMINAL_PROMPT=0 git push --force origin master
 ```
 
-**关键点**：
-- `--tree-filter` 会重写每个commit的文件内容，速度慢但可靠
-- `--tag-name-filter cat` 保留所有tag
-- `--all` 同时处理所有分支
-- macOS sed语法用 `sed -i ""`（GNU sed用 `sed -i`）
-- 第一次filter-branch只处理 `sk-` 和 `gho_`，后续需单独处理 `gsk_`、`nvapi-` 等其他类型
-- git filter-repo 更优（更快，需git>=2.22），但非必须
+**filter-branch局限性（2026-06-02发现）**：
+`--index-filter 'git rm --cached --ignore-unmatch <file>'` 只重写声明过该文件的commit，可能遗漏：
+- 更早commit中存在的文件（如`.hermes_history`在50+个commit的多个文件中）
+- 未被track但被paste进会话历史的敏感内容
+- backup文件（`config.backup.yaml`、`config.yaml.test_bak`）
 
-**如果filter-branch后仍被拦**：
-- 说明还有其他类型的key在历史中
-- 从报错信息中找到key类型，添加到sed命令重新执行
-- 常见key前缀：`sk-`（OpenAI）、`sk-or-`（OpenRouter）、`gsk_`（Groq）、`nvapi-`（NVIDIA）、`AIzaSy`（Google）、`gho_`（GitHub Token）
+**确定性修复方案：重建仓库**（当filter-branch清理后仍被拦时）：
+```bash
+# 1. 创建干净仓库
+mkdir ~/repo-clean && cd ~/repo-clean && git init
 
-**如果无法重写历史（如仓库太大）**：
-1. 创建新仓库：`git init && git remote add`
-2. 选择性迁移：只迁移需要的目录/文件
-3. 代价：丢失历史记录
+# 2. 只复制非敏感文件（绝对不复制含key的文件）
+cp -r ~/.hermes/skills ./skills
+# 不复制：.env、config.yaml、*.bak、.hermes_history、sessions/
+
+# 3. 确保无敏感文件（skills目录内）
+grep -rl "sk-\|gsk_\|ghp_\|csk-" skills/ 2>/dev/null
+# 如果有假阳性（如注释中的sk-类型），手动审查后再推送
+
+# 4. 提交并强制推送
+git add -A && git commit -m "clean backup - no secrets"
+git remote add origin https://github.com/{owner}/{repo}.git
+git push origin master --force
+```
+
+**Git版本兼容性注意**（macOS默认Git 2.15.0）：
+- `-- ':(exclude).env'` 负路径排除语法在Git < 2.22不工作
+- 改用 `--index-filter 'git rm --cached --ignore-unmatch .env'`
+- 脚本中用 `grep -vE "^\?\?\s+(\.env|auth\.json)"` 过滤 `git status --porcelain` 的方式更可靠
 
 ---
 
@@ -88,22 +87,12 @@ fatal: The remote end hung up unexpectedly
 Everything up-to-date
 ```
 
-**根因**：
-- `.git` 目录超过5GB（GitHub单个仓库限制5GB）
-- git buffer太小（`http.postBuffer` 不足）
-- 网络超时
+**根因**：`.git` 目录超过5GB（GitHub单个仓库限制5GB）
 
 **诊断**：
 ```bash
-# 检查.git大小
 du -sh .git
-
-# 检查pack大小
 git count-objects -vH | grep size-pack
-
-# 检查最大的文件
-git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objectname) %(objectsize) %(rest)' \
-  | sort -k3 -n -r | head -20
 ```
 
 **修复流程**：
@@ -111,74 +100,29 @@ git rev-list --objects --all | git cat-file --batch-check='%(objecttype) %(objec
 # 1. 增大git buffer
 git config http.postBuffer 524288000
 
-# 2. 尝试推送
+# 2. 推送
 GIT_TERMINAL_PROMPT=0 git push origin main
 
-# 3. 如果还是失败，检查是否是从未推送过的全新提交
-git status  # "Everything up-to-date" + exit code 1 = 远程不接收
-
-# 4. 如果是历史过大，需要从git历史中删除大文件
-# 找到最大的文件/目录
-git log --oneline --all | wc -l  # 看总commit数
-git ls-tree -r HEAD | grep -E "weights\.bin|model\.tflite" | head -10
-
-# 5. 从git历史中删除（示例：删除chrome-debug目录）
-git rm -r --cached chrome-debug/
-git commit -m "remove chrome-debug from git tracking"
-echo "chrome-debug/" >> .gitignore
-git add .gitignore && git commit -m "gitignore chrome-debug"
-
-# 注意：这只能删除当前commit的内容，历史中的大文件仍会占用空间
-# 完全清理需要git filter-branch（见类型1）
+# 3. 若仍失败且历史过大，创建新仓库选择性迁移
 ```
-
-**如果远程仓库已经超限**：
-- GitHub拒绝接收超限的pack文件
-- 无法通过推送解决，必须创建新仓库
-- 方案：创建新仓库，选择性迁移文件，通知所有协作者更新remote
 
 ---
 
 ## 验证清单
 
-修复后执行以下验证：
 ```bash
 # 1. 确认push成功
-git push origin main  # 应无报错
+git push origin master  # 应无报错
 
 # 2. 确认无残留key
-grep -rn "sk-[a-zA-Z0-9]\{20,\}\|gsk_[a-zA-Z0-9]\{20,\}\|nvapi-[a-zA-Z0-9]\{30,\}" . --include="*.md"
+grep -rn "sk-[a-zA-Z0-9]\{20,\}\|gsk_[a-zA-Z0-9]\{20,\}\|ghp_[a-zA-Z0-9]" . --include="*.md"
 
 # 3. 检查仓库大小
 du -sh .git  # 应在合理范围（<1GB为佳）
-
-# 4. 确认GitHub页面显示正常
-# 访问 https://github.com/{owner}/{repo}/settings
 ```
-
----
 
 ## 预防措施
 
-1. **永远不要在git历史中存储真实API Key**
-   - 使用环境变量或 .env 文件
-   - 示例：`api_key: sk-xxx` → `api_key: YOUR_API_KEY`（提交前替换）
-
-2. **在 .gitignore 中排除大型调试文件**
-   ```
-   chrome-debug/
-   *.log
-   node_modules/
-   ```
-
-3. **定期检查仓库大小**
-   ```bash
-   # 放在cron中每月检查
-   du -sh ~/.hermes/.git
-   ```
-
-4. **API Key占位符规范**
-   - OpenAI: `sk-xxx` 或 `YOUR_API_KEY`
-   - Groq: `gsk_xxx` 或 `GRSK_REDACTED`
-   - GitHub Token: `gho_xxx` 或 `GH_TOKEN_REDACTED`
-   - Google: `AIzaSyxxx` 或 `GOOGLE_AI_KEY_REDACTED`
+1. **永远不要在git历史中存储真实API Key** — 使用占位符
+2. **在 .gitignore 中排除** `.env`、`config.yaml`、`*.bak`、`.hermes_history`、`sessions/`
+3. **API Key占位符规范**：OpenAI用`sk-xxx`/→`YOUR_API_KEY`，Groq用`gsk_xxx`→`GRSK_REDACTED`，GitHub Token用`gho_xxx`→`GH_TOKEN_REDACTED`

@@ -251,6 +251,32 @@ env -i HOME=$HOME PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin bash ~/.he
 
 **覆盖范围**：所有cron脚本（sync-skills.sh、hermes-git-backup.sh等）均需此修复。
 
+### Cron任务 HTTP 429 额度耗尽（2026-06-02新发现）
+
+**症状**：`RuntimeError: HTTP 429: usage limit exceeded`
+
+**根因**：cron job使用默认模型（如MiniMax-M2.7-highspeed），但该模型额度已耗尽
+
+**自愈流程**：
+```bash
+# 1. 确认是429错误
+cat ~/.hermes/cron/output/<job_id>/*.md | grep "429"
+
+# 2. 测试备用模型连通性
+curl -s https://api.deepseek.com/chat/completions \
+  -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"deepseek-chat","messages":[{"role":"user","content":"hi"}],"max_tokens":5}'
+
+# 3. 更新cron job的model override
+hermes cron update <job_id> --model deepseek-v4-flash --provider deepseek
+
+# 或通过API：
+# cronjob update --job_id <id> --model deepseek-v4-flash --provider deepseek
+```
+
+**预防**：对所有cron job显式指定model和provider，避免依赖默认模型切换
+
 ### Git Push被GitHub Secret Scanning拦截
 
 **症状**：cron脚本 `git push` 失败，报 `GH013: Repository rule violations` 或 `Push cannot contain secrets`
