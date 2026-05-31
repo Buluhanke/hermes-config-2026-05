@@ -172,7 +172,7 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
    - 比 web_extract 更快（无 Firecrawl 调用）
    - 详见 [web-research skill](../engineering/web-research/SKILL.md)
 
-**Firecrawl web_search 状态**：已多次验证 402/404，credits 耗尽。在 cron 环境下默认不走 web_search，直接用 HN Firebase API + ddgs。
+**Firecrawl web_search 状态**：已多次验证 402/404 和 502（SearXNG），credits 耗尽且 SearXNG 网关错误。在 cron 环境下默认走降级路径——直接用 HN Firebase API + ddgs + browser_navigate。**2026-06-01 再次确认**：3 次连续调用均返回 502。`browser_navigate + browser_console JS` 已验证可替代 web_extract 获取文章内文。
 
 **Cron 模式特殊注意**：定时任务环境下，web_search 很容易 credits 用尽（Payment Required 频率高）。每次轮次开始时默认走降级路径——先用 ddgs + HN Firebase API，只有在明确有 credits 时才尝试 web_search。
 
@@ -241,7 +241,7 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - 三层递进任务：行为检测（9类，44.6%最强）→ 意图预测（71.39%）→ 辅助需求检测（69.82%）
   - **核心发现**：结构化上下文是关键催化剂——GPT-4o assistance从46%跃升至82%（+36pp）
   - **对Hermes的启发**：auto_execute需要捕捉用户困难信号（confusion/frustration），而非只看最终动作
-  - 详见 `references/guide-benchmark-cvpr2026.md`
+  - 详见 references/guide-benchmark-cvpr2026.md
 - **Browser Console 提取技巧**（⚠️ 2026-05-30 发现）：`browser_console` 连续调用会报 `Identifier already declared` 错误
   - ✅ 解决：用 IIFE 包装 JS 代码 `(function(){ ... })()`，每次都是新作用域
   - 示例：`document.querySelectorAll('table tbody tr').length` 可直接用，不用写循环变量
@@ -250,6 +250,19 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - `nvidia/LocateAnything-3B` 在 HuggingFace
   - GUI grounding benchmark 高分，arxiv 2605.27365v1（4天前发布）
   - 详见 `references/locateanything-3b-2026-06-07.md`
+- **⭐ ScreenParse + ScreenVLM + ScreenParser（ICML 2026，v2 May 2026）**：
+  - arXiv 2602.14276 — Moving Beyond Sparse Grounding with Complete Screen Parsing Supervision
+  - **ScreenParse v1**: 771K screenshots, 21M dense UI annotations (box/55-class/text)
+  - **ScreenParse v2 (May 2026)**: **1,447,100 screenshots, 25,575,213 elements**, leaf-element filtering
+  - **ScreenVLM**: 316M params, 0.592 PageIoU (vs 0.294 for 8B+ models), 4x faster, ScreenTag decoding
+  - **ScreenParser (NEW!)**: YOLO11-Large fine-tuned at 1280px on ScreenParse v2, 55 UI classes
+    - HF: docling-project/ScreenParser (Apache 2.0, IBM Research - ETH Zurich)
+    - Usage: YOLO(&quot;docling-project/ScreenParser&quot;) — ultralytics v8.4.57 already installed
+    - ~millisecond inference, suitable for fast scene classification
+    - ⚠️ HF download currently unstable (curl: 35), deploy when network recovers
+  - **Key finding**: fine-tuning foundation VLMs on ScreenParse consistently improves grounding
+  - **M4 value**: 316M lightweight VLM + YOLO ultra-fast detector — both fit 24GB
+  - See references/screenparse-2026-06-01.md
 - 新方向（2026-05-28 发现）：Apple FastVLM（CVPR 2025，MLX版本在HuggingFace）+ Ollama v0.19 MLX集成
 - 新方向（2026-05-29 发现）：Ollama MLX backend 需要 32GB+ RAM，24GB 不支持；smolvlm2-agentic-gui 有 q8_0 (~1.9GB) 和 fp16 (~3.6GB) 变体可用；Qwen2.5VL 在 Ollama 上有 3b/7b/32b/72b 各变体
 - **⭐ ZonUI-3B（WACV 2026，2026-05-29 发现）** — 轻量级GUI grounding VLM，3B参数
@@ -273,6 +286,15 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **已验证超越人类**：GPT-5.4 的 75.0% > 人类基准 72.4%
   - 来源：BenchLM.ai，2026-05-28 更新，browser_navigate 直接抓取
 
+- **⭐ RoTS-32B — 47.4% OSWorld SOTA（ICML 2026 Spotlight，2026-06-01 发现）**：
+  - arXiv 2605.29447："Recovering Policy-Induced Errors: Benchmarking and Trajectory Synthesis for Robust GUI Agents"
+  - **GUI-RobustEval**：1,216 个测试用例，系统评估 error recovery 能力
+  - **RoTS**：树状 pipeline 产出 800k 高质量 error recovery 训练数据
+  - **RoTS-32B OSWorld 47.4%**（SOTA）+ All-Pass@4 33.8%
+  - **核心论点**：error recovery 是 GUI agent 真实部署的最大瓶颈
+  - **对 Hermes**：screen_trigger_handler 否定检测 = 基础版 error recovery；RoTS 方法论可直接借鉴
+  - 详见 `references/rots-32b-2026-06-01.md`
+
 - **⭐ OpenRouter Series B $113M（2026-05-31 更新）**：
   - **规模**：CapitalG/NVIDIA/ServiceNow/MongoDB/Snowflake/Databricks 联合投资
   - **关键指标**：周处理量从 5T → 25T tokens，年底预计 1Q tokens；8M+ 开发者，400+ 模型
@@ -287,15 +309,40 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - 2D grounding（绝对→相对坐标），256K上下文
   - **实测**：qwen3-vl:2b 500px截图19.3s响应，正确识别UI元素；1024px+超时
   - 限制：1024px+图像处理超时，需较小输入尺寸；900x900 缩略图 46.6s
-- **⭐ Gemma 4 — M4 24GB 最佳 Ollama 可用升级路径（2026-05-31 InsiderLLM 确认）**：
-  - `gemma4:26b`（~18 GB Q4, MoE 3.8B active）— MMMU Pro **73.8%**, MATH-Vision **82.4%** — 当前 Ollama 可用最强 vision
-    - M4 24GB 理论上可装（余量 ~6GB 给系统），18GB 下载需谨慎规划
-  - `gemma4:e4b`（~7.2 GB）— MMMU Pro 52.6%, MATH-Vision 59.5% — 轻量升级首选，下载快
-  - `gemma4:e2b`（~3.4 GB）— MMMU Pro 44.2% — 接近 qwen3-vl:2b 级别，替换收益有限
-  - ⚠️ 安装前需确认磁盘空间 + Ollama 版本兼容性
-- **⭐ PaddleOCR-VL 0.9B**（2026-05-31 发现）— 纯 CPU OCR，92.6% doc accuracy
-  - `pip install`，无需 GPU，适合 screen_watcher 文本提取
-  - 详见 `references/paddleocr-vl-0.9b.md`
+- **⭐ Gemma 4 E4B — M4 24GB 最佳实测可用视觉模型（2026-06-01 更新实测数据，2026-04-04 M4 Pro 24GB 实测）**：
+  - `gemma4:e4b`（Dense 4.5B, Text/Image/Audio, **~5.5 GB at 4-bit**）— ollama pull 直接可用
+  - **实测**：M4 Pro 24GB → Ollama **57 tok/s**，Unsloth MLX 49 tok/s（少 40% 内存）
+  - **Image Understanding**：泰国王宫精确识别（vs E2B 泛化），日文 OCR "新宿ラーメン通り" ✅，详细场景描述
+  - **Audio ASR**：英语 1.0s/法语 1.6s/阿拉伯语 6.0s — 完美转写（E2B 均乱码）
+  - **Coding**：155 行 React + Tailwind 可用应用生成（E2B 碎片代码失败）
+  - **对 screen_watcher**: 5.5GB + qwen3-vl:2b 1.76GB = 7.3GB 总视觉模型内存，24GB 充足；inline OCR 能力可用于 "other" 场景文本提取
+  - `gemma4:e2b`（~3.4 GB, 95 tok/s）— 接近 qwen3-vl:2b 级别，替换收益有限
+  - `gemma4:26b`（~18 GB Q4, MoE 3.8B active）— ~2 tok/s on 24GB（swap），**不可用**
+  - 详见 `references/idle-learning-2026-06-01-r4-gemma4-e4b-mobile-explorer.md`
+- **⭐ MobileExplorer: On-Device GUI Agent 推理加速（2026-06-01 发现，arXiv 2605.26546, May 26）**：
+  - **核心创新**：利用 VLM 长 per-step 推理时间做轻量级并行 UI 元素探索
+  - 推理期间主动探测语义相关 UI 元素 → 探索轨迹记录为 structured memory → 下一次推理注入
+  - 双层级回滚机制（naive backtracking 失败时恢复初始 UI 状态）
+  - AndroidWorld benchmark：推理步数和端到端延迟均减少 **23%**，成功率保持或提升 **5%**
+  - **对 Hermes handler**：当前 scene classification 20-30s 全周期可被利用做并行 UI 探测（轻量 subprocess，不阻塞主 handler）
+  - 详见 `references/idle-learning-2026-06-01-r4-gemma4-e4b-mobile-explorer.md`
+
+- **⭐ 1-Bit Bonsai Image 4B（2026-06-01 发现）** — 4B 参数扩散 transformer 压缩至 **1.21 GB**（1-bit）
+  - 本地图像生成模型（非 VLM 理解），支持 Mac Metal via llama.cpp
+  - HuggingFace: prism-ml/Bonsai-4B-gguf
+  - 验证 1-bit 技术已成熟可实用化（图像生成可用）
+  - 详见 `references/idle-learning-2026-06-01-r4-gemma4-e4b-mobile-explorer.md`
+
+- **⭐ PaddleOCR-VL 0.9B**（2026-05-31 发现，2026-06-01 更新至 v1.5/v1.6）— 文档 OCR 专家 (0.9B)
+  - **OmniDocBench v1.5: 94.5%** — 超越 Qwen2.5-VL-72B (87%)、Gemini 2.5 Pro (88%)、GPT-4o (75%)
+  - Q4_K_M GGUF ~300MB (LM) + ~880MB (projector)，总量 ~1-1.5GB
+  - **Ollama 已支持**: MedAIBase/PaddleOCR-VL:0.9b（Ollama 库可搜到，registry API 404 待跟进）
+  - v1.5 (2026-01) 新增: text spotting + bbox, seal recognition, cross-page table merging
+  - v1.6 (GitHub, 3 days before 2026-06-01) — 最新版本
+  - 109 语言, NaViT dynamic resolution + ERNIE-4.5-0.3B LLM
+  - Merged into llama.cpp b8110 (Feb 19, 2026)
+  - **对 Hermes**: screen_watcher text extraction 本地跑，补齐 qwen3-vl:2b OCR 弱项
+  - 详见 references/paddleocr-vl-0.9b.md
 - **⭐ Qwen 3.6（2026-05）** — 视觉内建于基座模型（无独立VL分支）
   - Qwen 3.6-27B dense（~17GB Q4_K_M）— 新SOTA本地视觉
   - Qwen 3.6-35B-A3B MoE（~22GB）
@@ -313,13 +360,21 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **HF 镜像可用**：hf-mirror.com（返回 302，可直接用 hf-mirror.com 替代 huggingface.co）
 - **Smol2Operator（2025-09）**：归一化坐标（0-1 范围）比像素坐标好 **20x**（41% vs 4% ScreenSpot-v2）。当前 find_element_by_vision() 要求像素坐标，可能在降级 smolvlm2 表现
 **推荐来源（按可靠性排序）**：
-1. **InsiderLLM（insiderllm.com）** ✅ 已验证（2026-05-31）：深度 Mac 指南，定期更新模型推荐和 tok/s 基准，browser_navigate 可直接抓取
+1. **InsiderLLM（insiderllm.com）** ✅ 已验证（2026-05-31, 2026-06-01 再次确认）：深度 Mac 指南，定期更新模型推荐和 tok/s 基准。**Updated May 2026** — 本轮推荐 Qwen 3.6-27B Q4_K_M（16.8GB, 18-28 tok/s）为 24GB 编码首选，Gemma 4 E4B（5.5GB, 57 tok/s）为安全选择。Simon Willison 实测 Q4_K_M GGUF 达 25.57 tok/s。browser_navigate 可直接抓取。详见 `references/idle-learning-2026-06-01-r4-gemma4-e4b-mobile-explorer.md`
 2. **Ollama 官方 library**（ollama.com/library/）— 确认模型是否在库中
 3. **ddgs CLI**（`ddgs text -q "query" -m 5`）— 快速关键词，超时返回空时忽略
 4. **HN Firebase API** — 热点技术文章
 - ⚠️ 已知限制：`OLLAMA_USE_MLX=1` 需要 32GB+ 统一内存（M4 24GB 不支持）
 
 **方向 C — 决策操作（Computer Use / 规划层）**
+- ⭐ **GUI-Agent-Harness（2026-06-01 发现）** — Fzkuji 开源，OSWorld Multi-Apps **79.8%**
+  - 4-phase step loop: Observe → Verify → Plan → Dispatch
+  - **Visual Memory**：组件模板缓存（~5x faster, ~60x fewer tokens）
+  - **State Transitions**：UI 建模为 state graph，成功动作序列可 replay
+  - macOS-first：Apple Vision OCR + pynput + Accessibility API
+  - CLI-as-tool 设计，provider-agnostic
+  - **关键启发**：auto_execute 缺少 Verify 阶段（检查前一动作结果）
+  - 详见 `references/gui-agent-harness-2026-06-01.md`
 - ⭐ **2026-06-01 新增：生产日志效能分析法**
   从日志中提取 handler 时序数据的标准流程：
   1. 提取 handler 日志中的 trigger → scene → dry-run → completed 时间戳，计算各阶段耗时
@@ -328,12 +383,68 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   4. 用 `grep -c "AUTO-EXEC-DRY"` + `sed 's/.*scene=//' | sort | uniq -c -rn` 分析场景分布
   5. 验证假阳性标记：检查 unknown/other 场景是否被误标 [urgent]
   **落地案例**：2026-06-01 发现 qwen3-vl:2b 产线实际 scene classification 耗时 35-47s（非 24s），full cycle 70-84s，302 次 "Handler仍在运行"，所有 unknown/other 被误标 [urgent]
+- ⭐ **AVR: Adaptive VLM Routing for Computer Use Agents（CVPR 2026, arXiv 2603.12823）** — 三层级联路由框架
+  - **核心架构**: 难度评估器(120M嵌入层,~2ms) → 小VLM置信度探测(logprob几何平均) → 记忆注入(few-shot) → 升级大VLM(+guardrail)
+  - **关键数据**: 推理成本降低 **78%**，准确率仅损失 **2pp**（42.7% vs 43.6%）
+  - **动作难度分布**: ~45%简单(小模型足够)，~30%中等(记忆注入后小模型可处理)，~25%困难(需大模型)
+  - **记忆注入不对称效应**: 小模型 +13pp（83→96%），大模型仅 +1pp（94→95%）
+  - **置信度阈值**: logprob 几何平均概率，θ_high=0.85, θ_low=0.60
+  - **对 Hermes 的启发**:
+    - 当前 handler 2-tier（场景分类→action routing）可升级为 AVR 式 3-tier：confidence probing + memory injection
+    - 49% unknown 场景=handler 的"低置信"信号，需要记忆注入或升级策略
+    - logprob 置信度探测可直接应用于 scene classification（检查 VLM token 概率）
+    - `Qwen3-VL 坐标约定`: [x,y] on **1000×1000 相对坐标 canvas**，像素映射 x_px=x/1000×W
+  - 作者: vLLM Semantic Router Project / MBZUAI / McGill / AMD / Red Hat
+  - 代码: github.com/vllm-project/semantic-router
+  - 详见 references/avr-adaptive-vlm-routing-2026-06-01.md
+- ⭐ **WindowsWorld 基准（arXiv 2604.27776, Apr 2026）** — 跨应用计算机使用基准
+  - 181 个任务，平均 5.0 子目标，17 款桌面应用，78% 跨应用
+  - **所有 agent 在跨应用任务上 < 21%**，≥3 应用跳转的任务几乎全部卡在早期子目标
+  - 对 Hermes：auto_execute 当前只覆盖单场景，跨场景跳转是更难的问题。优先做好单场景
+  - 详见 `references/computer-use-2026-sota-zylos.md`
+- ⭐ **生产级权限模型（2026 行业共识）**: DRY_RUN=False 需要动作分级框架
+  - **Silent**：只读操作（截图分析、场景分类、信息检索）
+  - **Logged**：文件写入（日志、文件修改，记录到 activity feed）
+  - **Confirmed**：Shell/网络/跨应用（需确认机制，如 Telegram 推送确认）
+  - **Blocked**：凭据/系统修改（直接拒绝）
+  - 当前 ACTION_WHITELIST 可映射为 Silent 级，Confirmed 级需要 handler 中增加确认机制
+  - 详见 `references/computer-use-2026-sota-zylos.md`
+
+- ⭐ **DRY_RUN=False 过渡前置条件评估（2026-06-01 建立）**：
+  从产线 682 条 dry-run 记录和 44% unknown 场景数据中提取的评估框架，用于方向C巡检时判断 auto_execute 是否可以安全地非破坏性执行过渡。
+
+  **6 项前置条件**：
+  | # | 条件 | 检查命令 | 决策 |
+  |---|------|---------|------|
+  | ① 基线数据 | `grep -c "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log` | ≥500 条为充足 |
+  | ② Ollama 稳定性 | `ps aux | grep ollama` + `curl -s http://127.0.0.1:11434/api/tags` 无超时 | unknown < 30% 为稳定 |
+  | ③ 动作多样性 | `grep "scene=" ~/.hermes/logs/screen_trigger.log \| sort \| uniq -c` | 至少 3 种场景有 > 50 条记录 |
+  | ④ 坐标映射链 | `hermes_desktop_rpa.py` 中检查是否有 `normalized_click` 函数 | 需要归一化坐标→像素映射 |
+  | ⑤ SafeGround 置信度 | `screen_trigger_handler.py` 中检查多采样逻辑 | 需要集成不确定性量化 |
+  | ⑥ 动作分级 | `ACTION_WHITELIST` 中检查是否只有 wininfo | 需要 Silent/Logged/Confirmed/Blocked 分级 |
+
+  **诊断命令（产线数据巡检）**：
+  ```bash
+  # 场景分布
+  grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log | sed 's/.*scene=//' | sort | uniq -c | sort -rn
+  # 未知场景占比
+  grep -c "scene=unknown" ~/.hermes/logs/screen_trigger.log
+  # handler 锁残留
+  ls -la ~/.hermes/screenshots/.handler_lock 2>/dev/null
+  # Ollama 进程
+  ps aux | grep ollama | grep -v grep
+  ```
+
+  **判断逻辑**（当执行方向C巡检时）：
+  1. 条件①②③任一不满足 → 记录到可执行改进，不推进
+  2. 条件①②③满足 + ④⑤⑥部分满足 → 推进坐标映射（P0）
+  3. 全满足 → 设计梯度过渡方案（Friction=Focus 哲学：DRY_RUN=True → low-confidence auto → high-confidence auto）
 - ⭐ **"Domain Expertise Has Always Been the Real Moat"（754pts HN, 2026-05-31）**
   - 核心论点：Agentic AI 切断了"理解领域"和"生产代码"之间的绑定，约束从"能不能构建"变成了"能不能判断正确"
   - 对 Hermes 的意义：screen_watcher handler 的最大瓶颈不是"能不能执行"，而是"能不能判断何时需要执行"
   - 两角色类比：领域专家（知道正确输出长什么样）× 工程师（知道怎么构建）
   - Hermes auto_execute 需要两种能力兼备
-- ⚠️ **SearXNG web_search 状态（2026-06-01 发现）**：SearXNG 返回 HTTP 502（网关错误），web_search 完全不可用。ddgs + HN Firebase API 为当前唯一可选降级路径。
+- ⚠️ **SearXNG web_search 状态（2026-06-01 发现，2026-06-01 再次确认）**：SearXNG 返回 HTTP 502（网关错误），web_search 完全不可用。3 次连续调用均返回 502。ddgs + HN Firebase API + browser_navigate 为当前唯一可用降级路径。**注意**：如 ddgs 同时失败（超时返回空），browser_navigate + browser_console JS 提取是最后可行方案（已验证：arXiv 摘要页面、dev.to 文章、insiderllm.com 均可直接读取）。
 
 **方向 D — 执行（手眼配合）调研方向**
 - 本地工具链盘点：hermes-rpa（成熟）、computer_use、mcp_chrome_*（背景运行不抢焦点）
@@ -410,12 +521,39 @@ grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log | sed 's/.*scene=//' | so
   - 详见 `references/mobileagent-2026-05-30.md`
   - ⚠️ M4 24G 适配待验证（qwen3-vl:2b 响应 46.6s，agent loop 成本高）
 
-- **⭐ POINTS-GUI-G-8B（arXiv 2602.06391, Feb 2026）** — ScreenSpot-v2 **95.7%** SOTA
+- ⭐ **POINTS-GUI-G-8B（arXiv 2602.06391, Feb 2026）** — ScreenSpot-v2 **95.7%** SOTA
   - 三大成功因素：统一数据集格式 + 视觉编码器微调 + **RL with Verifiable Rewards**
   - GUI grounding 天然适合 RL：奖励可验证、精度高
   - 对 Hermes：auto_execute grounding 精度可通过 RL 持续提升
 
-- **⭐ RULER tokens + I-MRoPE（arXiv 2510.03230, Oct 2025）**
+- ⭐ **GUI-Libra（arXiv 2602.22190v2, 2026-05-25, MSR/UIUC/UNC, 57页）** — Action-aware 训练配方
+  - **核心问题**：标准 SFT + CoT 推理会损害 grounding 精度（diff实验中 grounding 显著下降）
+  - **Action-aware SFT**：混合推理→动作 + 直接动作训练数据，对动作和 grounding token 重加权
+  - **KL 信任区域**：RLVR 训练中 KL 正则化对离线→在线预测可预测性至关重要
+  - **Success-adaptive scaling**：降权不可靠的负梯度，稳定部分可验证 RL
+  - **发布**：81K GUI reasoning 数据集 + 代码 + 模型
+  - **对 Hermes auto_execute**：直接动作数据对 grounding 更友好 → 动作脚本应避免复杂推理链条；KL 正则化启示场景分类 temperature=0 但动作预测需保留熵
+  - 2026-06-01 方向D巡检发现
+
+- ⭐ **LiteGUI（arXiv 2605.07505, 2026-05-08）** — 2B/3B 轻量 GUI agent 蒸馏达 SOTA
+  - **Guided On-policy Distillation**：首次将通用知识蒸馏系统化引入 GUI agent 领域
+  - oracle 参考轨迹 + 动态检索机制 → 减少幻觉 + 缓解多解任务认知偏差
+  - **Multi-solution Dual-level GRPO**：宏观子任务规划 + 微观执行匹配
+  - 2B/3B 级别超越传统模仿学习上限
+  - **对 Hermes**：可蒸馏 qwen3-vl:2b 到更小模型（如 Vocaela-500M）提升速度
+  - 2026-06-01 方向D巡检发现
+
+- ⭐ **ClawGUI（arXiv 2604.11784, 2026-04-13, ZJU）** — 首个开源全栈 GUI agent 框架
+  - 统一框架覆盖训练 + 评估 + 部署
+  - **ClawGUI-RL**：首个开源 GUI agent RL 基础设施，并行虚拟环境 + 真实设备
+  - GiGPO + **Process Reward Model (PRM)** 密集步骤监督
+  - **ClawGUI-Eval**：6 基准 × 11+ 模型，95.8% 复现率
+  - **ClawGUI-Agent**：12+ 聊天平台，混合 CLI-GUI 控制，持久个性化记忆
+  - ClawGUI-2B：17.1% MobileWorld GUI-Only（超越 MAI-UI-2B 6.0%）
+  - **对 Hermes**：PRM 步骤级监督 → auto_execute Verify 阶段可直接借鉴；混合 CLI-GUI 控制与 screen_watcher 架构一致
+  - 2026-06-01 方向D巡检发现
+
+- ⭐ **RULER tokens + I-MRoPE（arXiv 2510.03230, Oct 2025）**
   - 显式位置标记替代隐式坐标生成（类网格参考点）
   - I-MRoPE 解决宽高维度不对称问题
   - 最大改进在高分辨率界面 → 适用 Mac 大屏场景
@@ -493,7 +631,11 @@ grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log | sed 's/.*scene=//' | so
   - **判断标准**：截图时间戳超过 24h 视为 stale，需要重启 screen_watcher
 - idle_learning 每次执行时必须检查进程 **和** 截图新鲜度，两个都要查
 - 启动命令已验证：`python3 ~/.hermes/scripts/screen_watcher.py`（PID 会变，不需要追踪旧 PID）
-- **idle_learning 第一步检查清单**：进程 → 截图时间 → 模型列表，三个全检查才链路完整
+- **idle_learning 第一步检查清单**：进程 → 截图时间 → 模型列表 → Ollama 运行时内存，四个全检查才链路完整  
+- **进程**：`ps aux | grep screen_watcher` 确认存活  
+- **截图时间**：`ls -lt ~/.hermes/screenshots/current.png` 时间戳在 24h 内  
+- **模型列表**：`curl -s --max-time 8 http://127.0.0.1:11434/api/tags`  
+- **Ollama 运行时内存**：`ollama ps` 检查 CONTEXT 字段 —— 默认 262144 会导致 20GB 内存占用。scene classification 应设 num_ctx=1024（1-2GB），ask_screen 应设 num_ctx=4096（2-3GB）。详见 `screen-watcher-vision` skill 的 [Ollama num_ctx 内存优化] 章节和 `screen-watcher-vision/references/ollama-numctx-memory-optimization-2026-06-01.md`。
 - ⚠️ **screen_watcher 目录不存在的情况（2026-05-29 发现）**：若 `ls ~/.hermes/screenshots/` 返回"No such file or directory"，说明 screen_watcher 从未启动过或已被清理。需要手动检查 screen_watcher 进程和启动脚本，确认目录会被正确创建。
 - **⚠️ Hook 污染 Gateway 日志巡检（2026-06-08 新增）**：
 `~/.hermes/hooks/` 中的 gateway hook 如果引用了已删除的模块或已下线的模型，会在每次 gateway:startup / session:start / agent:end 时向 gateway.log 写入错误信息。实测 screen_watch hook 写入了 1332 条 "model not found"（占日志 26%）。
@@ -621,10 +763,33 @@ for m in d.get('models',[]):
 **⚠️ Ollama 进程被系统 force kill（2026-06-01 发现）**：
 - 两次发现 Ollama 退出日志为 `err="signal: killed"`（23:53 和 00:04），疑似 macOS 内存压力调度
 - 后果：Ollama 挂掉后 screen_watcher handler 场景分类失败（Connection refused → 返回 unknown），dry-run 日志被污染
+- **"unknown" 场景占比 45% 的根因之一**：Ollama 被 kill 后所有场景分类均返回 unknown，大量误累积。这不是 prompt 质量问题，而是服务可用性问题。
 - **诊断**：`ps aux | grep -i ollama | grep -v grep` — 无输出 = 进程已挂
 - **修复**：`open -a Ollama && sleep 5 && curl -s --max-time 3 http://127.0.0.1:11434/api/tags`
 - **验证**：`curl -s --max-time 3 http://127.0.0.1:11434/api/tags` 返回模型列表即恢复
 - **连锁影响**：screen_watcher handler 场景分类全失败 → 全部返回 unknown → unknown 场景占比异常上升
+- **idle_learning 第一步检查清单必须新增**：`ps aux | grep ollama` 确认进程存活
+- **注意**：Ollama 是 macOS Login Item 自动启动的，但会在无活动后被杀，不是一次性故障
+
+**🔴 Ollama Watchdog（2026-06-01 新增，方向C巡检可执行改进）**：
+产线数据持续显示 44% unknown 场景（301/682），大部分是 Ollama 被内存压力调度 kill 后的产物。handler 场景分类全返回 unknown 说明训练数据被污染 — 不是 prompt 质量问题，是服务可用性问题。
+
+  **Watchdog 实现方案**（添加定时监测，每 5 分钟检测）：
+  ```bash
+  curl -sf --max-time 5 http://127.0.0.1:11434/api/tags > /dev/null 2>&1
+  if [ $? -ne 0 ]; then
+      open -a Ollama
+      sleep 5
+      for i in 1 2 3; do
+          curl -sf --max-time 3 http://127.0.0.1:11434/api/tags > /dev/null && break
+          sleep 3
+      done
+  fi
+  ```
+
+  **idle_learning 巡检时若发现 unknown 场景 > 40%，优先检查 Ollama 存活**（不要调 prompt 或改配置 — 根因是服务可用性，不是模型性能）
+
+  **配套参考**：`references/dry-run-false-readiness-2026-06-10.md` 包含完整的前置条件评估、坐标映射公式、SafeGround 集成方案和生产数据快照。
 - **idle_learning 第一步检查清单必须新增**：`ps aux | grep ollama` 确认进程存活
 - **注意**：Ollama 是 macOS Login Item 自动启动的，但会在无活动后被杀，不是一次性故障
 
@@ -853,7 +1018,10 @@ PYEOF
 
 ## 支持文件
 
+- [Computer Use & GUI Agents 2026 SotA — Zylos Research](./references/computer-use-2026-sota-zylos.md) — 2026 全貌，生产就绪 vs 研究级判断，混合架构验证，WindowsWorld 基准，生产级权限模型
 - [PaddleOCR-VL 0.9B (2026-05-31)](./references/paddleocr-vl-0.9b.md) — CPU-only OCR, 92.6% doc accuracy, pip install, complements screen_watcher text extraction
+- [RoTS-32B Error Recovery SOTA (2026-06-01)](./references/rots-32b-2026-06-01.md) — arXiv 2605.29447, 47.4% OSWorld via trajectory synthesis, ICML 2026 Spotlight
+- [ScreenParse + ScreenVLM (2026-06-01)](./references/screenparse-2026-06-01.md) — arXiv 2602.14276, 771K screenshots/21M elements, 316M param VLM, ICML 2026
 - [Ollama API 端点区分：本地 vs 远程库](./references/ollama-api-endpoint-local-vs-remote-2026-05-30.md) — api.ollama.com vs 127.0.0.1:11434 区别，实测4个本地模型
 - [GUIDE Benchmark CVPR 2026](./references/guide-benchmark-cvpr2026.md) — 用户行为理解benchmark，三层递进（behavior detection 44.6% → intent prediction → assistance），结构化上下文提升GPT-4o达+36pp
 - [搜索降级方案](./references/search-fallback.md) — 当 web_search 不可用时的 ddgs 降级流程
@@ -896,6 +1064,10 @@ PYEOF
 - `references/idle-learning-2026-06-01-session.md` — Fara1.5/Cider SDK 状态、24GB backend shootout、Qwen Q4 quant 风险
 - [2026-06-10 学习记录（方向C+生产验证）](./references/idle-learning-2026-06-10-session.md) — Negation fix 生产验证通过、screen_watcher 复活验证清单、"Friction=Focus" auto_execute 设计哲学、场景分布快照
 - [DRY_RUN=False 切换准备条件](./references/dry-run-false-readiness-2026-06-10.md) — 6 个前置条件的完整评估（坐标映射/SafeGround/Guardrails）、handler lock 非残留发现、冷却竞争观测，供后续 idle_learning 执行和 auto_execute 开发参考
+- [GUI-Agent-Harness（2026-06-01）](./references/gui-agent-harness-2026-06-01.md) — Fzkuji 开源 GUI agent，OSWorld 79.8%，4-phase loop 含 Verify 阶段，Visual Memory 组件缓存，macOS-first
+- [Gemma 4 E4B 实测 + MobileExplorer + Bonsai Image 4B（2026-06-01）](./references/idle-learning-2026-06-01-r4-gemma4-e4b-mobile-explorer.md) — Gemma 4 E4B 57 tok/s 实测、日文 inline OCR、MobileExplorer 并行探索加速 23%、1-Bit Bonsai Image 4B 1.21GB、InsiderLLM May 2026 更新、系统快照
+- [The Website Specification — Agent Readiness 18 Standards（2026-06-01）](./references/website-spec-agent-readiness-2026-06-01.md) — specification.website 的 Agent Readiness 分类完整摘录：18 项标准（Required/Recommended/Optional）、Web Bot Auth(RFC 9421)、WebMCP(navigator.modelContext)、Agent Skills discovery。用于评估目标网站 agent-friendly 程度
+- [2026-06-01 学习记录（方向D）](./references/idle-learning-2026-06-01-direction-d.md) — 执行层调研：GUI-Libra/LiteGUI/ClawGUI 三篇论文阅读、Qwen3-VL 1000×1000 坐标公式、auto_execute 动作利用率仅 2.7% 的瓶颈分析、否定检测持续生效的产线快照
 
 ---
 

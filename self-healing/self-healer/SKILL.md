@@ -268,12 +268,17 @@ hermes cron update <job_id> --model deepseek-v4-flash --provider deepseek
 
 ---
 
-### Docker/Ollama相关检查（已停用）
+### Docker/Ollama状态（2026-06-01 更新）
 
-Docker（Colima）和Ollama已彻底停用。以下报警可以忽略：
-- Docker容器（hindsight/searxng/n8n/chromadb/open-webui）未运行 → 设计如此
-- TTS异常 → 已卸载，不需要
-- smolvlm2/qwen3-vl模型缺失 → 已停用本地VLM
+**Docker（Colima）已彻底停用** — 以下容器未运行是正常的：
+- hindsight/searxng/n8n/open-webui → 已停止，不再使用
+- chromadb → 已迁移到原生 uvicorn 运行（端口8000）
+
+**Ollama 正在运行** — `qwen3-vl:2b` 用于 screen_watcher 视觉分析，是活跃依赖：
+- Ollama 被系统内存压力调度 kill 时 → screen_watcher handler 全部返回 unknown
+- 诊断：`ps aux | grep -i ollama | grep -v grep` — 无输出 = 已挂
+- 修复：`open -a Ollama && sleep 5 && curl -s --max-time 3 http://127.0.0.1:11434/api/tags`
+- 不可忽略 Ollama 故障！
 
 如果持续出现这些报警，说明watchdog脚本需要更新到v4版本（位于~/.hermes/scripts/self-healer-watchdog.sh）。
 
