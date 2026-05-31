@@ -299,42 +299,25 @@ grep -E "api_key:\s+[a-zA-Z]|app_secret:\s+[a-zA-Z]" ~/.hermes/config.yaml
 
 ---
 
-## ⚠️ grep 脱敏陷阱（已踩坑）
+## ⚠️ 字符串截断替换失败（已踩坑）
 
-`grep` / `repr()` / `cat` 对包含 `...` 的 key 会显示截断（如 `sk-290...6e18`），导致字符串替换失败。
+**症状**：`str.replace('api_key: sk-290...6e18', 'api_key_env: AICODEE_API_KEY')` 返回 0 替换，但文件里明明有这行。
 
-**现象**：Python `str.find('sk-290...6e18')` 返回 `-1`（找不到），但文件里确实有这个字符串。
+**原因**：`.env` 和 config.yaml 中的 key 有 `...` 占位符（如 `sk-290...6e18`），grep 在 TTY 重定向时会显示截断的占位符 `sk-290...`，实际 key 是完整的 `sk-290ad37180e59884f390f2fd2286e18`。用截断的字符串做 replace 当然找不到。
 
-**原因**：grep 的输出重定向会触发内部脱敏，stdout 显示的 `...` 是被截短后的占位符，原始 key 包含更多字符。
-
-**解法：用字节级 Python 定位后再替换**
-```python
-with open('/path/to/config.yaml', 'rb') as f:
-    raw = f.read()
-idx = raw.find(b'gsk_vt')  # 用 key 的确定前缀找
-print(raw[idx:idx+80])     # 查看完整原始字节（含实际key）
-# 确认内容后再做替换
+**识别方法**：
+```bash
+# grep 显示 "sk-290...6e18" 但实际字节是 "sk-290ad37180e59884f390f2fd2286e18"
+grep 'sk-290' /Users/aimac/.hermes/config.yaml   # 显示 sk-290...6e18（截断）
+python3 -c "with open('config.yaml','rb') as f: print(f.read().find(b'sk-290'))"  # 返回-1（找不到）
 ```
 
-### 检查 config.yaml 中是否还有硬编码 key
+**安全替换方法**：
+1. **还原备份**：`cp config.yaml.bak.YYYYMMDD_HHMMSS config.yaml`
+2. **用 yaml.safe_load 重建**（最可靠）：直接写入完整的 Python dict + yaml.dump，跳过字符串匹配
+3. **如果必须用字符串替换**：用 key 的确定前缀（`b'sk-290'`）+ 字节级查找确认后再替换
 
-```python
-import re
-with open('/Users/aimac/.hermes/config.yaml', 'rb') as f:
-    raw = f.read()
-
-# 查找所有可能的 api_key/app_secret 行（字节级）
-patterns = [b'api_key:', b'app_secret:', b'access_token:']
-for pat in patterns:
-    idx = 0
-    while True:
-        idx = raw.find(pat, idx)
-        if idx == -1:
-            break
-        line_end = raw.find(b'\n', idx)
-        print(f"Found {pat}: {raw[idx:line_end]}")
-        idx += 1
-```
+**根本原则**：不要对任何被 grep/sed/cat/repr 脱敏过的字符串做精确匹配替换。遇到 `...` 占位符，直接走 yaml 模块重建。
 
 ---
 
@@ -590,11 +573,63 @@ grep -n "aicodee-relay\|V2.aicodee\|custom_providers\|model_catalog.providers" ~
 详见 [references/v2-aicodee-gateway.md] — v2.aicodee.com API 聚合网关平台详情（可用模型、端点、API key 行为差异）
 详见 [references/clawrouter-gateway.md] — ClawRouter 云 API 网关详情（OpenAI 兼容、111+ 模型、Stripe 支付）
 
-### config.yaml 编辑安全
+## 何时用 yaml.dump 而非 str.replace
 
-⚠️ Python 的 `yaml.safe_load()` + `yaml.dump()` 会把所有 key 按字母重排，只适合批量删除/修改
-⚠️ 局部精准编辑用 `patch` 工具 — 但 config.yaml 是 protected 文件，patch 会被拒绝
-⚠️ 这种情况下只能走 execute_code + yaml 模块做批量操作
+**结论**：`yaml.safe_load()` + `yaml.dump()` 在**结构化替换**时优于 str.replace，尤其当你需要：
+- 重建列表/字典结构（如 `custom_providers` 列表）
+- 修复破损的 YAML 块（字段缺失、缩进错误）
+- 保证输出格式合法（YAML 验证通过）
+
+**已验证有效的场景：修复破损的 custom_providers 块**
+
+当 `config.yaml` 的 `custom_providers` 列表出现以下问题时：
+- 缺少 `name:` 字段（变成匿名 entry）
+- 缺少 `model:` 字段
+- 缩进错误导致 YAML 解析失败
+
+**用 yaml.dump 重建是最可靠的方法**：
+
+```python
+import yaml
+
+with open('/Users/aimac/.hermes/config.yaml') as f:
+    cfg = yaml.safe_load(f)
+
+# 重建 custom_providers（干净的 Python list + dict）
+cfg['custom_providers'] = [
+    {
+        'name': 'V2.aicodee.com',
+        'base_url': 'https://v2.aicodee.com/v1',
+        'api_key_env': 'AICODEE_API_KEY',
+        'model': 'MiniMax-M2.7-highspeed'   # ← 必须有，/model picker 靠这个显示
+    },
+    {
+        'name': 'Api.groq.com',
+        'base_url': 'https://api.groq.com/openai/v1',
+        'api_key_env': 'GROQ_API_KEY',
+        'model': 'llama-3.3-70b-versatile'
+    },
+    {
+        'name': 'Api.cerebras.ai',
+        'base_url': 'https://api.cerebras.ai/v1',
+        'api_key_env': 'CEREBRAS_API_KEY'
+    }
+]
+
+with open('/Users/aimac/.hermes/config.yaml', 'w') as f:
+    yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
+
+# 验证
+import yaml
+with open('/Users/aimac/.hermes/config.yaml') as f:
+    cfg = yaml.safe_load(f)
+for cp in cfg.get('custom_providers', []):
+    print(f"  {cp['name']}: api_key={cp.get('api_key_env','?')} model={cp.get('model','?')}")
+```
+
+**为什么之前说不要用 yaml.dump** — 那是对**整个 config.yaml** 做 dump 会重排所有 key 破坏结构。但**只重建其中某个区块**是可以接受的，因为这个区块本身已经是 Python 对象，重序列化不会影响其他部分。
+
+**关键原则**：只对需要修复的那一小块用 `yaml.safe_load()` + `yaml.dump()`，不伤害文件其余部分。
 
 ### credential 状态含义
 | 状态 | 含义 | 处理 |

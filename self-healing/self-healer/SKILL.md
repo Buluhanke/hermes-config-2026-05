@@ -142,6 +142,31 @@ else:
     else: 切换provider → 验证 → 成功则tts_ok，失败则tts_flip
 ```
 
+### config.yaml YAML 语法错误导致 Hermes 全局崩溃（2026-06-02新发现）
+
+**症状**：Hermes 启动后 `/model` picker 看不到 V2.aicodee.com，或所有 custom provider 都消失。Gateway 进程存在但行为异常。
+
+**根因**：config.yaml 任何一处 YAML 语法错误（indentation、缺少冒号、多余空格等）会导致整个文件 parse 失败。Hermes 在加载配置时会失败但不一定报明显错误。
+
+**自愈流程**：
+```bash
+# 1. 检测 YAML parse 是否成功
+python3 -c "import yaml; yaml.safe_load(open('/Users/aimac/.hermes/config.yaml'))" 2>&1
+
+# 2. 若报 "mapping values are not allowed here" 或 "expected <block end>" 等语法错误
+#    → 立即从最近备份恢复
+LATEST_BAK=$(ls -t /Users/aimac/.hermes/config.yaml.bak* | head -1)
+cp "$LATEST_BAK" /Users/aimac/.hermes/config.yaml
+
+# 3. 验证恢复成功
+python3 -c "import yaml; yaml.safe_load(open('/Users/aimac/.hermes/config.yaml')); print('YAML OK')"
+
+# 4. 重启 Gateway
+cd ~/.hermes/hermes-agent && venv/bin/hermes gateway restart
+```
+
+**预防**：编辑 config.yaml 后立即用上述命令验证 YAML parse 是否成功，再重启 Gateway。
+
 ### command_allowlist损坏的修复
 
 **症状**：Shell命令报 `Command not allowed`，脚本执行失败
