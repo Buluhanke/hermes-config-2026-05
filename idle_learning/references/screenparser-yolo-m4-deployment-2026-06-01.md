@@ -71,7 +71,11 @@ else:
     scene = 'ambiguous'
 ```
 
-## 集成到 screen_watcher handler（方案）
+## 集成到 screen_watcher handler（**✅ 2026-06-01 07:00 已实现**）
+
+见 `screen-watcher-vision` skill 的「核心能力」章节。集成后实测 idle 场景 0.18s full cycle（44x 加速）。
+
+以下是设计阶段的原始文档，保留供参考：
 
 在 handler 启动时加载 YOLO 模型一次（~0.1s），每帧 scene classification 从 qwen3-vl:2b（~7s）切到 ScreenParser（~93ms）：
 
@@ -99,9 +103,9 @@ class FastClassifier:
 3. **暗屏/锁屏**: 检测到 ~1 个 "Image" 元素（低置信度 0.32-0.87），无法区分具体 UI。需要结合 VLM 做二次分析。
 4. **首次加载缓存**: hf_hub_download 下载到 `~/.cache/huggingface/hub/`，后续加载直接从缓存读取（0.1s）。
 
-## 双层分类器架构（2026-06-01 实测提案）
+## 双层分类器架构（**✅ 2026-06-01 07:00 已实现**）
 
-替代单一 VLM 场景分类（qwen3-vl:2b ~3s）的最佳实践：
+替代单一 VLM 场景分类（qwen3-vl:2b ~3s）的生产架构：
 
 ```
 Layer 1: ScreenParser YOLO (93ms @ 320px)

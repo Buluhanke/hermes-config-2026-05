@@ -15,6 +15,33 @@
 | qwen3.5:4b-q8_0 | 4.92 GB | ⚠️ 有压 |
 | qwen3.5:9b-q4_K_M | ~6.6 GB | ❌ 太大 |
 
+### 🆕 2026-06-01 06:17 更新：完整 Variant 表（LeetLLM 确认）
+所有 Qwen3.5 默认 variant 支持 **Text + Image 双模态输入**（不是所有 quantized 变体都有 vision，但默认 alias 都有）：
+
+| PRIMARY ALIAS | SIZE | CONTEXT | INPUT MODES | 用途评估 |
+|---------------|------|---------|-------------|---------|
+| qwen3.5:0.8b | 1.0 GB | 256K | Text, Image | 🆕 超轻量 scene classification 专用候选 |
+| **qwen3.5:2b** | **2.7 GB** | **256K** | **Text, Image** | 当前替换候选（等价内存） |
+| qwen3.5:4b | 3.4 GB | 256K | Text, Image | 升级候选（需 +0.7GB） |
+| qwen3.5:9b | 6.6 GB | 256K | Text, Image | ❌ 太大 |
+| qwen3.5:27b | 17 GB | 256K | Text, Image | ❌ 仅推理 |
+| qwen3.5:35b | 24 GB | 256K | Text, Image | ❌ 仅推理 |
+
+来源：LeetLLM blog (leetllm.com/blog/run-qwen35-local-ollama, Updated May 26, 2026) — 已验证为可靠的本地 Qwen3.5 部署指南。Ollama library page 直接确认。
+
+**⚠️ Quantized variant 陷阱**：默认 alias 全部支持 Text+Image，但许多显式 quant 变体（`-mxfp8`, `-nvfp4`, `-int4`, `-int8`, `-coding-*`）是 **text-only**。pull 前必须检查 Input 列。
+
+### 🆕 2026-06-01 06:17 更新：旗舰版 Vision Benchmarks
+以下为 Qwen3.5-397B-A17B（旗舰版）的视觉基准（Ollama library page 直接抓取）。架构一致（early fusion），小模型趋势相同但无 2B/4B 专属 GUI 数据：
+
+| 基准 | Qwen3.5-397B | Qwen3-VL-235B | 变化 |
+|------|-------------|--------------|------|
+| ScreenSpot Pro | **65.6** | 62.0 | +3.6 ✅ |
+| OSWorld-Verified | **62.2** | 38.1 | +24.1 ✅ |
+| AndroidWorld | **66.8** | 63.7 | +3.1 ✅ |
+| RefCOCO(avg) | **92.3** | 91.1 | +1.2 ✅ |
+| OmniDocBench1.5 | **90.8** | 84.5 | +6.3 ✅ |
+
 ### 关键优势
 - **Early Fusion 训练**：多模态 token 在基座模型层面直接融合（非独立 VL 分支如 qwen3-vl）
 - "outperforms Qwen3-VL models across reasoning, coding, agents, and visual understanding benchmarks"（Qwen 官方 readme）
@@ -46,11 +73,13 @@
 - 内存占用接近（2.68GB → 2.7GB），essentially swap-in replacement
 - 一次 `ollama pull + handler 模型名修改` 即可完成
 - 不需要改 prompt 或 context config（early fusion 兼容 chat API）
+- qwen3.5:0.8b (1.0GB) 可作为 scene classification 专用超轻量模型（Layer 1），保留 qwen3-vl:2b 做内容分析（Layer 2）
 
 ### 来源
-- Ollama library: ollama.com/library/qwen3.5
+- Ollama library: ollama.com/library/qwen3.5（旗舰版 vision benchmarks 直接抓取）
 - Ollama registry manifests: registry.ollama.ai/v2/library/qwen3.5/manifests/4b-q4_K_M
 - InsiderLLM May 2026 update: insiderllm.com/guides/best-local-llms-mac-2026
+- LeetLLM blog: leetllm.com/blog/run-qwen35-local-ollama（Updated May 26, 2026 — 完整 variant 表 + vision support 确认）
 
 ### 🏆 外部验证信号（2026-06-01 06:00 发现）
 Ollama 官方 library 页面将 **Hermes Agent** 列为 Qwen3.5 的 launchable 应用之一，与 Claude Code、Codex、OpenClaw、OpenCode 并列：
@@ -101,9 +130,9 @@ Qwen3.6 只适合纯推理工作，不适合 screen_watcher 场景（需要常�
 | CUAAudit | 2603.10577 | VLM-as-judge 审计 | handler 自我验证 |
 | OS-Themis | 2603.19191 | 里程碑分解奖励模型 | DRY_RUN=False 验证机制 |
 
-## ⭐ 产线健康快照（2026-06-01 07:00）
-**注意：此快照为 07:00 轮次的数据。2026-06-01 06:00 轮次最新数据见下方 \`06:00 更新\` 分节。**
+## ⭐ 产线健康快照
 
+### 2026-06-01 07:00 快照
 | 组件 | 状态 | 详情 |
 |------|------|------|
 | screen_watcher | ✅ | PID 8748, 1:27 AM 启动 |
@@ -115,17 +144,23 @@ Qwen3.6 只适合纯推理工作，不适合 screen_watcher 场景（需要常�
 | AUTO-EXEC-DRY | ✅ | 853 条 |
 | Gateway 污染 | ✅ | 1707，修复后停止增长 |
 | 网络 | ✅ | github OK, hn blocked |
-| Handler lock | ✅ | 无 |
 
 ### 🆕 2026-06-01 06:00 轮次更新
-
 | 组件 | 更新值 |
 |------|--------|
-| AUTO-EXEC-DRY | 905（+52 自 07:00 快照） |
-| Gateway 污染 | 1788（+81，缓慢增长，非功能性问题） |
+| AUTO-EXEC-DRY | 905（+52 自 07:00） |
+| Gateway 污染 | 1788（+81，缓慢增长） |
 | June 1 05:00-06:00 scene | 48 "other", 1 "desktop", 0 unknown ✅ |
 | Ollama ps | qwen3-vl:2b loaded (2.7GB, 100% GPU, ctx 4096) |
-| 网络 | github OK, hn blocked（不变） |
-| Qwen3.5 决策 | ⛔ 不拉取（见上方更新） |
 
-**配置修改**：无。产线 100% 稳定。
+### 🆕 2026-06-01 06:17 轮次更新
+| 组件 | 更新值 |
+|------|--------|
+| AUTO-EXEC-DRY | 929（+24 自 06:00） |
+| Gateway 污染 | 1826（+38，~0.5/hr ✅） |
+| June 1 scene 分布 | 333 other, 2 unknown, 1 desktop, 1 browser |
+| unknown 率 | 0.59%（2/337）✅ |
+| 新增来源 | LeetLLM blog 确认完整 variant 表 + Text+Image 支持 |
+| 新增洞察 | qwen3.5:0.8b (1.0GB) 可作为 Layer 1 超轻量 scene classification |
+
+**配置修改**：无。

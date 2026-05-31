@@ -8,20 +8,50 @@ trigger: screen_watcher触发screen_trigger_handler后调用
 
 ## 核心能力
 
-当前仅使用 **qwen3-vl:2b**（Ollama 本地）完成全部视觉分析任务。
+当前使用 **ScreenParser YOLO**（快速预分类）+ **qwen3-vl:2b**（精确 VLM 分析）双层架构。
+
 smolvlm2-agentic-gui 已从 Ollama registry 永久下线（registry 404，2026-06-02 确认），不可再拉取。
 
-| 函数 | 模型 | 速度（产线实测，2026-06-01 04:45 基线） | 用途 |
-|------|------|-----------------------------------------|------|
-| `get_scene_type()` | qwen3-vl:2b | **~3s** (400px resize, num_ctx=1024) | 场景分类，返回英文单词（browser/wechat/desktop/other等） |
+| 函数 | 模型 | 速度（产线实测） | 用途 |
+|------|------|-----------------|------|
+| `fast_scene_check()` | ScreenParser YOLO11-Large | **~91ms** (320px, CPU) | 快速预分类：idle(0-1元素) / active(>5) / uncertain(2-5) |
+| `get_scene_type()` | qwen3-vl:2b | **~3s** (400px resize, num_ctx=1024) | VLM 精确场景分类（仅 active/uncertain 时调用） |
 | `ask_screen()` | qwen3-vl:2b | **~5s** (800px resize, num_ctx=4096) | GUI 内容分析（否定检测+关键词匹配） |
-| 完整周期 | — | **~8s** | 含两次 Ollama API 调用 + 图像处理 + 日志 + cooldown |
+| 完整周期（idle） | YOLO only | **~0.18s** | idle 场景跳过 VLM → 44x 加速 vs 纯 VLM |
+| 完整周期（active） | YOLO + VLM | **~8s** | 活跃场景保留全链路分析 |
+
+**核心流程**：
+```text
+触发 → YOLO 快速预分类 (~91ms)
+  ├── idle (0-1元素) → 直接 silent（跳过 VLM）    ← **新增 2026-06-01**
+  ├── uncertain (2-5) → 升级 VLM 场景分类
+  └── active (>5元素) → VLM 场景分类 → 内容分析
+```
 
 **性能演进**：
-- 2026-06-01 前（num_ctx 默认 262144）：get_scene_type 35-47s，完整周期 70-84s → 已归档 `references/handler-performance-timing-2026-06-01.md`
-- 2026-06-01 修复后（num_ctx=1024/4096）：9-12s / 20-30s
-- **2026-06-01 04:45 实测**（稳定运行后）：~3s / ~8s — 分类降速（400px）+ Ollama 预热稳定的真实性能
-- 全黑/锁屏场景通过暗屏检测（`is_dark_screenshot()`）直接跳过，<0.5s。**⚠️ 实测：843+ 条 dry-run 记录中该检测从未触发**（10x10 缩略图 < 500 字节阈值过严，暂不修复 — 低 ROI）
+- 2026-06-01 前（纯 VLM，num_ctx 默认 262144）：get_scene_type 35-47s，完整周期 70-84s
+- 2026-06-01 第一次优化（num_ctx=1024/4096）：9-12s / 20-30s
+- **2026-06-01 04:45 实测**（num_ctx 优化后稳定）：~3s / ~8s
+- **2026-06-01 07:00（本轮）：YOLO 预分类集成 + idle 旁路** → idle 场景 0.18s (44x)
+
+### ScreenParser YOLO 实现细节
+
+Model: `docling-project/ScreenParser` (YOLO11-Large fine-tuned on ScreenParse v2)
+Local path: `~/.cache/huggingface/hub/models--docling-project--ScreenParser/snapshots/f029e565f1206577402e43206454522075be3f72/best.pt`
+Deps: `ultralytics 8.4.57` (hermes-agent venv)
+
+**阈值**：
+```python
+if n <= 1:    return "idle"        # 跳过 VLM，直接 silent
+elif n > 5:   return "active"      # 升级 VLM 精确场景分类
+else:         return "uncertain"   # 升级 VLM（2-5 元素边界情况）
+```
+
+**已知限制**：ScreenParser 训练于 rendered web screenshots，原生桌面 App（微信/钉钉等）识别准确率待长期验证。55 UI 类覆盖 Table/Browser/Button/App Icon/Navigation Bar/Text Input 等常见桌面/移动 UI 元素。
+
+**实现位置**：`screen_trigger_handler.py` 第22-65行（`fast_scene_check()` + `_get_yolo()` 惰性加载），`on_trigger()` 中 `is_dark_screenshot()` 检查后立即调用。
+
+全黑/锁屏场景通过暗屏检测（`is_dark_screenshot()`）直接跳过，<0.5s。**⚠️ 实测：843+ 条 dry-run 记录中该检测从未触发**（10x10 缩略图 < 500 字节阈值过严，暂不修复 — 低 ROI）
 
 ## 场景分类 prompt（当前在用）
 
@@ -97,6 +127,7 @@ screen_trigger_handler 在调用 VLM 前先做场景过滤。**不分析**以下
 - `references/ollama-api-endpoint-chat-vs-generate-2026-05-30.md` — ⚠️ 重要：/api/chat vs /api/generate 性能差异，错误端点导致120s超时
 - `references/insiderllm-m4-2026-guide-2026-05-31.md` — InsiderLLM M4 2026 最新推荐：Qwen 3.6-27B dense（M4 24GB "tight but doable"），vision 内建于基座
 - `references/response-normalization-2026-06-02.md` — ⚠️ 重要：get_scene_type() response 标准化，取第一行+小写+trim标点
+- `references/production-snapshot-2026-06-01-0716.md` — 产线快照：YOLO预分类28次空闲检测全部正确，unknown率0.54%，双层分类器稳定运行
 - `references/screen-trigger-handler-telegram-fix-2026-05-30.md` — Telegram推送失败修复（hermes_tools → 直接Bot API）+ 场景分类prompt幻觉bug修复
 - `references/smolvlm2-structured-json-2026-05-29.md` — smolvlm2 JSON 输出测试详情（响应时间、清理函数、可靠性评估）
 - `references/screen-trigger-handler-auto-execute-2026-05-28.md` — Auto-Execute 集成设计文档
@@ -178,23 +209,64 @@ echo "${OLLAMA_KV_CACHE_TYPE:-not set}"
 
 详见 `references/ollama-numctx-memory-optimization-2026-06-01.md`
 
-## 生产验证状态（2026-06-01 02:30 更新）
+## ⚠️ 子进程 Python 版本不匹配（2026-06-01 发现并修复）
 
-以下指标为 2026-06-01 02:30 巡检确认的健康基线：
+**关键诊断**：screen_watcher 通过 `/bin/bash -lic set +m` 启动，`python3` 解析为 `/usr/local/bin/python3`（系统 Python 3.14），但 handler 依赖 `ultralytics`（YOLO）只装在 hermes venv（Python 3.11）。
+
+```python
+# screen_watcher.py line 87-90 — ❌ 旧代码（python3 解析到 Python 3.14）
+subprocess.Popen(
+    ["python3", "/Users/aimac/.hermes/scripts/screen_trigger_handler.py"],
+    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+)
+```
+
+**后果**：handler 因 `ModuleNotFoundError: ultralytics` 立即崩溃 → handler_lock 残留 → watcher 检测到锁文件后 `"Handler仍在运行，跳过本次触发"` → 483+ 次跳过 → 所有后续 trigger 被永久阻塞。
+
+**修复**：显式使用 venv Python 路径，不依赖 PATH 解析：
+
+```python
+# ✅ 修复后（2026-06-01）
+subprocess.Popen(
+    ["/Users/aimac/.hermes/hermes-agent/venv/bin/python3",
+     "/Users/aimac/.hermes/scripts/screen_trigger_handler.py"],
+    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+)
+```
+
+**验证方法**：
+```bash
+# 确认 watcher 使用的 python3 版本
+/bin/bash -lic 'which python3; python3 --version'
+
+# 确认 ultralytics 在目标 python 中可用
+/usr/local/bin/python3 -c "from ultralytics import YOLO"  # ❌ 系统 Python — ModuleNotFoundError
+~/.hermes/hermes-agent/venv/bin/python3 -c "from ultralytics import YOLO; print('OK')"  # ✅ venv
+```
+
+**根因**：`bash -lic`（login + interactive）会重新加载 PATH，如果用户 shell 配置中 PATH 顺序不同，可能导致子进程使用不同 Python。多 Python 版本环境（3.11 venv + 3.14 系统）下 PATH 解析不可靠，必须用绝对路径。
+
+**Pitfall**: 任何 `subprocess.Popen(["python3", ...])` 调用，如果 watcher 由 bash -lic 启动，`python3` 的解析结果可能与开发者预期不同。必须显式指定 venv 路径。
+
+**相关文件**：
+- Watcher: `~/.hermes/scripts/screen_watcher.py`
+- Handler: `~/.hermes/scripts/screen_trigger_handler.py`
+- Stale lock: `~/.hermes/screenshots/.handler_lock`
+
+## 生产验证状态（2026-06-01 07:00 更新）
+
+以下指标为 2026-06-01 07:00 巡检确认的健康基线（含本 session 修复的关键问题）：
 
 | 指标 | 值 | 状态 |
 |------|----|------|
-| screen_watcher 进程 | PID 8748 | ✅ 持续运行 |
+| screen_watcher 进程 | PID 48245（本 session 重启） | ✅ |
 | 截图新鲜度 | 持续更新（每 ~60s） | ✅ |
 | Ollama 进程 | qwen3-vl:2b runner (100% GPU) | ✅ |
-| Ollama 运行时内存 | 2.7 GB / Context 4096 | ✅ |
-| KV Cache 量化 | q8_0 | ✅ |
-| 场景分类 num_ctx | 1024（代码确认） | ✅ |
-| 内容分析 num_ctx | 4096（代码确认） | ✅ |
-| Handler 堆积 ("Handler仍在运行") | **0 次** | ✅ 完全解决 |
-| 否定检测（other → [silent]） | 0 个 other/unknown 误标 [urgent] | ✅ 生产验证通过 |
+| YOLO 预分类 | 首次 watcher auto-trigger 成功（07:06:19） | ✅ 新验证 |
+| Handler 堆积 (Handler仍在运行) | 修复前 483+ 次（Python 版本不匹配）；修复后 0 次 | ✅ 本 session 修复 |
+| Python 版本修复 | watcher 子进程显式使用 venv Python 3.11 | ✅ 本 session 修复 |
 | 系统空闲内存 | ~13.4 GB | ✅ |
-| dry-run 总数 | 715 条 | ✅ 正常增长（+43 自 01:50） |
+| dry-run 总数 | 967 条 | ✅ 正常增长 |
 
 ### 当前场景分布（2026-06-01 04:45 快照 — 当日 + 全量历史）
 
@@ -204,7 +276,16 @@ echo "${OLLAMA_KV_CACHE_TYPE:-not set}"
   2 unknown ( 0.8%) — 稳定极低位
   1 browser  ( 0.4%)
 ```
-**unknown 率 0.8%** — 历史最低。日期分片统计的必要性验证：全量 42-49% unknown 因包含 smolvlm2 时代/Ollama 挂掉的历史污染。详见 `references/unknown-scene-date-analysis-2026-06-01.md`。
+**unknown 率 0.8%** — 历史最低。
+
+**当日（06-01 07:16 快照 — YOLO 预分类上线后）**：
+```text
+369 other  — 其中 28 次被 YOLO 预分类直接跳过（93ms）
+  2 unknown (0.54%)
+  1 desktop
+  1 browser
+```
+**YOLO 预分类 28 次空闲检测，全部正确标记 [silent]**。双层分类器产线稳定。日期分片统计的必要性验证：全量 42-49% unknown 因包含 smolvlm2 时代/Ollama 挂掉的历史污染。详见 `references/unknown-scene-date-analysis-2026-06-01.md`。
 
 **全量历史（843+ 条 dry-run 总记录）**：
 ```text
@@ -222,6 +303,7 @@ echo "${OLLAMA_KV_CACHE_TYPE:-not set}"
 | 06-01 01:50 | 672 | 45% | — | 13% | 35% |
 | 06-01 02:30 | 715 | 42% | — | 18% | 33% |
 | **06-01 04:45** | **843** | **36%** | **0.8%** **(今日)** | **15%** | **28%** |
+| **06-01 07:16** | **967** | **36%** | **0.54%** **(当日 369 other / 2 unknown / 1 desktop / 1 browser)** | **YOLO idle 28次正确跳过** | **YOLO预分类已产线稳定** |
 
 other 从 88→129（+41）说明否定词检测持续生效：更多原被分类为 browser 的场景正确降级为 other + [silent]。unknown 占比从 45%→42%（下降 3pp，因 other 增长稀释）。
 

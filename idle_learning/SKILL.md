@@ -361,6 +361,19 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **DynamicUI** (2604.25380, v2 May 8): 视频输入解决动态GUI环境，screen_recording替代single screenshot
   - **GUI Grounding Sensitivity Benchmark** (EACL 2026): 12模型对同一元素不同描述敏感，单prompt不鲁棒
   - **CutVerse** (2605.19484, May 19): 媒体编辑基准36%成功率，验证long-horizon是通用瓶颈
+- **⭐ ScreenSearch: Uncertainty-Aware OS Exploration (2605.16024, May 15 2026) — 方向B 2026-06-01 新增**
+  - PUCT graph-bandit 用于大规模桌面探索，结构化 screen retrieval + deduplication (UIA tree → location-aware features)
+  - **核心洞察**: visually similar screens can map to different workflow states → ambiguity signal via matched-action outcome dispersion
+  - 1M screenshots / 30K deduplicated states across 11 desktop applications
+  - **Novelty-Ambiguity Trade-off**: 纯 ambiguity reduction 不够，需与 frontier expansion 平衡
+  - **对 handler**: 相邻帧间状态变化检测可替代纯 cooldown；有限桌面状态空间（30K）验证了有限场景分类方向正确
+  - 详见 `references/screen-search-uncertainty-os-exploration-2026-06-01.md`
+- **⭐ TOCTOU Attacks on CUA (2604.18860, Apr 20 2026) — 方向B+C交叉，2026-06-01 新增**
+  - Observation-to-action gap avg 6.51s → TOCTOU window for UI state manipulation
+  - 三个攻击原语: Notification Overlay Hijack / Window Focus Manipulation (100% AIR, 零视觉证据) / Web DOM Injection
+  - **PUSV防御**: 3层 pre-execution UI state verification (SSIM + screenshot diff + window snapshot)，100% AIR A+B，零假阳性，<0.1s overhead
+  - **对 Hermes**: 60s cooldown ≈ 大 TOCTOU 窗口；切换 DRY_RUN=False 前需实现 PUSV 类似机制
+  - 详见 `references/toctou-attacks-cua-2026-06-01.md`
 - 新方向（2026-05-28 发现）：Apple FastVLM（CVPR 2025，MLX版本在HuggingFace）+ Ollama v0.19 MLX集成
 - 新方向（2026-05-29 发现）：Ollama MLX backend 需要 32GB+ RAM，24GB 不支持；smolvlm2-agentic-gui 有 q8_0 (~1.9GB) 和 fp16 (~3.6GB) 变体可用；Qwen2.5VL 在 Ollama 上有 3b/7b/32b/72b 各变体
 - **⭐ ZonUI-3B（WACV 2026，2026-05-29 发现）** — 轻量级GUI grounding VLM，3B参数
@@ -394,9 +407,29 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **RoTS-32B OSWorld 47.4%**（SOTA）+ All-Pass@4 33.8%
   - **核心论点**：error recovery 是 GUI agent 真实部署的最大瓶颈
   - **对 Hermes**：screen_trigger_handler 否定检测 = 基础版 error recovery；RoTS 方法论可直接借鉴
-  - 详见 `references/rots-32b-2026-06-01.md`
+  - 详见 `references/uiloop-2026-06-01.md`
 
-- **⭐ OpenRouter Series B $113M（2026-05-31 更新）**：
+### ⭐ MMSkills: Towards Multimodal Skills for General Visual Agents (arXiv 2605.13527, May 13, 2026)
+- **对 Hermes 影响：最高优先级 — 直接验证 Hermes Skills 路线的学术基础，并扩展技能概念**
+- 核心：技能应是多模态的 — 每个 MMSkill = 文本过程 + 运行时状态卡片 + 多视角关键帧
+- 轨迹→技能的自动化 pipeline：workflow grouping → procedure induction → visual grounding → meta-skill auditing
+- Branch-loaded 技能 agent：临时分支检查状态卡片和关键帧，对齐实时环境后蒸馏为结构化指导
+- 同时改进前沿模型和小模型的 GUI/游戏 benchmarks
+- **对 Hermes Skills 的启发**：当前 Skills 仅包含文本过程，缺视觉识别信息（"什么视觉状态触发此技能"）。future 方向：每个 Hermes Skill 应附加 state cards（UI 截图 + 关键元素位置）+ keyframes（动作序列截图）
+- 详见 `references/mmskills-multimodal-skills-2026-06-01.md`
+
+### ⭐ PRO-CUA: Process-Reward Optimization for Computer Use Agents (arXiv 2605.29119, May 27, 2026)
+- PRM 引导的步骤级强化学习，解耦 on-policy 交互和策略优化
+- 密集 credit assignment（正/负信号都有），不依赖专家轨迹，减少分布偏移
+- **对 Hermes**：PRM 可为 auto_execute Verify 阶段提供步骤级反馈。当前 handler 无 Verify 阶段 — PRM 是社区验证的解决方案
+
+### ⭐ ToolCUA: Towards Optimal GUI-Tool Path Orchestration (arXiv 2605.12481, May 12, 2026)
+- 混合 GUI+Tool action space：学习何时继续 GUI 操作 vs 切换工具调用
+- 46.85% OSWorld-MCP（相对提升 66%，新 SOTA for comparable scale models）
+- Interleaved GUI-Tool Trajectory Scaling Pipeline — 复用静态 GUI 轨迹合成工具轨迹，开源
+- **对 Hermes**：GUI-vs-MCP 决策问题与 screen_watcher vs MCP 混合路径一致。当前 screen_watcher 纯视觉，ToolCUA 展示了 hybrid 训练的优势
+
+- **⭐ R5论文发现（2026-06-01 凌晨巡检）**
   - **规模**：CapitalG/NVIDIA/ServiceNow/MongoDB/Snowflake/Databricks 联合投资
   - **关键指标**：周处理量从 5T → 25T tokens，年底预计 1Q tokens；8M+ 开发者，400+ 模型
   - **战略意义**：企业投资方组合（基础设施和平台公司）= 路由层已成确定性基础设施
@@ -424,6 +457,8 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 
   **⚠️ 2026-06-01 方向A巡检结论：gemma4:e4b 不值得为 screen_watcher 场景分类拉取。**
   原因：(1) 3x 内存占用 (1.76GB → ~5.5GB) 换来的视觉质量提升对 scene classification 任务无明确收益；(2) qwen3-vl:2b 已实现 June 1 产线 0% unknown，正确率已满足需求；(3) Handler 使用 num_ctx=1024（场景分类）+ num_ctx=4096（内容分析），qwen3-vl:2b 完美胜任。替代价值：gemma4:e4b 可替换 qwen2.5:1.5b 做通用文本推理，但 ROI 低。
+
+  **✅ 2026-06-01 07:00 InsiderLLM May 2026 Guide 交叉验证**：InsiderLLM 推荐 Qwen 3.6-27B dense (~17GB @ Q4_K_M) 为24GB SOTA视觉模型，但需 llama.cpp/LM Studio，Ollama 暂不支持。Gemma 4 26B-A4B (~18GB) + OS/Ollama 超额。当前 qwen3-vl:2b + qwen2.5:1.5b = 2.68GB total 是 screen_watcher 场景的 M4 24GB 最优解。产线 0% unknown 已验证。**下一次 Direction A 巡检可跳过模型选型评估，直接进入健康检查**除非 Ollama 支持 Qwen 3.6 系列。
 
   **方向A模型评估标准流程**（2026-06-01 确立，供未来复用）：
   1. 查 Ollama library 页获取模型尺寸/基准（`browser_navigate ollama.com/library/<model>`）
@@ -465,22 +500,30 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **环境变量**：`PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=1` 跳过首次主机检测（可选）
   - **集成状态**：pip 链路完整，模型权重需首次下载（网络正常后可用，后续加载无需下载）
   - 详见 references/paddleocr-vl-0.9b.md
-- ⭐ **Qwen3.5（2026-05，Ollama 已发布约1周）** — 次世代多模态模型家族，early fusion 训练策略（视觉内建于基座模型）
+- **⭐ GLM-OCR 0.9B（2026-06-01 发现）** — OmniDocBench V1.5 **94.62**（#1 overall，SOTA OCR）
+  - 架构：CogViT 视觉编码器 → GLM-0.5B 解码器
+  - Ollama 直接可用：`ollama run glm-ocr`（1.3M pulls, 3 tags: latest/q8_0/bf16）
+  - 支持：文字识别、表格识别、图形识别
+  - **对 Hermes**：qwen3-vl:2b 的 OCR 轻量补充（0.9B），当前产线 0% unknown 稳定，暂不 pull
+  - 详见 references/glm-ocr-0.9b.md
+- **⭐ Qwen3.5（2026-05，Ollama 已发布约1周）** — 次世代多模态模型家族，early fusion 训练策略（视觉内建于基座模型）
   - **Ollama 直接可用**：12.8M pulls, 64 tags, 12 variants
   - 关键优势：Early fusion 训练策略 — 多模态 token 在基座模型层面直接融合，"outperforms Qwen3-VL models across vision understanding benchmarks"
-  - **可用变体及大小**（2026-06-01 Ollama library 页面实测，修正早期 registry manifest 估算错误）：
-    - qwen3.5:0.8b → 1.0 GB（轻量候补）
-    - **qwen3.5:2b → 2.7 GB**（等价 qwen3-vl:2b 1.76GB + qwen2.5:1.5b 0.92GB ≈ 2.68GB，替换后几乎相同总内存）
-    - **qwen3.5:4b → 3.4 GB**（升级候选，benchmark 更强）
+  - **可用变体及大小**（2026-06-01 Ollama library 页面实测，2026-06-01 LeetLLM 确认完整表）：
+    - qwen3.5:0.8b → 1.0 GB（Text+Image）🆕 超轻量候选
+    - **qwen3.5:2b → 2.7 GB**（Text+Image）等价 qwen3-vl:2b + qwen2.5:1.5b 总内存
+    - **qwen3.5:4b → 3.4 GB**（Text+Image）升级候选
     - qwen3.5:9b → 6.6 GB（太大）
     - qwen3.5:27b → 17 GB（>24GB 上限）
-  - **视觉基准**（Qwen3.5-397B-A17B 旗舰版，来源 Ollama library 页面）：
-    - ScreenSpot Pro: 65.6（vs Gemini-3 Pro 72.7）
+    - ⚠️ 所有 variant 默认支持 Text+Image，但显式 quant 变体（`-mxfp8`, `-int4`, `-coding-*`）可能是 text-only。pull 前必须检查 Input 列
+  - **📊 旗舰版 Vision Benchmarks（Qwen3.5-397B-A17B，来自 Ollama library 页面直接抓取）**：
+    - ScreenSpot Pro: 65.6（vs Gemini-3 Pro 72.7, Qwen3-VL 62.0）
     - OSWorld-Verified: 62.2（vs Claude 4.5 Opus 66.3, GPT5.2 38.2）
     - AndroidWorld: 66.8（优于 Qwen3-VL-235B-A22B 63.7）
-    - RefCOCO(avg): 92.3（空间定位）
+    - RefCOCO(avg): 92.3（空间定位，优于 Qwen3-VL 91.1）
     - OmniDocBench1.5: 90.8（文档OCR，超越 Qwen3-VL 84.5）
-  - **Ollama 生态信号**：Ollama library 页面将 **Hermes Agent** 列为 Qwen3.5 的 launchable 应用之一（与 Claude Code、Codex、OpenClaw 并列），说明 Ollama 对 Hermes 生态地位的认可
+    - ⚠️ 仅旗舰版数据，2B/4B 的 GUI 专项基准未发布。2026-06-01 产线决策：不拉取。
+  - **Ollama 生态信号**：Ollama library 页面将 **Hermes Agent** 列为 Qwen3.5 的 launchable 应用之一（与 Claude Code、Codex、OpenClaw、OpenCode 并列），说明 Ollama 对 Hermes 生态地位的认可
 - ⭐ **Qwen 3.6（2026-05）** — 视觉内建于基座模型（无独立VL分支）
   - Qwen 3.6-27B dense（~17GB Q4_K_M）— 新SOTA本地视觉
   - Qwen 3.6-35B-A3B MoE（~22GB）
@@ -501,10 +544,11 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 **推荐来源（按可靠性排序）**：
 1. **InsiderLLM（insiderllm.com）** ✅ 已验证（2026-05-31, 2026-06-01 再次确认）：深度 Mac 指南，定期更新模型推荐和 tok/s 基准。**Updated May 2026** — 本轮推荐 Qwen 3.6-27B Q4_K_M（16.8GB, 18-28 tok/s）为 24GB 编码首选，Gemma 4 E4B（5.5GB, 57 tok/s）为安全选择。Simon Willison 实测 Q4_K_M GGUF 达 25.57 tok/s。browser_navigate 可直接抓取。详见 `references/idle-learning-2026-06-01-r4-gemma4-e4b-mobile-explorer.md`
    - **⚠️ 2026-06-01 新增: Qwen 3.6 Q4 Quant \"Reliability Tax\"**（May 28, 2026 文章）: Q4 量化不损害推理能力，而是损害可靠性与指令遵循能力（tool call 格式、diff 输出、长 agentic loop 中的多步指令保持）。最便宜的修复: 用 calibrated Q4（imatrix 版如 Unsloth UD-Q4_K_XL）替换默认 Q4_K_M，相同内存占用。中间步骤: Q5_K_M 恢复大部分损失，Q6 清理最后编辑。对 Hermes: 如 scene classification 偶尔漂移或工具调用失败，优先检查量化校准而非换模型
-2. **Qwen 官方博客（qwen.ai/blog）** ✅ 已验证（2026-06-01 首次成功访问）：第一手资料源，Qwen-VLA / Qwen3.7 / Qwen3-2507 等最新发布信息。SPA 页面，browser_navigate 正常加载。**注意**：文章详情的 URL 结构为 qwen.ai/blog，具体文章需点击卡片后通过 SPA 导航加载。
-3. **Ollama 官方 library**（ollama.com/library/）— 确认模型是否在库中
-4. **ddgs CLI**（`ddgs text -q "query" -m 5`）— 快速关键词，超时返回空时忽略
-5. **HN Firebase API** — 热点技术文章
+2. **LeetLLM（leetllm.com）** ✅ 2026-06-01 新增验证：本地 Qwen 模型部署权威指南，覆盖率全的 variant 表（含 Input 列区分 vision/text-only），Updated May 26, 2026。browser_navigate 可直接抓取完整文章。优于 InsiderLLM 的细节（精确到各 variant 的量化类型和 input mode 确认）。
+3. **Qwen 官方博客（qwen.ai/blog）** ✅ 已验证（2026-06-01 首次成功访问）：第一手资料源，Qwen-VLA / Qwen3.7 / Qwen3-2507 等最新发布信息。SPA 页面，browser_navigate 正常加载。**注意**：文章详情的 URL 结构为 qwen.ai/blog，具体文章需点击卡片后通过 SPA 导航加载。
+4. **Ollama 官方 library**（ollama.com/library/）— 确认模型是否在库中，可直接 browser_navigate 抓取 benchmark 表格和描述。
+5. **ddgs CLI**（`ddgs text -q "query" -m 5`）— 快速关键词，超时返回空时忽略
+6. **HN Firebase API** — 热点技术文章
 - ⚠️ 已知限制：`OLLAMA_USE_MLX=1` 需要 32GB+ 统一内存（M4 24GB 不支持）
 
 ### 论文发现的方法论：arXiv browser 搜索
@@ -557,7 +601,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log
 
 **Verified production guardrails literature（2026-06-01 方向C实测）**：
 
-### ⭐ MSR Universal Verifier (arXiv 2604.06240, Apr 5, 2026, Microsoft Research)
+- ⭐ **MSR Universal Verifier (arXiv 2604.06240, Apr 5, 2026, Microsoft Research)**
 **"The Art of Building Verifiers for Computer Use Agents"**
 - 4 大验证原则（**直接可集成到 handler 缺失的 Verify 阶段**）：
   1. **有意义的非重叠词表** (Meaningful non-overlapping rubrics) → 减少验证噪声
@@ -568,6 +612,22 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log
 - 额外发现：auto-research agent 达到专家 70% 质量（仅用 5% 时间），但无法发现所有策略来复刻 Universal Verifier
 - **代码**：github.com/microsoft/fara
 - **对 Hermes**：process/outcome reward 分离和分治上下文管理可直映到 screen_watcher 的 multi-screenshot verification
+
+### ⭐ TOCTOU Attacks on CUA (arXiv 2604.18860, Apr 20 2026) — 方向C 2026-06-01 新增
+**"Temporal UI State Inconsistency in Desktop GUI Agents: Formalizing and Defending Against TOCTOU Attacks on Computer-Use Agents"**
+- Observation-to-action gap avg **6.51s** on OSWorld → formalized as **Visual Atomicity Violation** (TOCTOU)
+- 三个攻击原语: (A) Notification Overlay Hijack (B) Window Focus Manipulation — **100% action-redirection, zero visual evidence** (C) Web DOM Injection
+- **PUSV Defense**: Pre-execution UI State Verification
+  - L1: Masked pixel SSIM at click target (<0.1s)
+  - L2a: Global screenshot diff
+  - L2b: X Window snapshot diff
+  - **100% Action Interception Rate** against A+B, **zero false positives**, <0.1s total overhead
+  - Blind spot: DOM injection (0% AIR) — needs OS+DOM defense-in-depth
+- **对 Hermes guardrail 直接影响**:
+  - 60s cooldown = 68s TOCTOU window (cooldown+handler cycle)
+  - handler 当前无 pre-execution state verification → DRY_RUN=False 前必须实现类似 PUSV 的三层验证
+  - PUSV 的 "no single layer alone achieves full coverage" 验证了 handler 多层检测（场景分类+否定检测+CRITICAL_KEYWORDS）的正确性
+- 详见 `references/toctou-attacks-cua-2026-06-01.md`
 
 ### ⭐ IntentScore (arXiv 2604.05157v3, Apr / May 28, 2026, GWU)
 **"Intent-Conditioned Action Evaluation for Computer-Use Agents"**
@@ -743,13 +803,28 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log
   ```
   如果最新日期的 unknown 率 < 10%，即使全量 unknown > 30% 也算稳定。
 
-  **2026-06-01 03:08 生产验证（R3）**：条件①已达标（747 ≥ 500），②按全量 unknown 5%（June 1 只有2条 early-unknown，之后0%）✅ 达标，③动作多样性 ❌ 仅2种，④ 已确认实现（详见 2026-06-01 方向D R4 修正评估），⑤⑥ 仍缺位。结论：条件①②④ 已满足，可推进③⑤⑥。RPA支持11种动作但WHITELIST仅使用2种。"
+  **2026-06-01 03:08 生产验证（R3）**：条件①已达标（747 ≥ 500）
+**2026-06-01 07:00 方向A巡检再确认（本session）**：dry-run已达957条。June 1 00:06-06:46 场景分布100% "other"（深夜空闲），unknown=0%，无假阳性。场景分类+否定检测持续稳定运行。，②按全量 unknown 5%（June 1 只有2条 early-unknown，之后0%）✅ 达标，③动作多样性 ❌ 仅2种，④ 已确认实现（详见 2026-06-01 方向D R4 修正评估），⑤⑥ 仍缺位。结论：条件①②④ 已满足，可推进③⑤⑥。RPA支持11种动作但WHITELIST仅使用2种。"
 - ⭐ **"Domain Expertise Has Always Been the Real Moat"（754pts HN, 2026-05-31）**
   - 核心论点：Agentic AI 切断了"理解领域"和"生产代码"之间的绑定，约束从"能不能构建"变成了"能不能判断正确"
   - 对 Hermes 的意义：screen_watcher handler 的最大瓶颈不是"能不能执行"，而是"能不能判断何时需要执行"
   - 两角色类比：领域专家（知道正确输出长什么样）× 工程师（知道怎么构建）
   - Hermes auto_execute 需要两种能力兼备
 - ⚠️ **SearXNG web_search 状态（2026-06-01 发现，2026-06-01 再次确认）**：SearXNG 返回 HTTP 502（网关错误），web_search 完全不可用。3 次连续调用均返回 502。ddgs + HN Firebase API + browser_navigate 为当前唯一可用降级路径。**注意**：如 ddgs 同时失败（超时返回空），browser_navigate + browser_console JS 提取是最后可行方案（已验证：arXiv 摘要页面、dev.to 文章、insiderllm.com 均可直接读取）。
+
+- ⭐ **ProjGuard（arXiv 2605.13631, May 13 2026）** — 行为轨迹监控安全框架
+  - 轻量标量风险信号（累计交互历史）→ 在线评估执行是否偏移到不安全区域
+  - 提前预警 + 按需激活辅助 VLM 纠正下一步
+  - OS-Harm: unsafe 16%→3%, 完成率 59%→65%
+  - **对 Hermes**：scene_classification（始终在线监控）+ 按需内容分析 = 完全相同分层架构
+  - 详见 `references/projguard-safety-monitoring-2026-06-01.md`
+
+- ⭐ **TClone（arXiv 2605.17320, May 17 2026）** — Forkable 个人工作空间系统
+  - 实时 GUI 截图→快照→分支→隔离→回滚→选择性合并
+  - Sibling 容器 + COW 内存共享 + 文件系统版本化 + 异步检查点
+  - 比 KVM 快 1.9x，比 CRIU 快 1.5x
+  - **对 Hermes**：工作空间版本化直接支撑 DRY_RUN=False 的 speculative execution 过渡
+  - 详见 `references/tclone-forkable-workspace-2026-06-01.md`
 
 - ⭐ **VLAA-GUI（2026-06-01 发现, arXiv Apr 23）** — 77.5% OSWorld, 模块化 Stop-Recover-Search 框架
   - 三大失败模式：过早终止 + 无产出循环 + 卡死，直接可集成到 handler Verify 阶段
@@ -1471,6 +1546,8 @@ PYEOF
 - [RoTS-32B Error Recovery SOTA (2026-06-01)](./references/rots-32b-2026-06-01.md) — arXiv 2605.29447, 47.4% OSWorld via trajectory synthesis, ICML 2026 Spotlight
 - [ScreenParse + ScreenVLM (2026-06-01)](./references/screenparse-2026-06-01.md) — arXiv 2602.14276, 771K screenshots/21M elements, 316M param VLM, ICML 2026
 - [ScreenParser YOLO M4 Deployment (2026-06-01)](./references/screenparser-yolo-m4-deployment-2026-06-01.md) — 实测部署配方：HF下载13.8s/146MB, CPU推理93ms@320px (75x faster vs VLM), MPS 2.9s比CPU慢, 55类UI元素列表, handler集成方案, 已知坑
+- [TOCTOU Attacks on CUA (2026-06-01)](./references/toctou-attacks-cua-2026-06-01.md) — arXiv 2604.18860, 6.51s TOCTOU window, PUSV 3-layer defense, 100% AIR <0.1s
+- [ScreenSearch: Uncertainty-Aware OS Exploration (2026-06-01)](./references/screen-search-uncertainty-os-exploration-2026-06-01.md) — arXiv 2605.16024, PUCT graph-bandit for desktop exploration, 1M/30K states, ambiguity-aware probe-vs-commit
 - [Ollama API 端点区分：本地 vs 远程库](./references/ollama-api-endpoint-local-vs-remote-2026-05-30.md) — api.ollama.com vs 127.0.0.1:11434 区别，实测4个本地模型
 - [GUIDE Benchmark CVPR 2026](./references/guide-benchmark-cvpr2026.md) — 用户行为理解benchmark，三层递进（behavior detection 44.6% → intent prediction → assistance），结构化上下文提升GPT-4o达+36pp
 - [搜索降级方案](./references/search-fallback.md) — 当 web_search 不可用时的 ddgs 降级流程
