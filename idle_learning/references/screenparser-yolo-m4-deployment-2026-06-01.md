@@ -15,9 +15,10 @@
 
 ```python
 from huggingface_hub import hf_hub_download
-# 下载到 HF 缓存（~13.8s, 146.2 MB）
+# 首次下载（~13.8s, 146.2 MB）
 path = hf_hub_download(repo_id='docling-project/ScreenParser', filename='best.pt')
-print(path)  # ~/.cache/.../snapshots/.../best.pt
+print(path)  # ~/.cache/huggingface/hub/models--docling-project--ScreenParser/snapshots/.../best.pt
+# 后续加载从缓存读（实测 0.7s）
 ```
 
 ### 2. 加载模型
@@ -93,7 +94,26 @@ class FastClassifier:
 
 ## 已知坑
 
-1. **HF短名不工作**: `ultralytics.YOLO('docling-project/ScreenParser')` 报 FileNotFoundError。必须用本地路径。
+1. **HF短名不工作**: `ultralytics.YOLO('docling-project/ScreenParser')` 报 `FileNotFoundError: 'docling-project/ScreenParser' does not exist`。必须用本地路径。
 2. **MPS更慢**: 别用 `model.to('mps')`，CPU 反而更快。
 3. **暗屏/锁屏**: 检测到 ~1 个 "Image" 元素（低置信度 0.32-0.87），无法区分具体 UI。需要结合 VLM 做二次分析。
 4. **首次加载缓存**: hf_hub_download 下载到 `~/.cache/huggingface/hub/`，后续加载直接从缓存读取（0.1s）。
+
+## 双层分类器架构（2026-06-01 实测提案）
+
+替代单一 VLM 场景分类（qwen3-vl:2b ~3s）的最佳实践：
+
+```
+Layer 1: ScreenParser YOLO (93ms @ 320px)
+  ├── >5 UI 元素 → active (browser/app/chat)
+  ├── 2-5 元素 → uncertain（需升级）
+  └── 0-1 元素 → idle/lockscreen → 直接跳过
+
+Layer 2: qwen3-vl:2b (~3s, 仅 Layer 1 uncertain 时调用)
+  ├── browser → 精确分类
+  ├── wechat/chat → 精确分类
+  └── other → 静默跳过
+```
+
+**收益**: idle 场景从 ~8s full cycle 降至 ~93ms。活跃场景不受影响（VLM 仍精确分析）。
+**限制**: ScreenParser 训练于 rendered web screenshots，原生桌面应用（微信/钉钉等）识别准确率待验证。

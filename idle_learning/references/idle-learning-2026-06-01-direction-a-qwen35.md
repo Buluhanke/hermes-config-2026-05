@@ -23,19 +23,44 @@
 - 201 languages support
 - Near-100% multimodal training efficiency
 
-### 推荐替换路径
-- **P1 推荐**: `ollama pull qwen3.5:2b-q4_K_M` (1.81GB) → 直接替换 qwen3-vl:2b (1.76GB)
-  - 几乎相同内存占用，next-gen 视觉能力
-  - 还可替换 qwen2.5:1.5b（Qwen3.5 是通用多模态，scene classification + 文本推理可单模型完成）
-  - 总内存: 2.68GB → 1.81GB，节省 0.87GB
-- **P2 推荐**: `ollama pull qwen3.5:4b-q4_K_M` (3.39GB) → 更强但多占 1.63GB
-- 当前内存状态: 仅 11% 占用 (qwen3-vl:2b 1.76GB + qwen2.5:1.5b 0.92GB = 2.68GB / 24GB)
-- 空间充裕，升级后 ~14%，完全可接受
+### 推荐替换路径（🔄 2026-06-01 06:00 更新 — 实测决策修正）
+
+**⚠️ 结论：不拉取 qwen3.5:2b 或 qwen3.5:4b。**
+
+初始分析认为替换有收益（next-gen 视觉、单模型替换两模型），但**生产实测证据**否决了此建议：
+
+| 评估维度 | 旧假设 | 产线实测 |
+|---------|--------|---------|
+| qwen3-vl:2b unknown 率 | 未知基线 | **0.085%** (June 1, 0% after 00:07) |
+| 场景分类精度 | 存疑 | 99.2% "other" 深夜分类完全正确 |
+| 小模型 GUI 基准 | 假设 qwen3.5 更强 | **未发布** — 无 2B/4B 的 ScreenSpot/OSWorld 数据 |
+| 内存节约 | 2.68GB → 1.81GB | 实测 qwen3.5:2b = 2.7GB（**+0.02GB**，Ollama default quant） |
+
+**否决原因（四项）**：
+1. **0% unknown 率不可替代**：当前 qwen3-vl:2b 是经过数日生产验证的最佳状态
+2. **无小模型 GUI 基准**：所有 Qwen3.5 视觉基准数据来自 397B 云模型，2B/4B 的 GUI 专项表现未知
+3. **理论收益换已知风险**：所有宣称优势基于架构变化（early fusion），非实测数据
+4. **唤醒条件**：等 qwen3.5 小模型放出 ScreenSpot / OSWorld 基准后再重新评估
+
+**替代思路**（若未来需升级）：
+- 内存占用接近（2.68GB → 2.7GB），essentially swap-in replacement
+- 一次 `ollama pull + handler 模型名修改` 即可完成
+- 不需要改 prompt 或 context config（early fusion 兼容 chat API）
 
 ### 来源
 - Ollama library: ollama.com/library/qwen3.5
 - Ollama registry manifests: registry.ollama.ai/v2/library/qwen3.5/manifests/4b-q4_K_M
 - InsiderLLM May 2026 update: insiderllm.com/guides/best-local-llms-mac-2026
+
+### 🏆 外部验证信号（2026-06-01 06:00 发现）
+Ollama 官方 library 页面将 **Hermes Agent** 列为 Qwen3.5 的 launchable 应用之一，与 Claude Code、Codex、OpenClaw、OpenCode 并列：
+```
+ollama launch hermes --model qwen3.5
+```
+这是 Ollama 对 Hermes 生态地位的公开认可。意义：
+- Hermes 与 Claude Code / Codex 同级视为 AI Agent 平台
+- 间接验证 SOUL/memory/skills triad 方向
+- 可用于外部沟通（如用户问"Hermes 行不行"时的佐证）
 
 ## ⭐ Qwen3.6 — M4 24GB 不可用
 
@@ -77,6 +102,7 @@ Qwen3.6 只适合纯推理工作，不适合 screen_watcher 场景（需要常�
 | OS-Themis | 2603.19191 | 里程碑分解奖励模型 | DRY_RUN=False 验证机制 |
 
 ## ⭐ 产线健康快照（2026-06-01 07:00）
+**注意：此快照为 07:00 轮次的数据。2026-06-01 06:00 轮次最新数据见下方 \`06:00 更新\` 分节。**
 
 | 组件 | 状态 | 详情 |
 |------|------|------|
@@ -90,3 +116,16 @@ Qwen3.6 只适合纯推理工作，不适合 screen_watcher 场景（需要常�
 | Gateway 污染 | ✅ | 1707，修复后停止增长 |
 | 网络 | ✅ | github OK, hn blocked |
 | Handler lock | ✅ | 无 |
+
+### 🆕 2026-06-01 06:00 轮次更新
+
+| 组件 | 更新值 |
+|------|--------|
+| AUTO-EXEC-DRY | 905（+52 自 07:00 快照） |
+| Gateway 污染 | 1788（+81，缓慢增长，非功能性问题） |
+| June 1 05:00-06:00 scene | 48 "other", 1 "desktop", 0 unknown ✅ |
+| Ollama ps | qwen3-vl:2b loaded (2.7GB, 100% GPU, ctx 4096) |
+| 网络 | github OK, hn blocked（不变） |
+| Qwen3.5 决策 | ⛔ 不拉取（见上方更新） |
+
+**配置修改**：无。产线 100% 稳定。

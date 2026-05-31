@@ -68,7 +68,7 @@ Skills 采用 `category/skill-name/` 子目录结构，`hermes skills list` 显�
 3. 持续执行直到任务完成，不中途停下等用户
 4. 完成后记录结果到 memory，不打扰用户
 5. 破坏性操作（删文件、停进程、改系统设置）需保守，优先备份再操作
-7. **⚠️ 推荐清单 = 执行令**：用户说"以上任务也要做"或类似指令时，推荐列表是**直接执行的计划**，不是确认清单。列出推荐后立刻开始执行，不要问"需要我先联系询价吗？"、"要不要开始安装？"
+6. **⚠️ 推荐清单 = 执行令**：用户说"以上任务也要做"或类似指令时，推荐列表是**直接执行的计划**，不是确认清单。列出推荐后立刻开始执行，不要问"需要我先联系询价吗？"、"要不要开始安装？"
 **⚠️ 推荐清单 = 执行令（2026-06-02 强化，核心铁律）：**
 - 中小问题/多选择场景 → AI 自主决定执行，**不等确认，不废话**
 - 重要决策和改动 → 才问用户
@@ -281,6 +281,12 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **对Hermes的启发**：auto_execute需要捕捉用户困难信号（confusion/frustration），而非只看最终动作
   - 详见 `references/guide-benchmark-cvpr2026.md`
 - **2026-06-01 详细学习记录**: `references/idle-learning-2026-06-01-direction-b.md` — 完整 8 模型表 + 9 行为分类 + ScreenParse v2 数据 + ScreenParser YOLO 部署方法
+- **⭐ UI-Zoomer (2026-06-01 发现, ZJU-REAL, arXiv 2604.14113)** — training-free 自适应缩放 GUI grounding，置信度门控+方差分解，4.2-13.4% 提升。代码：github.com/ZJU-REAL/UI-Zoomer
+- **⭐ MolmoWeb (2026-06-01 发现, AI2/UW, arXiv 2604.08516)** — 4B/8B screenshot-only web agent，无 DOM/a11y，SOTA WebVoyager 超越 GPT-4o。验证纯视觉路线。
+- **⭐ Visual Confused Deputy (2026-06-01 发现, vLLM/McGill/AMD, arXiv 2603.14707)** — 双通道 guardrail（视觉+文本分别检查），与 AVR 同团队。handler 场景分类+内容分析的学术验证
+- **⭐ PIRA-Bench (2026-06-01 发现, CUHK/Huawei, arXiv 2603.08013)** — 连续视觉流→意图推断，screen_watcher 范式
+- **⭐ AndroTMem (2026-06-01 发现, arXiv 2603.18429)** — 因果链接状态锚点记忆，12 agent 提升 5-30%
+- **全文详见 `references/idle-learning-2026-06-01-direction-b-papers.md`**
 - **⭐ TRISHUL (arXiv 2502.08226, Feb 2025)** — 训练无关 (training-free) 的 GUI 理解框架
   - 核心：HSP (Hierarchical Screen Parsing) 多层次解析 + SEED (Spatially Enhanced Element Description)
   - **关键差异**：纯视觉，不依赖 HTML/元数据（vs SoM 依赖 DOM）
@@ -332,7 +338,8 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **ScreenVLM**: 316M params, 0.592 PageIoU (vs 0.294 for 8B+ models), 4x faster, ScreenTag decoding
   - **ScreenParser (NEW!)**: YOLO11-Large fine-tuned at 1280px on ScreenParse v2, 55 UI classes
     - HF: docling-project/ScreenParser (Apache 2.0, IBM Research - ETH Zurich)
-    - **⚠️ 实测 pitfall**: `ultralytics.YOLO('docling-project/ScreenParser')` HF短名不工作！必须是先 `hf_hub_download` 下载 best.pt 文件到本地，再用本地路径加载
+    - **⚠️ 实测 pitfall**: `ultralytics.YOLO('docling-project/ScreenParser')` HF短名不工作！返回 `FileNotFoundError: 'docling-project/ScreenParser' does not exist`。必须是先 `hf_hub_download` 下载 best.pt 文件到本地，再用本地路径加载
+    - **缓存路径**（首次下载后）：`~/.cache/huggingface/hub/models--docling-project--ScreenParser/snapshots/<hash>/best.pt`
     - **Download**: `hf_hub_download(repo_id='docling-project/ScreenParser', filename='best.pt')` — 13.8s, 146.2 MB
     - **CPU推理实测**（M4 24GB, ultralytics 8.4.57）:
       - 320px: **93ms** — 比 qwen3-vl:2b 场景分类（~7s）快 **75x**
@@ -343,6 +350,7 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
     - ✅ HF download verified stable (2026-06-01 via hf_hub_download)
     - Apache 2.0, IBM Research - ETH Zurich
     - **快速场景分类部署方案**: 启动时 `YOLO(local_path).to('cpu')` 一次（~0.1s），每帧 `model(imgsz=320, verbose=False)`（~93ms）。>5 UI元素=活跃桌面，0-1个元素=idle/锁屏。可替代 qwen3-vl:2b 场景分类（~93ms vs ~7s）
+    - **双层分类器架构（2026-06-01 实测提案）**：Layer 1 = ScreenParser YOLO (93ms) 快速 UI 元素检测 → 根据元素组合推断场景（Column/Browser + Button → browser；Text Input + Navigation Bar → chat）；Layer 2 = qwen3-vl:2b (~3s) 作为 Layer 1 不确定性高时的 VLM 精确分类回退。收益：idle 场景 93ms 跳过（当前 ~8s full cycle），>90% 流量节省。限制：模型训练于 rendered web screenshots，原生桌面表现待验证。
   - **Key finding**: fine-tuning foundation VLMs on ScreenParse consistently improves grounding
   - **M4 value**: 316M lightweight VLM + YOLO ultra-fast detector — both fit 24GB
   - See references/screenparse-2026-06-01.md
@@ -460,16 +468,19 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - ⭐ **Qwen3.5（2026-05，Ollama 已发布约1周）** — 次世代多模态模型家族，early fusion 训练策略（视觉内建于基座模型）
   - **Ollama 直接可用**：12.8M pulls, 64 tags, 12 variants
   - 关键优势：Early fusion 训练策略 — 多模态 token 在基座模型层面直接融合，"outperforms Qwen3-VL models across vision understanding benchmarks"
-  - **可用变体及大小**（从 Ollama registry 实测确认）：
-    - qwen3.5:0.8b-q8_0 → 0.96 GB（轻量候补）
-    - **qwen3.5:2b-q4_K_M → 1.81 GB**（等价 qwen3-vl:2b 的 1.76GB，直接替换候选）
-    - qwen3.5:2b-q8_0 → 2.55 GB
-    - **qwen3.5:4b-q4_K_M → 3.39 GB**（升级候选，benchmark 更强）
-    - qwen3.5:4b-q8_0 → 4.92 GB（24GB 有压）
-    - qwen3.5:9b-q4_K_M → ~6.6 GB（太大）
-  - **Benchmarks**（Qwen3.5-397B-A17B 旗舰）: MMLU-Pro 87.8, GPQA 88.4, HLE 28.7, AIME26 91.3
-  - **最佳替换路径**：qwen3.5:2b-q4_K_M (1.81GB) 替换 qwen3-vl:2b (1.76GB) → 几乎相同内存，次世代视觉。甚至可同时替换 qwen2.5:1.5b（Qwen3.5 是通用多模态，scene classification + 文本推理可单一模型完成，2.68GB→1.81GB 节省 0.87GB）
-  - 来源：Ollama library（ollama.com/library/qwen3.5）、Ollama registry（registry.ollama.ai/v2/library/qwen3.5/manifests/）
+  - **可用变体及大小**（2026-06-01 Ollama library 页面实测，修正早期 registry manifest 估算错误）：
+    - qwen3.5:0.8b → 1.0 GB（轻量候补）
+    - **qwen3.5:2b → 2.7 GB**（等价 qwen3-vl:2b 1.76GB + qwen2.5:1.5b 0.92GB ≈ 2.68GB，替换后几乎相同总内存）
+    - **qwen3.5:4b → 3.4 GB**（升级候选，benchmark 更强）
+    - qwen3.5:9b → 6.6 GB（太大）
+    - qwen3.5:27b → 17 GB（>24GB 上限）
+  - **视觉基准**（Qwen3.5-397B-A17B 旗舰版，来源 Ollama library 页面）：
+    - ScreenSpot Pro: 65.6（vs Gemini-3 Pro 72.7）
+    - OSWorld-Verified: 62.2（vs Claude 4.5 Opus 66.3, GPT5.2 38.2）
+    - AndroidWorld: 66.8（优于 Qwen3-VL-235B-A22B 63.7）
+    - RefCOCO(avg): 92.3（空间定位）
+    - OmniDocBench1.5: 90.8（文档OCR，超越 Qwen3-VL 84.5）
+  - **Ollama 生态信号**：Ollama library 页面将 **Hermes Agent** 列为 Qwen3.5 的 launchable 应用之一（与 Claude Code、Codex、OpenClaw 并列），说明 Ollama 对 Hermes 生态地位的认可
 - ⭐ **Qwen 3.6（2026-05）** — 视觉内建于基座模型（无独立VL分支）
   - Qwen 3.6-27B dense（~17GB Q4_K_M）— 新SOTA本地视觉
   - Qwen 3.6-35B-A3B MoE（~22GB）
@@ -540,6 +551,7 @@ grep -c "2026-06-01" ~/.hermes/logs/screen_trigger.log
 grep "2026-06-01" ~/.hermes/logs/screen_trigger.log | grep "AUTO-EXEC-DRY" | wc -l
 # Gateway hook 污染检查
 grep -c "screen_watch" ~/.hermes/logs/gateway.log
+```
 
 **方向 C — 决策操作（Production Guardrails / 规划层）**
 
@@ -658,8 +670,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log
     - 当前 handler 2-tier（场景分类→action routing）可升级为 AVR 式 3-tier：confidence probing + memory injection
     - 49% unknown 场景=handler 的"低置信"信号，需要记忆注入或升级策略
     - logprob 置信度探测可直接应用于 scene classification（检查 VLM token 概率）
-    - `Qwen3-VL 坐标约定`: [x,y] on **1000×1000 相对坐标 canvas**，像素映射 x_px=x/1000×W
-    - **⚠️ 2026-06-01 实测修正**：Qwen3-VL 实际使用 **normalized 0-999 scale**（非 0-1000），转换公式 `x_px = round(x/999×W)`。详见方向D的 Qwen3-VL 坐标约定章节。
+    - `Qwen3-VL 坐标约定`: [x,y] on **1000×1000 相对坐标 canvas**，像素映射 `x_px = round(x/1000×W)`
   - 作者: vLLM Semantic Router Project / MBZUAI / McGill / AMD / Red Hat
   - 代码: github.com/vllm-project/semantic-router
   - 详见 references/avr-adaptive-vlm-routing-2026-06-01.md
@@ -700,7 +711,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log
   | ① 基线数据 | `grep -c "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log` | ≥500 条为充足 |
   | ② Ollama 稳定性 | `ps aux | grep ollama` + `curl -s http://127.0.0.1:11434/api/tags` 无超时 | unknown < 30% 为稳定，**需按日期分片** |
   | ③ 动作多样性 | `grep "Would execute:" ~/.hermes/logs/screen_trigger.log \| sort \| uniq -c` | **至少 3 种不同的 action 值**（≠ 3 种 scene 类型 — scene 多但全映射到同一 action 不算多样） |
-  | ④ 坐标映射链 | `grep -r "normalized_click\|1000/1000" ~/.hermes/scripts/` | 需要归一化坐标→像素映射函数 |
+  | ④ 坐标映射链 | `grep -rn "normalized_click\|nclick\|1000/1000" ~/.hermes/scripts/ ~/.hermes/autonomous-ai-agents/ 2>/dev/null \| head -10` | 需要归一化坐标→像素映射函数。RPA脚本路径: `~/.hermes/autonomous-ai-agents/hermes-rpa/scripts/hermes_desktop_rpa.py`，含 `normalized_click(nx, ny)` 用公式 `round(nx/1000 * screen_w)` 映射 |
   | ⑤ SafeGround 置信度 | `grep -r "confidence\|multi.sampl\|uncertainty" ~/.hermes/scripts/screen_trigger_handler.py` | 需要不确定性量化或多采样 |
   | ⑥ 动作分级 | `grep -A1 "^ *\"[a-z]*\": (" ~/.hermes/scripts/screen_trigger_handler.py \| head -20` | 需要不同场景映射不同 privilege 等级（idle→none, business→wininfo 是基础分水岭） |
 
@@ -718,7 +729,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log
 
   **判断逻辑**（当执行方向C巡检时）：
   1. 条件①②③任一不满足 → 记录到可执行改进，不推进
-  2. 条件①②③满足 + ④⑤⑥部分满足 → 推进坐标映射（P0）
+  2. 条件①②③满足 + ④已实现 + ⑤⑥部分满足 → 推进动作多样性扩展（P0）和 SafeGround 置信度（P1）
   3. 全满足 → 设计梯度过渡方案（Friction=Focus 哲学：DRY_RUN=True → low-confidence auto → high-confidence auto）
 
   **⚠️ 条件② unknown 率的时间戳陷阱（2026-06-01 发现）**：
@@ -732,7 +743,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log
   ```
   如果最新日期的 unknown 率 < 10%，即使全量 unknown > 30% 也算稳定。
 
-  **2026-06-01 03:08 生产验证（R3）**：条件①已达标（747 ≥ 500），②按全量 unknown 5%（June 1 只有2条 early-unknown，之后0%）✅ 达标，③动作多样性 ❌ 仅2种，④-⑥均缺位。结论：条件①②实际已满足，可推进③-⑥。RPA支持11种动作但WHITELIST仅使用2种。"
+  **2026-06-01 03:08 生产验证（R3）**：条件①已达标（747 ≥ 500），②按全量 unknown 5%（June 1 只有2条 early-unknown，之后0%）✅ 达标，③动作多样性 ❌ 仅2种，④ 已确认实现（详见 2026-06-01 方向D R4 修正评估），⑤⑥ 仍缺位。结论：条件①②④ 已满足，可推进③⑤⑥。RPA支持11种动作但WHITELIST仅使用2种。"
 - ⭐ **"Domain Expertise Has Always Been the Real Moat"（754pts HN, 2026-05-31）**
   - 核心论点：Agentic AI 切断了"理解领域"和"生产代码"之间的绑定，约束从"能不能构建"变成了"能不能判断正确"
   - 对 Hermes 的意义：screen_watcher handler 的最大瓶颈不是"能不能执行"，而是"能不能判断何时需要执行"
@@ -900,6 +911,12 @@ ACTION_WHITELIST = {
   - **对 Hermes**：可蒸馏 qwen3-vl:2b 到更小模型（如 Vocaela-500M）提升速度
   - 2026-06-01 方向D巡检发现
 
+- **⭐ See-Point-Refine (arXiv 2604.13019, Apr 14, Microsoft/CMU)** — 多轮视觉反馈 GUI grounding
+  - 核心：将 GUI grounding 重构为 iterative loop（point → observe visual feedback → refine）
+  - 目标：editing-level grounding in dense coding interfaces（sub-pixel 精度）
+  - **对 Hermes**：screen_watcher 的多帧验证 → handler 的多轮动作修正；一帧截图不够时，用下一帧视觉反馈做闭环纠正
+  - 代码：github.com/microsoft/precision-cua-bench
+  - 2026-06-01 OSU-NLP YAML 扫描发现
 - ⭐ **ClawGUI（arXiv 2604.11784, 2026-04-13, ZJU）** — 首个开源全栈 GUI agent 框架
   - 统一框架覆盖训练 + 评估 + 部署
   - **ClawGUI-RL**：首个开源 GUI agent RL 基础设施，并行虚拟环境 + 真实设备
@@ -934,17 +951,18 @@ ACTION_WHITELIST = {
   - **对 Hermes auto_execute**：坐标映射链（qwen3-vl:2b 归一化 0-999→像素坐标）是社区公认的瓶颈。Semantic-Execution Gap 概念可直接用于分析 dry-run 数据的动作识别 vs 空间精度差距
   - 详见 `references/pager-semantic-execution-gap-2026-06-01.md`
 
-- **⭐ Qwen3-VL 坐标约定（DeepWiki 2026-06-01 实测修正）** — 坐标系关键
-  - [x, y] on **normalized 0-999 scale**（⚠️ 不是 1000×1000！早期 idle_learning 记录错误）
-  - 正确映射公式（Qwen mobile_agent.ipynb 第50行）：
+- **⭐ Qwen3-VL 坐标约定（2026-06-01 Qwen官方notebook验证，修正早期记录）** — 坐标系关键
+  - [x, y] on **normalized 0-1000 scale**
+  - 官方转换公式（QwenLM/Qwen3-VL cookbooks/2d_grounding.ipynb 确认）：
     ```python
-    def rescale_coordinates(point, width, height):
-        point = [round(point[0]/999*width), round(point[1]/999*height)]
-        return point
+    # Qwen3-VL 官方坐标系：相对坐标 0-1000
+    # 像素映射公式：
+    x_px = int(coord_x / 1000 * screen_width)
+    y_px = int(coord_y / 1000 * screen_height)
     ```
-  - 除数用 **999** 不是 1000（0-based indexing：坐标范围 0-999 共 1000 个整数点）
-  - 来源：https://deepwiki.com/QwenLM/Qwen3-VL/5.2-spatial-understanding-and-2d-grounding
-  - ⚠️ Ollama 版 qwen3-vl:2b 是否沿用此坐标约定待验证（DeepWiki 面向 Transformers 版）
+  - ⚠️ **不是 /999！** 早期 DeepWiki 的 0-999 记录已通过官方 notebook 推翻
+  - 来源：github.com/QwenLM/Qwen3-VL/cookbooks/2d_grounding.ipynb
+  - Ollama 版 qwen3-vl:2b 沿用同一坐标系
   - 对 DRY_RUN=False 切换最关键：VLM 输出需要归一化映射
 
 - **⭐ The Website Specification（HN 346pts, 2026-06-01 发现）**
@@ -965,6 +983,21 @@ ACTION_WHITELIST = {
   - tokenized screen output 思路：smolvlm2 做 UI 元素文本化而非只输出坐标
   - macOS-first, daemon+CLI 架构
   - 太早期不推荐直接采用，但 selector-first 方法值得借鉴
+
+### ⭐ Agent Security Research Monitoring (2026-06-01 新增)
+
+Direction C 的常规巡检应覆盖实际安全研究，不限于学术论文。安全研究机构对主流AI Agent平台的手动渗透测试直接揭示生产级 guardrail 缺陷。
+
+**监测源**：
+1. **PromptArmor**（promptarmor.com/resources/threat-intelligence）— 2026年5月披露18+ agent数据窃取攻击，全部为"间接提示注入→工具越权→数据窃取"同一模式
+2. **检测方法**：HN Firebase API发现对应故事 → browser_navigate到文章 → 检查侧边栏"相关文章"列表发现同类文章（交叉发现模式，比单篇搜索更高效），每篇仅需2-3次browser_console提取
+
+**Key findings from PromptArmor series**（详见 `references/promptarmor-agent-security-2026-06-01.md`）：
+- 共性根因：Agent架构授予"任意工具调用"权限 + 无法区分用户指令与外部内容的恶意指令
+- Ollama Desktop（170K★）：**报告2025-12-18，至今未修复** — 三类零点击数据窃取+UI覆盖钓鱼
+- Google Antigravity：Gemini绕过自身的"Allow Gitignore Access > Off"设置
+- ChatGPT Google Sheets：绕过"需要人类批准"设置
+- 对Hermes的验证：本地VLM(不渲染输出) + ACTION_WHITELIST + 场景分类+否定检测 = 对比主流平台更具攻击弹性的架构
 - **⭐ SafeGround (UCSB AI, Feb 2026)** — 不确定性校准框架，解决 GUI grounding "何时信任"的问题
   - 空间不确定性量化 → patch-level 概率分布判断模型确信度
   - 选择性预测 + 安全推迟：不确定时 defer 而非盲目执行
@@ -1498,6 +1531,7 @@ PYEOF
 - [Agent Guardrails Production Field Guide (2026-03-06)](./references/agent-guardrails-production-2026-06-01.md) — Supergood Solutions，4 层 Guardrails 模型（Input/Action/Output/Behavior），80% 组织遇风险行为数据，验证非二元安全模型必要性
 - [2026-06-01 学习记录（方向B，凌晨）](./references/idle-learning-2026-06-01-session-n.md) — github 恢复后的首次 idle_learning 实测，Mano-P/GUI-Agent-Harness/Qwen-VLA 首次 GitHub 验证，ScreenParser YOLO/LocateAnything-3B HuggingFace 状态确认
 - [2026-06-01 学习记录（方向B，深夜）](./references/idle-learning-2026-06-01-session-late.md) — UILoop/AutoGUI-v2/Same Outcomes Different Journeys 四篇新论文发现 + OSU paper list YAML 扫描方法论验证 + 产线健康快照（0.88% unknown）
+- [2026-06-01 方向B Top 10 论文发现](./references/idle-learning-2026-06-01-direction-b-papers.md) — 本次学习新增：UILoop/UI-Zoomer/MolmoWeb/Visual Confused Deputy/PIRA-Bench/AndroTMem 等 10 篇，含扫描方法论
 
 ---
 
@@ -1601,9 +1635,22 @@ echo "建议添加每日凌晨2点自学任务，是否确认？"
 - **2026-06-08 尝试修复**：`HOOK.yaml` events 置空 — 结果：**不足！Gateway 启动时仍加载 handler.py**
 - **2026-06-01 中期修复**：清空 `~/.hermes/hooks/screen_watch/handler.py`（仅保留占位 docstring）
 - **⚠️ 2026-06-01 pycache 陷阱（关键发现）**：即使 handler.py 已清空为占位 docstring，Gateway 仍继续报错！根因是 `~/.hermes/hooks/screen_watch/__pycache__/handler.cpython-311.pyc` 缓存了旧 handler 编译代码。Python 在 import 时优先从 .pyc 加载，旧代码（含 smolvlm2 模型引用）持续生效。单清 handler.py 不够！
-- **✅ 最终根治**：`rm -rf ~/.hermes/hooks/screen_watch/`（删除整个废弃 hook 目录，pycache 一并清理）
-- **验证方法**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log` 记录当前值；下次 session 对比是否增长。不再增长=根治。
-- **判断标准**：count 值不变 = 根治；count 增长 = 仍有活着的 hook 或 pycache 残留。
+- **✅ 最终根治（方法A — 目录清理）**：`rm -rf ~/.hermes/hooks/screen_watch/`（删除整个废弃 hook 目录，pycache 一并清理）
+
+**⚠️ Gateway 进程缓存陷阱（2026-06-01 实测修正）**：
+删除 hook 目录后，gateway.log `screen_watch` 错误可能**仍在增长**！2026-06-01 实测：删除后 count 从 1766 增至 1767，因为 Gateway 在启动时将 hook 模块加载到内存中缓存，不会热重载。
+- **根因**：Gateway 的 hook 加载是一次性扫描（进程启动时），旧模块驻留内存
+- **方法A 不够**：目录删除后，已缓存的 hook 模块继续运行，错误持续写入
+- **方法B（必选，如需彻底根治）**：`rm -rf ~/.hermes/hooks/screen_watch/` + **重启 gateway 进程**
+  - Gateway 重启：`pkill -f "hermes gateway"` 然后重新启动（注意会中断所有活跃 session）
+  - ⚠️ 重启 gateway 是重大操作。idle_learning 巡检时如发现 count 继续增长，**只记录不执行重启**；等用户主动确认。
+- **判断标准（修正版）**：
+  | count 不变 = 根治（方法A足够）
+    - count 缓慢增长（1-12/天）= 被缓存模块的残余运行，非功能性问题，仅日志噪音
+  - count 快速增长（10+/天）= 需要方法B，记录到巡检日志
+  - **实测增长率（2026-06-01 方向D巡检）**：~21/hr，约 500/天。当前增长级别无需重启 gateway，但应追踪趋势并在 5000+ 时预警。
+
+**验证方法**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log` 记录当前值；下次 idle_learning 巡检时对比。
 
 ### idle_learning 执行过程中的 skill 引用注意
 
