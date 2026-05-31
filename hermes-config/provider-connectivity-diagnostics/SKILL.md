@@ -116,6 +116,20 @@ sed -i '' '/  api_key: old-key-pattern/d' ~/.hermes/config.yaml
 - API key: `MINIMAX_CN_API_KEY` in `.env`
 - Base URL: `https://api.minimaxi.com/v1` (or `https://api.minimaxi.com/anthropic` for compat)
 - Known issue: 429 rate limit / usage limit exceeded (2056)
+- **已失效**：2026-06-02 测试返回 `{"base_resp":{"status_code":2049,"status_msg":"invalid api key"}}`
+  — key 格式为 `sk-cp-pjty...`（125字符），但验证失败，需重新获取
+
+### Groq (`provider: custom`)
+- API key: `GROQ_API_KEY` in `.env` (gsk_...格式)
+- Base URL: `https://api.groq.com/openai/v1`
+- 模型：`llama-3.3-70b-versatile`
+- 当前为 primary model（2026-06-02 确认）
+
+### Cerebras (`provider: custom`)
+- API key: `csk-585933myftrtrrvj85kk8p6wnndcvrfn69jyxxmwvpv6r22h` (已验证可用)
+- Base URL: `https://api.cerebras.ai/v1`
+- 模型：`cerebras/llama-3.3-70b`（格式必须是 `cerebras/` 前缀，直接用 `llama-3.3-70b` 会报 not_found_error）
+- **已知问题**：Cerebras 平台上的 `llama-3.3-70b` 模型已下线，模型名必须带 `cerebras/` 前缀
 
 ### v2.aicodee.com (`provider: custom` with aicodee base_url)
 - API key: `AICODEE_API_KEY` in `.env`
@@ -157,6 +171,10 @@ See `references/free-model-scan-results.md` for the latest full scan output.
 | z-ai/glm-4.5-air:free | 131K | ✅ Responds |
 | deepseek/deepseek-v4-flash:free | 1M | ❌ 429 rate-limited |
 | qwen/qwen3-coder:free | 1M | ❌ 429 rate-limited |
+
+## June 2026 Update (2026-06-02)
+- **Groq** still primary: `llama-3.3-70b-versatile` via `custom:clawrouter` (provider: custom)
+- **MiniMax CN key invalid**: `{"base_resp":{"status_code":2049,"status_msg":"invalid api key"}}` — key `sk-cp-pjty...` format OK but auth rejected, needs regen
 
 ## Periodic Free Model Scanning
 

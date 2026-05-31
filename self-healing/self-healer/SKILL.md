@@ -282,7 +282,28 @@ env -i HOME=$HOME PATH=/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin bash ~/.he
 
 ---
 
-### Mac mini M4 24GB 内存爆掉（OOM卡死）
+### Docker容器全部离线（2026-06-02新发现）
+
+**症状**：`docker ps -a` 返回空列表（无任何运行中容器）
+
+**说明**：Hindsight/n8n/SearXNG/ChromaDB 等容器可能被人为停止，或 colima 虚拟机重启后 Docker daemon 需要重新初始化。当前发现所有容器离线，但 colima 本身（Linux VM runtime）运行正常。
+
+**快速自愈**：
+```bash
+# 检查colima状态
+colima list
+# 若running但docker ps空 → docker ps -a先看全部容器（含已停止）
+# 启动单容器
+docker start <container_name>
+# 或若compose文件存在
+docker compose up -d
+```
+
+**参考**：用户未要求重启所有容器（可能有意暂停以节省资源），自愈仅作记录不自动执行。
+
+---
+
+### Mac mini M4 内存爆掉（OOM卡死）
 
 **症状**：系统极卡，内存只剩100MB，Ollama runner占15GB+
 
@@ -354,7 +375,7 @@ cd ~/.hermes/hermes-agent && venv/bin/hermes gateway run --replace &
 background=true + notify_on_complete=true 启动
 sleep 8 && tail -30 ~/.hermes/logs/gateway.log
 
-# 4. 验证日志是否在8秒内有新条目（ свежие memory_monitor 或 platform connected）
+# 4. 验证日志是否在8秒内有新条目（ fresh memory_monitor 或 platform connected）
 # 如果日志时间戳仍是卡住前的旧时间 → 重启失败，需要重新kill再试
 ```
 
@@ -364,6 +385,21 @@ sleep 8 && tail -30 ~/.hermes/logs/gateway.log
 - 不用 `kill -9` 除非进程已僵死，SIGTERM即可
 - 重启后验证时间：等8秒后检查日志是否有新条目（platform connected 或 memory_monitor）
 - 若gateway_state.json里feishu状态为connected但日志里已无飞书连接记录 → 说明飞书已断开但状态未更新，也是卡死的信号
+
+### 代码修改后必须重启 Gateway（易漏！）
+
+**场景**：修改了 gateway/run.py、gateway/platforms/*.py 或 tools/terminal_tool.py 后，立即测试发现修改没生效。
+
+**原因**：Gateway 进程加载的是内存中的代码，不读取磁盘文件。必须重启才能加载新版。
+
+**判断方法**：检查文件修改时间 vs 进程启动时间
+```bash
+stat -f "%Sm %N" gateway/run.py              # 文件最后修改时间
+ps aux | grep "hermes_cli.main gateway"       # 进程启动时间
+# 若文件修改时间 > 进程启动时间 → 需要重启
+```
+
+**修复**：kill + 重启 Gateway（见上方重启流程）
 
 **当patch工具被保护拒绝时的替代编辑方法**：
 ```bash
