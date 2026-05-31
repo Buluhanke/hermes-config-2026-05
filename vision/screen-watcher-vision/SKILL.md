@@ -11,13 +11,17 @@ trigger: screen_watcher触发screen_trigger_handler后调用
 当前仅使用 **qwen3-vl:2b**（Ollama 本地）完成全部视觉分析任务。
 smolvlm2-agentic-gui 已从 Ollama registry 永久下线（registry 404，2026-06-02 确认），不可再拉取。
 
-| 函数 | 模型 | 速度（产线实测） | 用途 |
-|------|------|------------------|------|
-| `get_scene_type()` | qwen3-vl:2b | **9-12s** | 场景分类，返回英文单词（browser/wechat/desktop/calculator/other/unknown等） |
-| `ask_screen()` | qwen3-vl:2b | **~12s** | GUI 内容分析（否定检测+关键词匹配） |
-| 完整周期 | — | **20-30s** | 含两次 Ollama API 调用 + 图像处理 |
+| 函数 | 模型 | 速度（产线实测，2026-06-01 04:45 基线） | 用途 |
+|------|------|-----------------------------------------|------|
+| `get_scene_type()` | qwen3-vl:2b | **~3s** (400px resize, num_ctx=1024) | 场景分类，返回英文单词（browser/wechat/desktop/other等） |
+| `ask_screen()` | qwen3-vl:2b | **~5s** (800px resize, num_ctx=4096) | GUI 内容分析（否定检测+关键词匹配） |
+| 完整周期 | — | **~8s** | 含两次 Ollama API 调用 + 图像处理 + 日志 + cooldown |
 
-**响应时间注意**：qwen3-vl:2b 分类时间曾被记录为 35-47s（2026-06-01 前，num_ctx 默认 262144 导致内存溢出）。2026-06-01 修复：显式设置 `num_ctx=1024`（场景分类）和 `num_ctx=4096`（内容分析），分类时间降至 **9-12s**，完整周期 20-30s。详见 `references/ollama-numctx-memory-optimization-2026-06-01.md`。全黑/锁屏场景通过暗屏检测（`is_dark_screenshot()`）直接跳过，耗时 <0.5s。
+**性能演进**：
+- 2026-06-01 前（num_ctx 默认 262144）：get_scene_type 35-47s，完整周期 70-84s → 已归档 `references/handler-performance-timing-2026-06-01.md`
+- 2026-06-01 修复后（num_ctx=1024/4096）：9-12s / 20-30s
+- **2026-06-01 04:45 实测**（稳定运行后）：~3s / ~8s — 分类降速（400px）+ Ollama 预热稳定的真实性能
+- 全黑/锁屏场景通过暗屏检测（`is_dark_screenshot()`）直接跳过，<0.5s。**⚠️ 实测：843+ 条 dry-run 记录中该检测从未触发**（10x10 缩略图 < 500 字节阈值过严，暂不修复 — 低 ROI）
 
 ## 场景分类 prompt（当前在用）
 
@@ -74,6 +78,7 @@ smolvlm2-agentic-gui 已从 Ollama registry 永久下线（registry 404，2026-0
 - **ClawGUI**（ZJU, arXiv 2604.11784）：首个开源全栈 GUI agent 框架+PRM 步骤监督
 
 详见 `references/auto-execute-execution-layer-2026-06-01.md`
+- **Self-Critiqued RL for GUI Grounding**（arXiv 2510.27266）：自批评机制——模型输出坐标前自我批评，拒绝低置信预测。零样本可集成到 handler，用 qwen3-vl:2b logprob 做置信度门控。详见 `references/self-critiqued-rl-gui-grounding.md`
 
 ## 触发过滤
 
@@ -191,34 +196,41 @@ echo "${OLLAMA_KV_CACHE_TYPE:-not set}"
 | 系统空闲内存 | ~13.4 GB | ✅ |
 | dry-run 总数 | 715 条 | ✅ 正常增长（+43 自 01:50） |
 
-### 当前场景分布（735 条 dry-run 记录，2026-06-01 02:55 快照，含全量历史）
+### 当前场景分布（2026-06-01 04:45 快照 — 当日 + 全量历史）
 
+**当日（June 1 00:06~04:46，qwen3-vl:2b 稳定运行期）**：
 ```text
-301 unknown (41%)  — 分类器信心不足（含 Ollama 被 kill 历史遗留，June 1 00:06 后 0% unknown）
-234 browser  (32%)
-129 other    (18%)  — 所有 other 正确标记 [silent] ✅（否定检测持续生效）
- 42 desktop  ( 6%)
+246 other  (98.8%) — 全额标记 [silent] ✅（否定检测生效）
+  2 unknown ( 0.8%) — 稳定极低位
+  1 browser  ( 0.4%)
+```
+**unknown 率 0.8%** — 历史最低。日期分片统计的必要性验证：全量 42-49% unknown 因包含 smolvlm2 时代/Ollama 挂掉的历史污染。详见 `references/unknown-scene-date-analysis-2026-06-01.md`。
+
+**全量历史（843+ 条 dry-run 总记录）**：
+```text
+301 unknown (36%)  — 历史污染（smolvlm2 时代 + Ollama 被 kill 遗留）
+236 browser  (28%)
+129 other    (15%)  — 所有 other 正确标记 [silent] ✅
+ 42 desktop  ( 5%)
   6 wechat   ( 1%)
   3 calculator
 ```
-
-**⚠️ 2026-06-01 02:50 后变化**：ACTION_WHITELIST 语义分离修复后，idle 场景（other/unknown/desktop/calculator）不再产生 "Would execute: wininfo" dry-run 日志。June 1 02:50 后的 dry-run 日志仅记录活跃业务场景（browser/wechat 等），日志量从每 ~60s 一条 idle 记录降为仅在有真实业务活动时记录。
-
 **变化趋势**：
-| 日期 | dry-run | unknown | browser | other | desktop |
-|------|---------|---------|---------|-------|---------|
-| 05-31 06:00 | 468 | 184 (40%) | 233 (50%) | — | 42 (9%) |
-| 06-01 01:50 | 672 | 301 (45%) | 234 (35%) | 88 (13%) | 42 (6%) |
-| 06-01 02:30 | 715 | 301 (42%) | 234 (33%) | 129 (18%) | 42 (6%) |
+| 日期 | dry-run | unknown（全量） | unknown（当日分片） | other | browser |
+|------|---------|----------------|-------------------|-------|---------|
+| 05-31 06:00 | 468 | 40% | 280(May-31) | — | 50% |
+| 06-01 01:50 | 672 | 45% | — | 13% | 35% |
+| 06-01 02:30 | 715 | 42% | — | 18% | 33% |
+| **06-01 04:45** | **843** | **36%** | **0.8%** **(今日)** | **15%** | **28%** |
 
 other 从 88→129（+41）说明否定词检测持续生效：更多原被分类为 browser 的场景正确降级为 other + [silent]。unknown 占比从 45%→42%（下降 3pp，因 other 增长稀释）。
 
-**DRY_RUN=False 前置条件评估**（方向C巡检结论，2026-06-01 更新）：
+**DRY_RUN=False 前置条件评估**（2026-06-01 04:45 更新）：
 | # | 条件 | 值 | 结论 |
 |---|------|----|------|
-| ① 基线数据 | 735+ 条 ≥ 500 | ✅ 已达基线 |
-| ② Ollama 稳定性 | 42% unknown > 30%（含历史污染） | ❌ 需降低（按日期分片 June 1 后 0% unknown ✅） |
-| ③ 动作多样性 | **3 活跃场景 wininfo + 5 idle 场景 none** | ✅ 已修复（P0 完成） |
+| ① 基线数据 | 843+ 条 ≥ 500 | ✅ 超基线 |
+| ② Ollama 稳定性 | 全量 36% unknown（含历史污染）；**当日 0.8%** | ✅ 当日满足 |
+| ③ 动作多样性 | **3 活跃场景 wininfo + 5 idle 场景 none** | ✅ 已修复 |
 | ④-⑥ | 坐标映射/SafeGround/分级 | ❌ 需工程实现 |
 
 **unknown 42% 是已知问题**：约半数为 macOS 内存压力杀死 Ollama 后历史遗留的 Connection refused 分类失败。idle_learning 方向C 提出 P0 改进（Ollama Watchdog 5 分钟健康检查+自动重启），预期降 unknown 到 25-30%。

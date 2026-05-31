@@ -259,6 +259,22 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 **方向 B — 看懂内容（理解层）**
 - 搜索：`VLM benchmark evaluation methodology GUI understanding 2026`
 - 搜索：`GUIDE benchmark CVPR 2026 user behavior understanding`
+- **⭐ CORA: Conformal Risk-Controlled Agents (arXiv 2604.09155, Apr 10 2026)** — **方向B最重要发现，handler guardrail 形式化理论框架**
+  - 三模块后-策略预-动作安全框架：Guardian(risk estimation) → Conformal Risk Control(calibrate) → Diagnostician(confirm/reflect/abort)
+  - **对 Hermes**: 当前否定检测(前12字符 heuristic) → conformal risk control(formal guarantee)
+  - Guardian = qwen3-vl:2b logprob（已产线运行），calibration 数据 = 834 dry-run 日志
+  - Goal-Lock 抵抗视觉注入 = CRITICAL_KEYWORDS + 否定检测的语义化升级
+  - Phone-Harm 数据集含 step-level 有害行为标签
+  - 详见 `references/cora-conformal-risk-control-agent-2026-06-01.md`
+- **⭐ AutoGUI-v2 (arXiv 2604.24441, Apr 27)** — 2,753 任务/6 OS 的 GUI 功能理解基准
+  - 开源模型(Qwen3-VL)在 functional grounding 领先，商业模型在 captioning 领先
+  - 验证 qwen3-vl:2b 选型正确；罕见操作交互逻辑普遍差 → ACTION_WHITELIST 有限动作的合理性
+- **⭐ OS-BLIND (arXiv 2604.10577, Apr 12)** — 良性指令→有害环境上下文攻击，>90% agent 成功率
+  - 安全对齐只在初始激活，执行中不再评估 → 验证 handler 每帧场景分类+全否定检测为正确设计
+- **⭐ EE-MCP (arXiv 2604.09815, Huawei)** — 自进化 MCP-GUI 混合策略，experience bank +10pp
+  - 验证 dry-run 日志积累可作为 self-evolution 的数据基础
+- **⭐ UI-Injection (arXiv 2604.07831, Apr 9)** — 语义级 UI 元素注入攻击，4.4x 攻击成功率提升
+  - screen_watcher 纯视觉输入易受攻击 → 需要 cross-modal 验证机制
 - **⭐ H-VLM (H Company Runner H, 3B)** — Strongest small ScreenSpot model. Runner H 0.1 achieves 67% WebVoyager (vs Emergence AgentE 61%, Anthropic 52%). H-LLM (2B) outperforms larger models on code+function calling. **Key lesson**: dedicated GUI training data lets 3B models beat 10x larger generalists. Source: hcompany.ai blog. Validates our qwen3-vl:2b approach.
   - 三层递进任务：行为检测（9类，44.6%最强）→ 意图预测（71.39%）→ 辅助需求检测（69.82%）
   - **核心发现**：结构化上下文是关键催化剂——GPT-4o assistance从46%跃升至82%（+36pp）
@@ -316,11 +332,17 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **ScreenVLM**: 316M params, 0.592 PageIoU (vs 0.294 for 8B+ models), 4x faster, ScreenTag decoding
   - **ScreenParser (NEW!)**: YOLO11-Large fine-tuned at 1280px on ScreenParse v2, 55 UI classes
     - HF: docling-project/ScreenParser (Apache 2.0, IBM Research - ETH Zurich)
-    - Usage: YOLO(&quot;docling-project/ScreenParser&quot;) — ultralytics v8.4.57 already installed
-    - ~millisecond inference, suitable for fast scene classification
-    - ✅ HF download verified stable (2026-06-01 accessed successfully via browser_navigate)
+    - **⚠️ 实测 pitfall**: `ultralytics.YOLO('docling-project/ScreenParser')` HF短名不工作！必须是先 `hf_hub_download` 下载 best.pt 文件到本地，再用本地路径加载
+    - **Download**: `hf_hub_download(repo_id='docling-project/ScreenParser', filename='best.pt')` — 13.8s, 146.2 MB
+    - **CPU推理实测**（M4 24GB, ultralytics 8.4.57）:
+      - 320px: **93ms** — 比 qwen3-vl:2b 场景分类（~7s）快 **75x**
+      - 640px: **126ms**
+      - 1280px: **378ms**
+    - **MPS推理** (2,949ms) — 比 CPU 慢 7-31x，YOLO11 MPS backend 未优化，绝不用
+    - **55 UI 元素类**: Table/Column/Button/Utility Button/App Icon/Navigation Bar/Status Bar/Search Field/Toolbar/Tooltip/Video/Tab Bar/Side Bar/Slider/Picker/ContextMenu/DockMenu/EditMenu/Image/Scroll/Switch/File Icon/Chart/Window/Screen/List/List Item/PopUp Menu/Steppers/Toggles/Text Input/Rating Indicator/Checkbox/Radiobox/Select/Avatar/Badge/Alert/Progress bar/Bottom navigation/Breadcrumb/Page control/Link/Menu/Pagination/Tab/Search Bar/Date-Time picker/Calendar/Text/Heading/Code snippet/Carousel/Notification/Logo
+    - ✅ HF download verified stable (2026-06-01 via hf_hub_download)
     - Apache 2.0, IBM Research - ETH Zurich
-    - Only 1 HF like (very new — potential early mover advantage)
+    - **快速场景分类部署方案**: 启动时 `YOLO(local_path).to('cpu')` 一次（~0.1s），每帧 `model(imgsz=320, verbose=False)`（~93ms）。>5 UI元素=活跃桌面，0-1个元素=idle/锁屏。可替代 qwen3-vl:2b 场景分类（~93ms vs ~7s）
   - **Key finding**: fine-tuning foundation VLMs on ScreenParse consistently improves grounding
   - **M4 value**: 316M lightweight VLM + YOLO ultra-fast detector — both fit 24GB
   - See references/screenparse-2026-06-01.md
@@ -373,6 +395,7 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **产品**：multi-modal 支持（image/audio/speech/transcription/embedding/video），Provider-level failover + cost/latency 优化
   - 来源：browser_navigate 直接抓取 openrouter.ai/announcements/series-b
 
+- **✅ [已验证结论] PAGER region-tolerant 范式不适用于 scene classification（2026-06-01 验证）**：PAGER的 Semantic-Execution Gap 只影响 point-precise 任务（点击坐标），不影响分类任务（browser/wechat/desktop/other）。当前 qwen3-vl:2b + 400px resize + temperature=0 + num_ctx=1024 配置完全适配 region-tolerant 范式，无需调整。未来 Direction A 巡视时跳过此验证方向。
 - **⭐ Qwen3-VL（2026-05-29 发现，2026-05-29 实测成功）** — Qwen最新旗舰VLM
   - Ollama完整可用：qwen3-vl:2b（1.9GB）✅，qwen3-vl:8b（6.1GB）✅
   - ⚠️ **qwen3-vl:4b 不存在**（2026-05-30 实测：not found 404）— 不要尝试 pull
@@ -434,10 +457,24 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - **环境变量**：`PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=1` 跳过首次主机检测（可选）
   - **集成状态**：pip 链路完整，模型权重需首次下载（网络正常后可用，后续加载无需下载）
   - 详见 references/paddleocr-vl-0.9b.md
-- **⭐ Qwen 3.6（2026-05）** — 视觉内建于基座模型（无独立VL分支）
+- ⭐ **Qwen3.5（2026-05，Ollama 已发布约1周）** — 次世代多模态模型家族，early fusion 训练策略（视觉内建于基座模型）
+  - **Ollama 直接可用**：12.8M pulls, 64 tags, 12 variants
+  - 关键优势：Early fusion 训练策略 — 多模态 token 在基座模型层面直接融合，"outperforms Qwen3-VL models across vision understanding benchmarks"
+  - **可用变体及大小**（从 Ollama registry 实测确认）：
+    - qwen3.5:0.8b-q8_0 → 0.96 GB（轻量候补）
+    - **qwen3.5:2b-q4_K_M → 1.81 GB**（等价 qwen3-vl:2b 的 1.76GB，直接替换候选）
+    - qwen3.5:2b-q8_0 → 2.55 GB
+    - **qwen3.5:4b-q4_K_M → 3.39 GB**（升级候选，benchmark 更强）
+    - qwen3.5:4b-q8_0 → 4.92 GB（24GB 有压）
+    - qwen3.5:9b-q4_K_M → ~6.6 GB（太大）
+  - **Benchmarks**（Qwen3.5-397B-A17B 旗舰）: MMLU-Pro 87.8, GPQA 88.4, HLE 28.7, AIME26 91.3
+  - **最佳替换路径**：qwen3.5:2b-q4_K_M (1.81GB) 替换 qwen3-vl:2b (1.76GB) → 几乎相同内存，次世代视觉。甚至可同时替换 qwen2.5:1.5b（Qwen3.5 是通用多模态，scene classification + 文本推理可单一模型完成，2.68GB→1.81GB 节省 0.87GB）
+  - 来源：Ollama library（ollama.com/library/qwen3.5）、Ollama registry（registry.ollama.ai/v2/library/qwen3.5/manifests/）
+- ⭐ **Qwen 3.6（2026-05）** — 视觉内建于基座模型（无独立VL分支）
   - Qwen 3.6-27B dense（~17GB Q4_K_M）— 新SOTA本地视觉
   - Qwen 3.6-35B-A3B MoE（~22GB）
   - ⚠️ Ollama不支持，需llama.cpp/LM Studio
+  - **2026-06-01 实测结论**：27B Q4_K_M(16.8GB) 在 24GB Mac 上仅剩 ~5GB 给系统和上下文，不适合 vision 常驻。Qwen3.5 系列为更安全选择。
 - **⭐ Vocaela-500M（2026-05-29 发现，2026-05-29 实测部署结论）**：仅 500M 参数，GGUF Q8_0 仅 437MB（+ 109MB mmproj），ScreenSpotV2 基准 **85.8%**（vs smolvlm2-agentic-gui 2.2B 的 61.71%）
   - 基于 SmolVLM2-500M-Video-Instruct，两阶段 SFT + GRPO RFT 训练
   - 输出结构化 JSON action（click/type/scroll/hotkey/drag）+ [0,1) 归一化坐标
@@ -459,7 +496,142 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 5. **HN Firebase API** — 热点技术文章
 - ⚠️ 已知限制：`OLLAMA_USE_MLX=1` 需要 32GB+ 统一内存（M4 24GB 不支持）
 
-**方向 C — 决策操作（Computer Use / 规划层）**
+### 论文发现的方法论：arXiv browser 搜索
+当需要扫描大量论文时（如方向A的模型调研），直接用 browser_navigate 访问 arxiv.org 搜索结果页，再用 browser_console JS 提取标题和摘要：
+```javascript
+// 提取前N篇论文的标题+摘要
+(function(){
+  var items = document.querySelectorAll('li');
+  var result = [];
+  var count = 0;
+  for(var i=0; i<items.length && count<N; i++){
+    var m = items[i];
+    var title = m.querySelector('.list-title');
+    if(!title) continue;
+    count++;
+    var id = title.innerText.trim().slice(0,200);
+    var desc = m.querySelectorAll('p');
+    result.push(id+' | '+(desc[1]?desc[1].innerText.slice(0,150):''));
+  }
+  return result.join('\\n');
+})()
+```
+筛选方法：遍历结果，排除特定领域论文（医疗/农业/遥感等非 GUI agent 方向），保留各模型中适合 M4 24GB 的变体。2026-06-01 实测：78 篇 Qwen VL 论文中 0 篇 GUI agent 直接相关。
+
+**补充方法论：OSU-NLP-Group 论文列表 YAML 扫描（2026-06-01 验证）**
+当需要快速扫描最新 GUI agent 论文时，OSU-NLP-Group 的 paper list 比 arXiv 搜索更高效（537 篇已分类，持续更新，1,095 commits）：
+1. `browser_navigate raw.githubusercontent.com/OSU-NLP-Group/GUI-Agents-Paper-List/main/papers.yaml`（raw 内容，无 GitHub UI 加载负担）
+2. `browser_console(expression='document.body.innerText.slice(0, 20000)')` 分片提取
+3. 过滤关键词：`Desktop` + `GUI grounding` + `framework` + `model`，排除 healthcare/remote sensing/agriculture
+4. 对比已有文档中已记录的论文，标记新发现
+**优势**：比 arXiv 更快（免搜索）、覆盖面更广（537 篇 vs arXiv 单次搜索）、含 tldr 摘要可快速筛选
+**坑**：仓库更新频率不定，新论文可能有 1-3 周滞后
+
+### 产线健康巡检命令集（可复用脚本）
+在 Direction A/C 巡检时，用以下命令获取 handler 产线快照：
+```bash
+# 场景分布（按日期分片）
+grep "2026-06-01" ~/.hermes/logs/screen_trigger.log | grep "场景类型:" | awk '{print $NF}' | sort | uniq -c | sort -rn
+# unknown 率
+grep "2026-06-01" ~/.hermes/logs/screen_trigger.log | grep -c "场景类型: unknown"
+# total triggers
+grep -c "2026-06-01" ~/.hermes/logs/screen_trigger.log
+# dry-run 计数
+grep "2026-06-01" ~/.hermes/logs/screen_trigger.log | grep "AUTO-EXEC-DRY" | wc -l
+# Gateway hook 污染检查
+grep -c "screen_watch" ~/.hermes/logs/gateway.log
+
+**方向 C — 决策操作（Production Guardrails / 规划层）**
+
+**Verified production guardrails literature（2026-06-01 方向C实测）**：
+
+### ⭐ MSR Universal Verifier (arXiv 2604.06240, Apr 5, 2026, Microsoft Research)
+**"The Art of Building Verifiers for Computer Use Agents"**
+- 4 大验证原则（**直接可集成到 handler 缺失的 Verify 阶段**）：
+  1. **有意义的非重叠词表** (Meaningful non-overlapping rubrics) → 减少验证噪声
+  2. **过程奖励与结果奖励分离** (Separate process/outcome rewards) → 捕捉"步骤正确但被阻塞"或"异常路径但成功"等互补信号
+  3. **可控 vs 不可控失败区分** (Controllable vs uncontrollable failures) → 级联错误无感知
+  4. **分治上下文管理** (Divide-and-conquer context) → 全截图轨迹注意力，增强长任务可靠性
+- **关键指标**：假阳性率降至近零（vs WebVoyager ≥45%, WebJudge ≥22%）
+- 额外发现：auto-research agent 达到专家 70% 质量（仅用 5% 时间），但无法发现所有策略来复刻 Universal Verifier
+- **代码**：github.com/microsoft/fara
+- **对 Hermes**：process/outcome reward 分离和分治上下文管理可直映到 screen_watcher 的 multi-screenshot verification
+
+### ⭐ IntentScore (arXiv 2604.05157v3, Apr / May 28, 2026, GWU)
+**"Intent-Conditioned Action Evaluation for Computer-Use Agents"**
+- **398K** 离线 GUI 交互步骤（跨 3 个操作系统）
+- **97.5%** 成对区分准确率
+- 作为 Agent S3 的重排序器 → OSWorld **+6.9pp**（未见过的 agent 和任务分布）
+- 两个互补目标：contrastive alignment（状态-动作相关）+ margin ranking（动作正确性）
+- **对 Hermes**：handler 产生多个候选 action 时，IntentScore 式重排序可做验证层面的 action selection
+
+### ⭐ VeriGUI (ACL 2026, arXiv 2604.05477, Apr 7)
+**"Don't Act Blindly: Robust GUI Automation via Action-Effect Verification and Self-Correction"**
+
+**TVAE 框架**（Thinking→Verification→Action→Expectation）：
+- 行动效果验证作为一等RL目标，处理非确定性GUI环境（延迟/滞后/崩溃）
+- 当前auto_execute只有 Observe→Plan→Act 三阶段，缺Verify阶段
+- GUI-Agent-Harness也指出缺Verify → 社区共识：Verify是CUA落地瓶颈
+- **Expectation阶段**：可映射到screen_watcher的下一帧差异检测
+- 两阶段训练：Robust SFT（合成失败轨迹）+ GRPO（不对称验证奖励）
+- 不对称验证奖励 → 否定检测中负样本权重 > 正样本的设计方向
+
+### ⭐ CaMeLs (Cambridge/ETH, arXiv 2601.09923v2, Jan/Mar 2026)
+**"System-level Security for Computer Use Agents"**
+
+- Dual-LLM安全范式：trusted planner + untrusted executor（架构隔离 = 唯一已知鲁棒防御）
+- **Single-Shot Planning**：操作恶意内容前生成完整执行图（含条件分支），可证明的control flow integrity
+- **Branch Steering攻击**：恶意UI元素操纵agent走入计划中的非预期路径 → 需额外防御
+- OSWorld性能：保留前沿模型57%，小模型提升19%（安全架构对小模型更友好，印证qwen3-vl:2b方向）
+- **对Hermes**：当前handler（scene classification → action routing）是Dual-LLM弱版本；否定检测+WHITELIST组合与Branch Steering防御哲学一致
+
+### ⭐ Specification.website — Agent Readiness 18 项标准
+（llms.txt直接提取，2026-06-01 方向C实测）
+
+**检测流程**：`browser_navigate https://specification.website/llms.txt` → browser_console提取目标section
+**对auto_execute最相关的6项**：Web Bot Auth(RFC 9421) / MCP和tool discovery / Agent Skills发现(/.well-known/agent-skills/) / WebMCP(navigator.modelContext) / /llms.txt+llms-full.txt / DNS-AID
+**落地优先级**：目标URL agent-readiness检测 → MCP/WebMCP/llms.txt/纯视觉策略分级
+
+### ⭐ MirrorGuard (arXiv 2601.12822, Jan 19, Fudan)
+- Simulation-to-Real reasoning correction：MirrorWorld神经符号模拟器合成高风险轨迹 → 行动前纠正不安全推理
+- 即插即用，无需修改base agent → 可作为handler pre-action guardrail层
+
+### ⭐ SmartSnap (arXiv 2512.22322, Dec 2025, Tencent/PKU)
+- Proactive evidence seeking：3C原理 — 收集决定性截图使LLM-judge可验证
+- screen_watcher天然是SmartSnap的infrastructure（每帧截图=evidence）
+
+### ⭐ 其他方向C相关论文（2026-06-01 OSU-NLP YAML首次扫描发现）
+- **Zero-Permission Manipulation** (2601.12349, Jan 18, NJU) — Action Rebinding攻击，利用观察→动作间隙
+- **PRAC** (2604.08005, Apr 9, Tübingen) — Preference Redirection via Attention Concentration对抗性patch
+- **GUI-Perturbed** (2604.14262, Apr 15) — 域随机化揭示grounding系统性脆弱性，>85%模型损失27-56分
+- **WebSP-Eval** (2604.06367, Apr 7) — 首个web agent安全隐私评估，stateful UI失败>45%
+- **MAESTRO** (2604.06134, Apr 7, VT/NAVER) — 偏好记忆驱动的GUI适应
+- **MagicGUI-RMS** (2601.13060, Jan 19, Honor) — 多Agent奖励模型自进化
+
+**OSU-NLP YAML扫描方法论**（2026-06-01 方向C实测验证）：
+1. browser_navigate到raw yaml URL（免搜索，覆盖200+论文）
+2. browser_console分片提取 + 关键词过滤（Desktop + safety/guardrail/verification/framework）
+3. 比arXiv搜索更快，覆盖更广，含tldr摘要
+
+- ⭐ **UI-Voyager（2026-03-25, Tencent Hunyuan, arXiv 2603.24533）** — 从失败轨迹自我进化的 GUI agent
+  - 两阶段训练：Rejection Fine-Tuning + Group-Relative Self-Distillation（RFT+GRSD）
+  - **4B 模型 81.0% Pass@1 AndroidWorld** — 验证小模型通过自我进化可达到 SOTA
+  - 从失败轨迹中提取稠密纠错信号，无需人工标注
+  - **对 Hermes**：auto_execute dry-run 日志积累后可类似训练 self-correction，handler 的否定检测可看作最简版 failure learning
+  - 代码: github.com/ui-voyager/UI-Voyager
+- ⭐ **GPA: GUI Process Automation（2026-04-02, Salesforce, arXiv 2604.01676）** — 无需训练的视觉过程回放
+  - Sequential Monte Carlo 定位 + readiness calibration
+  - 单次演示即可复现，**10x faster than Gemini 3 Pro** on long-horizon，完全本地运行
+  - **对 Hermes**：演示→复现 pipeline 可直接集成到 screen_watcher 作为动作模板，验证纯视觉方案可行
+- ⭐ **ZoomUI（2026-03-15, arXiv 2603.14448）** — Training-free 渐进式 GUI grounding
+  - 指令重写（自然语言→元素级视觉描述）→ 候选区域渐进式缩放
+  - 无需微调，超越微调基线（ScreenSpot 等基准）
+  - **对 Hermes**：可直接集成到 handler 做 "other" 场景的第二层细粒度分析，无需额外模型
+- ⭐ **HyMEM（2026-03-11, arXiv 2603.10291）** — 图结构自进化记忆系统
+  - 符号节点 + 连续轨迹嵌入，multi-hop 检索，随时间自我更新
+  - 7B/8B 开源 GUI agent 匹配或超越更强闭源模型
+  - **对 Hermes**：screen_watcher dry-run 日志可注入 HyMEM 架构作为结构化记忆
+  - 验证 graph-based memory 方向（与 Hermes SOUL/memory/skills triad 互补）
 - ⭐ **GUI-Agent-Harness（2026-06-01 发现）** — Fzkuji 开源，OSWorld Multi-Apps **79.8%**
   - 4-phase step loop: Observe → Verify → Plan → Dispatch
   - **Visual Memory**：组件模板缓存（~5x faster, ~60x fewer tokens）
@@ -491,7 +663,13 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - 作者: vLLM Semantic Router Project / MBZUAI / McGill / AMD / Red Hat
   - 代码: github.com/vllm-project/semantic-router
   - 详见 references/avr-adaptive-vlm-routing-2026-06-01.md
-- **⭐ Cua VLM Router（2026-06-01 发现）** — 生产级 VLM 路由基础设施，验证 AVR 三级路由概念已落地
+- ⭐ **SafePred（arXiv 2602.01725, Feb 2026）** — 预测型Guardrail替代反应式WHITELIST
+  - risk-to-decision loop：world model 预测短期+长期风险，在action扩散前prune
+  - 97.6% safety，21.4% better task utility vs reactive baselines
+  - **对Hermes**：当前ACTION_WHITELIST是最原始的反应式guardrail。SafePred的演化路径：whitelist → 世界模型预测+修剪 → production-ready
+  - 与AVR路由互补：AVR解决"哪个模型做"，SafePred解决"哪个动作安全"
+  - 详见 `references/safepred-predictive-guardrail-2026-06-01.md`
+- ⭐ **Cua VLM Router（2026-06-01 发现）** — 生产级 VLM 路由基础设施，验证 AVR 三级路由概念已落地
   - 统一 API key 访问 Claude/Gemini/Fara/Qwen，cost tracking 内建
   - HTTP API 兼容 Anthropic Messages + OpenAI Chat Completions
   - **模型三分类与 AVR 完全对应**：
@@ -621,8 +799,8 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
 - June 1 00:07 后 unknown=0% ✅（qwen3-vl:2b handler 稳定运行）
 - 动作分布：`none`=12（idle静默）, `wininfo`=736（历史+业务）
 - 产线状态：screen_watcher ✅ | Ollama ✅ | handler 正常 | 无锁残留
-- 场景分类耗时：~4s（qwen3-vl:2b with 400px resize）
-- full cycle：~15-20s（含冷却检查、场景分类、内容分析）
+- 场景分类耗时：~3s（qwen3-vl:2b with 400px resize, 2026-06-01 04:45 实测）
+- full cycle：~8s（含冷却检查、场景分类、内容分析）
 - 否定检测：✅ 生效，scene=other 全部正确标记 [silent]
 - **详见 `references/idle-learning-2026-06-01-r3.md`** （含完整 handler 代码结构摘要和 P0-P3 改进计划）
 
@@ -776,7 +954,7 @@ ACTION_WHITELIST = {
 
 - **⭐ Handler 优化模式（2026-06-01 实装，2026-06-08 补充否定检测）**：
   从产线数据中提取的 handler 优化模式，可供未来的执行层巡检反复使用：
-  1. **暗屏检测**：10x10 缩略图体积判断 → 全黑/锁屏直接跳过分析（夜间 CPU 节省 ~98%）
+  1. **暗屏检测**：10x10 缩略图体积判断 → 全黑/锁屏直接跳过分析（夜间 CPU 节省 ~98%）。**⚠️ 已知局限**：843+ 条 dry-run 历史中该检测从未触发（<500 字节阈值过严），qwen3-vl:2b 分类为 "other" 已足够替代。低 ROI，暂不修复。
   2. **分类降速**：场景分类 resize 800→400px（分类精度不变，耗时减半）
   3. **紧急权重降级**：unknown/other 场景仅匹配 CRITICAL_KEYWORDS，其余静默
   4. **冷却自适应**：优化后 handler 更快 → 冷却时间减半（120→60s）
@@ -844,8 +1022,11 @@ ACTION_WHITELIST = {
 `~/.hermes/hooks/` 中的 gateway hook 如果引用了已删除的模块或已下线的模型，会在每次 gateway:startup / session:start / agent:end 时向 gateway.log 写入错误信息。实测 screen_watch hook 写入了 1332 条 "model not found"（占日志 26%）。
 - **检查**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log`
 - **根因**：hook 硬编码旧模型 + 引用已删除的 python 模块
-- **修复**：将 `HOOK.yaml` 的 events 置空 `events: []`，或直接删除 hooks 目录
+- **修复**：将 `HOOK.yaml` 的 events 置空 `events: []`，并清空 `handler.py`（仅保留占位 docstring），或直接删除整个 hooks 子目录
+  ⚠️ `events: []` 单独使用不足！Gateway 启动时仍会扫描并加载 handler.py，旧模型/模块引用错误持续产生。
+  ✅ 正确两步：HOOK.yaml events 置空 + handler.py 清空（仅保留占位 docstring），或直接 `rm -rf hooks/screen_watch/`
 - **巡检命令**：`ls ~/.hermes/hooks/` + 对各 hook 的 `HOOK.yaml` 检查 events 列表有效性
+- **验证**：记录当前值（`grep -c "screen_watch" ~/.hermes/logs/gateway.log`），下次巡检时对比是否增长
 
 **⚠️ "Handler仍在运行"日志但handler未启动（2026-06-07 实测）**：
   - 症状：screen_watcher 日志大量 "Handler仍在运行，跳过本次触发"，但 `ps aux | grep screen_trigger` 无进程
@@ -1193,9 +1374,22 @@ nomic-embed-text:latest                ❌ 已从本地移除
 把本次学习结果追加到学习日志文件 `~/.hermes/memory/idle_learning_log.md`：
 
 ⚠️ **禁止用 `cat >> file << 'EOF'` 写法**（terminal foreground 模式会报 `&` 错误）。
+⚠️ **⚠️ write_file 完全覆盖文件！** `write_file` 会**覆盖整个文件**，不是追加。如果你用 write_file(path='~/.hermes/memory/idle_learning_log.md')，原来所有 5000+ 行历史日志会全部消失！2026-06-01 实测导致 3586 行日志丢失。
 ✅ **正确做法（两种任选）**：
-1. `read_file` + `patch` 在文件末尾追加（推荐，无 shell 解析风险）
+1. **`read_file` + `patch` 在文件末尾追加（推荐，无 shell 解析风险）**。
+   - 找到最后一行（通常是"**下次学习方向**：X"），用 patch 替换它为新内容 + 续行。
+   - ⚠️ patch 只替换唯一匹配的字符串，不会覆盖整个文件。
 2. `write_file` 写到 `/tmp/idle_log_YYYYMMDD_HHMMSS.md`，再用 `terminal` 执行 `cat /tmp/... >> ~/.hermes/memory/idle_learning_log.md`
+   - ✅ 安全做法：write_file 写临时文件到 /tmp，再用 cat 追加到目标。
+
+**💀 如果不慎用 write_file 覆盖了日志（恢复方案）**：
+`/tmp/` 目录下有之前写入的碎片文件（`idle_log_*.md`），可按时间顺序拼接恢复：
+```bash
+cat $(ls -1t /tmp/idle_log*.md | sort -t_ -k3,4) > /tmp/recovered.md
+cp /tmp/recovered.md ~/.hermes/memory/idle_learning_log.md
+```
+- 恢复后行数可能少于原文件（碎片不完整），但比从头开始强
+- 立即备份恢复后的文件：`cp ~/.hermes/memory/idle_learning_log.md ~/.hermes/memory/idle_learning_log.md.bak.$(date +%Y%m%d)`
 
 ```python
 # 方法1（推荐）：patch 追加
@@ -1243,6 +1437,7 @@ PYEOF
 - [PaddleOCR-VL 0.9B (2026-05-31)](./references/paddleocr-vl-0.9b.md) — CPU-only OCR, 92.6% doc accuracy
 - [RoTS-32B Error Recovery SOTA (2026-06-01)](./references/rots-32b-2026-06-01.md) — arXiv 2605.29447, 47.4% OSWorld via trajectory synthesis, ICML 2026 Spotlight
 - [ScreenParse + ScreenVLM (2026-06-01)](./references/screenparse-2026-06-01.md) — arXiv 2602.14276, 771K screenshots/21M elements, 316M param VLM, ICML 2026
+- [ScreenParser YOLO M4 Deployment (2026-06-01)](./references/screenparser-yolo-m4-deployment-2026-06-01.md) — 实测部署配方：HF下载13.8s/146MB, CPU推理93ms@320px (75x faster vs VLM), MPS 2.9s比CPU慢, 55类UI元素列表, handler集成方案, 已知坑
 - [Ollama API 端点区分：本地 vs 远程库](./references/ollama-api-endpoint-local-vs-remote-2026-05-30.md) — api.ollama.com vs 127.0.0.1:11434 区别，实测4个本地模型
 - [GUIDE Benchmark CVPR 2026](./references/guide-benchmark-cvpr2026.md) — 用户行为理解benchmark，三层递进（behavior detection 44.6% → intent prediction → assistance），结构化上下文提升GPT-4o达+36pp
 - [搜索降级方案](./references/search-fallback.md) — 当 web_search 不可用时的 ddgs 降级流程
@@ -1292,6 +1487,7 @@ PYEOF
 - [H Company Runner H — H-VLM 3B 方法论（2026-06-01 阅读）](./references/h-company-runner-h-2026-06-01.md) — 专用 GUI VLM 在小模型（3B）上超越 10x 大模型，Runner H 0.1 达 67% WebVoyager。验证 qwen3-vl:2b 路线。
 - [The Website Specification — Agent Readiness 18 Standards（2026-06-01）](./references/website-spec-agent-readiness-2026-06-01.md) — specification.website 的 Agent Readiness 分类完整摘录：18 项标准（Required/Recommended/Optional）、Web Bot Auth(RFC 9421)、WebMCP(navigator.modelContext)、Agent Skills discovery。用于评估目标网站 agent-friendly 程度
 - [2026-06-01 学习记录（方向D）](./references/idle-learning-2026-06-01-direction-d.md) — 执行层调研：GUI-Libra/LiteGUI/ClawGUI 三篇论文阅读、Qwen3-VL 1000×1000 坐标公式、auto_execute 动作利用率仅 2.7% 的瓶颈分析、否定检测持续生效的产线快照
+- [2026-06-01 方向D执行层验证](./references/idle-learning-2026-06-01-direction-d-execution.md) — RPA 11种动作清单、坐标映射链状态、DMI 论文 (arXiv 2510.04607)、Gateway 污染修复记录、DRY_RUN=False 前置条件检查
 - [Cua VLM Router（2026-06-01）](./references/cua-vlm-router-2026-06-01.md) — 生产级三级 VLM 路由，验证 AVR routing 概念已落地。三分类（Full CU / Browser-Only / Grounding-Only），统一 API key，cost tracking
 - [Microsoft Agent Governance Toolkit（2026-06-01）](./references/microsoft-agent-governance-toolkit.md) — 生产级 Agent 治理框架，4 特权环模型 → 直接映射 Hermes Silent/Logged/Confirmed/Blocked 动作分级。MCP Security Gateway，OWASP Top 10 覆盖
 - [TRISHUL GUI Understanding Framework（2026-06-01）](./references/trishul-gui-understanding-2026-06-01.md) — Training-free 分层屏幕解析框架（HSP + SEED），纯视觉无需 DOM 元数据，ScreenSpot 超越 SoM。可直接集成到 handler 的 other/unknown 场景
@@ -1301,6 +1497,7 @@ PYEOF
 - [Dynamic Tiered AgentRunner — arXiv 2605.10223 (2026-05-11)](./references/agentrunner-dynamic-tiered-2026-06-01.md) — Risk-Adaptive Tiering / Separation of Powers / Verifier-Recovery 闭环，验证 Hermes 动作分级和 SILENT/LOGGED/CONFIRMED/BLOCKED 方向
 - [Agent Guardrails Production Field Guide (2026-03-06)](./references/agent-guardrails-production-2026-06-01.md) — Supergood Solutions，4 层 Guardrails 模型（Input/Action/Output/Behavior），80% 组织遇风险行为数据，验证非二元安全模型必要性
 - [2026-06-01 学习记录（方向B，凌晨）](./references/idle-learning-2026-06-01-session-n.md) — github 恢复后的首次 idle_learning 实测，Mano-P/GUI-Agent-Harness/Qwen-VLA 首次 GitHub 验证，ScreenParser YOLO/LocateAnything-3B HuggingFace 状态确认
+- [2026-06-01 学习记录（方向B，深夜）](./references/idle-learning-2026-06-01-session-late.md) — UILoop/AutoGUI-v2/Same Outcomes Different Journeys 四篇新论文发现 + OSU paper list YAML 扫描方法论验证 + 产线健康快照（0.88% unknown）
 
 ---
 
@@ -1399,11 +1596,14 @@ echo "建议添加每日凌晨2点自学任务，是否确认？"
 - 获取 HN 文章内文时用 `browser_navigate + browser_console JS` 替代 ddgs
 - 格式：`ddgs text -q "query" -m 5`
 
-**屏幕分析日志污染 gateway.log（2026-05-29 发现，2026-06-08 确认修复）**：
+**屏幕分析日志污染 gateway.log（2026-05-29 发现，2026-06-08 初步修复，2026-06-01 重新修复，2026-06-01 pycache 陷阱发现）**：
 - 原根因：`screen_watch` hook 引用了已删除的 humanization_core + 已下线的 smolvlm2 模型
-- **2026-06-08 修复**：`~/.hermes/hooks/screen_watch/HOOK.yaml` events 置空，hook 不再被 gateway 触发
-- **当前状态**：gateway.log 不再增长 screen_watch 记录
-- **检查**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log` — 当前值 1352（历史遗留，已不再增加）
+- **2026-06-08 尝试修复**：`HOOK.yaml` events 置空 — 结果：**不足！Gateway 启动时仍加载 handler.py**
+- **2026-06-01 中期修复**：清空 `~/.hermes/hooks/screen_watch/handler.py`（仅保留占位 docstring）
+- **⚠️ 2026-06-01 pycache 陷阱（关键发现）**：即使 handler.py 已清空为占位 docstring，Gateway 仍继续报错！根因是 `~/.hermes/hooks/screen_watch/__pycache__/handler.cpython-311.pyc` 缓存了旧 handler 编译代码。Python 在 import 时优先从 .pyc 加载，旧代码（含 smolvlm2 模型引用）持续生效。单清 handler.py 不够！
+- **✅ 最终根治**：`rm -rf ~/.hermes/hooks/screen_watch/`（删除整个废弃 hook 目录，pycache 一并清理）
+- **验证方法**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log` 记录当前值；下次 session 对比是否增长。不再增长=根治。
+- **判断标准**：count 值不变 = 根治；count 增长 = 仍有活着的 hook 或 pycache 残留。
 
 ### idle_learning 执行过程中的 skill 引用注意
 
