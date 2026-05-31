@@ -342,6 +342,70 @@ python3 -c "import yaml; yaml.safe_load(open('/Users/aimac/.hermes/config.yaml')
 
 格式错误会导致 Hermes 启动失败。
 
+## Provider 连通性诊断（联网测试）
+
+当用户问"哪些模型还能连"、"备用哪个能用"时，不要只查配置，要做实际 API 连通性测试。
+
+### 方法：Python 脚本批量测试
+
+核心思路：拿每个配置好的 provider 的 API Key 和 Base URL，发一个最小 chat completion 请求，看 HTTP 状态码和响应。
+
+```python
+import json, os, urllib.request
+
+providers_to_test = [
+    ("描述名称", {
+        "url": "https://example.com/v1/chat/completions",
+        "key": os.environ.get("ENV_VAR_NAME", ""),
+        "model": "model-name",
+    }),
+]
+
+for name, cfg in providers_to_test:
+    if not cfg["key"]:
+        print(f"❌ {name}: 无API Key")
+        continue
+    payload = json.dumps({
+        "model": cfg["model"],
+        "messages": [{"role": "user", "content": "Say pong"}],
+        "max_tokens": 5,
+    }).encode()
+    req = urllib.request.Request(
+        cfg["url"], data=payload,
+        headers={"Authorization": f"Bearer {cfg['key']}", "Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        resp = urllib.request.urlopen(req, timeout=15)
+        print(f"✅ {name}: HTTP {resp.status}")
+    except urllib.error.HTTPError as e:
+        body = e.read().decode()[:200]
+        print(f"❌ {name}: HTTP {e.code} — {body[:80]}")
+    except Exception as e:
+        print(f"❌ {name}: {e}")
+```
+
+### 常见 HTTP 状态码含义
+
+| 状态码 | 含义 | 处理 |
+|--------|------|------|
+| 200 | ✅ 正常 | 可直接设为 fallback |
+| 401 | ❌ 认证失败 | Key 无效或格式不对 |
+| 403 | ❌ 额度不足 | 中转平台余量耗尽，需充值或换 provider |
+| 429 | ❌ 超限 | 频率限制或月配额用完，等重置或换 key |
+| 502/503 | ⚠️ 服务不可用 | 服务端问题，稍后重试 |
+
+### 测试流程要点
+
+1. **source .env** 后再跑 — API Key 在 .env 里，脚本需要读取
+2. **最小 token 数** — `max_tokens: 5` 避免浪费配额
+3. **按 3 层链路测**：主模型 → fallback_model → fallback_providers 逐个测
+4. **结果记录到 memory** — 状态会变（额度恢复、重置），不要固化到技能里
+
+### 已知状态备忘
+
+当前环境 Provider 连通性快照见 memory 中的 "Provider 状态快照" 条目。每次测完后更新此条目，不要让它过期。
+
 ## 删除 Provider（清理配置）
 
 当需要彻底删除某个 provider（不只换 key，而是整个条目）时：
