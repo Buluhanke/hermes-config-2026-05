@@ -259,18 +259,23 @@ Custom provider key truncation and full fallback sync — see `references/2026-0
 
 ## June 2026 Update (2026-06-02)
 
-### 当前可用性实测结果（2026-06-02晚，经实测）
+**.env 清理 + 密钥存储架构确认** — 见 `references/2026-06-02-env-cleanup-and-provider-verification.md`
 
+### 当前可用性实测结果（2026-06-02晚，经实测）
+### 当前可用性实测结果（2026-06-02晚，经实测）
 | Provider | 模型 | 状态 | 错误码 | 说明 |
 |----------|------|------|--------|------|
 | MiniMax CN | MiniMax-M2.7 | ❌ | 429 usage limit exceeded (2056) | 额度耗尽，等待刷新 |
 | DeepSeek 直连 | deepseek-v4-flash | ❌ | 401 Authentication Fails | API Key无效需重新获取 |
-| Cerebras | llama-3.3-70b | ❌ | 401 Wrong API Key | Key已失效 |
-| Groq | llama-3.3-70b-versatile | ❌ | 403 Forbidden | 模型名格式错，应为 `cerebras/llama-3.3-70b` |
+| Cerebras | zai-glm-4.7 | ❌ | 403 CF Error 1009 | IP被Cerebras Cloudflare拦截，非key问题 |
+| Groq | llama-3.3-70b-versatile | ❌ | 403 Forbidden | Cloudflare当时拦截了Groq直连，非key格式问题 |
 | **OpenRouter** | **deepseek/deepseek-v4-flash** | ✅ | 正常 | 成本$0.0000013173/call，极低 |
 | **OpenRouter** | **google/gemma-4-31b-it:free** | ✅ | 正常 | 免费，262K context |
 
-**结论**：当前唯一可靠可用选项是 OpenRouter + DeepSeek（非free版，free版被限流）。
+**2026-06-02深夜复盘后真实key验证（直接HTTP测试）**：
+- Groq key (`gsk_vtS3ft...` 在 config.yaml): **200 OK** ✅
+- Cerebras key (`csk-585933myf...` 在 config.yaml): **200 OK** ✅
+- 结论：Groq 403是当时Cloudflare拦截（已恢复），Cerebras 403是IP被禁，这些key本身都是正常的
 
 **当前Gateway活跃连接**（lsof法）：
 ```

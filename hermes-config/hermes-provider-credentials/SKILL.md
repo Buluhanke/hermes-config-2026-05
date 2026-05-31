@@ -210,6 +210,84 @@ sed -i '' '/^credential_pool_strategies:/,/^[a-z]/ {
 
 **或用 patch 工具**（会被阻挡时用 sed / Python 单行替换）。
 
+## API Key 归集规范（config.yaml → .env）
+
+### 原则
+
+所有 API keys 统一存在 `~/.hermes/.env`，config.yaml 通过变量引用。禁止在 config.yaml 中出现明文 key。
+
+### 三层引用方式
+
+```yaml
+# 1. Provider api_key（推荐）
+api_key_env: VAR_NAME          # → 读取 .env 的 VAR_NAME
+
+# 2. Feishu app_secret 等
+app_secret_env: VAR_NAME       # → 读取 .env 的 VAR_NAME
+
+# 3. MCP server env block
+env:
+  MY_TOKEN: ${VAR_NAME}        # → 读取 .env 的 VAR_NAME
+```
+
+### .env 标准命名
+
+| Key 类型 | 命名格式 | 示例 |
+|----------|---------|------|
+| API Key | `*_API_KEY` | `GROQ_API_KEY`, `CEREBRAS_API_KEY` |
+| App Secret | `*_SECRET` 或 `*_APP_SECRET` | `FEISHU_APP_SECRET` |
+| Token | `*_TOKEN` | `GITHUB_MCP_TOKEN` |
+| Base URL | `*_BASE_URL` | `DEEPSEEK_BASE_URL`, `GEMINI_BASE_URL` |
+
+### 验证：确认无硬编码 key 残留
+
+```bash
+# 查找 config.yaml 中仍存在的明文 key 行
+grep -E "api_key:\s+[a-zA-Z]|app_secret:\s+[a-zA-Z]" ~/.hermes/config.yaml
+# 返回空 = 全部归集完成
+```
+
+---
+
+## ⚠️ grep 脱敏陷阱（已踩坑）
+
+`grep` / `repr()` / `cat` 对包含 `...` 的 key 会显示截断（如 `sk-290...6e18`），导致字符串替换失败。
+
+**现象**：Python `str.find('sk-290...6e18')` 返回 `-1`（找不到），但文件里确实有这个字符串。
+
+**原因**：grep 的输出重定向会触发内部脱敏，stdout 显示的 `...` 是被截短后的占位符，原始 key 包含更多字符。
+
+**解法：用字节级 Python 定位后再替换**
+```python
+with open('/path/to/config.yaml', 'rb') as f:
+    raw = f.read()
+idx = raw.find(b'gsk_vt')  # 用 key 的确定前缀找
+print(raw[idx:idx+80])     # 查看完整原始字节（含实际key）
+# 确认内容后再做替换
+```
+
+### 检查 config.yaml 中是否还有硬编码 key
+
+```python
+import re
+with open('/Users/aimac/.hermes/config.yaml', 'rb') as f:
+    raw = f.read()
+
+# 查找所有可能的 api_key/app_secret 行（字节级）
+patterns = [b'api_key:', b'app_secret:', b'access_token:']
+for pat in patterns:
+    idx = 0
+    while True:
+        idx = raw.find(pat, idx)
+        if idx == -1:
+            break
+        line_end = raw.find(b'\n', idx)
+        print(f"Found {pat}: {raw[idx:line_end]}")
+        idx += 1
+```
+
+---
+
 ## 注意事项
 
 ### config.yaml 是保护文件 — patch 会被拒绝
@@ -406,7 +484,15 @@ for name, cfg in providers_to_test:
 
 当前环境 Provider 连通性快照见 memory 中的 "Provider 状态快照" 条目。每次测完后更新此条目，不要让它过期。
 
-## 删除 Provider（清理配置）
+### .env 中的 Groq/MINIMAX/Cerebras 等 key 不要只做注释 — 要实际使用
+
+**已踩坑教训**：config.yaml 的 `custom_providers` 中硬编码了 Groq/Cerebras/AICODEE 的 key，.env 中虽有同名变量但没被引用，导致：
+- key 变更时需要同时改两处
+- 复盘时容易误认为 .env 的 key 已丢失
+
+**正确做法**：所有 custom_providers 也统一用 `api_key_env: VAR_NAME` 引用 .env，参考"API Key 归集规范"章节。
+
+### 删除 Provider（清理配置）
 
 当需要彻底删除某个 provider（不只换 key，而是整个条目）时：
 

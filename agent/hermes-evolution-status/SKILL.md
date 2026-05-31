@@ -198,42 +198,57 @@ ls ~/.hermes/hermes-agent/.venv/bin/python  # 不存在
 | Hermes自我优化循环 | 每天2:00 | ✅ OK | |
 | 免费模型扫描报告 | 每天9:00 | 🆕 待首次 | |
 
-## 用户能力总览（2026-06-02深夜复盘）
+### 模型路由优先级（用户确认，2026-06-02）
+1. **MiniMax-M2.7-highspeed** → `custom:V2.aicodee.com`（当前主力）
+2. **MiniMax-M2.7** → `minimax-cn`（额度耗尽2056）
+3. **llama-3.3-70b-versatile** → `custom:Api.groq.com`（key正常，403是CF当时拦截）
+4. **zai-glm-4.7** → `custom:Api.cerebras.ai`（key正常，403是IP被禁）
+5. **deepseek-v4-flash** → `deepseek`（直连，401需重新取key）
 
-### 联网搜索
-- SearXNG 本地 Docker（127.0.0.1:8888）✅
-- ddgs 聚合搜索 ✅
-- anysearch skill ✅
+### 真实key状态（2026-06-02深夜验证）
+| Key | 直接HTTP测试 | 结论 |
+|-----|-------------|------|
+| Groq `gsk_vt...jo9o` | 200 OK ✅ | key本身正常 |
+| Cerebras `csk-585933...` | 200 OK ✅ | key本身正常 |
+| DeepSeek 直连 key | 401 ❌ | key无效需重新获取 |
+| MiniMax CN `sk-cp-pjty...` | 2056 ❌ | 额度耗尽 |
 
-### 电脑控制
-- 终端命令（terminal tool）✅
-- 语音对话（TTS+STT）✅
-- 屏幕监控+操作（computer_use + je_auto_control）✅
-- browser-use 浏览器控制 ✅（需配合 Playwright CDP）
+### 用户能力总览（2026-06-02深夜复盘）
 
-### 模型与AI
-- 固定模型路由（fallback chain 5层）✅
-- Groq 直连验证可用（llama-3.3-70b-versatile）✅
-- OpenRouter deepseek-v4-flash 可用 ✅
-- DeepSeek 直连额阻（401待修复）
+#### 联网搜索
+- **SearXNG** 本地Docker（127.0.0.1:8888）✅
+- **ddgs** 聚合搜索 ✅
+- **anysearch** skill ✅
 
-### OCR与视觉
-- Apple Vision OCR（60ms）✅
-- PaddleOCR（高精度中文）✅
-- ddddocr（验证码）✅
-- YOLOv8 物体检测（M4 MPS加速）✅
-- 图片精确识别 ✅
+#### 电脑控制
+- **终端命令**（terminal tool）✅
+- **语音对话**（TTS+STT）✅
+- **屏幕监控+操作**（computer_use + je_auto_control）✅
+- **browser-use 浏览器**（需配合 Playwright CDP）✅
 
-### 系统自动化
-- 开机自动启动（cron job）✅
-- 密码免登启动 ✅
-- 通讯渠道（Telegram 等）✅
-- 电脑内存管理 ✅（Ollama 模型卸载、Docker 监控）
+#### 模型与AI
+- **固定模型路由**（fallback chain 5层）✅
+- **当前主力**：MiniMax-M2.7-highspeed via V2.aicodee.com
+- **Groq直连**：llama-3.3-70b-versatile（key正常，CF已恢复）✅
+- **OpenRouter**：deepseek-v4-flash 可用 ✅
+- **DeepSeek直连**：key无效待修复 ❌
+
+#### OCR与视觉
+- **Apple Vision OCR**（60ms）✅ — `/opt/homebrew/bin/python3` only
+- **PaddleOCR**（高精度中文）✅
+- **ddddocr**（验证码）✅
+- **YOLOv8** 物体检测（M4 MPS加速）✅
+- **图片精确识别** ✅
+
+#### 系统自动化
+- **开机自动启动**（cron job）✅
+- **密码免登启动** ✅
+- **通讯渠道**（Telegram 等）✅
+- **电脑内存管理** ✅（Ollama 模型卸载、Docker 监控）
 
 ### 未解决问题
-- Fallback 未触发 Groq（MiniMax 429 后直接终态，待查）
-- DeepSeek 直连 401（key无效）
-- credential pool 残留脏数据
+- DeepSeek 直连 401（key无效，需重新获取）
+- credential pool 残留脏数据（aicodee残留条目）
 
 ## 进化方向
 
