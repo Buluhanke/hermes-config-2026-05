@@ -14,7 +14,19 @@ triggers:
 
 Test which Hermes model providers can connect, diagnose common errors, and switch the active model.
 
+## User Preferences (for this machine)
+
+- Language: **Chinese** (`language: zh` in config). All system prompts (approval messages, tool notes) should use Chinese.
+- **"Test before switching"** — never switch the active model provider/config first. Always test the target model via direct API call, verify it responds, THEN switch config. User explicitly wants verification before activation.
+- Cost preference: free models first, then direct-billed provider models.
+
 ## Provider Testing Workflow
+
+### Golden Rule — Test Before You Switch
+
+User repeatedly corrects: **don't change config first and hope it works.** Always:
+1. Test the target provider:model via direct API call from a temp script
+2. Only if the test succeeds, update config.yaml
 
 ### Step 1 — Check Current Fallback Chain
 
@@ -112,10 +124,46 @@ sed -i '' '/  api_key: old-key-pattern/d' ~/.hermes/config.yaml
 ## Hermes Official (Nous Portal) Models
 
 - Nous Portal (portal.nousresearch.com) is Hermes' official model provider
-- Requires **paid subscription** — not free
-- Model catalog includes: Claude, GPT, Gemini, DeepSeek V4 Pro, Qwen, Kimi, GLM, MiniMax, Grok, etc.
-- **There is no Hermes-official free DeepSeek V4 model**
-- Free DeepSeek V4 access is via OpenRouter's free tier only
+- Authentication: OAuth device code (stored in `~/.hermes/shared/nous_auth.json`)
+- Inference endpoint: `https://inference-api.nousresearch.com/v1`
+- Requires **paid subscription** for most models (Claude, GPT, Gemini, DeepSeek V4 Pro, etc.)
+- **Does have some free models** (notably `stepfun/step-3.7-flash:free`)
+- OAuth token has expiry + refresh flow — `hermes auth status nous` to check login state
+- Model list: use `curl -H "Authorization: Bearer $TOKEN" https://inference-api.nousresearch.com/v1/models` (247 models as of May 2026)
+
+## Free Model Discovery
+
+OpenRouter supports `:free` model variants. To scan for available free models:
+
+1. Call `https://openrouter.ai/api/v1/models` with the OR API key
+2. Filter for models with `:free` in their id
+3. Test each candidate with a minimal chat completion to see if it responds or rate-limits
+
+Common results:
+- Some free models work immediately (google/gemma-4-31b-it, nvidia/nemotron-3-super-120b-a12b, openai/gpt-oss-120b)
+- Popular models like deepseek/deepseek-v4-flash:free or qwen/qwen3-coder:free often get 429 rate-limited
+- Context windows vary widely (33K to 1M tokens)
+
+See `references/free-model-scan-results.md` for the latest full scan output.
+
+## Known Free Models (OpenRouter, May 2026)
+
+| Model | Context | Testing Status |
+|-------|---------|---------------|
+| google/gemma-4-31b-it:free | 262K | ✅ Responds |
+| nvidia/nemotron-3-super-120b-a12b:free | 1M | ✅ Responds |
+| nvidia/nemotron-nano-12b-v2-vl:free | 128K | ✅ Visual model |
+| openai/gpt-oss-120b:free | 131K | ✅ Responds |
+| z-ai/glm-4.5-air:free | 131K | ✅ Responds |
+| deepseek/deepseek-v4-flash:free | 1M | ❌ 429 rate-limited |
+| qwen/qwen3-coder:free | 1M | ❌ 429 rate-limited |
+
+## Periodic Free Model Scanning
+
+A cron job (`免费模型扫描报告`) runs daily at 9:00 to scan all providers and report new free models. Script: `~/.hermes/scripts/scan_free_models.py`. Run manually:
+
+```bash
+cd ~/.hermes/hermes-agent && . venv/bin/activate && python3 ~/.hermes/scripts/scan_free_models.py
 
 ## Common Pitfalls
 
@@ -123,3 +171,6 @@ sed -i '' '/  api_key: old-key-pattern/d' ~/.hermes/config.yaml
 - **Chrome cookies not shared**: browser tool uses `~/.hermes/chrome-debug` profile, separate from user's daily Chrome. Login state doesn't carry over.
 - **config.yaml is protected file**: patch/write_file tools block writes. Use `sed -i ''` via terminal.
 - **Fallback only triggers on errors** (429/5xx/connection), not on 403 quota errors. Some providers return 403 instead of 429 for exhaustion — test each provider individually.
+- **Nous Portal OAuth token expiry**: Token stored in `~/.hermes/shared/nous_auth.json`. Has `expires_at` and `refresh_token`. Check status with `hermes auth status nous`. If expired, re-auth via `hermes setup --portal` in interactive terminal.
+- **Same API key length issue across different auth schemes**: OpenRouter uses `sk-or-v1-...`, DeepSeek uses `sk-...`, MiniMax uses `sk-cp-pj-...` format. Scripts reading `.env` must handle variable names, not hardcode key prefixes.
+- **Don't trust which models appear in OpenRouter console UI** — API may serve models not visible in the console, and vice versa. Always test via API, not by what the dashboard shows.

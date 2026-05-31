@@ -32,13 +32,15 @@ python3 ~/.hermes/scripts/detect.py ~/Downloads/product.jpg 0.3
 
 ## 可用模型
 
-| 模型 | 大小 | 速度 | 精度 |
-|------|------|------|------|
-| yolov8n.pt (nano) | 6.2MB | 170ms | 基础 |
+| 模型 | 大小 | 速度 (M4 MPS) | 精度 |
+|------|------|--------------|------|
+| yolov8n.pt (nano) | 6.2MB | **170ms** | 80类, 基础够用 |
 | yolov8s.pt (small) | 22MB | ~300ms | 较好 |
 | yolov8m.pt (medium) | 52MB | ~500ms | 好 |
+| yolov8l.pt (large) | 87MB | ~800ms | 更好 |
+| yolov8x.pt (xlarge) | 136MB | ~1.2s | 最优 |
 
-首次运行自动下载模型文件。
+首次运行自动下载模型文件（`yolov8n.pt` 约 6.2MB）。
 
 ## Python代码引用
 
@@ -58,3 +60,7 @@ for box in results[0].boxes:
 - 包装箱检测（结合训练自己的数据集）
 - 库存盘点拍照统计
 - 供应商来货照片质量检查
+
+---
+
+> 隶属于 [`m4-ml-toolkit`](../m4-ml-toolkit/SKILL.md) — M4 Mac 本地 ML 工具箱
