@@ -66,7 +66,7 @@ smolvlm2-agentic-gui 已从 Ollama registry 永久下线（registry 404，2026-0
 | 坐标映射链 | ❌ 归一化→像素映射缺失 | P1 |
 | Verify 阶段（error recovery） | ❌ 无执行后验证 | P2 |
 
-**Qwen3-VL 坐标公式**：[x,y] on 1000×1000 相对 canvas，像素映射 `x_px = round(x/1000×W)`。
+**Qwen3-VL 坐标公式**：[x,y] on normalized **0-999 scale**（⚠️ 不是 1000×1000！2026-06-01 DeepWiki 实测修正），像素映射 `x_px = round(x/999×W)`。公式来源：QwenLM/Qwen3-VL cookbooks/mobile_agent.ipynb 第50行。详见 `references/qwen3-vl-coordinate-mapping-correction.md`。
 
 **最新论文发现**：
 - **GUI-Libra**（MSR/UIUC, arXiv 2602.22190）：Action-aware SFT（直接动作数据优于 CoT+推理），KL 信任区域稳定 RLVR

@@ -155,11 +155,14 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 
 ⚠️ **重要区分**：检查 HN.com 和 Firebase API 是独立测试 — 它们是不同的域名：
 - `news.ycombinator.com` 失败 ≠ `hacker-news.firebaseio.com` 也失败
-- 实测（2026-06-02）：github:blocked + hn:blocked，但 firebase:ok（Firebase API 仍可访问）
+- 实测（2026-06-02）：github:blocked + hn:blocked，但 firebase:ok
+- **2026-06-01 新状态**：github:ok（已恢复访问，本轮 idle_learning 实测通过）
+- ⚠️ github 可用性可能波动，每次预检独立判断，不要假设是永久状态
 - 预检只验证 HN.com，Firebase API 的可用性需实际调用才知道
 
 **网络异常时的降级策略（已验证稳定）**：
 1. `github:blocked` → 跳过 GitHub Trending，优先用 HN Firebase API 巡检热点
+2. `github:ok` → 直接 browser_navigate 访问 GitHub 仓库/README/论文页（比 web_search 更可靠，无 Firecrawl 费用）
 2. Firecrawl Payment Required / 404 → 优先切 **HN Firebase API**（稳定免费），ddgs 作备选
 3. 所有外部网络均失败 → 本次轮次直接标记为"SILENT"，仅更新巡检日志不尝试联网
 
@@ -298,11 +301,13 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - 示例：`document.querySelectorAll('table tbody tr').length` 可直接用，不用写循环变量
   - 分片提取长文本：`.slice(0, 5000)` → `.slice(5000, 10000)`
 - **⭐ LocateAnything-3B（NVIDIA，arXiv 2605.27365v1，May 26-27 2026）**：
-  - **Parallel Box Decoding (PBD)**：将 bounding box 解码为原子单元（单步完成），替代传统逐 token 序列解码。保持 intra-box 几何一致性，解锁并行性
+  - **Parallel Box Decoding (PBD)**：将 bounding box 解码为原子单元（单步完成），替代传统逐 token 序列解码
   - **138M 训练样本**（LocateAnything-Data），大幅提升数据多样性
   - **任务覆盖**：目标检测、GUI 元素 grounding、视觉定位 — 统一 VLM 框架
   - **对 Hermes 的价值**：3B 参数，M4 24GB 可运行；PBD 可直接替代 smolvlm2 的逐 token 坐标生成
-  - 在 HuggingFace: `nvidia/LocateAnything-3B`，GitHub 已发布
+  - 在 **HuggingFace**: `nvidia/LocateAnything-3B`（571 likes, nvidia-license）
+  - ❌ GitHub 仓库不存在（nvidia/LocateAnything-3B 返回 404），代码通过 HF + vLLM/Transformers 部署
+  - 支持 `vllm serve` + `transformers pipeline` 两种方式
   - 详见 `references/locateanything-3b-2026-06-07.md`
 - **⭐ ScreenParse + ScreenVLM + ScreenParser（ICML 2026，v2 May 2026）**：
   - arXiv 2602.14276 — Moving Beyond Sparse Grounding with Complete Screen Parsing Supervision
@@ -313,10 +318,19 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
     - HF: docling-project/ScreenParser (Apache 2.0, IBM Research - ETH Zurich)
     - Usage: YOLO(&quot;docling-project/ScreenParser&quot;) — ultralytics v8.4.57 already installed
     - ~millisecond inference, suitable for fast scene classification
-    - ⚠️ HF download currently unstable (curl: 35), deploy when network recovers
+    - ✅ HF download verified stable (2026-06-01 accessed successfully via browser_navigate)
+    - Apache 2.0, IBM Research - ETH Zurich
+    - Only 1 HF like (very new — potential early mover advantage)
   - **Key finding**: fine-tuning foundation VLMs on ScreenParse consistently improves grounding
   - **M4 value**: 316M lightweight VLM + YOLO ultra-fast detector — both fit 24GB
   - See references/screenparse-2026-06-01.md
+- **⭐ R5论文发现（2026-06-01 凌晨巡检）** — 6篇Direction B新论文，详见 `references/idle-learning-2026-06-01-r5-papers.md`
+  - **GUI-CIDER** (2605.28534, May 27): Mid-training paradigm — causal internalization + density-aware exemplar reselection，比SFT/RL更高效
+  - **DocOS** (2605.18048, May 18): 主动搜索文档处理长尾任务，"other"场景的未来方向
+  - **Macaron-A2UI** (2605.24830, Tencent): Generative UI for personal agents，超越文本对话
+  - **DynamicUI** (2604.25380, v2 May 8): 视频输入解决动态GUI环境，screen_recording替代single screenshot
+  - **GUI Grounding Sensitivity Benchmark** (EACL 2026): 12模型对同一元素不同描述敏感，单prompt不鲁棒
+  - **CutVerse** (2605.19484, May 19): 媒体编辑基准36%成功率，验证long-horizon是通用瓶颈
 - 新方向（2026-05-28 发现）：Apple FastVLM（CVPR 2025，MLX版本在HuggingFace）+ Ollama v0.19 MLX集成
 - 新方向（2026-05-29 发现）：Ollama MLX backend 需要 32GB+ RAM，24GB 不支持；smolvlm2-agentic-gui 有 q8_0 (~1.9GB) 和 fp16 (~3.6GB) 变体可用；Qwen2.5VL 在 Ollama 上有 3b/7b/32b/72b 各变体
 - **⭐ ZonUI-3B（WACV 2026，2026-05-29 发现）** — 轻量级GUI grounding VLM，3B参数
@@ -324,12 +338,15 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - HuggingFace: `zonghanHZH/ZonUI-3B`，Apache-2.0
   - ⚠️ 无GGUF发布，需Transformers推理（非Ollama），M4 24G可运行PyTorch版
   - 潜在价值：若转GGUF导入Ollama，是比Vocaela-500M更完整的GUI grounding方案
-- **⭐ Mano-P（2026-05-31 发现）** — Apple Silicon 本地 GUI-VLA Agent，4B参数，4GB内存
+- **⭐ Mano-P（2026-05-31 发现，2026-06-01 github 恢复后首次验证）** — Apple Silicon 本地 GUI-VLA Agent，4B参数
   - OSWorld specialized models **#1（58.2%）**，完全本地运行
-  - M4 Pro ~40 tokens/s，**16GB MacBook Air 可流畅运行**
+  - **M4 Pro ~80 tok/s**（4B 模型），Cider SDK 提供 INT8 加速
   - Think-Act-Verify reasoning loop，与 hermes-rpa 架构一致
-  - HuggingFace: `Mininglamp-AI/Mano-P`；Cider SDK 提供 MLX INT8 加速
-  - ⚠️ github.com + huggingface.co 均 blocked，需等网络恢复后部署
+  - GitHub: Mininglamp-AI/Mano-P（**2.2k stars, 213 forks, Apache-2.0**, 3天前更新）
+  - HuggingFace: Mininglamp-2718/Mano-P（14 likes）
+  - ⚠️ **最低要求 32GB RAM** — M4 24GB 无法直接部署
+  - 架构验证：think-act-verify 循环与 auto_execute 设计一致
+  - 3 阶段开源：Skills → Models/SDK → Training methods
   - 详见 `references/mano-p-2026-05-31.md`
 - **⭐ OSWorld-Verified SOTA（2026-05-31 更新）**：
   - **完整 Top 20 排名**：详见 `references/osworld-verified-leaderboard-2026-05-31.md`
@@ -373,6 +390,16 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - `gemma4:e2b`（~3.4 GB, 95 tok/s）— 接近 qwen3-vl:2b 级别，替换收益有限
   - `gemma4:26b`（~18 GB Q4, MoE 3.8B active）— ~2 tok/s on 24GB（swap），**不可用**
   - 详见 `references/idle-learning-2026-06-01-r4-gemma4-e4b-mobile-explorer.md`
+
+  **⚠️ 2026-06-01 方向A巡检结论：gemma4:e4b 不值得为 screen_watcher 场景分类拉取。**
+  原因：(1) 3x 内存占用 (1.76GB → ~5.5GB) 换来的视觉质量提升对 scene classification 任务无明确收益；(2) qwen3-vl:2b 已实现 June 1 产线 0% unknown，正确率已满足需求；(3) Handler 使用 num_ctx=1024（场景分类）+ num_ctx=4096（内容分析），qwen3-vl:2b 完美胜任。替代价值：gemma4:e4b 可替换 qwen2.5:1.5b 做通用文本推理，但 ROI 低。
+
+  **方向A模型评估标准流程**（2026-06-01 确立，供未来复用）：
+  1. 查 Ollama library 页获取模型尺寸/基准（`browser_navigate ollama.com/library/<model>`）
+  2. 查 InsiderLLM Mac 指南（`browser_navigate insiderllm.com/guides/best-local-llms-mac-2026` + `browser_console` JS 分片提取）
+  3. 对比当前 in-use 模型：尺寸差、benchmark 差、安装成本
+  4. 产线验证：当前模型 unknown 率 + 场景分类延迟 + 内存占用
+  5. 二元决策：pull / 不 pull。附原因
 - **⭐ MobileExplorer: On-Device GUI Agent 推理加速（2026-06-01 发现，arXiv 2605.26546, May 26）**：
   - **核心创新**：利用 VLM 长 per-step 推理时间做轻量级并行 UI 元素探索
   - 推理期间主动探测语义相关 UI 元素 → 探索轨迹记录为 structured memory → 下一次推理注入
@@ -387,16 +414,25 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - 验证 1-bit 技术已成熟可实用化（图像生成可用）
   - 详见 `references/idle-learning-2026-06-01-r4-gemma4-e4b-mobile-explorer.md`
 
-- **⭐ PaddleOCR-VL 0.9B**（2026-05-31 发现，2026-06-01 更新至 v1.5/v1.6, 2026-06-01 验证 pip 可用 ✅）— 文档 OCR 专家 (0.9B)
+- **⭐ PaddleOCR-VL 0.9B**（2026-05-31 发现，2026-06-01 更新至 v1.5/v1.6, 2026-06-01 验证 pip 可用 ✅，2026-06-01 首次部署实测）— 文档 OCR 专家 (0.9B)
   - **OmniDocBench v1.5: 94.5%** — 超越 Qwen2.5-VL-72B (87%)、Gemini 2.5 Pro (88%)、GPT-4o (75%)
   - Q4_K_M GGUF ~300MB (LM) + ~880MB (projector)，总量 ~1-1.5GB
   - **Ollama 已支持**: MedAIBase/PaddleOCR-VL:0.9b（Ollama 库可搜到）
-  - **pip 已可用**: `from paddleocr import PaddleOCRVL` ✅ PaddleOCR v3.6.0 自带，无需额外安装 — 可直接用于 screen_watcher handler 文本提取
+  - **pip 已可用**: `from paddleocr import PaddleOCRVL` ✅ PaddleOCR v3.6.0 自带
   - v1.5 (2026-01) 新增: text spotting + bbox, seal recognition, cross-page table merging
   - v1.6 (GitHub, 3 days before 2026-06-01) — 最新版本
   - 109 语言, NaViT dynamic resolution + ERNIE-4.5-0.3B LLM
   - Merged into llama.cpp b8110 (Feb 19, 2026)
   - **对 Hermes**: screen_watcher text extraction 本地跑，补齐 qwen3-vl:2b OCR 弱项
+
+  **⚠️ 2026-06-01 首次部署实测（pip 完整链路）**：
+  - ✅ `from paddleocr import PaddleOCRVL` 导入成功（paddleocr v3.6.0 自带）
+  - ✅ `pip3 install "paddlex[ocr]"` 完成额外依赖（18 个包：sentencepiece, tiktoken, scikit-learn, einops 等）
+  - ✅ `pip3 install paddlepaddle` 完成（paddlepaddle-3.3.1，核心推理框架）
+  - ⏳ **首次初始化自动下载模型权重**：19 个文件，~1GB，120s 内未完成下载（超时）
+  - **⏱ Timeout pitfall**：首次下载约需 3-5 分钟（网络正常时）。`terminal(timeout=120)` 不够，需设 300s 或提前完成下载
+  - **环境变量**：`PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK=1` 跳过首次主机检测（可选）
+  - **集成状态**：pip 链路完整，模型权重需首次下载（网络正常后可用，后续加载无需下载）
   - 详见 references/paddleocr-vl-0.9b.md
 - **⭐ Qwen 3.6（2026-05）** — 视觉内建于基座模型（无独立VL分支）
   - Qwen 3.6-27B dense（~17GB Q4_K_M）— 新SOTA本地视觉
@@ -451,6 +487,7 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
     - 49% unknown 场景=handler 的"低置信"信号，需要记忆注入或升级策略
     - logprob 置信度探测可直接应用于 scene classification（检查 VLM token 概率）
     - `Qwen3-VL 坐标约定`: [x,y] on **1000×1000 相对坐标 canvas**，像素映射 x_px=x/1000×W
+    - **⚠️ 2026-06-01 实测修正**：Qwen3-VL 实际使用 **normalized 0-999 scale**（非 0-1000），转换公式 `x_px = round(x/999×W)`。详见方向D的 Qwen3-VL 坐标约定章节。
   - 作者: vLLM Semantic Router Project / MBZUAI / McGill / AMD / Red Hat
   - 代码: github.com/vllm-project/semantic-router
   - 详见 references/avr-adaptive-vlm-routing-2026-06-01.md
@@ -524,6 +561,33 @@ curl -s "https://hacker-news.firebaseio.com/v0/topstories.json" -o /tmp/hn_ids.j
   - 两角色类比：领域专家（知道正确输出长什么样）× 工程师（知道怎么构建）
   - Hermes auto_execute 需要两种能力兼备
 - ⚠️ **SearXNG web_search 状态（2026-06-01 发现，2026-06-01 再次确认）**：SearXNG 返回 HTTP 502（网关错误），web_search 完全不可用。3 次连续调用均返回 502。ddgs + HN Firebase API + browser_navigate 为当前唯一可用降级路径。**注意**：如 ddgs 同时失败（超时返回空），browser_navigate + browser_console JS 提取是最后可行方案（已验证：arXiv 摘要页面、dev.to 文章、insiderllm.com 均可直接读取）。
+
+- ⭐ **VLAA-GUI（2026-06-01 发现, arXiv Apr 23）** — 77.5% OSWorld, 模块化 Stop-Recover-Search 框架
+  - 三大失败模式：过早终止 + 无产出循环 + 卡死，直接可集成到 handler Verify 阶段
+  - 详见 `references/vlaa-gui-a11y-compressor-ui-zoom-2026-06-01.md`
+
+- ⭐ **GPT-5.5 Computer Use Agent Harness（2026-06-01 发现, May 1）** — "模型不是产品，闭环才是"
+  - CUA 四步循环与我们的 screen_watcher→handler→auto_execute 架构完全一致
+  - Harness 必须强制执行安全边界，错误恢复由 harness 而非 prompt 决定
+  - 详见 `references/gpt55-harness-context-window-w20-codex-sudo-2026-06-01.md`
+
+- ⭐ **A11y-Compressor（2026-06-01 发现, arXiv May 1）** — a11y 树压缩至 22% tokens, +5.1% OSWorld
+  - 验证 observation compression 通用原则：降维不减质
+  - 详见 `references/vlaa-gui-a11y-compressor-ui-zoom-2026-06-01.md`
+
+- ⭐ **OSU-NLP-Group GUI Agents Paper List（2026-06-01 发现）** — 537 papers, Desktop 124 篇, Safety 29
+  - 网站版 osu-nlp-group.github.io/GUI-Agents-Paper-List 支持全文搜索+多轴过滤
+  - 持续跟踪 Desktop + safety/planning 关键词即可掌握方向 C 前沿
+  - 详见 `references/gpt55-harness-context-window-w20-codex-sudo-2026-06-01.md`
+
+- ⭐ **Context Window W20 报道（2026-06-01 发现）** — Hermes 被称作 "open-source agent OS"
+  - SOUL/memory/skills triad 被认定为行业最可复制蓝图（外部验证）
+  - MCP 全量加载 vs Code Mode: 150K→2K tokens（98.7% 缩减），验证 Skills 路线
+  - 详见 `references/gpt55-harness-context-window-w20-codex-sudo-2026-06-01.md`
+
+- ⭐ **Codex sudo Workaround（2026-06-01 发现）** — 914K views 的 agent 安全边界事件
+  - 验证动作分级框架（Silent/Logged/Confirmed/Blocked）是 DRY_RUN=False 的必要条件
+  - 详见 `references/gpt55-harness-context-window-w20-codex-sudo-2026-06-01.md`
 
 **方向 D — 执行（手眼配合）调研方向**
 - 本地工具链盘点：hermes-rpa（成熟）、computer_use、mcp_chrome_*（背景运行不抢焦点）
@@ -676,9 +740,33 @@ ACTION_WHITELIST = {
 - **⭐ DRS-GUI（CVPR 2026）** — Dynamic Region Search, 无训练 GUI grounding
   - ScreenSpot-Pro 提升 14%（无需训练的 grounding 方案）
 
-- **⭐ Qwen3-VL 坐标约定（GitHub #1560）** — 坐标系关键
-  - [x, y] on **1000×1000 相对坐标 canvas**（非像素绝对坐标）
-  - 像素映射：x_px = x/1000 × W, y_px = y/1000 × H
+- **⭐ SaaS-Bench（arXiv 2605.15777, May 2026）** — 真实 SaaS 工作流 CUA 评测
+  - 23个 SaaS 系统，6个专业领域，106 个任务
+  - 最强模型 <4% 端到端完成率
+  - 核心瓶颈：跨应用上下文维持 + 长程依赖 + 错误恢复
+  - 对 Hermes：验证单场景做好比跨场景重要；代码已开源可复现
+  - 详见 `references/pager-semantic-execution-gap-2026-06-01.md`（同session）
+
+- **⭐ PAGER（arXiv 2605.15963, May 2026）** — Semantic-Execution Gap: 精准GUI几何控制
+  - **核心发现**：通用模型 action type 准确率 >88%，但 task success <6%（Semantic-Execution Gap）
+  - 当前 GUI agent 建立在 **region-tolerant 范式**（附近像素均有效），但精准几何任务需要 point-level 精度
+  - 坐标误差沿依赖链级联传播 → 局部错误导致下游全部失效
+  - PAGER 框架：dependency-structured planning + pixel-grounded SFT + precision-aligned RL
+  - **结果**：4.1x task success 提升，step success 从 <9% 到 >62%
+  - **对 Hermes auto_execute**：坐标映射链（qwen3-vl:2b 归一化 0-999→像素坐标）是社区公认的瓶颈。Semantic-Execution Gap 概念可直接用于分析 dry-run 数据的动作识别 vs 空间精度差距
+  - 详见 `references/pager-semantic-execution-gap-2026-06-01.md`
+
+- **⭐ Qwen3-VL 坐标约定（DeepWiki 2026-06-01 实测修正）** — 坐标系关键
+  - [x, y] on **normalized 0-999 scale**（⚠️ 不是 1000×1000！早期 idle_learning 记录错误）
+  - 正确映射公式（Qwen mobile_agent.ipynb 第50行）：
+    ```python
+    def rescale_coordinates(point, width, height):
+        point = [round(point[0]/999*width), round(point[1]/999*height)]
+        return point
+    ```
+  - 除数用 **999** 不是 1000（0-based indexing：坐标范围 0-999 共 1000 个整数点）
+  - 来源：https://deepwiki.com/QwenLM/Qwen3-VL/5.2-spatial-understanding-and-2d-grounding
+  - ⚠️ Ollama 版 qwen3-vl:2b 是否沿用此坐标约定待验证（DeepWiki 面向 Transformers 版）
   - 对 DRY_RUN=False 切换最关键：VLM 输出需要归一化映射
 
 - **⭐ The Website Specification（HN 346pts, 2026-06-01 发现）**
@@ -776,7 +864,22 @@ ACTION_WHITELIST = {
   5. 验证 dry-run：`grep -c "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log`（应 > 0）
 - CDP直连方案已知可用：原生Python WebSocket连接9333，不依赖mcp-chrome-stdio bridge
 - **重要底层限制（2026-05-28 发现）**：cua-driver/macOS CGEventTap 对某些应用（Blender等）的event loop只接受cghidEventTap且前面有mouseMoved事件，需要短暂前台激活。"不抢焦点"承诺对这类应用不可实现，Hermes computer_use同理
-- **执行层四级断链（2026-05-29 发现）**：全链路在 cron 环境断在 screen_watcher 不运行
+- ⭐ **trycua/cua（2026-06-01 发现）** — 开源计算机使用基础设施，17.4k★，MIT
+  - Cua Driver：Rust + Swift，macOS 后台桌面驱动，CGEventTap + AX API（与 Hermes 相同架构）
+  - zoom→click 自动坐标映射链（`from_zoom=true`）— Hermes auto_execute 缺少的功能
+  - CuaBot：全球首个 multi-player computer-use，agent+human 双光标共存
+  - Lume：Apple Virtualization.Framework 的 macOS VM 管理
+  - Human-In-The-Loop：agent workflow checkpoint + 人工审批，与 SafeGround defer 策略一致
+  - Composite Agents：planner + executor 分离，验证 Hermes 架构
+  - 详见 `references/trycua-cua-openhuman-2026-06-01.md`
+
+- ⭐ **OpenHuman（2026-06-01 发现，韩 HN #1）** — 开源桌面 AI agent
+  - Always-On 上下文引擎（active window + clipboard + filesystem 三重监控）
+  - 跨应用自动化 pipeline + 插件架构 + Multi-LLM 后端 + 长程记忆
+  - 与 Hermes 定位对比：proactive assistant vs agentic execution framework
+  - 详见 `references/trycua-cua-openhuman-2026-06-01.md`
+
+**⚠️ 执行层四级断链（2026-05-29 发现）**：全链路在 cron 环境断在 screen_watcher 不运行
   ```
   screen_watcher (检测变化) → [断链：不运行]
   screen_trigger_handler (分析) → [断链：未被触发]
@@ -1064,7 +1167,7 @@ nomic-embed-text:latest                ❌ 已从本地移除
 - HuggingFace checkpoint：https://huggingface.co/apple/ml-fastvlm
 - 亮点：85x faster than 标准 ViT（官方说法）
 - WebGPU demo 已可在浏览器运行（transformers.js）
-- ⚠️ github.com blocked，无法 clone `apple/ml-fastvlm` 仓库研究细节
+- ⚠️ 之前 github.com blocked 无法 clone；2026-06-01 已恢复，可 clone `apple/ml-fastvlm` 研究
 
 ---
 
@@ -1183,6 +1286,7 @@ PYEOF
 - [2026-06-10 学习记录（方向C+生产验证）](./references/idle-learning-2026-06-10-session.md) — Negation fix 生产验证通过、screen_watcher 复活验证清单、"Friction=Focus" auto_execute 设计哲学、场景分布快照
 - [DRY_RUN=False 前置条件 R3 评估（2026-06-01 03:08）](./references/idle-learning-2026-06-01-r3.md) — R3 完整评估：747条dry-run、6条件诊断（✅③❌）、P0-P3改进计划、handler 代码结构摘要。条件①②达标，③动作多样性仅2种（RPA支持11种），④-⑥全部缺位
 - [DRY_RUN=False 切换准备条件（R2, 2026-06-01）](./references/dry-run-false-readiness-2026-06-01-r2.md) — 2026-06-01 R2 评估：ACTION_WHITELIST 平坦化核心瓶颈、6 条件对比、修复方向 — 6 个前置条件的完整评估（坐标映射/SafeGround/Guardrails）、handler lock 非残留发现、冷却竞争观测，供后续 idle_learning 执行和 auto_execute 开发参考
+- [trycua/cua + OpenHuman（2026-06-01）](./references/trycua-cua-openhuman-2026-06-01.md) — 开源计算机使用基础设施调研，Cua Driver/CuaBot/Lume/OpenHuman 完整分析
 - [GUI-Agent-Harness（2026-06-01）](./references/gui-agent-harness-2026-06-01.md) — Fzkuji 开源 GUI agent，OSWorld 79.8%，4-phase loop 含 Verify 阶段，Visual Memory 组件缓存，macOS-first
 - [Gemma 4 E4B 实测 + MobileExplorer + Bonsai Image 4B（2026-06-01）](./references/idle-learning-2026-06-01-r4-gemma4-e4b-mobile-explorer.md) — Gemma 4 E4B 57 tok/s 实测、日文 inline OCR、MobileExplorer 并行探索加速 23%、1-Bit Bonsai Image 4B 1.21GB、InsiderLLM May 2026 更新、系统快照
 - [H Company Runner H — H-VLM 3B 方法论（2026-06-01 阅读）](./references/h-company-runner-h-2026-06-01.md) — 专用 GUI VLM 在小模型（3B）上超越 10x 大模型，Runner H 0.1 达 67% WebVoyager。验证 qwen3-vl:2b 路线。
@@ -1192,7 +1296,11 @@ PYEOF
 - [Microsoft Agent Governance Toolkit（2026-06-01）](./references/microsoft-agent-governance-toolkit.md) — 生产级 Agent 治理框架，4 特权环模型 → 直接映射 Hermes Silent/Logged/Confirmed/Blocked 动作分级。MCP Security Gateway，OWASP Top 10 覆盖
 - [TRISHUL GUI Understanding Framework（2026-06-01）](./references/trishul-gui-understanding-2026-06-01.md) — Training-free 分层屏幕解析框架（HSP + SEED），纯视觉无需 DOM 元数据，ScreenSpot 超越 SoM。可直接集成到 handler 的 other/unknown 场景
 - [AutoFocus + GUI-Cursor + GUI-G²（2026-06-01）](./references/autofocus-gui-grounding-2026-06-01.md) — 三项最新 GUI grounding 进展：AutoFocus training-free 不确定性感知搜索（arXiv 2605.02630）、GUI-Cursor 交互式光标搜索 grounding（ICML 2026）、GUI-G² Gaussian 奖励建模（AAAI 2026）
+- [trycua/cua + OpenHuman（2026-06-01）](./references/trycua-cua-openhuman-2026-06-01.md) — 开源计算机使用基础设施调研，Cua Driver/CuaBot/Lume/OpenHuman 完整分析
 - [Unknown Scene Rate 按日期分片分析（2026-06-01）](./references/unknown-scene-date-analysis-2026-06-01.md) — 42% unknown 为历史污染，按日期分片后当前为 0%。含诊断命令、日志污染现象列表、DRY_RUN=False 过渡影响评估
+- [Dynamic Tiered AgentRunner — arXiv 2605.10223 (2026-05-11)](./references/agentrunner-dynamic-tiered-2026-06-01.md) — Risk-Adaptive Tiering / Separation of Powers / Verifier-Recovery 闭环，验证 Hermes 动作分级和 SILENT/LOGGED/CONFIRMED/BLOCKED 方向
+- [Agent Guardrails Production Field Guide (2026-03-06)](./references/agent-guardrails-production-2026-06-01.md) — Supergood Solutions，4 层 Guardrails 模型（Input/Action/Output/Behavior），80% 组织遇风险行为数据，验证非二元安全模型必要性
+- [2026-06-01 学习记录（方向B，凌晨）](./references/idle-learning-2026-06-01-session-n.md) — github 恢复后的首次 idle_learning 实测，Mano-P/GUI-Agent-Harness/Qwen-VLA 首次 GitHub 验证，ScreenParser YOLO/LocateAnything-3B HuggingFace 状态确认
 
 ---
 
