@@ -99,6 +99,7 @@ result = client.recall(bank_id="hermes", query="搜索query")
 `~/.hermes/current_context.json` — 跨会话JSON追踪文件
 ## 参考资料
 
+- [GitHub Push Protection 清理实战](./references/git-push-protection-cleanup-20260602.md) — API key历史清理，filter-branch vs 重建方案
 - [Cron Jobs 配置](./references/cron-jobs-config.md)
 - [Matt Pocock Skills + EvoMap 参考](./references/mattpocock-evomap.md)
 - [Web搜索后端配置](./references/web-search-backend-config.md)
