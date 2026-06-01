@@ -316,6 +316,7 @@ auto.locate_and_click('确认')        # OCR找字+点击
 **备用脚本**：`~/.hermes/scripts/browser_cdp.py`（Playwright CDP直连Chrome调试端口9333）
 
 ### 执行层：Browser-Use + Playwright 本地集成（2026-06-01 实测）
+### 执行层：Browser-Use + Playwright 本地集成（2026-06-01实测）
 
 **多平台AI专家一致推荐方案**：
 - DeepSeek/Gemini/豆包/ChatGPT/ChatGLM全都推荐 Browser-Use + Playwright + 本地VLM
@@ -348,20 +349,20 @@ from langchain_core.language_models.chat_models import BaseChatModel
 class OllamaChatModel(BaseChatModel):
     """Wrapper that adds provider and model_name to ChatOllama"""
     _llm: ChatOllama
-    
+
     def __init__(self, llm: ChatOllama, **kwargs):
         super().__init__(**kwargs)
         self._llm = llm
         self._provider = 'ollama'
         self._model = llm.model
-    
+
     @property
     def provider(self): return self._provider
     @property
     def model(self): return self._model
     @property
     def model_name(self): return self._model
-    
+
     def _llm_type(self) -> str: return "ollama"
     def _generate(self, **kwargs): return self._llm._generate(**kwargs)
     def _call(self, messages, **kwargs): return self._llm._call(messages, **kwargs)
@@ -414,6 +415,35 @@ agent = Agent(llm=llm, task='打开 example.com，告诉我页面标题')
 asyncio.run(agent.run())
 EOF
 ```
+
+### 执行层：Scrapling 网页解析库（2026-06-02验证入库）
+
+**安装命令**：
+```bash
+~/.hermes/hermes-agent/venv/bin/pip3 install "scrapling[all]"
+```
+
+**核心能力**：
+- **自适应解析**：网站结构变化时自动重定位元素，不依赖固定选择器
+- **隐身抓取（StealthyFetcher）**：基于curl_cffi，模拟真实浏览器指纹
+- **Cloudflare绕过**：能过其他平台的Cloudflare（1688除外）
+- **MCP服务器**：可作为MCP工具被其他Agent调用
+- **代理轮换**：内置代理池集成
+
+**1688实测结论（2026-06-02）**：
+- ❌ 1688登录墙无法绕过：Scrapling隐身抓取仍被重定向到login.taobao.com
+- 根因：1688登录状态检测基于阿里系Cookie，不是简单的TLS指纹
+- **主力方案：已登录Chrome CDP session**（browser工具已登录淘宝账号）
+
+**有效场景**：
+- 阿里巴巴国际站（无登录墙）
+- 慧聪网、中国制造网
+- 其他中文B2B平台
+- Cloudflare保护的网站
+
+**测试脚本**：`/tmp/1688_scrapling.py`（基础功能）、`/tmp/1688_parse.py`（自适应解析）
+
+**结论**：Scrapling作为browser CDP的**备用方案**，非主力。入库`~/.hermes/tools-inventory.md`。
 
 ### 执行层：Chrome双Profile体系（2026-06-01 修正）
 
@@ -588,11 +618,11 @@ EOF
 | references/js-inject-dom-labeling-2026-06-02.md | JS注入打标签DOM解析（2026-06-02实测） |
 | references/perception_loop_verification_20260531.md | 感知层闭环验证（2026-05-31实测） |
 | references/agent-tars-cli实测-20260530.md | Agent TARS CLI实测记录 |
-| references/1688-captcha-automation-20260530.md | 1688自动化验证码瓶颈 |
+| references/scrapling-verification-20260602.md | Scrapling验证入库（1688无效，备用B2B） |
 | references/computer-use-agents-leaderboard-2026-05-31.md | Computer Use Agents 2026 live leaderboard — Kimi K2.6(73.1%) beats human baseline(72.4%), Anthropic #1 HN, Playwright MCP, SWE-Agent |
 | references/computer-use-agents-2026-06-02.md | Computer Use & GUI Agents 2026 SOTA — trycua/cua, Agent-S, benchmarks, hybrid architectures |
 | references/ai-websites-evolution-advice-20260531.md | 6个AI网站第一轮建议 + 已实现组件 |
-| references/1688-captcha-automation-20260530.md | 1688自动化验证码瓶颈 |
+| references/scrapling-verification-20260602.md | Scrapling验证入库（1688无效，备用B2B） |
 
 ## AI Computer Use 三层架构（2026-05-31 新增）
 
