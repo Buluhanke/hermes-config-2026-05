@@ -75,7 +75,7 @@ macOS上容易出现多个Playwright版本（1.58.0/1.59.1/1.60.0）：
 | 工具 | 适用场景 | 状态 |
 |------|---------|------|
 | PyAutoGUI | 基础鼠标键盘 | ✅ hermes venv |
-| je_auto_control | AX树定位+精确点击 | ✅ Homebrew Python |
+| je_auto_control | AX树定位+精确点击 | ⚠️ 仅Homebrew Python，hermes venv无 |
 | Apple Vision OCR | 屏幕文字识别(60ms) | ✅ Homebrew Python |
 | PaddleOCR | 中文高精度OCR | ✅ hermes venv |
 
