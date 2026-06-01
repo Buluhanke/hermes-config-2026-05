@@ -167,9 +167,6 @@ python3 /tmp/hn_fast.py
 5. **gentic.news/computer-use**（✅ 2026-06-02 实测）Computer Use Agents SOTA 排行榜，覆盖 OSWorld-V / BrowseComp / WebVoyager 等 8 benchmark。方向 A 模型评估时用作 benchmark 对比，方向 B/D 作 landscape 巡检。
 6. **Ollama 官方 library**（ollama.com/library/）— browser_navigate 直接抓取 benchmark
 7. **ddgs CLI** — 快速关键词搜索
-8. **HN Firebase API** — 热点技术文章ark。方向 A 模型评估时用作 benchmark 对比，方向 B/D 作 landscape 巡检。
-6. **Ollama 官方 library**（ollama.com/library/）— browser_navigate 直接抓取 benchmark
-7. **ddgs CLI** — 快速关键词搜索
 8. **HN Firebase API** — 热点技术文章
 
 **产线健康巡检命令集**：
@@ -302,6 +299,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
            ```
        - **Check**: browser_navigate 到 `https://github.com/ZJU-REAL/Awesome-GUI-Agents/tree/main/` 查看文件树顶层目录，检查是否有新会议子目录（NeurIPS2026/、ACL2026/、CVPR2026/ 等）
      - **跨源去重**：子目录中的论文可能与 OSU-NLP YAML 或已有 reference 重叠，需用 arxiv_id 交叉验证
+     - **⚠️ 标题 HTML 标签陷阱（2026-06-02 实测）**：GitHub 的 README.md 渲染为 HTML 后，论文标题可能被 `<font style="color:...">` 等标签包裹。直接用 `grep -ci "$title"` 时匹配会失败（因为标题含隐藏 HTML）。**建议去重方法**：从 curl 原始内容中用 Python `re.sub(r'<[^>]+>', '', text)` 先剥离 HTML 标签，再用剥离后的纯文本标题做 grep 匹配。详见本次轮次 AAAI2026 扫描中的实战示范。
 
   1c. **ZJU README Updates 区独立扫描**（2026-06-02 新增）:
      - 主 README.md 顶部的 Updates 区包含**不在任何 Paperlist 子目录中的论文**
@@ -339,11 +337,20 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
 - **论文发现方法论**：arXiv browser 搜索 + OSU-NLP YAML 扫描 + ZJU Awesome-GUI-Agents raw README 扫描
 - **重复扫描去重**：使用 `scripts/direction-b-scan.py` 自动标记 KNOWN vs NEW，详见 `references/direction-b-dedup-technique.md`
 - **饱和确认处理**（2026-06-02 实测）：当第 4 次及以上增量扫描确认 0 新发现时（趋势 30→11→9→0），标记为完全饱和。后续方向 B 轮次执行以下降级流程：
-  1. **跳过 OSU-NLP YAML 全量/增量扫描**（已有 34+ 篇桌面论文全部覆盖）
-  2. ddgs CLI 2 个关键词搜索（`"GUI agent desktop 2026"` + `"computer use agent security 2026"`）检测是否有新论文发布
-  3. **gentic.news/computer-use 排行榜巡检**（2026-06-02 新增，2026-06-02 补充 curl 轻量法）：
-     - **轻量法（推荐）**：`curl -sf --max-time 10 "https://gentic.news/computer-use" | python3 -c "import sys,json,re; d=json.loads(re.search(r'<script type=\\\"application/ld+json\\\">(.*?)</script>', sys.stdin.read(),re.S).group(1)); [print(q.get('name',''),'→',str(q.get('acceptedAnswer',{}).get('text',''))[:120]) for q in d.get('mainEntity',{}).get('itemListElement',[]) if q.get('@type')=='Question']"` — 提取 FAQ 中的 SOTA 数据（Holo3/Kimi/UI-TARS 等），比 browser 快 10x，不消耗浏览器资源
-     - **浏览器法（备选）**：`browser_navigate` → `browser_console(expression='document.body.innerText.slice(0, 8000)')` — curl 被 blocked 时降级至此
+  1. **跳过 OSU-NLP YAML 全量/增量扫描**（已有 34+ 篇桌面论文全部覆盖），但保留**安全/跨域定向扫描**（targeted scan using `python3 scripts/direction-b-scan.py | grep -E "NEW.*security|NEW.*safety|NEW.*guardrail|NEW.*red teaming"`）。原因：OSU-NLP YAML 中的安全/跨域论文在 GUI 关键词过滤中仍可能产生 2-4 篇新发现（如 AutoElicit/MisActBench/AdvCUA/RiOSWorld），即使 GUI grounding 方向已饱和。安全论文使用不同关键词（safety/security/red teaming/guardrail），在标准 GUI 扫描中经常因 keyword overlap 不足被遗漏，但全量扫描的 keyword scoring 仍能命中。详见 `references/direction-b-dedup-technique.md`。
+     - **脚本是 canonical 去重源**：`scripts/direction-b-scan.py` 的 KNOWN_ARXIV 是 paper 覆盖度的权威记录。filesystem grep（learning_log + reference files）返回 0 匹配不一定代表论文未覆盖——KNOWN_ARXIV 可能已标记为 KNOWN。**优先运行 script 的 --incremental 模式做去重，而非手动 grep**。
+  2. ddgs CLI 搜索（多角度关键词轮换）— 检测盲区新论文发布
+     - **固定关键词**（每次运行）：`"GUI agent desktop 2026"` + `"computer use agent security 2026"`（共2个）
+     - **轮换关键词**（每次选1-2个不同的，避免长期仅固定2个导致盲区，2026-06-02 实测 WinDeskGround 需用不同角度才能发现）：
+       - `"GUI agent desktop computer use 2026 new paper arXiv"` — 找最新6月论文
+       - `"compact VLM GUI grounding on-device 2026 small model"` — 找小模型/端侧方向
+       - `"multi-window desktop GUI grounding benchmark 2026"` — 多窗口桌面方向
+       - `"human demonstration GUI agent training 2026"` — 示教训练方向
+       - `"multi-window desktop GUI grounding 2026"` — 多窗口桌面方向（已验证 WinDeskGround 命中）
+     - 轮换策略：固定关键词每次必查，轮换关键词从候选池中选2个，保证2个月覆盖全部角度
+  3. **gentic.news/computer-use 排行榜巡检**（2026-06-02 新增，2026-06-02 修正）：
+     - **⚠️ curl 轻量法已弃用**：页面 schema 为 WebSite/Organization 类型（非 FAQPage），不含 Question/mainEntity.itemListElement 结构。提取脚本静默返回空列表，不报错。**不要再用 curl JSON-LD 提取作为主要路径。**
+     - **浏览器法（推荐）**：`browser_navigate` → `browser_console(expression='document.body.innerText.slice(0, 8000)')` — gentic.news 是轻量静态页，加载快，不受 Firecrawl 配额限制。稳定可靠。
      - 追踪 Screen-level OS Control / Browser-only / Coding-focused 三类 SOTA 变化
      - 重点关注本地/开源 agent 新条目（Hermes 定位匹配）
   ⚠️ **gentic.news 核心洞察（2026-04-24 更新）**：编辑语 _\"the harness — scaffold + sandbox + verifier + recovery — matters more than the model. Independent tests show Cursor's scaffold adds 16pp over the raw model.\"_ — 直接验证 Hermes screen_trigger + RPA 架构方向正确。方向 A/B/D 通用参考文件：`references/gentic-news-computer-use-leaderboard-2026-04-24.md`
@@ -411,6 +418,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
      - **穿透方法**（已验证 ✅）：web_extract 返回 credits_exhausted 时，用 browser_navigate 替代。`document.body.innerText.slice(0, 10000)` 全量提取正文。
      - **已知高价值文章模式**：博客使用 article 标签结构，`browser_console(expression='document.body.innerText.slice(0, 8000)')` 可提取 80% 以上正文。若 snapshot 截断，用 CDP 分片提取。
      - **历史发现**：May 7, 2026 — CVE-2026-26030 (Semantic Kernel In-Memory Vector Store RCE) + CVE-2026-25592 (SessionsPythonPlugin 任意文件写入)。详见 `references/semantic-kernel-rce-cve-2026-26030-2026-06-02.md`
+     - **RAMPART + Clarity (May 20, 2026)**：微软开源两工具 — RAMPART 是 AI Agent 持续安全测试框架（pytest 接口，统计试验，组合评估器，红队发现→永久回归测试），Clarity 是结构化设计验证平台（.clarity-protocol/ markdown，AI Thinkers 多角度审查）。详见 `references/rampart-clarity-agent-safety-testing-2026-06-02.md`
      - **Hermes 架构相关性**：Microsoft blog 的 agent security 系列覆盖 Semantic Kernel / LangChain / CrewAI 框架脆弱性。Hermes 虽不使用 eval()，但 delegate_task subagent 自汇报不验证有同类架构脆弱性。
      - **每个发现必须产出风险矩阵**：
        | 维度 | 说明 |
@@ -418,14 +426,74 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
        | Direct risk | 当前产线/配置直接受影响？LOW/MED/HIGH + 理由 |
        | Indirect risk | 架构相似但有防护？LOW/MED/HIGH + 理由 |
        | Action | 明确措施：不改配置 / 新增 reference / 增强防护 |
-  2e. **Adversa AI Security Digest 扫描**（2026-06-02 新增，~30s）：
-     - browser_navigate `https://adversa.ai/blog/top-agentic-ai-security-resources-june-2026/` 获取最新月度安全摘要
+  2f. **Hermes 依赖链 CVE 扫描**（2026-06-02 新增，~30s）：
+     - **目标**：检查 Hermes 运行时依赖的工具/库是否存在已知 CVE
+     - **⚠️ 关键区分：venv vs 系统 Python（2026-06-02 实战教训）**：
+       - **Hermes gateway 使用自己的 venv**（`~/.hermes/hermes-agent/venv/`），不依赖系统 Python
+       - **系统 Python 的 pip 版本 ≠ Hermes venv 版本** — 例如：系统 Starlette 1.0.0 (affected by BadHost) vs Hermes venv Starlette 1.0.1 (已修复)
+       - **始终使用 venv 的 pip** 检查 Hermes 运行时依赖，而非系统 pip
+       - 系统 Python 依赖状态无关紧要（Hermes 不用系统 Python）
+     - **重点扫描项**：
+       - **Hermes gateway 依赖栈**：检查 venv 中的 Starlette/FastAPI/httpx 版本
+         ```bash
+         # ✅ 正确：检查 Hermes venv（不是系统 Python）
+         ~/.hermes/hermes-agent/venv/bin/pip show starlette 2>/dev/null | grep Version
+         ~/.hermes/hermes-agent/venv/bin/pip show fastapi 2>/dev/null | grep Version
+         # 或直接用 dist-info 目录确认
+         ls ~/.hermes/hermes-agent/venv/lib/python*/site-packages/starlette-*.dist-info/ 2>/dev/null
+         # ❌ 不要用系统 pip — Hermes 不使用系统 Python 的包
+         # pip3 show starlette   # ← 获取的是系统 Python 版本，和 Hermes 无关
+         ```
+       - **Ollama 网络绑定检查**（Go 二进制，无 Python 依赖）：
+         ```bash
+         lsof -iTCP -sTCP:LISTEN -P 2>/dev/null | grep ollama
+         ```
+         ⚠️ **Ollama 没有 Starlette 依赖** — Ollama 是 Go 二进制（Go 1.22+ 的 net/http），不使用 Python/Starlette。搜索 "Ollama Starlette CVE" 时，应检查 Ollama 的 Go HTTP 栈（如 Go net/http CVE），而非 Python 依赖。
+       - **Python 工具链**：检查 hermes-agent venv 中关键依赖（httpx, aiohttp, requests 等）的 CVE
+         ```bash
+         # ✅ 推荐：单次 Python 调用列出 venv 关键依赖版本
+         # 避免 for 循环多 pip show 调用（cron 上下文会误判为长进程）
+         $HOME/.hermes/hermes-agent/venv/bin/python3 -c "
+         import subprocess, sys
+         r = subprocess.run(['$HOME/.hermes/hermes-agent/venv/bin/pip', 'list', '--format=columns'],
+             capture_output=True, text=True, timeout=30)
+         # 过滤关键包
+         key_pkgs = ['httpx','aiohttp','requests','pydantic','uvicorn','fastapi','starlette',
+                     'websockets','httpcore','anyio','httptools']
+         for line in r.stdout.split('\n'):
+             for p in key_pkgs:
+                 if line.lower().startswith(p.lower()):
+                     print(line.strip())
+                     break
+         "
+         ```
+         ⚠️ **Cron 上下文陷阱（2026-06-02 实测）**：纯 bash `for` 循环中多次调用 `pip show`（如旧版 `for pkg in ...; do pip show ...; done`）会被 cron 上下文误判为启动长进程（返回 `"starting a long-lived server/watch process"` 错误）。**必须使用单次 Python 调用**（如上）一次性过滤所有目标依赖。备选：用 `/Users/aimac/.hermes/hermes-agent/venv/bin/pip list --format=columns | grep -iE "httpx|aiohttp"` 一行完成。
+       - **检查方法**：ddgs 关键词搜索 `"CVE <tool> <version> 2026"` 而非全量 CVE 数据库遍历
+       - 已知高危 CVE 记录写入 reference 文件，含风险矩阵（直接/间接/行动）
+     - **优先级**：高于通用安全新闻扫描（如果 CVE 影响 Hermes venv 依赖则直接威胁产线）
+     - **Hermes 映射**：即使 CVE 不直接导致 Hermes 被攻破（如 Ollama 默认无路径认证），依赖链暴露面仍值得追踪
+  2g. **Adversa AI Security Digest 扫描**（2026-06-02 新增，~30s）：
+     - URL 模式（按月更新）：`https://adversa.ai/blog/top-agentic-ai-security-resources-<month>-2026/`
+       - ⚠️ 每次执行时，URL 中的 `<month>` 应更新为当前月份（如 `july-2026`、`august-2026` 等）
+       - 检查方法：`browser_navigate` 到当前月 URL，若 404 则回退到上次已知有效 URL（即滞后一个月）
+       - 2026-06 已验证可用，2026-07 开始需尝试新 URL
      - **已验证可靠来源**：Adversa AI 独立发现了 SymJack（6个 AI coding agent symlink-hijack RCE）和 TrustFall（Claude Code/Cursor/Gemini CLI/GitHub Copilot 一键 RCE）
-     - **扫描方法**：用 `browser_console(expression='document.body.innerText.slice(0, 8000)')` 提取正文；或 `curl -sf --max-time 10 URL | python3 -c "import sys,re;text=re.sub(r'<[^>]+>',' ',sys.stdin.read());print(text[:3000])"` 快速提取
+     - **扫描方法**：用 `browser_console(expression='document.body.innerText.slice(0, 15000)')` 提取全量正文（8000 字符截断不足，建议 15000）。28 篇资源列表散落在页面各节，需从 Attacks → Agentic AI Defense → Vulnerabilities → Research → Framework → Exploitation → Threat Modelling 各节逐一提取标题。
      - **关注关键词**：SymJack / TrustFall / RCE / bypass / symlink / trust dialog / codesign / approval prompt
      - **Hermes 映射重点**：SymJack 的批准提示绕过逻辑直接映射到 Hermes 的 terminal() 沙盒绕过风险；TrustFall 的 trust dialog 回归缺陷映射到 delegate_task subagent 自汇报不验证问题
-     - **已知发现记录**：`references/adversa-ai-security-digest-june-2026.md`（含 SymJack + TrustFall 全量风险矩阵）
-     - **2026-06-02 实测：同一 digest 的 28 篇资源中有 8 篇未被之前扫描覆盖**（占比 29%）— 说明 Adversa digest 需要全量扫描而非仅头部提取。后续方向 C 轮次应确保从 digest 中提取全部 28 篇资源的标题，逐一 cross-reference learning_log 确认覆盖。
+     - **已知发现记录**：
+       - `references/adversa-ai-security-digest-june-2026.md`（SymJack + TrustFall 全量风险矩阵）
+       - `references/adversa-ai-june-2026-new-findings.md`（首次扫描发现的 8 篇未覆盖资源）
+       - 2026-06-02 二次全量扫描从同一 digest 中发现 12 篇未在 learning_log 中的新资源（含 multi-agent communication attack、agent worms、gemini-cli supply chain compromise 等高危），可见 Adversa digest 每轮扫描均能发现新内容，必须全量扫描。详见 learning_log 方向 C 巡检记录
+     - **每月全量扫描必要性**：Adversa digest 每月更新（每月第一篇或末篇），每次方向 C 轮次必须全量扫描所有 28+ 篇资源标题，逐一 cross-reference learning_log 确认覆盖。仅头部提取会导致遗漏（实测 29% 漏报率）。
+  2h. **webpro255/awesome-ai-agent-attacks 安全事件时间线扫描**（2026-06-02 新增，~30s）：
+     - 来源：`https://github.com/webpro255/awesome-ai-agent-attacks` — 2024-2026 年 AI agent 真实安全事件时间线（日期/影响/根因/CVE/来源）
+     - **已验证**：首次扫描覆盖 7 个未记录事件（LangChain SSRF / HexagonalRodent / Bitwarden CLI trojan / Xinference compromise / LMDeploy 13h exploit / CanisterSprawl worm / CSA survey）
+     - **扫描方法**：`browser_navigate` 到 raw.githubusercontent.com 的 README 路径 → `browser_console(expression='document.body.innerText.slice(0, 16000)')` 全量提取
+     - **关注关键词**：RCE / SSRF / prompt injection / sandbox escape / MCP / delegation / supply chain / tool poisoning
+     - **饱和判断**：检查仓库 last_updated 字段（README 中 "Last updated:"）。无更新则跳过；有更新则对比上次 entries 数量差异
+     - **Hermes 映射**：LMDeploy's 13h exploit window → AI 基础设施补丁时效性；CanisterSprawl npm→PyPI 跨生态传播 → agent 供应链风险
+     - **已知覆盖记录**：`references/awesome-ai-agent-attacks-timeline-2026-06-02.md`
      - **同一 digest 中新发现的 8 篇未覆盖资源**（2026-06-02）：
        - **MemMorph**: 内存中毒劫持 tool selection，不触及元数据即可偏移 Agent 行为
        - **Sleeper Memory Poisoning (Hidden in memory)**: 休眠记忆跨 session 触发，难以追溯 → Hermes memory 直接相关
@@ -711,6 +779,7 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/vocaela-500m-benchmarks.md` — Vocaela-500M GUI grounding
 - `references/ui-tars-desktop-research.md` — UI-TARS Desktop
 - `references/mcp-is-dead-analysis.md` — MCP vs Skills analysis
+- `references/badhost-cve-2026-48710-starlette-2026-06-02.md` — CVE-2026-48710 BadHost: Starlette <1.0.1 Host header auth bypass，Ollama 0.24.0 使用 Starlette 1.0.0（受影响），方向 C 安全参考
 - `references/microsoft-agent-governance-toolkit.md` — 4-privilege ring governance
 - `references/safepred-predictive-guardrail-2026-06-01.md` — Predictive guardrails
 - `references/avr-adaptive-vlm-routing-2026-06-01.md` — AVR 3-tier routing
@@ -762,3 +831,5 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/mcp-prompt-injection-empirical-study-2026.md` — MCP Prompt Injection 实证研究 (2603.21642): 7 大 MCP 客户端首篇对比，方向 C 安全参考
 - `references/ui-s1-semi-online-rl-gui-2026-06-02.md` — UI-S1 (2509.11543): Semi-online RL for GUI agents，方向 B 新发现 + 方向 D auto_execute 参考
 - `references/a2a-contagion-agent-communication-security-2026.md` — A2A Contagion: Agent-to-Agent 通信安全（语义防火墙/GAF/mTLS/OWASP），方向 C HIGH 风险参考
+- `references/rampart-clarity-agent-safety-testing-2026-06-02.md` — Microsoft RAMPART + Clarity 开源 Agent 安全测试/设计验证框架 (May 2026)，方向 C 架构参考
+- `references/windeskground-multi-window-benchmark-2026-06-02.md` — WinDeskGround (arXiv 2605.16402) 多窗口桌面 GUI grounding 基准，方向 B 新发现

@@ -53,8 +53,11 @@ KNOWN_ARXIV = {
     '2511.04307', '2512.16295', '2509.23866', '2508.14040',
     '2510.04673', '2510.02250', '2505.21964', '2505.18829',
     '2505.19897',
-    # Known safety references
+    # Known safety references (covers all discovered as of 2026-06-02)
     '2602.08995', '2602.08235',
+    # direction-b-cross-domain: security/safety papers found via full scan after saturation
+    '2510.06607',   # AdvCUA — MITRE ATT&CK CUA security benchmark
+    '2506.00618',   # RiOSWorld — CU misuse risk benchmark
     # Known from other reference files
     '2508.05615', '2506.07672', '2503.15661',
 }
