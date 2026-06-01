@@ -281,9 +281,12 @@ hermes cron update <job_id> --model deepseek-v4-flash --provider deepseek
 - Colima 不是重要组件，**待机时立即停掉**
 - 检查：`colima list` → 有容器才保留
 
-**Ollama 已退出** — 2026-06-01凌晨决定不用本地模型（内存占用太大）
-- 进程可能残留：`ps aux | grep ollama | grep -v grep` → 有则 `pkill -9 -f ollama`
-- VLM 能力依赖云端模型，本地备用方案已废弃
+**Ollama 仍在运行** — 用于 screen_watcher VLM 场景分类（qwen3-vl:2b）。
+- 2026-06-01 曾考虑停用，但 qwen3-vl:2b (1.89GB) 配合 YOLO 预分类后内存可控（~2.7GB 运行时），未停用。
+- 进程检查：`ps aux | grep [o]llama` — 有输出 = 正常运行
+- 本地模型检查：`curl -sf http://127.0.0.1:11434/api/tags` — 应返回 qwen3-vl:2b + qwen2.5:1.5b
+- 系统 force kill 诊断：检查 `/api/tags` 不可用 + 日志中 unknown 率异常上升 -> `open -a Ollama && sleep 5` 恢复
+- 内存释放（仅非必要时）：`pkill -9 -f ollama`（screen_watcher 关联中断）
 
 ### Mac资源清理（定期执行）
 

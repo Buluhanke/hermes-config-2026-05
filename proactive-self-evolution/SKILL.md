@@ -466,6 +466,49 @@ ChatGPT / Claude.ai / Perplexity 均返回"正在进行安全验证"，**无法�
 - **归档标准**：Vision_Lab（工具）+ Brain_Lab（思路）+ gaps_known.json更新
 - **通知标准**：已验证的重大突破→QQ；未验证的发现→静默存档等周五汇总
 
+## 真人化模式 — Hermes不拥有商业数据（2026-06-02确立）
+
+**核心原则**：Hermes是系统管理者，不是业务数据库。供应商/采购/公司相关记忆归用户，不归Hermes。
+
+| 数据类型 | 归属 | Hermes行为 |
+|---------|------|-----------|
+| 供应商名称、价格、评价 | 用户 | ❌ 不记忆，1688实时搜 |
+| 公司名、业务线 | 用户 | ❌ 不记忆 |
+| 采购案例、谈判记录 | 用户 | ❌ 不记忆 |
+| 系统配置、工具路径 | Hermes | ✅ 永久记忆 |
+| 学到的技术/工具用法 | Hermes | ✅ 永久记忆 |
+| 真人化行为准则 | Hermes | ✅ 永久记忆 |
+
+**触发**：用户说"跟采购/1688相关全部删除" → 立即执行完整memory cleanse protocol：
+1. `rm -rf ~/.hermes/supplier_memory/ ~/.hermes/market_memory/ ~/.hermes/tactics_memory/`
+2. `fact_store(action='list')` → 删所有business相关fact_id
+3. 重写 memory.md + user.md，保留系统配置，删除用户/公司/业务信息
+4. 验证：fact_store无业务内容
+
+## 浏览器CDP正确用法（2026-06-02实战教训）
+
+**原则**：文字提取优先，截图仅备用。
+
+优先顺序：
+1. `web_extract` — 最快，用于静态页面
+2. `browser_get_web_content` — 结构化内容
+3. **CDP Runtime.evaluate** — 直接DOM查询，最可靠（SPA页面）
+4. `browser_vision` — 最后才用：动态渲染、CAPTCHA、富文本
+
+**ChatGPT/豆包等AI网站对话采集**：
+```python
+# 通过CDP直接读DOM，避免截图
+import urllib.request, json, websocket
+
+with urllib.request.urlopen('http://127.0.0.1:9222/json/list') as f:
+    tabs = json.load(f)
+ws = websocket.create_connection(f"ws://127.0.0.1:9222/devtools/page/{tab_id}", timeout=15)
+ws.send(json.dumps({"id":1,"method":"Runtime.enable"}))
+ws.send(json.dumps({"id":2,"method":"Runtime.evaluate","params":{"expression":"document.querySelectorAll('[data-message-author-role]')","returnByValue":True}}))
+```
+
+**何时用截图**：页面是Canvas/WebGL渲染、CAPTCHA验证、CDOM无法穿透的富文本。
+
 ## 问题处理原则
 
 | 情况 | 做法 |

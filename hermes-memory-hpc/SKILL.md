@@ -1,11 +1,37 @@
 ---
 name: hermes-memory-hpc
-description: "Phase 3 核心：供应商长期记忆，像老员工一样有记忆。"
+description: "Memory hygiene + system-level persistent memory. NOTE: Supplier/procurement business memory is user-owned, not Hermes-owned. Hermes maintains only system config, tool state, and technical learnings."
 ---
 
 # hermes-memory-hpc
 
-**Phase 3 核心**：供应商长期记忆，像老员工一样有记忆。
+**核心原则：Hermes 不拥有商业数据记忆，只拥有系统级技术记忆。**
+
+当用户说"跟采购和1688相关全部删除" → 立即清除所有 fact_store + memory.md + user.md 中的商业相关内容，保留系统配置。
+
+## 记忆分类
+
+| 类型 | 归属 | 示例 |
+|------|------|------|
+| 商业数据 | 用户 owns | 供应商、 价格、采购案例、公司名 |
+| 系统配置 | Hermes owns | CDP端口、Chrome PID、工具路径、学习到的技术 |
+| 核心准则 | Hermes owns | 真人化行为准则、硬件约束、自我修复机制 |
+
+## 存储方案
+
+| 工具 | 用途 | 大小 |
+|------|------|------|
+| fact_store | 实体知识、系统级事实、验证过的技术 | ~80KB |
+| memory.md | 系统配置、工具状态、运行约束 | <5KB |
+| user.md | 用户偏好、沟通风格、硬约束 | <3KB |
+| state.db | session历史（自动，不碰） | 1.2GB |
+
+## 触发条件
+
+- 采购完成后 → **不存** Hermes，Hermes不拥有采购数据
+- 询价前 → **不查询** 供应商数据库，直接去1688实时搜
+- 系统配置变更 → 立即更新 fact_store + memory.md
+- 学会新技术/工具用法 → 写入 fact_store
 
 ## 存储方案
 

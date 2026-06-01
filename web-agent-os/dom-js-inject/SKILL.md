@@ -315,6 +315,176 @@ ps aux | grep -i chrome | grep -v grep
    ```
 2. 然后用 `dom-js-inject` 的 `cdp_ws_client.py` 连接
 
+### 问题G（2026-06-01 新增）：启动用户Chrome调试端口的正确方式
+
+**教训**：不要 kill 用户的 Chrome 进程！重启会丢失所有标签页和登录态。
+
+**错误做法**：
+```bash
+pkill -f "Google Chrome"  # ❌ 会杀掉用户所有标签页
+open -a "Google Chrome" --args --remote-debugging-port=9222  # ❌ open 不接受 --args
+```
+
+**正确做法**：
+- 如果用户Chrome已在运行 → **直接用它**，不需要重启，配置 `cdp_url: 'http://127.0.0.1:9222'` 即可
+- 如果必须新开调试Chrome（用户明确说"可以重启"时）：
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir="/Users/aimac/Library/Application Support/Google/Chrome/Default" \
+  --no-first-run --no-default-browser-check --remote-allow-origins=*
+```
+
+**关键标志**：
+- `--remote-allow-origins=*` — 允许 WebSocket 从任何 origin 连接
+- `--user-data-dir` 指定用户的 Default profile，保留已登录状态
+
+**读取AI网站对话内容（如ChatGPT、豆包、智谱清言）：用 CDP Runtime.evaluate，不截图**
+
+```python
+import websocket, json, urllib.request
+
+# 获取目标标签页
+with urllib.request.urlopen('http://127.0.0.1:9222/json/list') as f:
+    tabs = json.loads(f.read())
+tab_id = tabs[0]['id']
+
+ws = websocket.create_connection(f"ws://127.0.0.1:9222/devtools/page/{tab_id}", timeout=15)
+ws.send(json.dumps({"id":1,"method":"Runtime.enable"})); ws.recv()
+
+# 用JS提取页面对话内容（ChatGPT为例）
+ws.send(json.dumps({
+    "id": 2,
+    "method": "Runtime.evaluate",
+    "params": {
+        "expression": """
+(function(){
+    var items = document.querySelectorAll('[data-testid*="conversation"] article, .markdown-comment, [class*="assistant"]');
+    var texts = [];
+    items.forEach(function(el){
+        if(el.innerText.trim()) texts.push(el.innerText.substring(0,3000));
+    });
+    return JSON.stringify(texts.slice(-6));
+})()
+""",
+        "returnByValue": True
+    }
+}))
+msg = json.loads(ws.recv())
+val = msg.get('result',{}).get('result',{}).get('value','')
+if val:
+    texts = json.loads(val)
+    for t in texts:
+        print(t[:1500])
+ws.close()
+```
+
+**什么时候用这个 vs. 截图：**
+| 场景 | 正确方式 |
+|------|---------|
+| AI网站对话内容（ChatGPT、豆包等） | CDP Runtime.evaluate（文本提取） |
+| 动态渲染页面（React/Vue SPA） | CDP Runtime.evaluate |
+| 页面有验证码/CAPTCHA | browser_vision 截图 |
+| 表单/列表/普通网站 | dom_tag_and_extract |
+
+**读取AI网站对话内容（如ChatGPT、豆包、智谱清言）：用 CDP Runtime.evaluate，不截图**
+
+> ⚠️ **教训（2026-06-02）**：AI网站内容在DOM里，直接提取文本。走截图是绕弯路，token消耗大且慢。但很多AI网站用shadow DOM，标准DOM查询返回空——需要递归遍历shadowRoot。
+
+```python
+import websocket, json, urllib.request
+# 获取目标标签页
+with urllib.request.urlopen('http://127.0.0.1:9222/json/list') as f:
+    tabs = json.loads(f.read())
+tab_id = tabs[0]['id']
+
+ws = websocket.create_connection(f"ws://127.0.0.1:9222/devtools/page/{tab_id}", timeout=15)
+ws.send(json.dumps({"id":1,"method":"Runtime.enable"})); ws.recv()
+
+# 递归遍历shadow DOM，提取所有文本（通用方法）
+ws.send(json.dumps({
+    "id": 2,
+    "method": "Runtime.evaluate",
+    "params": {
+        "expression": """
+(function(){
+    function extractText(node, depth) {
+        if(depth > 8) return '';
+        var texts = [];
+        if(node.nodeType === 3 && node.textContent.trim()) {
+            texts.push(node.textContent.trim());
+        }
+        if(node.shadowRoot) {
+            Array.from(node.shadowRoot.childNodes).forEach(function(child){
+                texts.push(extractText(child, depth+1));
+            });
+        }
+        if(node.childNodes) {
+            Array.from(node.childNodes).forEach(function(child){
+                texts.push(extractText(child, depth+1));
+            });
+        }
+        return texts.join(' ');
+    }
+    return extractText(document.body, 0).substring(0, 8000);
+})()
+""",
+        "returnByValue": True
+    }
+}))
+msg = json.loads(ws.recv())
+val = msg.get('result',{}).get('result',{}).get('value','')
+print(val[:3000] if val else "空")
+ws.close()
+```
+
+**什么时候用这个 vs. 截图：**
+| 场景 | 正确方式 |
+|------|---------|
+| AI网站对话内容（ChatGPT、豆包等） | CDP Runtime.evaluate + 递归shadow DOM（文本提取） |
+| 动态渲染页面（React/Vue SPA） | CDP Runtime.evaluate |
+| 页面有验证码/CAPTCHA | browser_vision 截图 |
+| 表单/列表/普通网站 | dom_tag_and_extract |
+
+**正确判断流程（按顺序，禁止跳过）：**
+1. `web_extract` 或 `browser_get_web_content` → 有内容？✅ 直接用
+2. CDP Runtime.evaluate + 递归shadow DOM JS → 有内容？✅ 直接用
+3. 以上皆空或不完整 → `browser_vision` 截图 ✅（最终兜底）
+
+**教训（2026-06-02）**：AI网站内容在DOM里，直接提取文本。走截图是绕弯路，token消耗大且慢。
+
+### 问题H（2026-06-01 新增）：accessibility Tree 为空的正确解读
+
+**现象**：`Accessibility.getFullAXTree` 返回 0 节点，但 `DOM.getDocument` 正常。
+
+**根因**：React/Vue 单页应用（SPA）渲染时机问题。ChatGPT 等 AI 网站使用客户端渲染，页面加载早期 DOM 几乎为空，accessibility 树也为空。
+
+**验证 CDP 连接是否正常（不依赖 accessibility）**：
+```python
+import websocket, json, urllib.request
+
+with urllib.request.urlopen('http://127.0.0.1:9222/json/list') as f:
+    tabs = json.loads(f.read())
+chatgpt_tab = [t for t in tabs if 'chatgpt' in t.get('url','') and t.get('type')=='page'][0]
+tab_id = chatgpt_tab['id']
+
+ws = websocket.create_connection(f"ws://127.0.0.1:9222/devtools/page/{tab_id}", timeout=15)
+ws.send(json.dumps({"id":99,"method":"Runtime.enable"})); ws.recv()
+
+# 测试1：页面标题
+ws.send(json.dumps({"id":2,"method":"Runtime.evaluate","params":{"expression":"document.title","returnByValue":True}}))
+print(json.loads(ws.recv()))
+
+# 测试2：DOM根节点
+ws.send(json.dumps({"id":3,"method":"DOM.getDocument","params":{"depth":2}}))
+result = json.loads(ws.recv())
+print(f"根节点: {result['result']['root']['nodeName']}")
+
+ws.close()
+```
+
+**结论**：accessibility tree 空白 ≠ CDP 连接失败。CDP HTTP 和 WebSocket 都通才是真通。
+
 ### 问题D（2026-06-01 新增）：macOS Chrome Keychain 加密导致 browsercookie 失效
 
 **现象**：`browsercookie` 库调用后超时（60s），无法读取任何 cookie。

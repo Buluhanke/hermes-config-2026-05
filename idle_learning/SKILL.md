@@ -20,8 +20,12 @@ description: >
 ```
 
 **AI专家网站咨询方法论**：遇到不熟悉的领域/问题，直接去AI网站客户端"请教"。
-可用站点（按优先级）：Gemini(gemini.google.com) ✅ 免登录 > 豆包(doubao.com) ✅ 免登录 > 其他需登录跳过。
-详见 `references/ai-expert-websites-methodology.md`
+可用站点（按优先级）：ChatGPT ✅ 已登录 > 豆包 ✅ 已登录 > DeepSeek ✅ 已登录 > Gemini ✅ 已登录 > 其他需登录跳过。
+详见 `references/ai-website-access.md`（核心方法：CDP Runtime.evaluate，不用截图）
+
+**⚠️ 致命陷阱（2026-06-02 用户直接纠正）：不要默认用截图！**
+用户原话："你方向都不对了，为什么浏览器需要截图去识别"
+正确的真人化行为：收到任务后先想用什么工具最轻量，而不是默认最先进的工具。截图/VLM是最后手段，不是第一选择。
 
 **触发场景**：
 - 遇到技术问题不知如何下手 → 先问AI网站获取知识
@@ -78,6 +82,10 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 3. **browser_navigate + browser_console JS提取** → 获取文章内文（绕过 Firecrawl 费用）
    - `document.querySelector("article").innerText.slice(0, 5000)` 分片提取
    - 比 snapshot 更可靠（snapshot 8000 字符截断），比 web_extract 更快
+4. **browser_navigate 替代 web_extract** → 当 web_extract 返回 "Payment Required" (credits exhausted) 时
+   - 直达页面：research 博客、arxiv 摘要、官方文档均可全量读取
+   - browser_snapshot 直接返回页面文本（arxiv、Apple ML Research 已验证 ✅）
+   - 跨站路由规则：不同域名独立测试，一个 blocked 不影响其他
 
 **Cron 模式特殊注意**：定时任务环境下 web_search 易 credits 用尽。每次轮次开始时默认走降级路径——先用 ddgs + HN Firebase API。
 
@@ -152,16 +160,30 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log
 
 **Probe**:
 ```bash
-ps aux | grep -E "[s]creen_watcher|[o]llama"   # processes alive?
+ps aux | grep -E "[o]llama"                     # ollama serve alive?
 ls -lt ~/.hermes/screenshots/current.png        # screenshot fresh?
 curl -sf --max-time 5 http://127.0.0.1:11434/api/tags | python3 -c "
 import sys,json; d=json.load(sys.stdin)
 for m in d.get('models',[]): print(m['name'], round(m['size']/1e9,2), 'GB')
 "                                               # models loaded?
 ls ~/.hermes/screenshots/.handler_lock 2>/dev/null || echo "no_lock"
+# --- YOLO & scene stats ---
+DATE=$(date +%Y-%m-%d)
+echo "--- YOLO pre-class ---"
+grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep "YOLO预分类:" | awk -F'YOLO预分类: ' '{print $2}' | awk '{print $1}' | sort | uniq -c | sort -rn
+echo "--- scene types ---"
+grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep "场景类型:" | awk '{print $NF}' | sort | uniq -c | sort -rn
+echo "--- unknown count / total triggers ---"
+UNK=$(grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep -c "场景类型: unknown" 2>/dev/null || echo 0)
+TOT=$(grep -c "$DATE" ~/.hermes/logs/screen_trigger.log 2>/dev/null || echo 0)
+echo "unknown: $UNK / total: $TOT"
+echo "--- dry-run count ---"
+grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep -c "AUTO-EXEC-DRY" 2>/dev/null || echo 0
+echo "--- gateway pollution ---"
+grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gateway_log"
 ```
 
-**Pass criteria** (all must green): screen_watcher PID ✓ | screenshot <24h ✓ | qwen3-vl:2b ✓ | no_lock ✓
+**Pass criteria** (all must green): Ollama PID ✓ | screenshot <24h ✓ | qwen3-vl:2b loaded ✓ | no_lock ✓ | unknown rate < 10% ✓ | YOLO idle skips > 0 ✓
 
 **Report template**:
 ```markdown
@@ -214,16 +236,41 @@ ls ~/.hermes/screenshots/.handler_lock 2>/dev/null || echo "no_lock"
 - **论文发现方法论**：arXiv browser 搜索 + OSU-NLP YAML 扫描
 - **最新论文**：详见 `references/direction-b-papers-2026-06.md` 和 `references/direction-b-papers-2026-06-02.md`
 
+**⚠️ 降级路径（OSU-NLP + HN 均无结果时，已验证 2026-06-01）**：
+当 OSU-NLP YAML 被阻塞且 HN Firebase 无相关热点时，采用以下二级降级链：
+1. **ddgs CLI 关键词搜索** → `ddgs text -q "GUI agent small on-device 2026 compact VLM grounding" -m 5`
+   - 比泛泛搜索更有效：指定年份 + 具体技术栈 + 型号参数
+2. **browser_navigate 直达研究机构页面** → 当 web_extract 返回 credits-exhausted 时，用 browser_navigate 替代
+   - Apple ML Research: machinelearning.apple.com/research/<topic> ✅ 可读
+   - arXiv: arxiv.org/abs/<id> ✅ 完整摘要可读
+   - 跨站路由独立测试：raw.githubusercontent.com blocked ≠ 其他站点 blocked
+3. **关键词评分过滤**同上（写 .py 文件执行），适用于 ddgs 搜索结果
+4. **先在已有 reference 文件中搜索论文标题/arxiv_id 确认未覆盖**，再写入新文件
+
 **方向 C — 决策操作（Production Guardrails / 规划层）**
 - **目标**：安全 guardrail 前沿追踪 + 产线健康巡检
 - **标准巡检协议**（5 步，~2-3 分钟）：
   1. **HN Firebase API 安全告警巡检** (~20s)：top 15 stories，过滤 promptarmor/agent/safety/security 关键词
-  2. **PromptArmor 扫描** (~60s)：browser_navigate promptarmor.com/resources/threat-intelligence → JS 提取
+  2. **PromptArmor 扫描** (~60s)：
+     - browser_navigate promptarmor.com/resources/threat-intelligence → browser_console JS 提取
+     - **⚠️ 已知陷阱：侧栏文章链接点击会重定向到 chatgpt.com！** 不要在侧栏列表页点击文章链接。
+       ✅ 正确做法：从提取页面文本获取完整 URL，直接 `browser_navigate` 到文章路径（如 `/resources/unpatched-ollama-vulnerabilities-phishing-overlays-and-data-exfiltration`）
+     - **优先扫描文章**（按重要性降序）：
+       a. Ollama vulnerabilities（本地运行，直接相关）
+       b. Claude Code / Cursor plugin hijacking（skills/plugin 架构，Hermes 高风险）
+       c. Computer Use / CUA attacks（screen_trigger 执行层）
+       d. Agent data exfiltration / sandbox escape（通用 agent 安全）
+     - **每个发现必须产出风险矩阵**：
+       | 维度 | 说明 |
+       |------|------|
+       | Direct risk | 当前产线/配置直接受影响？LOW/MED/HIGH + 理由 |
+       | Indirect risk | 架构相似但有防护？LOW/MED/HIGH + 理由 |
+       | Action | 明确措施：不改配置 / 新增 reference / 增强防护 |
   3. **OSU-NLP YAML 扫描** (~40s，覆盖完整时可跳过)
   4. **产线健康检查** (~30s)：日期分片统计场景分布、unknown率、YOLO预分类、handler lock
-  5. **对照记录** (~20s)：对比新发现与现有 references
-- **产出要求**：至少一条可执行改进（或确认"无改进必要"）
-- **最新论文/发现**：详见 `references/projguard-safety-monitoring-2026-06-01.md`、`references/toctou-attacks-cua-2026-06-01.md` 等
+  5. **对照记录** (~20s)：搜索现有 references 确认未覆盖（搜索 `promptarmor`/`ollama.*vulnerab`/`agent.*injection` 等关键词）
+- **产出要求**：至少一条可执行改进（或确认"无改进必要"），每个发现带风险矩阵评估
+- **最新论文/发现**：详见 `references/projguard-safety-monitoring-2026-06-01.md`、`references/toctou-attacks-cua-2026-06-01.md`、`references/promptarmor-ollama-vulnerabilities-2026-06-02.md`、`references/claude-code-marketplace-plugin-hijacking-2026-06-02.md` 等
 
 **方向 D — 手眼配合（执行层）**
 - **目标**：动作执行能力评估 + 执行层改进
@@ -232,12 +279,16 @@ ls ~/.hermes/screenshots/.handler_lock 2>/dev/null || echo "no_lock"
      ```bash
      grep "AUTO-EXEC-DRY" ~/.hermes/logs/screen_trigger.log | wc -l
      ```
-  2. 备份版本对比 — 检查 handler whitelist 是否有变更（影响 Jun 1 后的动作分布分析）：
+  2. 备份版本对比 — 检查 handler whitelist 是否有变更（影响动作分布分析的时间分片归因）：
      ```bash
      # 对比当前与备份的 ACTION_WHITELIST
-     grep -A 12 "^ACTION_WHITELIST" ~/.hermes/scripts/screen_trigger_handler.py | head -15
-     grep -A 12 "^ACTION_WHITELIST" ~/.hermes/scripts/screen_trigger_handler.py.bak.* | head -15
+     grep -A 12 "^ACTION_WHITELIST" ~/.hermes/scripts/screen_trigger_handler.py
+     for bak in ~/.hermes/scripts/screen_trigger_handler.py.bak.*; do
+       echo "=== $bak ==="
+       grep -A 12 "^ACTION_WHITELIST" "$bak"
+     done
      ```
+     **验证技巧**：当发现异常事件（如 "wininfo for scene=other"），一定要按小时分片确认事件时间。如果全部发生在 handler 最近一次修改时间之前，则已被修复 —— 不要误报为当前问题。
   3. 动作多样性分析：
      ```bash
      # 按日期分片，避免历史数据干扰
@@ -288,6 +339,12 @@ ls ~/.hermes/screenshots/.handler_lock 2>/dev/null || echo "no_lock"
 - 诊断：`ps aux | grep [o]llama` — 无输出 = 进程已挂
 - 修复：`open -a Ollama && sleep 5 && curl -sf --max-time 3 http://127.0.0.1:11434/api/tags`
 - idle_learning 第一步检查清单必须包含 Ollama 进程存活检查
+
+**⚠️ Ollama /api/ps 为空但 /api/tags 有模型（2026-06-01 实测）**：
+- `/api/ps` 返回空列表 ≠ 模型未安装/不可用
+- 原因：`/api/ps` 只显示**当前已加载到 VRAM 的活跃模型**；`/api/tags` 显示**已拉取到本地的所有模型**
+- qwen3-vl:2b 在 cron 环境下很少保持持续加载状态（无推理请求时 Ollama 自动卸载）
+- **正确做法**：使用 `/api/tags` 检查模型是否存在，不使用 `/api/ps` 做存在性判定
 
 **⚠️ Ollama API 端点关键陷阱（2026-05-30 实测）**：
 - `/api/generate` 处理 1920x1080 截图需 41.6s
@@ -422,6 +479,8 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 
 ## 主要参考文件
 
+- `references/ferret-ui-lite-2026-06-01.md` — Apple Ferret-UI Lite 3B compact GUI agent
+- `references/goclick-230m-gui-grounding-2026-06-01.md` — GoClick 230M encoder-decoder GUI grounding VLM
 - `references/computer-use-2026-sota-zylos.md` — Computer Use & GUI Agents 全貌
 - `references/pager-semantic-execution-gap-2026-06-01.md` — Semantic-Execution Gap
 - `references/toctou-attacks-cua-2026-06-01.md` — TOCTOU attacks + PUSV defense
