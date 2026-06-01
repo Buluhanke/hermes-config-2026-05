@@ -51,26 +51,29 @@ version: 2026-05-31
 - 不要解释过程，只说结论+问题+建议
 ```
 
-## LTM 三层记忆（已重建 2026-05-31）
+## LTM 三层记忆（已废弃，2026-06-02 迁移到 GBrain）
 
-实际文件位置：
-- `~/.hermes/personality.md` — 性格设定（重建）
-- `~/.hermes/ltm/episodic/` — 情景记忆（事件存档）
-- `~/.hermes/ltm/concepts/` — 概念记忆
-- `~/.hermes/ltm/skills/` — 程序记忆
-- `~/.hermes/ltm/semantic.json` — `{"facts": []}`
-- `~/.hermes/ltm/procedural.json` — `{"procedures": []}`
-- `~/.hermes/scripts/ltm.py` — LTM框架（remember/recall/memorize/learn）
+**旧的 LTM 框架（已废弃）**：
+- `~/.hermes/personality.md`
+- `~/.hermes/ltm/episodic/` / `concepts/` / `skills/`
+- `~/.hermes/scripts/ltm.py`
 
-API:
-```python
-from ltm import remember, recall, memorize, learn
-remember("完成采购", context="1688询价")
-recall("纸箱")
-memorize("义乌星火包装价格最优惠", tags=["1688","纸箱"])
-learn("CDP拦截法", "1688不需要AK即可提取数据", tags=["1688","爬虫"])
-```
+**新的 GBrain 方案**：
+- 位置：`~/gbrain/`，v0.37.0.0，PGLite + nomic-embed-text
+- 命令：`gbrain put <slug>` / `gbrain get <slug>` / `gbrain search <query>` / `gbrain query <question>`
+- 存储格式：Markdown 文件（slug = 第一行标题）
+- **不需要 Docker，不依赖任何外部 API key**
 
+**Hindsight 已永久丢失**：
+- ghcr.io/nousresearch/hindsight：denied
+- docker.io/nousresearch/hindsight：timeout
+- ChromaDB 数据未备份，无法恢复
+
+**当前记忆系统**：
+- GBrain（新增）：结构化知识存储，向量搜索
+- fact_store（已有）：9条facts，SQLite + FTS5
+- session_search（已有）：9.8万条对话历史
+- MEMORY.md（已有）：系统配置和经验文档
 CLI: `python ~/.hermes/scripts/ltm.py [remember|memorize|learn|recall] [args...]`
 
 ## 已知陷阱：Cron "error" 状态未必是真错

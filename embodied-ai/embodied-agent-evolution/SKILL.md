@@ -67,10 +67,38 @@ tags: [embodied-ai, desktop-automation, self-evolution, hermes]
 - 动作统一映射：模型输出`click(x,y)`、`type("...")`
 - 双重定位：视觉网格标号 + Accessibility API辅助
 
-#### 记忆层（Memory）
-- 短期：当前操作上下文
-- 长期：用户偏好、凭证、历史最佳路径
-- 技术：Vector DB + 知识图谱
+#### 记忆层（Memory） — GBrain 替代 Hindsight（2026-06-02 实测更新）
+
+**关键教训**：Hindsight 的 Docker 镜像被删后，数据永久丢失。
+
+**GBrain = 正确的长期记忆方案**：
+- **无需 Docker**：PGLite（本地 SQLite）+ nomic-embed-text（本地嵌入模型）
+- **已安装**：`~/gbrain/`，`/Users/aimac/.bun/bin/gbrain`，v0.37.0.0
+- **健康分**：50/100（大脑是空的，不是损坏）
+- **不需要任何外部 API key**
+
+**核心命令**：
+```bash
+# 存储记忆
+gbrain put 用户-罗元 << 'EOF'
+# 用户：罗元
+## 基本信息
+- 姓名：罗元（aimac）
+- 公司：义乌市迅龙贸易有限公司
+- 主营业务：1688采购包装材料（纸箱为主）
+EOF
+
+# 搜索
+gbrain get 用户-罗元    # 读取
+gbrain search "罗元"     # 关键词
+gbrain query "用户做什么生意"  # 向量语义（需先embed）
+```
+
+**Hindsight 不可恢复**：ghcr.io denied，docker.io timeout，永久丢失。
+
+**轻量替代测试**：mem0ai❌依赖qdrant，ChromaDB✅纯本地已装，GBrain✅正确方案已启用。
+
+**Colima 优化**：`colima start --memory 2`（2GB），`colima stop` 按需启停。当前 Colima 已停，内存空闲 7.6GB。
 
 ### 2. 思考方式进化：从System 1到System 2
 
@@ -778,6 +806,8 @@ ollama pull ahmadwaqar/smolvlm2-agentic-gui:latest
 - "要记得落实" = 必须验证+量化汇报，不能放空炮
 
 ## 已实现的真人化核心组件（2026-05-31）
+
+详见 `references/memory-system-ltm-20260602.md`（2026-06-02 实测：Hindsight 数据丢失不可恢复，ChromaDB 轻量替代可用，fact_store 当前主力）
 
 详见 `references/ai-websites-evolution-advice-20260531.md`，核心文件：
 
