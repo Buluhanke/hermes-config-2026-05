@@ -319,6 +319,72 @@ kill $(pgrep -f WallpaperAerialsExtension) 2>/dev/null
 4. 大文件 >50MB（旧备份 tar.gz）
 5. cron job 引用已删除的 skill
 
+### MCP服务器配置错误导致Gateway不稳定（2026-06-01新增）
+
+**症状**：Gateway反复被SIGTERM杀掉（日志显示 `Shutdown context: signal=SIGTERM under_systemd=yes parent_pid=1`），重启后几分钟又死。不是代码crash，是外部进程终止。
+
+**根因排查**：
+1. 查 `gateway.error.log` — SIGTERM信号源和loadavg
+2. 查MCP服务器连接失败 — 重试3次每次消耗资源和时间，累积导致gateway不稳定
+3. 已知踩坑记录：
+
+**searxng MCP服务器修正**：
+```
+# ❌ 错误配置（uvx + mcp-server-searxng 包名过时/不兼容）
+  searxng:
+    args:
+    - mcp-server-searxng
+    command: uvx
+
+# ✅ 正确配置（npx + searxng-mcp，已验证可用）
+  searxng:
+    args:
+    - -y
+    - searxng-mcp
+    command: npx
+```
+`npx searxng-mcp` 若报ZodError，那是帮助信息解析失败，不影响MCP协议运行。
+
+**n8n MCP服务器路径修正**：
+```
+# ❌ 错误路径（/tmp/下的文件重启后消失）
+    args:
+    - /tmp/hermes-n8n-mcp/server.py
+
+# ✅ 永久路径（~/.hermes/下的文件持久化）
+    args:
+    - /Users/aimac/.hermes/n8n-mcp/server.py
+```
+
+**SIGTERM常见原因**：
+- `--replace` 替换旧进程时可能误杀自己
+- 多个background进程争夺同一端口
+- MCP服务器重试期间gateway异步任务堆积→超时→系统kill
+- terminal工具的background进程在父shell退出后被reparent到PID 1，然后被init决策kill
+
+**修复后验证**：
+```bash
+python3 -c "import yaml; yaml.safe_load(open('/Users/aimac/.hermes/config.yaml')); print('✅ YAML正确')"
+```
+
+---
+
+### knowledge-base.md 损坏导致Gateway WARNING（2026-06-01新增）
+
+**症状**：Gateway启动日志 `Failed to load prefill messages: Expecting value: line 1 column 1 (char 0)`
+
+**原因**：`~/.hermes/knowledge-base.md` 被写成了markdown文本（`# 义乌迅龙知识库`），但Gateway期望的是有效JSON数组格式。
+
+**修复**：
+```bash
+# clear到空JSON数组
+echo '[]' > ~/.hermes/knowledge-base.md
+```
+
+**预防**：每次修改此文件后验证 `python3 -c "import json; json.load(open('/Users/aimac/.hermes/knowledge-base.md')); print('✅ JSON正确')"`
+
+---
+
 ### Gateway卡死/不响应
 
 **症状**：用户说"你没反应"、消息发不出去、PID存在但僵死
