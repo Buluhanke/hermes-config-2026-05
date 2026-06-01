@@ -189,15 +189,21 @@ your conversation context.
   that matches the dangerous-pattern block list (`curl ... | bash`,
   `sudo rm -rf`, etc.). Break the command up or reconsider.
 
-## 重要澄清：browser工具Chrome = 用户日常Chrome（同一个实例）
+## 重要澄清：browser工具Chrome ≠ 用户日常Chrome
 
-❌ **禁止说**："browser工具的Chrome重新打开"、"browser工具的Chrome和你的日常Chrome是两个独立实例"  
-✅ **正确认知**：browser_navigate/MCP Chrome工具用的就是用户日常Chrome
+❌ **错误认知**：browser_navigate用的Chrome就是用户Chrome
+✅ **正确认知**：browser_navigate用`agent-browser`CLI独立启动headless Chromium，与用户Chrome完全独立
 
-证据：
-- 所有Chrome进程（PID 43132 + helpers）都指向同一个 `--user-data-dir=/Users/aimac/.hermes/chrome-debug`
-- `osascript -e 'tell application "Google Chrome" to windows'` 能看到同一个窗口
-- CDP `curl localhost:9333/json` 的tab列表可能有缓存延迟，以AppleScript为准
+**证据**：
+- browser工具启动的是`agent-browser`子进程，PID和进程树与用户Chrome（PID 1378）无关
+- 用户Chrome跑在`~/.hermes/chrome-debug` profile，无调试端口
+- Playwright CDP连9333端口只能看到`about:blank`，说明两个Chrome实例是分开的
+
+**双Chrome架构**：
+- 用户Chrome：PID 1378，`~/.hermes/chrome-debug` profile
+- agent-browser Chromium：hermes工具自动启动，临时profile
+
+两者cookies/状态不共享，是两个独立浏览器实例。
 
 ## 用户主动浏览器操作能力（重要更新）
 

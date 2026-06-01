@@ -87,6 +87,51 @@ els.forEach(el => {
 - 反爬站点(百度等)可能注入隐藏UI → JS已用getBoundingClientRect过滤零尺寸元素
 - iframe内元素需分别连接对应frame的target
 
+## Chrome双实例架构（重要更新 2026-06-03）
+
+**两种完全独立的Chrome运行方式：**
+
+| 实例 | 用途 | 启动方式 | 端口 |
+|------|------|---------|------|
+| agent-browser Chromium | browser_navigate/click等工具 | hermes-agent自动管理 | 无调试端口 |
+| chrome-debug profile | Playwright CDP | 需手动启动launcher | 9333 |
+
+**browser工具Chrome ≠ 用户日常Chrome。** browser_navigate用agent-browser起独立headless Chromium，与用户Chrome完全独立。
+
+**启动chrome-debug Chrome的正确方式：**
+```bash
+python3 ~/.hermes/scripts/chrome-debug-launcher.py &
+# 阻塞运行，保持9333端口
+```
+
+## JS标签注入脚本
+
+`~/.hermes/scripts/dom_label.py` — Playwright CDP直连9333：
+
+```bash
+python3 ~/.hermes/scripts/dom_label.py inject    # 注入标签+打印元素
+python3 ~/.hermes/scripts/dom_label.py click h5  # 点击指定hermes-id
+python3 ~/.hermes/scripts/dom_label.py navigate https://www.baidu.com
+```
+
+## Playwright CDP接入方式
+
+```python
+from playwright.sync_api import sync_playwright
+p = sync_playwright().start()
+browser = p.chromium.connect_over_cdp('http://localhost:9333')
+# CDP endpoint是HTTP URL，不是WebSocket
+ctx = browser.contexts[0]
+page = ctx.pages[0]  # 默认about:blank，需主动goto
+```
+
+## 已知限制
+
+- chrome-debug Chrome是headless，用户看不到页面
+- 需在chrome-debug里打开目标页，dom_label才能注入
+- MCP chrome bridge不可用，不影响本方案
+- agent-browser和Playwright CDP两个通道互不干扰
+
 ## 两种使用方式
 
 ### 方式1：原生 Agent 工具（生产级，推荐）
@@ -115,6 +160,53 @@ python3 cdp_ws_client.py <url>         # 提取指定URL元素
 ```
 
 ---
+
+## Chrome debug实例启动脚本
+
+`~/.hermes/scripts/chrome-hermes.sh` — 启动chrome-debug Chrome的正确方式（4个flag缺一不可）：
+
+```bash
+#!/bin/bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --user-data-dir="$HOME/.hermes/chrome-debug" \
+  --remote-debugging-port=9333 \
+  --load-extension="$HOME/.hermes/mcp-chrome-extension" \
+  --no-first-run \
+  --no-default-browser-check
+```
+
+**关键flag说明：**
+- `--user-data-dir` — 指定独立的Chrome profile，避免与用户日常Chrome冲突
+- `--remote-debugging-port=9333` — 开放CDP调试端口，Playwright/MCP bridge都依赖这个端口
+- `--load-extension` — 加载MCP Chrome扩展（即使MCP bridge当前不通，扩展已注册到Chrome）
+- `--no-first-run` + `--no-default-browser-check` — 避免Chrome首次运行检查阻塞
+
+**启动后验证：**
+```bash
+# 端口确认
+lsof -i :9333 | grep Chrome
+
+# 页面确认（应为about:blank）
+curl -s http://127.0.0.1:9333/json | head -50
+```
+
+**注意：** 进程需要在后台保持运行。Chrome退出后9333端口随之关闭。
+
+### MCP Chrome Bridge架构（已废弃，仅供参考）
+
+MCP chrome bridge是4层串接链：
+```
+Chrome扩展(Native Messaging) → stdio → mcp-chrome-stdio → WebSocket → 9333端口
+```
+
+**断点在哪：** Native Messaging层（Chrome扩展未装进chrome-debug），导致整条链失效。
+
+**不修原因：** 修复需要解决Chrome扩展安装+Native Messaging host配置+stdio通信三层问题，收益有限。Playwright CDP直连9333已覆盖所有核心功能。
+
+**相关工具状态：**
+- `mcp_chrome_get_windows_and_tabs` → ❌ 失败（bridge断）
+- `browser_navigate` → ✅ 正常（走agent-browser独立Chromium）
+- `Playwright CDP` → ✅ 正常（直连9333）
 
 ## 阿里云盘登录：browser工具 + Playwright CDP 混合用法
 
@@ -145,16 +237,13 @@ token过期时间**不会**因"重新打开登录页"而刷新！用户在已登
 
 ## 已知坑
 
-### target_id 输出截断 vs /json端点获取
-有两种不同的 target_id 截断问题：
-
-**问题A（已修复）**：`dom_tabs()` 输出截断  
-`Target.getTargets` CDP 返回的 `targetId` 实际是完整32字符，但 `dom_tabs()` 用 `tid[:12]` 切片输出，导致 `dom_snapshot`/`dom_click` 接收到的ID不完整而报错 "No target with given id found"。
+### 问题A（已修复）：`dom_tabs()` 输出截断
+`Target.getTargets` CDP 返回的 `targetId` 实际是完整32字符，但旧版 `dom_tabs()` 用 `tid[:12]` 切片导致ID不完整。
 
 **解法**：修 `dom_tools.py` line 380 附近，将 `[{tid[:12]}...]` 改为 `[{tid}]`。
 
-**问题B**（已在用解法）：`/json` HTTP 端点获取完整 ID  
-某些场景下通过 HTTP `http://127.0.0.1:9333/json` 获取 targets 列表，可以同时拿到完整 `id`（32字符）和 `webSocketDebuggerUrl`。
+### 问题B：/json HTTP端点获取完整ID
+通过 HTTP `http://127.0.0.1:9333/json` 获取 targets 列表，可同时拿到完整 `id`（32字符）和 `webSocketDebuggerUrl`。
 
 ### websockets 版本必须用 15.x
 browser_supervisor.py（browser_dialog_tool）依赖 `websockets.asyncio`，需要 **websockets==15.0.1**。
@@ -162,22 +251,16 @@ hermes-agent 的 `.venv` (Python 3.13) 需手动安装：
 ```bash
 uv pip install websockets==15.0.1 -p ~/.hermes/hermes-agent/.venv/bin/python
 ```
-dom_tools 用自己的 WS 连接，兼容 12-16 任意版本，不受此影响。
 
-### dispatch() 空参数测试说明
-registry.dispatch() 在独立进程中调用工具，环境变量（如 BROWSER_CDP_URL）不传递。因此 `dom_snapshot()` 空跑会报"No CDP endpoint"，但实际 Agent 对话调用时参数会注入，正常工作。这是进程隔离机制，不是故障。
-
-### MCP Chrome 工具 vs dom_tools
-MCP chrome (`mcp_chrome_*`) 提供了27个工具，但需要 Chrome 扩展启动端口 12306 的 HTTP 服务器。扩展必须装在 chrome-debug profile 并手动点击 Connect 按钮。
-
-**当前状态**: MCP chrome 工具注册成功但 tool call 失败（端口 12306 无响应）。dom_tools 已覆盖其核心功能，建议优先使用。详细排障过程见 `references/mcp-chrome-debugging.md`。
+### MCP Chrome 工具已废弃
+MCP chrome bridge (`mcp-chrome-stdio`) 因Chrome扩展通信架构问题不可用。Playwright CDP接chrome-debug端口已覆盖所有核心功能，无需修复MCP bridge。
 
 ---
 
 ## 相关文件
 
 - **生产工具**: `~/.hermes/hermes-agent/tools/dom_tools.py`
-- **验证脚本**: `~/.hermes/hermes-dom-extractor/cdp_ws_client.py`
+- **启动脚本**: `scripts/chrome-debug-launcher.py` — 启动chrome-debug Chrome并开放9333端口
+- **注入脚本**: `scripts/dom_label.py` — inject/click/navigate三种命令
 - **排障参考**: `references/mcp-chrome-debugging.md`
-- **阿里云盘token提取**: `references/aliyundrive-token-extraction.md`（Playwright CDP法，含过期判断和重新登录正确姿势）
-- **token验证脚本**: `scripts/get_aliyun_token.py`（直接运行，输出用户/过期时间/状态）
+- **阿里云盘token提取**: `references/aliyundrive-token-extraction.md`
