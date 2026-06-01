@@ -40,12 +40,14 @@ GPU 加速:     MPS (Metal Performance Shaders) ✅
 | **u2net.onnx** | 手动下载 | ~/.u2net/ (168MB) | ✅ |
 | **holographic** | hermes-agent 插件 | ~/.hermes/memory_store.db | ✅ 记忆系统 |
 
-### ✅ 记忆系统现状
+### ✅ 记忆系统现状（三层架构，不依赖 Docker）
 
-**已切换到 holographic**（原生 Python 插件，不依赖 Docker）：
-- 数据库：`~/.hermes/memory_store.db`
-- 工具：`fact_store add` / `fact_store list`
-- chromadb：原生 uvicorn 端口 8000（heartbeat 正常）
+| 组件 | 类型 | 状态 | 数据位置 |
+|------|------|------|---------|
+| **MEMORY.md** | 系统 prompt 快照 | ✅ 正常 | ~/.hermes/memories/MEMORY.md |
+| **fact_store** | holographic 结构化记忆 | ✅ 正常，9条facts | ~/.hermes/memory_store.db |
+| **session_search** | FTS5 对话检索 | ✅ 正常，9.8万条 | ~/.hermes/state.db (1.2GB) |
+| **Hindsight** | 叙事化经验存储 | ❌ 永久丢失 | Docker 卷未备份 |
 
 ## 已知问题
 
@@ -90,16 +92,50 @@ colima stop   # 释放 VM 内存
 colima start  # 需要时再启动
 ```
 
-**hindsight 已废弃** — 已切换到 holographic（原生 Python 插件，不依赖 Docker）。
-当前记忆系统：holographic（memory_store.db）+ chromadb（原生 uvicorn 端口 8000）。
+**hindsight + holographic 已全部废弃** — Docker 镜像不可恢复：
+- ghcr.io/nousresearch/hindsight 访问被拒绝，docker.io 拉取超时
+- ChromaDB Docker 卷数据全部丢失，无备份
+- 当前记忆系统：MEMORY.md + fact_store（holographic SQLite）+ session_search（state.db FTS5）
+- 三层架构完全不依赖 Docker
 
-**停止后实测：** Colima stop 后 23GB 机器空闲从 237MB → 8GB。
+**停止 Colima 释放内存:**
+```bash
+colima stop   # 释放 VM 内存（实测降 6.5GB）
+colima start  # 需要时再启动
+```
 
 ### Nous Portal 模型状态变化
 
 **背景**: 2026-05-21~22 期间，Nous Portal 的 `deepseek/deepseek-v4-flash` 免费可用。但 2026-05-31 测试时返回 404 "requires available credits"。
 
 **教训**: 模型定价会变化，测试前不要假设收费策略与历史配置一致。
+
+### PaddleOCR 参数已变更（2026-06-02 发现）
+**旧版参数已废弃：**
+```python
+PaddleOCR(lang='ch', use_angle_cls=True, show_log=False)  # ❌ 报错
+```
+**正确写法：**
+```python
+PaddleOCR(lang='ch', use_textline_orientation=True, show_log=False)  # ✅
+```
+或直接省略（默认已启用）：
+```python
+PaddleOCR(lang='ch')  # ✅ 最简
+```
+
+### 截图读取失败时的备选方案（2026-06-02 发现）
+browser 工具对 JS 动态加载页面（阿里云盘、1688 等）返回空。
+**备选读取流程：**
+1. `computer_use` capture 截图
+2. `screencapture -x /tmp/page.png`
+3. pytesseract 读图（hermes venv 或 Homebrew Python 均有）：
+```python
+from PIL import Image
+import pytesseract
+img = Image.open('/tmp/page.png')
+text = pytesseract.image_to_string(img, lang='chi_sim+eng')
+```
 
 ### 包安装到不同 Python 环境
 

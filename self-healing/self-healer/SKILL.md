@@ -52,7 +52,8 @@ tail -5 ~/.hermes/logs/gateway.log | grep -c "memory_monitor\\|platform connecte
 
 **自动修复项目**：
 - stale MCP进程（同一binary多个PID）→ kill最旧的
-- 容器down → `docker restart <name>`
+- Chrome CDP端口(:9333) 无响应 → 重启Chrome debug实例
+- Colima内存过高（有容器时）→ `colima stop` 停掉不重要的容器
 - Gateway日志超时 → 重启Gateway
 - Ollama占用过高 → `pkill -9 -f 'ollama'`
 
@@ -268,16 +269,21 @@ hermes cron update <job_id> --model deepseek-v4-flash --provider deepseek
 
 ---
 
-### Docker/Ollama状态（2026-06-01 更新）
+### Docker/Ollama状态（2026-06-02 更新）
 
-**Docker（Colima）已彻底停用** — 以下容器未运行是正常的：
-- hindsight/searxng/n8n/open-webui → 已停止，不再使用
-- Colima 也已 stop，内存释放约 2-4GB
+**Docker（Colima）已彻底停用** — 以下容器从未运行：
+- hindsight/searxng/n8n/open-webui/chromadb → 已全部删除
+- Colima 可随时停止（`colima stop`），不跑任何容器
 
-**Ollama 已退出** — 2026-06-01凌晨决定不用本地模型（内存占用太大，qwen3-vl:latest 6GB压垮系统）
-- 进程可能残留：`kill $(pgrep -f ollama)` 清理
-- screen_watcher 不再依赖 Ollama VLM
-- 搜索降级为 web_search API
+**⚠️ Colima 内存陷阱（2026-06-02 发现）**
+- Colima 运行但无容器：limactl VM 仍吃 ~6GB 内存
+- `colima stop` 后实测降 6.5GB
+- Colima 不是重要组件，**待机时立即停掉**
+- 检查：`colima list` → 有容器才保留
+
+**Ollama 已退出** — 2026-06-01凌晨决定不用本地模型（内存占用太大）
+- 进程可能残留：`ps aux | grep ollama | grep -v grep` → 有则 `pkill -9 -f ollama`
+- VLM 能力依赖云端模型，本地备用方案已废弃
 
 ### Mac资源清理（定期执行）
 

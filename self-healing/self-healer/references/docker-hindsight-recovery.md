@@ -1,82 +1,44 @@
-# Docker Hub 网络阻断与 Hindsight 恢复流程
+# Hindsight Docker 恢复流程（已废弃）
 
-## 网络诊断命令
+> ⚠️ **2026-06-02 永久记录**：Hindsight Docker 镜像无法恢复，此文档仅作历史参考。
 
-```bash
-# Docker Hub 完全阻断（100%丢包）
-curl -s --max-time 10 https://registry-1.docker.io/v2/ -o /dev/null && echo "docker.io:ok" || echo "docker.io:blocked"
+## 当前状态
 
-# ghcr.io 状态
-curl -s --max-time 10 https://ghcr.io/v2/ -o /dev/null && echo "ghcr.io:ok" || echo "ghcr.io:blocked"
-```
+| 项目 | 状态 |
+|------|------|
+| ghcr.io/nousresearch/hindsight | ❌ Access Denied |
+| docker.io/nousresearch/hindsight | ❌ i/o timeout |
+| 本地 .tar 备份 | 无 |
 
-## 当前网络状态（2026-06-02 实测）
+Hindsight 积累的所有叙事化经验（观察记录、银行信息等）**永久丢失**。
 
-| 域名 | 状态 | 说明 |
-|------|------|------|
-| `registry-1.docker.io` | ❌ 100% 丢包 | Docker Hub 主站，完全阻断 |
-| `docker.io` | ❌ 超时 | Docker Hub 备用域名，同样阻断 |
-| `ghcr.io` | ✅ 可通 | GitHub Container Registry，ping OK |
-
-## Docker Hub 阻断时的容器恢复流程
-
-### Step 1：检查 Colima 和 Docker 状态
+## 网络诊断（历史记录）
 
 ```bash
-colima list
-docker ps -a
+# ghcr.io — Access Denied
+curl -s --max-time 10 https://ghcr.io/v2/ -o /dev/null && echo "ok" || echo "denied"
+
+# docker.io — 超时
+curl -s --max-time 10 https://registry-1.docker.io/v2/ -o /dev/null && echo "ok" || echo "timeout"
 ```
 
-### Step 2：优先用原生替代方案
+## 当前记忆系统（替代方案）
 
-**ChromaDB** 有 pip 包，可以原生运行：
+三层架构完全不依赖 Docker，正常运转：
 
-```bash
-cd ~/.hermes/hermes-agent
-./venv/bin/pip install chromadb opentelemetry-instrumentation-fastapi -i https://pypi.tuna.tsinghua.edu.cn/simple
-./venv/bin/python -c "from chromadb.app import app; import uvicorn; uvicorn.run(app, host='0.0.0.0', port=8000)" &
-sleep 2
-curl -s http://localhost:8000/api/v2/heartbeat
-```
+| 组件 | 状态 | 数据位置 |
+|------|------|---------|
+| MEMORY.md | ✅ | ~/.hermes/memories/MEMORY.md |
+| fact_store (holographic) | ✅ 9条facts | ~/.hermes/memory_store.db |
+| session_search (FTS5) | ✅ 9.8万条 | ~/.hermes/state.db |
 
-### Step 3：Hindsight 没有 pip 包，只能等网络恢复
+## 如果未来要重建 Hindsight
 
-```bash
-# 检查镜像层是否已部分下载
-docker images
-
-# 清理残留层
-docker rmi $(docker images -f "dangling=true" -q) 2>/dev/null
-
-# 尝试从 ghcr.io 拉取（如果镜像在 ghcr.io）
-docker pull ghcr.io/vectorize-io/hindsight:latest
-
-# 或尝试镜像加速
-docker pull docker.1ms.run/ghcr.io/vectorize-io/hindsight:latest
-```
-
-### Step 4：Hindsight 容器启动
-
-```bash
-docker run -d \
-  --name hermes-hindsight \
-  -p 8899:8000 \
-  -v ~/.hindsight/data:/data \
-  ghcr.io/vectorize-io/hindsight:latest
-
-# 验证
-curl -s http://localhost:8899/health
-```
-
-## 凌晨重试 Cron 任务建议
-
-如需设凌晨重试，在 Docker Hub 恢复后自动拉取：
-
-```
-docker pull ghcr.io/vectorize-io/hindsight:latest && docker start hermes-hindsight
-```
+1. 需要可访问 ghcr.io 的网络环境
+2. 或者找到 nousresearch/hindsight 的其他镜像源
+3. 当前三层架构已足够，不需要重建 Hindsight
 
 ## 关联文档
 
-- `references/api-key-centralization.md` — API Key 集中化管理流程（含 key 状态总表）
-- `references/mac-mini-ram-management.md` — Colima vs Docker Desktop 选型，内存控制
+- `references/mac-mini-ram-management.md` — Colima 内存管理
+- `references/api-key-centralization.md` — API Key 状态总表

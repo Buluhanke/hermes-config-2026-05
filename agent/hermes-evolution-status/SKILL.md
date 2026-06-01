@@ -52,12 +52,25 @@ hermes gateway (node)
 - MCP Chrome Extension loaded ✅
 - **Playwright CDP** `~/.hermes/scripts/browser_cdp.py` 可用（备用方案）✅
 
-### Docker/Colima 状态 ⚠️ 已清空（2026-06-01凌晨决定）
+### Docker/Colima 状态 ✅ 已清空（2026-06-02凌晨决定）
 **决定：不做Docker生态，用本地替代方案。**
 - 所有容器已删除（n8n/open-webui/hindsight/searxng/chromadb）
 - Colima 已 stop（`colima stop`，menu bar残留进程无碍）
 - 内存从 ~23GB 降至 ~8GB 空闲
-- 搜索降级为 web_search API
+
+**⚠️ Colima 仍在消耗内存（2026-06-02 17:09 发现）**
+- Colima 运行但无容器：limactl VM 吃 6GB 内存
+- `colima stop` 后实测：15GB used / 8.5GB free（降了约 6.5GB）
+- Colima 不是重要组件，待机消耗资源，**立即停掉**
+- 验证命令：`colima list` / `top | grep PhysMem`
+
+**Hindsight Docker 永久丢失（2026-06-02 发现）**
+- ghcr.io/nousresearch/hindsight 访问被拒绝（Access Denied）
+- docker.io 拉取超时（i/o timeout）
+- 无本地 .tar 备份
+- 之前积累的所有观察记录、银行信息等叙事化经验全部丢失
+- ChromaDB 数据未备份，容器卷数据不可恢复
+- 重建希望渺茫（需要可访问 ghcr.io 的网络）
 
 ### 端口状态（2026-06-02 更新）
 - 9333: Chrome CDP ✅
