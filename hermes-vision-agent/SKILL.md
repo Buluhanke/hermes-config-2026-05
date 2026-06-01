@@ -9,6 +9,12 @@ description: "视觉感知 + 桌面/浏览器控制。Phase 2 核心：看→想
 
 **VLM不再必要。** 浏览器用DOM+LLM，桌面用AX树+OCR，VLM是可选补充。
 
+**优先级（用户指定，2026-06-02）：**
+1. 浏览器自动化（Browser Use）
+2. 电脑桌面控制（Computer Use）
+3. 视觉感知闭环（看→懂→做→验证）
+~~音频~~ ~~视频~~ ~~语音AI~~ — 不碰
+
 ```
 浏览器:
   browser_snapshot (DOM, 8ms) → LLM理解 → browser_click/type 执行
@@ -19,6 +25,17 @@ description: "视觉感知 + 桌面/浏览器控制。Phase 2 核心：看→想
 验证:
   browser_snapshot 对比 或 SSIM (5ms) 或 LLM第二次分析
 ```
+
+## 真实世界Browser Use / Computer Use SOTA数据
+
+**当前SOTA（gentic.news 2026-04）：**
+- OSWorld SOTA：Claude Sonnet 4.5 达 62.9%，**首个超人类基准(72.4%)**
+- 最强开源：Kimi K2.6 达 73.1%
+- 浏览器Agent：Surfer 2 WebVoyager 97.1%
+- 代码Agent：Claude Opus 4.7 SWE-Bench Pro 64.3%
+- 12个模型已在SWE-Bench Verified超越人类
+
+详见 `references/browser-use-sota.md`
 
 ## 浏览器自动化（主力方案）
 

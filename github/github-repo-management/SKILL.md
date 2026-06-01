@@ -628,6 +628,15 @@ Parameters:
 - **Extracting a remote branch's files without switching**: Use `git archive <remote>/<branch> --prefix=<dir>/ | tar -xf - -C .` — this pulls files directly from the remote without creating a local branch or worktree. Useful when a branch (e.g., `obsidian-backup`) exists on remote but not locally. After extraction, `git add` the new directory and commit.
 - **Fetching a remote branch that has no local tracking**: `git ls-tree <remote>/<branch>` shows what's in that branch without fetching. Use `git archive <remote>/<branch> --prefix=<dir>/ | tar -xf - -C .` to extract files from a remote branch into a local directory without switching branches.
 
+## 12. Project Evaluation (User-Shared Repo)
+
+When a user shares a GitHub link and asks to evaluate or deploy it, see `references/github-project-evaluation.md`. Covers the full pipeline:
+- Quick scan (stars/forks/activity)
+- README extraction fallback chain (GitHub API MCP as default)
+- Feasibility assessment
+- Quick deployment with `uv sync` for Python projects
+- Output verification
+
 ## Quick Reference Table
 
 | Action | gh | git + curl |
