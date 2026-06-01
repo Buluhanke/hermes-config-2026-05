@@ -92,6 +92,10 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 - `news.ycombinator.com` 失败 ≠ `hacker-news.firebaseio.com` 也失败
 - 各域名独立验证，不可假设永久状态
 
+**⚠️ 网络状态变更 → 新鲜度门控 override（2026-06-02 新增）**：
+当 github 从 `blocked` 变为 `ok`，即使 commit 时间无变化也不应跳过全量扫描。
+详见上方"新鲜度门控" → "网络状态变更 escalator" 小节。
+
 **网络异常时的降级策略（已验证稳定）**：
 1. `github:blocked` → 跳过 GitHub Trending，优先用 HN Firebase API 巡检热点
 2. `github:ok` → 直接 browser_navigate 访问 GitHub 仓库/README（比 web_search 更可靠）
@@ -233,11 +237,14 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
 **⚠️ 新鲜度门控（freshness gate）：防止凌晨高频重复巡检（2026-06-02 新增）**
 - **问题**：凌晨时段 cron 每 15-30 分钟触发一次，所有 repo 无变化时仍执行全量 A→B→C→D 扫描，learning_log 单日膨胀至 8525+ 行
 - **规则**：在执行方向 A 健康检查前，先检查学习日志最后一条 entry 的时间戳。
-  - 若最后一条 entry < 30 分钟前，且所有关键 repo 的 last_commit 时间无变化 → 跳过全量扫描，仅执行：
+  - 若最后一条 entry < 30 分钟前，且所有关键 repo 的 last_commit 时间无变化，且**网络状态与上次全量扫描时一致** → 跳过全量扫描，仅执行：
     1. 方向 A 健康检查（~30s）→ 如果全绿
     2. 一次 ddgs 旋转关键词查询（~15s）→ 检测盲区新发现
     3. 记录"新鲜度跳过"简版 entry（~50 行而非 ~400 行），或日志末尾标注 `[freshness_skip]` 标记
   - 若最后一条 entry ≥ 30 分钟前，或任一 repo 有更新 → 执行全量 A→B→C→D 扫描
+  - **⚠️ 网络状态变更 escalator（2026-06-02 新增）**：当 github 从 `blocked` 变为 `ok`（或反之），**即使 commit 时间无变化，也不应跳过全量扫描**。原因：之前 blocked 时期的全量扫描无法访问 raw.githubusercontent.com / github.com 内容，repo 可能已有未扫描的内容。当网络状态发生变更时，将 freshness 门控阈值从 30 分钟重新放宽到 1 小时，允许一次全量扫描来捕获之前无法访问的内容。
+    - **实现**：健康检查中记录上一轮的网络状态（记入学习日志），本次检查时比较。若网络状态从 blocked→ok，**必须升级**为一次完整的方向 B 扫描（至少 ZJU README Updates + OSU-NLP YAML，可用 raw.githubusercontent.com 直读），不因 freshness gate 跳过。
+    - 网络状态以最近一次全量扫描时的记录为准。示例：07:30 freshness_skip 记录 github=ok，但上次全量扫描在 github=blocked 时期。07:36 轮次检查到网络状态与全量扫描时不一致 → 跳过 freshness gate 直接升级。
 - **repo 变更检测方法**（轻量，无需浏览器）：
   ```bash
   curl -sf --max-time 8 "https://api.github.com/repos/ZJU-REAL/Awesome-GUI-Agents/commits?per_page=1" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['commit']['committer']['date'] if isinstance(d,list) and d else 'unknown')"
@@ -320,11 +327,24 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
        - **AAAI2026/**（长驻子目录）
          - ⚠️ **2026-06-02 实测修正**：之前误标记为"全覆盖"，实际 AAAI2026/README.md 含 **7 个独立 section**（Benchmark/Grounding & RL/Test-time Scaling/Training Framework/Robustness/Data Collection/Multi-Agent）。ICLR2026 饱和 ≠ AAAI2026 饱和 — **每个子目录需独立扫描和标记饱和**。
          - **AAAI2026 论文扫描命令**：
-           - ⚠️ curl empty response 陷阱（2026-06-02 实测）：`curl` 到 raw.githubusercontent.com 有时返回空结果（exit code 0 但 body 为空）。检测方法：`wc -c` 确认返回字节数，若 < 100 bytes 则重试一次，仍空则降级 `browser_navigate` 替代。
+           - ⚠️ curl empty response 陷阱（2026-06-02 实测）：`curl` 到 raw.githubusercontent.com 有时返回空结果（exit code 0 但 body 为空）。检测方法：`wc -c` 确认返回字节数，若 < 100 bytes 则重试一次。
+           - **GitHub API 替代（推荐，无浏览器开销）**：当 rawgh 返回空时，直接用 GitHub Contents API + base64 解码，比 browser_navigate 更轻量：
+             ```bash
+             curl -s --max-time 10 "https://api.github.com/repos/ZJU-REAL/Awesome-GUI-Agents/contents/AAAI2026/README.md" | python3 -c "
+             import sys,json,base64,re
+             d = json.load(sys.stdin)
+             content = base64.b64decode(d.get('content','')).decode('utf-8')
+             clean = re.sub(r'<[^>]+>', '', content)  # 剥离 HTML 标签
+             for line in clean.split('\n'):
+                 if line.startswith('#'):
+                     print(line.strip())
+             "
+             ```
+           - 若 GitHub API 也失败，再降级 `browser_navigate` 替代。
            ```bash
-           # 获取 section 列表
+           # 获取 section 列表（rawgh 正常时用）
            curl -sf --max-time 15 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/AAAI2026/README.md" | grep "^# "
-           # 获取论文标题列表
+           # 获取论文标题列表（rawgh 正常时用）
            curl -sf --max-time 15 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/AAAI2026/README.md" | grep -E "^[0-9]+\."
            # 跨源去重验证（对比 learning_log）
            curl -sf --max-time 15 "..." | grep -E "^[0-9]+\." | while IFS=. read n title; do
@@ -342,7 +362,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
      - 扫描：`curl -sf --max-time 10 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/README.md" | head -80 | grep -E "arxiv\.org|arXiv:"`
      - **饱和判断独立**：README Paperlist 饱和 ≠ Updates 区饱和。Updates 区是活来源
 
-  **方向 B 饱和状态管理**（2026-06-02 新增）：饱和不是永久状态。当以下情况发生时，重新激活全量扫描：
+  **方向 B 饱和状态管理**（2026-06-02 新增，2026-06-02 扩展）：饱和不是永久状态。当以下情况发生时，重新激活全量扫描：
   - 新会议论文列表发布（ICLR/ACL/NeurIPS/CVPR 等）
   - 已知 repo 中出现新子目录（如 AAAI2026/、NeurIPS2026/）
   - Benchmark 排行榜出现新模型
@@ -395,10 +415,11 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
      - **固定关键词**（每次运行）：`"GUI agent desktop 2026"` + `"computer use agent security 2026"`（共2个）
      - **轮换关键词**（每次选1-2个不同的，避免长期仅固定2个导致盲区，2026-06-02 实测 WinDeskGround 需用不同角度才能发现）：
        - `"GUI agent desktop computer use 2026 new paper arXiv"` — 找最新6月论文
-       - `"compact VLM GUI grounding on-device 2026 small model"` — 找小模型/端侧方向
+       - `"compact VLM GUI grounding on-device 2026 small model"` — 找小模型/端侧方向 [⚠️ 2026-06-02 实测：已饱和，连续2次返回全已知]
        - `"multi-window desktop GUI grounding benchmark 2026"` — 多窗口桌面方向
        - `"human demonstration GUI agent training 2026"` — 示教训练方向
        - `"multi-window desktop GUI grounding 2026"` — 多窗口桌面方向（已验证 WinDeskGround 命中）
+       - `"GUI agent benchmark real world evaluation 2026"` — 找新评估基准/论文（2026-06-02 实测命中 PlayCoder/HalluClear/GUIWorld/WebHarbor/PhoneWorld 5篇）
      - 轮换策略：固定关键词每次必查，轮换关键词从候选池中选2个，保证2个月覆盖全部角度
   3. **gentic.news/computer-use 排行榜巡检**（2026-06-02 新增，2026-06-02 修正）：
      - **⚠️ curl 轻量法已弃用**：页面 schema 为 WebSite/Organization 类型（非 FAQPage），不含 Question/mainEntity.itemListElement 结构。提取脚本静默返回空列表，不报错。**不要再用 curl JSON-LD 提取作为主要路径。**
@@ -448,7 +469,8 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
   2b. **ddgs CLI 安全关键词搜索**（2026-06-02 新增，~15s，当 PromptArmor/Programming Helper 被阻塞时也适用）：
      - 用 `ddgs text -q "AI agent security MCP function calling injection 2026" -m 5` 搜索 MCP/Function Calling 攻击面
      - 用 `ddgs text -q "computer use agent safety prompt injection guardrail 2026" -m 5` 搜索 Computer-Use 安全
-     - 这两个关键词组合在此次执行中**命中 2 项重大发现**（Parallax 论文 + Semantic Kernel RCE）
+     - 用 `ddgs text -q "agentic AI red team pentesting 2026" -m 5` 搜索 Agentic Red Teaming / Pentesting（2026-06-02 新增，首次查询命中 QueryPie/Strike48/Penligent/Mindgard 4 篇）
+     - 这三个关键词组合覆盖预判防御（MCP/FC漏洞）、运行时防护（CU guardrails）、攻击评估（red teaming）三个互补角度
      - 对 ddgs 结果用 `browser_navigate` 直读（跳过 web_extract credits 消耗）
   2c. **Programming Helper AI Agent Security 扫描**（2026-06-02 新增，~40s）：
      - browser_navigate `https://www.programming-helper.com/tech/ai-agent-security-2026-attack-surfaces-mcp-function-calling`
@@ -891,4 +913,5 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/mvp-multi-view-prediction-gui-grounding-2026-06-02.md` — MVP (arXiv 2512.08529, CVPR 2026) 多视角预测提升 GUI grounding 坐标稳定性，方向 D 坐标映射链参考
 - `references/ui-oceanus-2604.02345.md` — UI-Oceanus (arXiv 2604.02345): 合成环境动力学替代人类示教，交互物理学习范式，+7% offline/+16.8% online，方向 B 训练方法论
 - `references/agentdog-guardrail-framework-2026-06-02.md` — AgentDoG (arXiv 2601.18491): 诊断式 agent 安全防护框架（4B/7B/8B，开源），三维风险分类 + 根因诊断，方向 C
+- `references/dreadnode-ai-red-teaming-2605.04019.md` — Dreadnode AI Red Teaming Agent (arXiv 2605.04019): agentic 红队框架，45+攻击/450+变换/130+评分器，方向 C 安全评估参考
 - `scripts/direction-b-yaml-dedup.py` — OSU-NLP YAML 全量扫描 + 去重脚本。自动拉取 537 论文、过滤 Desktop、对比 learning_log、去重、输出新发现列表。支持 `--incremental` 和 `--output-ids` 模式。
