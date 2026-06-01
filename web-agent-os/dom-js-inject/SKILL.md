@@ -242,7 +242,76 @@ token过期时间**不会**因"重新打开登录页"而刷新！用户在已登
 
 **解法**：修 `dom_tools.py` line 380 附近，将 `[{tid[:12]}...]` 改为 `[{tid}]`。
 
-### 问题B：/json HTTP端点获取完整ID
+### 问题C（2026-06-01 新增）：Playwright 临时实例不暴露 9333 端口
+
+**现象**：`lsof -i :9333` 无输出，但 `browser_navigate` 能正常控制 Chrome。
+
+**根因**：Hermes agent 的 browser 工具使用 **Playwright 临时 Chrome 实例**（路径 `/var/folders/.../agent-browser-chrome-XXX/`），每次启动是全新临时 profile，不复用，也**不开放外部 CDP 端口**。端口 9333 只有在用户手动启动 `chrome-debug Chrome`（带 `--remote-debugging-port=9333` 参数）时才存在。
+
+**确认方法**：
+```bash
+# 检查 9333 端口
+lsof -i :9333
+
+# 检查 browser 工具实际用的 Chrome 实例
+ps aux | grep -i chrome | grep -v grep
+# 如果看到 /var/folders/.../agent-browser-chrome-XXX 就是临时实例
+```
+
+**解法**：
+1. 需要持久化 CDP 访问时，手动启动 chrome-debug Chrome：
+   ```bash
+   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+     --user-data-dir="$HOME/.hermes/chrome-debug" \
+     --remote-debugging-port=9333 \
+     --no-first-run
+   ```
+2. 然后用 `dom-js-inject` 的 `cdp_ws_client.py` 连接
+
+### 问题D（2026-06-01 新增）：macOS Chrome Keychain 加密导致 browsercookie 失效
+
+**现象**：`browsercookie` 库调用后超时（60s），无法读取任何 cookie。
+
+**根因**：macOS Chrome 的 cookies 使用 **Apple Safe Storage**（Keychain）加密，密钥绑定用户登录密码。`browsercookie` 底层调用 Chrome 的 JSON 类型文件读取 cookie，但解密时需要访问 Keychain——若 Keychain 处于锁定状态（用户未解锁或使用了独立的 Keychain），解密会一直等待直到超时。
+
+**解法**：
+1. **用户手动解锁 Keychain**（一次性）：
+   - 打开 `钥匙串访问` → 右键 `登录` Keychain → `锁定"登录"钥匙串` 再 `解锁`
+   - 解锁后立即运行 cookie 提取脚本
+2. **浏览器扩展导出 Cookie**（推荐）：
+   - 安装 `EditThisCookie` 或 `Cookie-Editor` 扩展
+   - 登录目标网站后导出 JSON
+   - 手动导入到 hermes 可用的位置
+3. **在 browser 工具的 Chrome 里重新登录**（最简单）：
+   - `browser_navigate` 打开目标网站
+   - `browser_click` 登录
+   - 用户扫码/输入
+   - cookies 会保存在临时 profile 下，当前 session 可用
+
+### 问题E（2026-06-01 新增）：browser_vision API key 无效
+
+**现象**：`browser_vision` 调用返回 "API key not valid"。
+
+**根因**：辅助视觉模型使用的 Gemini API key 配置无效或过期。
+
+**状态**：不影响 DOM 提取（`dom-js-inject` 不依赖 `browser_vision`），但影响屏幕内容理解。
+
+**解法**：见 `hermes-ocr` skill 的降级路径。
+
+### 问题F（2026-06-01 新增）：AI 网站登录墙汇总
+
+| 网站 | 登录要求 | 未登录行为 | 访客可用性 |
+|------|---------|-----------|-----------|
+| 豆包 (doubao) | 手机号/抖音账号 | 显示"登录"按钮，无法对话 | ❌ 完全阻止 |
+| ChatGLM | 手机号注册 | 访客可输入但无回复 | ❌ 需注册 |
+| DeepSeek | 手机号注册 | 显示登录页 | ❌ 需注册 |
+| Gemini | Google 账号 | 显示登录按钮 | ❌ 需 Google 账号 |
+| ChatGPT | OpenAI 账号 | 显示登录按钮 | ❌ 需账号 |
+| Grok | X/Twitter 账号 | 显示登录按钮 | ❌ 需账号 |
+
+**结论**：browser 工具的临时 Chrome 实例没有任何 AI 网站的登录态。在 browser 工具里完成一次登录后，当前 session 可用，但重启后失效。
+
+**替代方案**：用 `computer_use` 控制用户真实 Chrome（已打开标签页），可以读取已登录内容，但需要用户可见窗口。详见 `macos-computer-use` skill。
 通过 HTTP `http://127.0.0.1:9333/json` 获取 targets 列表，可同时拿到完整 `id`（32字符）和 `webSocketDebuggerUrl`。
 
 ### websockets 版本必须用 15.x

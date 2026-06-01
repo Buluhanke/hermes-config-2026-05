@@ -36,7 +36,8 @@ observe() → encode_state() → GoalController.filter() → UCB1.select()
 - `~/hermes_web_agent_os.py` — 完整30KB可运行版本（单文件，7组件全内置）
 - `~/hermes_v3_demo/` — 工程化项目（多模块，fake_site测试环境，可直接在主机终端运行）
 - `references/tool-inventory-check.md` — 68工具分类核查记录（快速验证命令）
-
+- `references/ai-website-login-status.md` — AI网站登录访问模式（豆包/ChatGLM/DeepSeek/Gemini/ChatGPT/Grok登录态现状+解决方案）
+- `references/verified-cdp-ws-agent-test.md` — CDP WebSocket连接测试记录
 ## 运行
 
 ```bash

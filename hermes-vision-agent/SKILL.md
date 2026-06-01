@@ -79,6 +79,9 @@ macOS上容易出现多个Playwright版本（1.58.0/1.59.1/1.60.0）：
 | Apple Vision OCR | 屏幕文字识别(60ms) | ✅ Homebrew Python |
 | PaddleOCR | 中文高精度OCR | ✅ hermes venv |
 
+### AI聊天网站状态
+详见 `references/ai-chat-sites-status.md` — 各平台登录态限制和Bing搜索替代方案
+
 ## 搜索能力
 
 | 工具 | 状态 | 说明 |
@@ -99,3 +102,21 @@ macOS上容易出现多个Playwright版本（1.58.0/1.59.1/1.60.0）：
 - Chrome GPU合成层 → 截图全失败 → 用browser_snapshot (DOM) 替代
 - 文件对话框 → 需要人工介入
 - Gemini API视觉 → 网络墙不可靠
+
+## AI聊天网站登录态限制（2026-06-01发现）
+
+**问题**：Playwright启动的是干净浏览器实例，没有用户Chrome的cookies。
+
+豆包、ChatGLM、DeepSeek、ChatGPT等AI网站：
+- 打开后显示"登录"按钮或需要手机验证
+- AI对话功能不可用（显示转圈但无回复）
+- `browser_snapshot` / `browser_console` 读不到动态渲染的AI回复（JS懒加载）
+
+**当前解法**：
+1. **用户配合看屏幕** — 用户能看到Playwright浏览器窗口，直接告诉AI回复了什么
+2. **Bing搜索替代** — 用Python curl调用Bing搜索获取信息（见 references/ai-chat-sites-status.md）
+3. **手动cookies导入** — 用户从Chrome导出cookies JSON，导入Playwright（技术可行但麻烦）
+
+**不要做的事**：
+- 不要反复等 `browser_snapshot` 期待AI回复出现 — 动态内容查不到
+- 不要花时间调 `browser_vision` — API key无效，短期内无法修复

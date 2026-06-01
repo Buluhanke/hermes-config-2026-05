@@ -86,17 +86,28 @@ ls ~/.hermes/hermes-agent/venv/bin/python  # 存在
 ls ~/.hermes/hermes-agent/.venv/bin/python  # 不存在
 ```
 激活命令：`source ~/.hermes/hermes-agent/venv/bin/activate`（不是 `.venv`）
+### 记忆系统实况（2026-06-01修正）
+- state.db (1.2GB): 9.9万条messages，3678个sessions，FTS5搜索主力
+- memory_store.db (82KB): holographic记忆（fact_store），9条facts
+- hermes.db: 空，遗留文件，可忽略
+- sessions.db: 空，不使用
+- gbrain: ~/gbrain/ 已安装
+- FTS5联想限制：AND查询要求所有词命中，需用OR或同义词扩展
+- pending_tasks机制：fact_store存储，重启后自动恢复（已验证可用）
 
-### je_auto_control 安装位置
-安装在 `/usr/local/bin/python3` (Python 3.14)，hermes-agent venv 是 Python 3.11。
-如需在 hermes-agent venv 里调用，需单独安装：
+### venv路径（已确认）
+文档说 `.venv`，**实际是 `venv`**（无前缀点）：
 ```bash
-~/.hermes/hermes-agent/venv/bin/pip install je-auto-control
+ls ~/.hermes/hermes-agent/venv/bin/python  # 存在 ✅
+ls ~/.hermes/hermes-agent/.venv/bin/python  # 不存在 ❌
 ```
+激活命令：`source ~/.hermes/hermes-agent/venv/bin/activate`
 
-### 磁盘/内存（2026-06-02）
-- 磁盘: 241GB空闲 (7% used)
-- 内存: ~15GB used / 24GB total，空闲 ~8.8GB
+### Gateway稳定性（2026-06-01晚间确认）
+- PID 29179稳定运行20+分钟，RSS=360MB，CPU=2.9%
+- 根因：n8n/searxng MCP连接失败 + launchd KeepAlive=true → 重启风暴
+- 修复：searxng从`uvx mcp-server-searxng`改为`npx -y searxng-mcp`；n8n路径从/tmp改到~/.hermes/n8n-mcp/
+- hermes_self_check.sh中有`.venv`路径bug，需修复
 
 ## 已发现的问题
 

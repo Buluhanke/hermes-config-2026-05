@@ -438,7 +438,42 @@ C. **把你日常Chrome的Cookies复制到Hermes Chrome profile**
 
 **HumanConfig 关键参数**：typing_delay（打字延迟ms）、mistype_chance（误触概率）、mouse_min_steps/mouse_max_steps（鼠标曲线路径步数）、idle_between_actions（操作间停顿）、idle_between_duration（停顿秒数范围）
 
-## 真人化六维度进度（2026-05-29 更新）
+**2026-06-01 新增：AI聊天网站对话获取知识（已验证失败但路径明确）**
+
+**症状**：豆包/ChatGLM 在 Playwright 无头浏览器中打开后：
+- 页面正常加载，有输入框
+- 发送消息后 AI 不回复（限流或风控拦截）
+- 豆包弹出图片验证码；ChatGLM 无响应
+
+**根因**：这些网站检测 headless Playwright 模式，会静默拦截请求。
+
+**已验证可行的替代方案**：
+
+| 方案 | 工具 | 状态 |
+|------|------|------|
+| Bing搜索 | Python urllib + requests | ✅ 可用 |
+| browser_console 读动态内容 | browser_console | ✅ 可用（比snapshot更可靠） |
+| 1688 CDP | Python websocket 直连 | ✅ 之前已验证 |
+
+**browser_console 优于 browser_snapshot 的场景**：
+```javascript
+// browser_snapshot 只能看到静态DOM结构
+// browser_console 可以读取动态渲染内容
+document.querySelector('[class*="message"], .conversation-item')?.innerText
+document.body.innerText.substring(0, 8000)
+```
+
+**SearXNG MCP 不是独立服务**：
+- `npx -y searxng-mcp` 需要 serverUrl 参数，不是直接可运行的服务
+- 需要配置一个正在运行的 SearXNG 实例 URL
+- web_search 返回 502 时，用 Python urllib 直连 Bing 作为降级方案
+
+**推荐知识获取路径**：
+1. 首选：`execute_code` + Python urllib → Bing 搜索 → 提取 snippet
+2. 次选：browser_navigate → browser_console 读 innerText（需要AI网站有登录态）
+3. 备选：1688 CDP 提取商品详情（已验证）
+
+### 真人化六维度进度（2026-05-29 更新）
 
 | 方向 | 优先级 | 状态 | 说明 |
 |------|--------|------|------|

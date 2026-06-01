@@ -323,10 +323,46 @@ kill $(pgrep -f WallpaperAerialsExtension) 2>/dev/null
 
 **症状**：Gateway反复被SIGTERM杀掉（日志显示 `Shutdown context: signal=SIGTERM under_systemd=yes parent_pid=1`），重启后几分钟又死。不是代码crash，是外部进程终止。
 
-**根因排查**：
-1. 查 `gateway.error.log` — SIGTERM信号源和loadavg
-2. 查MCP服务器连接失败 — 重试3次每次消耗资源和时间，累积导致gateway不稳定
-3. 已知踩坑记录：
+**诊断特征**：
+- `gateway-exit-diag.log` 中大量 `success: false` 的 `gateway.exit_nonzero` 条目
+- 时间间隔规律（每1-2分钟一次）
+- `replace: false` 说明不是 `--replace` 替换，是自发退出
+
+**hermes_self_check.sh venv路径bug（2026-06-01发现）**：
+
+此脚本有路径错误，会导致自检失败：
+```
+# ❌ 错误路径（hermes_self_check.sh中的写法）
+~/.hermes/hermes-agent/.venv/bin/python
+
+# ✅ 正确路径（实际存在的venv）
+~/.hermes/hermes-agent/venv/bin/python
+```
+
+**诊断**：检查 `~/.hermes/scripts/hermes_self_check.sh` 中是否包含 `.venv`，若有则修复：
+```bash
+sed -i '' 's|\.hermes/hermes-agent/\.venv|hermes-agent/venv|g' ~/.hermes/scripts/hermes_self_check.sh
+```
+
+**launchd KeepAlive + MCP失败 = 重启风暴（2026-06-01新发现）**
+
+这是本次问题的核心机制：
+
+1. Gateway启动 → MCP服务器（n8n/searxng）连接失败
+2. MCP重试3次，每次失败产生异步TaskGroup错误
+3. 错误累积 → Gateway内部崩溃或退出码非0
+4. **launchd的 `KeepAlive=true`** 检测到进程退出 → 立即重启
+5. 新进程又MCP失败 → 又崩溃 → 又重启 → **循环**
+
+诊断特征：
+- `gateway-exit-diag.log` 中大量 `success: false` 的 `gateway.exit_nonzero` 条目
+- 时间间隔规律（每1-2分钟一次）
+- `replace: false` 说明不是 `--replace` 替换，是自发退出
+
+```
+{"ts": "2026-06-01T13:09:19.160673+00:00", "tag": "gateway.start", "pid": 27088, "replace": false}
+{"ts": "2026-06-01T13:09:19.165595+00:00", "tag": "gateway.exit_nonzero", "pid": 27088}
+```
 
 **searxng MCP服务器修正**：
 ```
@@ -361,6 +397,7 @@ kill $(pgrep -f WallpaperAerialsExtension) 2>/dev/null
 - 多个background进程争夺同一端口
 - MCP服务器重试期间gateway异步任务堆积→超时→系统kill
 - terminal工具的background进程在父shell退出后被reparent到PID 1，然后被init决策kill
+- **launchd KeepAlive=true + 任何原因的非正常退出 = 快速重启循环**
 
 **修复后验证**：
 ```bash
@@ -578,6 +615,7 @@ cd /Users/aimac/.hermes/hermes-agent
 
 | 文件 | 内容 |
 |------|------|
+| `references/gateway-sigterm-diagnostics.md` | SIGTERM诊断、launchd重启风暴机制、gateway-exit-diag.log分析 |
 | `references/api-key-centralization.md` | API Key 集中化管理流程、key 状态总表 |
 | `references/docker-hindsight-recovery.md` | Docker Hub 网络阻断诊断、Hindsight 容器恢复流程 |
 | `references/mac-mini-ram-management.md` | M4 Mac 内存控制、Colima vs Docker Desktop 选型 |
