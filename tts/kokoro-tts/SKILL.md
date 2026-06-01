@@ -47,16 +47,10 @@ bm_george, bm_lewis                           # 英式男声
 | 微软 Azure 语音 | 很好 | 付费 | 需API Key |
 | IndexTTS 中文 voice | 很好 | 免费 | 需GPU |
 
-## 切换到 Edge 中文 TTS
+## 当前配置（已切换为 Edge TTS）
 
-如果中文语音是刚需，改一行配置：
-
-```yaml
-tts:
-  provider: edge
-  edge:
-    voice: zh-CN-XiaoxiaoNeural
-```
+**已切换**：`~/.hermes/config.yaml` → `tts.provider: edge`（2026-06-02 完成）
+Edge TTS 是当前生产方案，Kokoro 作为备用本地引擎保留。
 
 ## 删除 MOSS-TTS-Nano
 

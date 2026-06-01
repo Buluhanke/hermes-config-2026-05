@@ -186,19 +186,23 @@ This is a recurring pattern: user asks for information and wants the reply as an
 
 用户偏好默认 Xiaoxiao，切换音色时先让用户试听确认。
 
-### MOSS-TTS-Nano — CPU 模式不稳定，慎用
+### MOSS-TTS-Nano 已废弃
 
-**已知问题（实测）：**
-- CPU 模式（`--device cpu`）加载慢，首次推理 180s 仍超时
-- 模型加载完成后生成过程也不稳定，短时间内无法产出
-- 短中文文本（5-15字）经常只输出 0.5 秒，是模型 token 数量不稳定问题
-- wrapper 参数修复无效
+MOSS-TTS-Nano 已从本系统中移除（CPU 模式不稳定、生成失败）。如需本地离线 TTS，优先考虑 Kokoro（已集成在 `tts.py` 中）。
 
-**实测结论：**
-- 180s 超时仍无法完成一次生成 → 不推荐用于生产
-- 如需本地离线 TTS，优先考虑 Kokoro（已集成在 `tts.py` 中）
+**当前最可靠中文语音方案（已验证 WeChat/Telegram 发送成功）：**
+- `provider: edge` — Edge TTS，`~/.hermes/hermes-agent/venv/bin/edge-tts`
+- 音色：`zh-CN-XiaoxiaoNeural`（女声）
+- 输出格式：`.ogg`（Telegram 原生语音气泡）
+- 配置位置：`~/.hermes/config.yaml` → `tts.provider: edge`
 
-**Edge TTS 是当前最可靠的中文语音方案（已验证 WeChat 发送成功）。**
+```bash
+# 直接调用 Edge TTS（不走 text_to_speech_tool fallback）
+~/.hermes/hermes-agent/venv/bin/edge-tts \
+  --text "语音回复的文本内容" \
+  --voice "zh-CN-XiaoxiaoNeural" \
+  --write-media /tmp/voice_reply.ogg
+```
 
 **已知问题：Gateway 配置的 `provider: moss` 与实际执行不符**
 
@@ -206,12 +210,11 @@ Gateway 配置 `tts.provider: moss`，但 `text_to_speech_tool` 内部有 fallba
 - 音色可能不是用户偏好的音色
 - 内容生成可能因为 Edge TTS 和 MOSS 的 token 处理差异而跑偏
 
-**正确做法：不要依赖 `text_to_speech_tool` 的 provider fallback，直接调 MOSS-TTS-Nano wrapper。** 见下方「语音回复工作流」第 3 步。
+**正确做法：不要依赖 `text_to_speech_tool` 的 provider fallback，直接调 Edge TTS CLI。** 见上方「语音回复工作流」第 3 步。
 
 **Pitfalls:**
-- Edge TTS can fail with "No audio was received" — fall back to MOSS-TTS-Nano (local) or Noiz
+- Edge TTS can fail with "No audio was received" — fall back to Kokoro local
 - **不要信任 `text_to_speech_tool` 日志里的 `provider: xxx` 标注** — 实际生成引擎以日志里 "Generating speech with X" 那行为准
-- MOSS-TTS-Nano first run downloads models (~hundreds of MB from HF), subsequent runs are fast
 - Ensure user wants voice before generating — some channels don't support MEDIA or the user may prefer text
 - Voice text should be self-contained: user won't see supporting text/charts with the audio
 - Audio is sent as a media attachment, NOT as WeChat native voice message — set expectation with user if they specifically asked for "按住说话" style

@@ -72,6 +72,32 @@ python3 voice_module.py
 
 ## ⚠️ 已知坑点
 
+### Edge TTS 配置（当前生产方案）
+
+Edge TTS 是当前最可靠的中文语音方案（已验证 WeChat/Telegram 发送成功）。
+
+**配置步骤：**
+1. 修改 `~/.hermes/config.yaml` 中的 `tts.provider: edge`（原来是 `provider: local`）
+2. 设置 `tts.edge.voice: zh-CN-XiaoxiaoNeural`
+3. Edge TTS 输出 `.ogg` 格式，Telegram 语音气泡原生支持
+
+**直接调用（不走 text_to_speech_tool fallback）：**
+```bash
+~/.hermes/hermes-agent/venv/bin/edge-tts \
+  --text "语音回复内容" \
+  --voice "zh-CN-XiaoxiaoNeural" \
+  --write-media /tmp/voice.ogg
+```
+
+**验证 TTS 输出格式是否为 .ogg：**
+```python
+from tools.tts_tool import text_to_speech_tool
+import json
+result = text_to_speech_tool(text='测试语音')
+data = json.loads(result)
+print(data.get('file_path'))  # 应该是 .ogg 结尾
+```
+
 ### Kokoro TTS 只有英文 voice（重要！）
 
 Kokoro 自带 voice 文件（`voices.bin`）全是英文：af_sky, af_bella, bf_emma 等，没有中文 voice。

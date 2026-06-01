@@ -24,9 +24,12 @@ trigger: 每天9点daily进化 或 每周一weekly进化 时更新
 - Vision OCR 60ms ✅、PaddleOCR ✅、dddddocr ✅、pymupdf ✅、qwen3-vl:2b ✅
 - 唯一完整可运行的 hermes-系核心技能
 
-### hermes-voice-module ⚠️ 部分缺失
-- Edge TTS: Framework Python 3.14 ✅, venv ✅, Homebrew ❌
-- Faster-Whisper: Framework 3.14 ✅, venv ❌, Homebrew ❌
+### hermes-voice-module ✅ 已修复（2026-06-02）
+- Edge TTS: venv ✅，输出格式 `.ogg`（Telegram 原生语音气泡）
+- 音色：`zh-CN-XiaoxiaoNeural`（女声）
+- **配置变更**：`tts.provider` 从 `local`（MOSS-TTS-Nano，不稳定）切换为 `edge`
+- 验证命令：`~/.hermes/hermes-agent/venv/bin/edge-tts --text "测试" --write-media /tmp/test.ogg`
+- ffmpeg 路径：`/opt/homebrew/bin/ffmpeg`（支持 .ogg 编码）
 
 ### hermes-memory-hpc ⚠️ 数据在但未激活
 - ChromaDB 数据库存在（221KB）✅

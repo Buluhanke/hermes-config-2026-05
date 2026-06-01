@@ -19,6 +19,11 @@ description: >
  Vision     理解        规划        执行
 ```
 
+**已验证的 TTS 工作流（2026-06-02 更新）：**
+- Edge TTS 直接调用：`~/.hermes/hermes-agent/venv/bin/edge-tts --text "内容" --voice "zh-CN-XiaoxiaoNeural" --write-media /tmp/voice.ogg`
+- MOSS-TTS-Nano 已废弃（CPU 模式不稳定）
+- 输出格式 `.ogg` = Telegram 原生语音气泡
+
 **AI专家网站咨询方法论（2026-05-29确立，2026-06-01修正）**
 
 遇到不熟悉的领域/问题，直接去AI网站客户端"请教"，像员工请教专家：
