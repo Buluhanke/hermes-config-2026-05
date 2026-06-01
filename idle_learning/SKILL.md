@@ -230,26 +230,61 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
 2. All green + unknown < 10% → report healthy, continue to next direction
 3. On every 5th healthy pass → do full HN scan (not required on routine passes)
 
+**⚠️ 新鲜度门控（freshness gate）：防止凌晨高频重复巡检（2026-06-02 新增）**
+- **问题**：凌晨时段 cron 每 15-30 分钟触发一次，所有 repo 无变化时仍执行全量 A→B→C→D 扫描，learning_log 单日膨胀至 8525+ 行
+- **规则**：在执行方向 A 健康检查前，先检查学习日志最后一条 entry 的时间戳。
+  - 若最后一条 entry < 30 分钟前，且所有关键 repo 的 last_commit 时间无变化 → 跳过全量扫描，仅执行：
+    1. 方向 A 健康检查（~30s）→ 如果全绿
+    2. 一次 ddgs 旋转关键词查询（~15s）→ 检测盲区新发现
+    3. 记录"新鲜度跳过"简版 entry（~50 行而非 ~400 行），或日志末尾标注 `[freshness_skip]` 标记
+  - 若最后一条 entry ≥ 30 分钟前，或任一 repo 有更新 → 执行全量 A→B→C→D 扫描
+- **repo 变更检测方法**（轻量，无需浏览器）：
+  ```bash
+  curl -sf --max-time 8 "https://api.github.com/repos/ZJU-REAL/Awesome-GUI-Agents/commits?per_page=1" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['commit']['committer']['date'] if isinstance(d,list) and d else 'unknown')"
+  curl -sf --max-time 8 "https://api.github.com/repos/OSU-NLP-Group/GUI-Agents-Paper-List/commits?per_page=1" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['commit']['committer']['date'] if isinstance(d,list) and d else 'unknown')"
+  curl -sf --max-time 8 "https://api.github.com/repos/webpro255/awesome-ai-agent-attacks/commits?per_page=1" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d[0]['commit']['committer']['date'] if isinstance(d,list) and d else 'unknown')"
+  ```
+  - 每次全量扫描的 log entry 应记录关键 repo 的 last_commit 时间，供下一轮新鲜度门控使用。
+- **简版 entry 模板**（新鲜度跳过时使用）：
+  ```markdown
+  ## 2026-06-02 空闲学习记录 (HH:MM) [freshness_skip]
+  **学习方向**：A(快速巡检) + ddgs 旋转(仅)
+  **新鲜度门控**: 最后全量巡检为 HH:MM（<30min），所有 repo 无变化，跳过 B→C→D。
+  **方向 A**: ✅ 全绿（Ollama PID, unknown < 10%, YOLO idle > 0）
+  **ddgs 旋转**: [有/无新发现]
+  **结论**: 产线健康，无操作需要。
+  ```
+- **⚠️ 二次门控（secondary gate）：防止 freshness_skip 日志膨胀（2026-06-02 新增）**
+  - **问题**：5分钟 cron 间隔下，连续 freshness_skip 每小时产生 ~600 行冗余日志（05:10→05:35 已出现5条 skip entry）
+  - **规则**：在执行健康检查和 ddgs 旋转后，写日志前检查最后一条 entry：
+    - 若最后一条 entry 也是 `[freshness_skip]`，且所有巡检指标与上次相同（全绿+无新发现+repo 无变化） → **跳过日志写入**，仅记录一条 memory（cron 下不可用则静默通过）
+    - 若最后一条 entry 是 `[freshness_skip]` 但本次有**新发现**（ddgs 命中未覆盖论文、HN 出现相关热点等） → 正常写入简版 entry
+    - 若最后一条 entry 不是 `[freshness_skip]`（例如是全量扫描） → 这是首次 skip，正常写入简版 entry
+  - **效果**：凌晨高频 cron 时段从每小时 12 条 skip entry → 仅首次 skip 写入，后续安静通过。减少 90%+ 日志膨胀。
+  - **不写日志 ≠ 不做事**：健康检查和 ddgs 旋转仍执行（保障产线监控），仅跳过持久化写操作。
+- **提前终止条件**：方向 A 不健康时（unknown > 10% 或产线问题），修复后终止，不继续后面的方向
+
 **⚠️ Cron 高效模式：一次执行跑完四个方向（2026-06-02 实战优化）**
 - 传统模型每次只跑一个方向（A→下一个），需要 4 次 cron 轮次才能完成全周期
-- **更高效模式**：一次 cron 调用跑完 A→B→C→D 全部四个方向（只要时间预算够）
+- **更高效模式**（新鲜度门控通过后执行）：一次 cron 调用跑完 A→B→C→D 全部四个方向（只要时间预算够）
   - 时间预估：A（~30s）+ B 饱和降级（~40s）+ C 安全扫描（~15s）+ D 执行层（~10s）≈ 95s 以内
   - 方向 A 健康检查全绿 → 直接衔接方向 B（跳过"等下一轮"）
   - 方向 B 饱和且无新发现 → 直接衔接方向 C/D
   - 所有发现一次性写入 learning_log，只产生一条日志 entry
 - **收益**：跨方向发现连贯，减少日志碎片
-- **提前终止条件**：方向 A 不健康时（unknown > 10% 或产线问题），修复后终止，不继续后面的方向
 - **下次学习方向推断规则**：综合巡检（A→B→C→D 全跑完）的日志 entry 末尾可以不写"下次学习方向"（因为是全方向覆盖）。当下一次 cron 触发读到缺少此字段的最后一个 entry 时，**默认从方向 A 开始**。
 
 **方向 B — 看懂内容（理解层）**
 - **目标**：GUI 理解/grounding 前沿论文追踪
 - ⚠️ **饱和提示（2026-06-02 实测）**：OSU-NLP YAML 经过 3 次全量扫描后，发现量从 ~30→11→9 递减。后续方向 B 执行时跳过全量 YAML 扫描，改用 `curl | head -100` 增量检查新增论文（YAML 文件按日期排序，只看最近的文章条目是否已有对应 reference）。
 - **标准流程**（全量模式，饱和后仅增量检查）：
-  1. **OSU-NLP YAML 获取**（raw.githubusercontent.com/OSU-NLP-Group/GUI-Agents-Paper-List/main/papers.yaml）
+  1. **OSU-NLP YAML 获取**（raw.githubusercontent.com/OSU-NLP-Group/GUI-Agents-Paper-List/refs/heads/main/papers.yaml）
+     - ⚠️ **URL 陷阱（2026-06-02 实测）**：`main/papers.yaml` 有时返回空（exit code 0 但 body 空）。`refs/heads/main/papers.yaml` 始终有效。建议优先使用 `refs/heads/main/` 路径，若 curl 返回 <100 bytes 则重试 `refs/heads/main/`。
      - ⚠️ `browser_navigate` 到 raw URL → 用 `browser_console(expression='document.body.innerText')` 取全量内容
      - ❌ `browser_snapshot` 截断（8000字符限制），不可用
-     - ⚠️ 返回的是 JSON 包裹的 YAML 字符串（`{"success": true, "result": "YAML_STRING..."}`），需用 `json.loads()` 提取
+     - ⚠️ 返回的是 JSON 包裹的 YAML 字符串，需用 `json.loads()` 提取
      - ⚠️ raw.githubusercontent.com 与 github.com 独立路由：github blocked ≠ raw-github blocked
+   **参考文件**：`scripts/direction-b-yaml-dedup.py` — 自动拉取 YAML、解析 537 论文、按 Desktop 过滤、对比 learning_log 去重、输出新发现列表。支持 `--incremental`（只显示有关键词匹配的论文）和 `--output-ids`（纯 arxiv_id 列表供 shell 管道消费）。优先于 inline Python 构造。
    - **跨源搜索验证**：搜索已有论文时，用 `grep -r <arxiv_id> ~/.hermes/memory/idle_learning_log.md` 作为主搜索路径。direction-b-papers reference 文件可能不存在于磁盘（论文列表嵌入在 learning_log.md 正文中），优先搜索日志文件。
   1b. **ZJU-REAL/Awesome-GUI-Agents 增量扫描**（新增来源，2026-06-02 验证）:
      - 用 `curl raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/README.md` 获取全量 README（比 browser_navigate 更快更轻量）
@@ -313,7 +348,23 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
   - Benchmark 排行榜出现新模型
 
   2. **Python 关键词评分过滤**（写 .py 文件执行，不内联 `python3 -c`）:
-     ```
+     ```python
+     # ⚠️ OSU-NLP YAML 中 envs 字段是多行列表格式（非单行数组），见下方解析示例
+     # YAML 格式:
+     #   envs:
+     #   - Desktop
+     #   - Web
+     # 必须用状态机逐行读取，不能简单用 line.split('[') 单行解析
+     
+     def parse_envs(lines, start_idx):
+         """从 '  envs:' 行的下一行开始读多行列表"""
+         envs = []
+         j = start_idx + 1
+         while j < len(lines) and lines[j].strip().startswith('- '):
+             envs.append(lines[j].strip().replace('- ', ''))
+             j += 1
+         return envs, j - 1
+     
      keywords_of_interest = [
          'grounding', 'visual understanding', 'GUI understanding',
          'screen parsing', 'GUI agent', 'computer use', 'desktop agent',
@@ -336,6 +387,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
      - learning_log 用 patch 追加到 `~/.hermes/memory/idle_learning_log.md`
 - **论文发现方法论**：arXiv browser 搜索 + OSU-NLP YAML 扫描 + ZJU Awesome-GUI-Agents raw README 扫描
 - **重复扫描去重**：使用 `scripts/direction-b-scan.py` 自动标记 KNOWN vs NEW，详见 `references/direction-b-dedup-technique.md`
+  - ⚠️ **`scripts/direction-b-scan.py` 可能不存在于磁盘（2026-06-02 实测）**：此脚本属于 hermes-agent repo（不在用户 skills 目录），cron 上下文可能无法引用。优先用 `scripts/direction-b-yaml-dedup.py`（如存在）或 reference 文件中的 inline Python 方案。当脚本不可用时，走手动 grep 路线：用 Python 多行解析器从 YAML 提取 Desktop 论文，用 grep 对比 learning_log 做去重。详见下方"Python 关键词评分过滤"示例。
 - **饱和确认处理**（2026-06-02 实测）：当第 4 次及以上增量扫描确认 0 新发现时（趋势 30→11→9→0），标记为完全饱和。后续方向 B 轮次执行以下降级流程：
   1. **跳过 OSU-NLP YAML 全量/增量扫描**（已有 34+ 篇桌面论文全部覆盖），但保留**安全/跨域定向扫描**（targeted scan using `python3 scripts/direction-b-scan.py | grep -E "NEW.*security|NEW.*safety|NEW.*guardrail|NEW.*red teaming"`）。原因：OSU-NLP YAML 中的安全/跨域论文在 GUI 关键词过滤中仍可能产生 2-4 篇新发现（如 AutoElicit/MisActBench/AdvCUA/RiOSWorld），即使 GUI grounding 方向已饱和。安全论文使用不同关键词（safety/security/red teaming/guardrail），在标准 GUI 扫描中经常因 keyword overlap 不足被遗漏，但全量扫描的 keyword scoring 仍能命中。详见 `references/direction-b-dedup-technique.md`。
      - **脚本是 canonical 去重源**：`scripts/direction-b-scan.py` 的 KNOWN_ARXIV 是 paper 覆盖度的权威记录。filesystem grep（learning_log + reference files）返回 0 匹配不一定代表论文未覆盖——KNOWN_ARXIV 可能已标记为 KNOWN。**优先运行 script 的 --incremental 模式做去重，而非手动 grep**。
@@ -455,7 +507,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
          # 避免 for 循环多 pip show 调用（cron 上下文会误判为长进程）
          $HOME/.hermes/hermes-agent/venv/bin/python3 -c "
          import subprocess, sys
-         r = subprocess.run(['$HOME/.hermes/hermes-agent/venv/bin/pip', 'list', '--format=columns'],
+         r = subprocess.run(['$HOME/.hermes/hermes-agent/venv/bin/pip3', 'list', '--format=columns'],
              capture_output=True, text=True, timeout=30)
          # 过滤关键包
          key_pkgs = ['httpx','aiohttp','requests','pydantic','uvicorn','fastapi','starlette',
@@ -467,6 +519,8 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
                      break
          "
          ```
+         ⚠️ **Hermes venv 中 `pip3` 而非 `pip`（2026-06-02 实测）**：`/Users/aimac/.hermes/hermes-agent/venv/bin/` 目录下只有 `pip3` 和 `pip3.11`，没有 `pip` 二进制。用 `subprocess.run(['/path/to/pip', ...])` 会报 `FileNotFoundError`。必须使用 `pip3` 替代 `pip`。
+         备选一行命令（当 Python subprocess 不可用时）：`/Users/aimac/.hermes/hermes-agent/venv/bin/pip3 list --format=columns | grep -iE "httpx|aiohttp|starlette|fastapi"`
          ⚠️ **Cron 上下文陷阱（2026-06-02 实测）**：纯 bash `for` 循环中多次调用 `pip show`（如旧版 `for pkg in ...; do pip show ...; done`）会被 cron 上下文误判为启动长进程（返回 `"starting a long-lived server/watch process"` 错误）。**必须使用单次 Python 调用**（如上）一次性过滤所有目标依赖。备选：用 `/Users/aimac/.hermes/hermes-agent/venv/bin/pip list --format=columns | grep -iE "httpx|aiohttp"` 一行完成。
        - **检查方法**：ddgs 关键词搜索 `"CVE <tool> <version> 2026"` 而非全量 CVE 数据库遍历
        - 已知高危 CVE 记录写入 reference 文件，含风险矩阵（直接/间接/行动）
@@ -724,6 +778,7 @@ sed -i '' 's/model: ahmadwaqar\/smolvlm2-agentic-gui:latest/model: qwen3-vl:2b/'
 | `execute_code` 被拦截 | cron 禁止沙盒 Python | 用 `terminal` + 写 `.py` 文件替代 |
 | **`/tmp` 文件路径竞争**（2026-06-02 实测） | **兄弟 subagent 同时写入同名 `/tmp/xx.py` 互相覆盖** | 必须用时间戳命名（`/tmp/hn_$(date +%s).py`），不要用固定路径 |
 | **`write_file` 不展开 shell 变量**（2026-06-02 实测） | 写入路径含 `$(date +%s)` 或 `$(date +%H%M%S)` 时当作字面文件名 | 先用 `terminal` 获取时间戳赋值到拼好的路径（如 `/tmp/idle_log_20260602_015816.md`），再用 `write_file` 写入固定路径。或：仅 `terminal cat >>` 追加时用 shell 变量，不用在 `write_file` 路径中放 `$()` |
+| **macOS `grep -P` 不支持**（2026-06-02 实测） | BSD grep 无 `-P`（Perl 正则）选项，`grep -oP 'pattern'` 报 `invalid option -- P` | 用 `grep -E`（扩展正则）替代，或改用 `python3 -c "import re; ..."` 做复杂正则。管道到 `python3` 比 BSD grep 更可靠 |
 
 ---
 
@@ -833,3 +888,6 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/a2a-contagion-agent-communication-security-2026.md` — A2A Contagion: Agent-to-Agent 通信安全（语义防火墙/GAF/mTLS/OWASP），方向 C HIGH 风险参考
 - `references/rampart-clarity-agent-safety-testing-2026-06-02.md` — Microsoft RAMPART + Clarity 开源 Agent 安全测试/设计验证框架 (May 2026)，方向 C 架构参考
 - `references/windeskground-multi-window-benchmark-2026-06-02.md` — WinDeskGround (arXiv 2605.16402) 多窗口桌面 GUI grounding 基准，方向 B 新发现
+- `references/mvp-multi-view-prediction-gui-grounding-2026-06-02.md` — MVP (arXiv 2512.08529, CVPR 2026) 多视角预测提升 GUI grounding 坐标稳定性，方向 D 坐标映射链参考
+- `references/ui-oceanus-2604.02345.md` — UI-Oceanus (arXiv 2604.02345): 合成环境动力学替代人类示教，交互物理学习范式，+7% offline/+16.8% online，方向 B 训练方法论
+- `scripts/direction-b-yaml-dedup.py` — OSU-NLP YAML 全量扫描 + 去重脚本。自动拉取 537 论文、过滤 Desktop、对比 learning_log、去重、输出新发现列表。支持 `--incremental` 和 `--output-ids` 模式。
