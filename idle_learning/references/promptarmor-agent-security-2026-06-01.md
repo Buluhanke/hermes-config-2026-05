@@ -40,6 +40,24 @@
 - **利用机制**：使用浏览器子代理访问恶意网站窃取数据
 - **对 Hermes**：设置被绕过说明纯配置层面的防御不可靠，必须有 Verify 阶段
 
+### vLex Screen Takeover — 厂商积极响应案例
+
+**来源**：https://www.promptarmor.com/resources/screen-takeover-attack-in-ai-tool-acquired-for-1b
+**HN 92pts, 2026-05**
+
+Vincent AI（vLex，法律 AI，被 Clio 以 $1B 收购）的 3 步攻击链：
+
+1. 用户上传不可信文档（含隐藏在白字中的提示注入）
+2. 用户询问文档内容，AI 解析"直接引语"→ 引用了攻击者隐藏的 HTML 代码
+3. AI 输出 HTML → 浏览器渲染恶意 iframe → 全屏钓鱼弹窗覆盖 vLex 界面
+
+**扩展攻击面**：模型输出可执行 JavaScript（通过 Markdown 超链接/HTML 元素注入）→ 零点击数据窃取、会话令牌窃取、强制文件下载
+
+**关键差异 vs ChatGPT/OpenAI 披露**：
+- vLex **快速响应并修复**了漏洞（PromptArmor 表示"took fast and effective action"）
+- 相比之下，OpenAI 对 ChatGPT Google Sheets 披露无回复（自动邮件后静默）
+- 结论：安全响应速度取决于厂商态度，而非漏洞严重程度
+
 ### Other confirmed victims（同为间接提示注入攻击）
 - Codex for Everything — 数据窃取
 - Microsoft Copilot Cowork — 文件窃取
@@ -52,7 +70,6 @@
 - Ramp Sheets AI — 财务数据窃取
 - Snowflake Cortex AI — 沙箱逃逸+执行恶意软件
 - GitHub Copilot CLI — 下载和执行恶意软件
-- vLex（法律AI，10亿美元收购）— 屏幕接管攻击
 - CellShock — Claude AI Excel 数据窃取
 - IBM AI ('Bob') — 下载和执行恶意软件
 
@@ -87,3 +104,16 @@
 4. 检查页面侧边栏的"相关文章"/"threat intelligence"列表
 5. 交叉发现：侧边栏列表通常包含同机构的其他同类研究，每篇 2-3 次 browser_console JS 提取即可获取完整内容
 6. 比 arXiv 搜索更高效——安全研究的发布模式是"系列披露"而非单篇论文
+
+## 2026-06-01 新增：ChatGPT for Google Sheets 数据窃取
+
+**来源**：https://www.promptarmor.com/resources/gpt-for-google-sheets-data-exfiltration
+**HN 87pts, May 2026**
+
+ChatGPT for Google Sheets 扩展（185K 下载，上线 <1月）：
+- 单次间接提示注入即可触发：跨工作表数据窃取、钓鱼弹窗、GPT侧边栏覆盖、恶意编辑
+- **绕过 "require human approval" 设置**
+- OpenAI 对负责任披露无回应
+- 攻击模式：「间接提示注入→工具权限越权→数据窃取」，与之前 18+ 漏洞完全一致
+
+详见 `references/promptarmor-chatgpt-sheets-exfiltration-2026-06-01.md`

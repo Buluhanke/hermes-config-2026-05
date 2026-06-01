@@ -24,6 +24,16 @@ description: "视觉感知 + 桌面/浏览器控制。Phase 2 核心：看→想
 
 **不需要截图，不需要VLM，不需要Ollama。**
 
+**ReAct工作循环实测（2026-06-01）：**
+- Playwright启动Chrome：0.1s（`channel='chrome'`）
+- DeepSeek响应：0.8s
+- 表单填写+提交：1步完成
+- 1688搜索：遇到滑块验证码（ddddocr可用，待集成）
+
+**进化框架**：任务池(cron 09:00) → 自我优化(cron 02:00) → 结果存日志 → 自我修复 → 汇报
+
+**脚本**：`~/.hermes/scripts/hermes_react_loop.py`
+
 ```python
 # 安装
 pip3 install playwright

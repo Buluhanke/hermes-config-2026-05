@@ -46,17 +46,20 @@ category: procurement
 
 **三步走，按优先级选：**
 
-#### 方式A：AnySearch（推荐，2026-05-29验证可用）
+#### 方式A：ddgs搜索（推荐，2026-06-01验证可用）
 ```bash
-python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py batch_search \
-  --queries '[{"query":"纸箱 义乌 1688 批发","max_results":5}]'
+~/.hermes/hermes-agent/venv/bin/python3 -c "
+from ddgs import DDGS
+with DDGS() as ddgs:
+    results = list(ddgs.text('纸箱 义乌 1688 批发', max_results=5))
+    for r in results: print(r['title'], '-', r['href'])
+"
 ```
-- 输出结构化，1688商品直接命中摘要
 - 速度快，不触发反爬
-- **局限**：摘要数据有限（标题/价格/已售/货源地），无法自动获取商品详情页的规格/颜色/尺寸等详细规格数据
+- 数据为网页摘要，非1688直接商品数据
 
 #### 方式B：CDP拦截1688搜索postMessage数据
-**⚠️ 已失效（2026-05-29验证）**：1688对headless Chrome触发滑块验证，直接搜索URL（s.1688.com）100%被拦。CDP浏览器无法绕过。
+**⚠️ 实际不可用（2026-06-01验证）**：1688对headless Chrome触发滑块验证，直接访问s.1688.com 100%被拦。
 
 **触发条件**：只有在用户**已登录1688的浏览器**中手动搜索关键词后，才能用CDP拦截postMessage数据。自动化搜索全部失败。
 
@@ -242,15 +245,8 @@ hermes-ocr（辅助）← extract工厂资质文件 / 读报价单截图
 
 **AnySearch常用命令**（runtime.conf已配置python3）：
 ```bash
-# 单次搜索
-python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py search "关键词" --max_results 5
-
-# 批量搜索（推荐，比单次快）
-python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py batch_search \
-  --queries '[{"query":"纸箱 义乌 工厂","max_results":5},{"query":"气泡袋 金华 批发","max_results":5}]'
-
-# 全页内容提取（工厂详情页）
-python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py extract "https://detail.1688.com/offer/ID.html"
+# 单次搜索（已改用ddgs，anysearch CLI已弃用）
+~/.hermes/hermes-agent/venv/bin/python3 -c "from ddgs import DDGS; ..."
 ```
 
 **1688 ClawHub技能库（2026-05-29新增）

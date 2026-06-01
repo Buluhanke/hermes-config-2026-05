@@ -278,14 +278,16 @@ subprocess.Popen(
 ```
 **unknown 率 0.8%** — 历史最低。
 
-**当日（06-01 07:16 快照 — YOLO 预分类上线后）**：
+**2026-06-01 07:16 快照 — YOLO 预分类上线后**：
 ```text
 369 other  — 其中 28 次被 YOLO 预分类直接跳过（93ms）
   2 unknown (0.54%)
   1 desktop
   1 browser
 ```
-**YOLO 预分类 28 次空闲检测，全部正确标记 [silent]**。双层分类器产线稳定。日期分片统计的必要性验证：全量 42-49% unknown 因包含 smolvlm2 时代/Ollama 挂掉的历史污染。详见 `references/unknown-scene-date-analysis-2026-06-01.md`。
+**YOLO 预分类 28 次空闲检测，全部正确标记 [silent]**。双层分类器产线稳定。
+
+**2026-06-01 07:46 延展验证**：82 次 YOLO 触发中 41 次 idle 跳过（**50% 跳过率**），41/41 正确标记 [silent]。详见 `references/yolo-production-verification-2026-06-01.md`。
 
 **全量历史（843+ 条 dry-run 总记录）**：
 ```text
