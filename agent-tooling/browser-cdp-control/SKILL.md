@@ -23,9 +23,43 @@ Priority order:
 ## Architecture
 
 ### Chrome Setup (macOS)
-- Chrome must run with `--remote-debugging-port=9222` on user's Default profile
-- 同一 profile 不能同时以普通模式+调试模式运行 → 先 `pkill -9 -f "Chrome"`，再启动调试模式
-- Config: `engine: cdp`, `cdp_url: http://127.0.0.1:9222` in `~/.hermes/config.yaml`
+
+### CDP Port Requirement
+Chrome 148+ **refuses** `--remote-debugging-port` on the default user data directory. You must use a **custom** directory.
+
+### Gateway Restart Recovery (proven workflow)
+After gateway restart/Chrome crash:
+```bash
+# 1. Kill all Chrome processes + clear lock files
+pkill -9 -f "Google Chrome" 2>/dev/null
+sleep 2
+rm -f "/Users/aimac/Library/Application Support/Google/Chrome/SingletonLock" \
+      "/Users/aimac/Library/Application Support/Google/Chrome/SingletonSocket" \
+      "/Users/aimac/Library/Application Support/Google/Chrome/SingletonCookie" 2>/dev/null
+
+# 2. Copy Default profile to custom dir, EXCLUDING large cache dirs
+rm -rf /Users/aimac/.hermes/chrome-debug 2>/dev/null
+cp -R "/Users/aimac/Library/Application Support/Google/Chrome/Default/" \
+      "/Users/aimac/.hermes/chrome-debug/"  # 实测4.7GB, ~30-60s
+# Or use rsync --exclude=Cache --exclude='Code Cache' --exclude=GPUCache for faster copy
+
+# 3. Launch with custom profile and remote debugging
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --user-data-dir="/Users/aimac/.hermes/chrome-debug" \
+  --remote-debugging-port=9222 \
+  --no-first-run --no-default-browser-check \
+  --disable-blink-features=AutomationControlled \
+  --new-window about:blank 2>/dev/null &
+sleep 10  # CRITICAL: wait for CDP to be ready
+
+# 4. Verify
+curl -s --max-time 5 http://127.0.0.1:9222/json/version | python3 -c \
+  "import sys,json; d=json.load(sys.stdin); print('OK:' + d['Browser'])"
+```
+
+If `--disable-remote-debugging-check` doesn't work, the copy+launch method is the only reliable way.
+
+Config: `engine: cdp`, `cdp_url: http://127.0.0.1:9222` in `~/.hermes/config.yaml`
 
 ### CDP Direct Access
 ```python
@@ -97,7 +131,50 @@ ws.close()
 - If CDP returns empty results, Chrome may have crashed/restarted — verify with `curl http://127.0.0.1:9222/json/version`
 - If Chrome has restarted, the WebSocket URL changes — re-fetch tabs
 
-## AI网站内容提取（Shadow DOM专用）
+## AI网站交互工作流（实战验证）
+
+### 正确流程（问题→发送→等待→提取）
+
+AI聊天网站（ChatGPT/豆包/DeepSeek/智谱清言/Gemini）使用 WebSocket 流式输出+虚拟DOM渲染，**必须在同一页面完成发送+等待+提取，不能刷新或导航离开。**
+
+```
+Step 1: browser_navigate(url)                  → 打开目标AI网站
+Step 2: browser_type(ref, text)                → 向textbox输入问题
+Step 3: browser_press(key='Enter')             → 发送消息
+Step 4: terminal("sleep 20")                   → 等待AI回复（必须等待！）
+Step 5: browser_console(expression=...)        → 用CDP提取页面文本
+       or browser_vision(question=...)         → 截图提取（模型支持时）
+```
+
+### ⚠️ 关键坑
+
+1. **不要 browser_navigate 刷新** — 导航离开当前对话页面会丢失整个对话。SPA页面不保存状态。想在同一个页面内等待回复。
+2. **等待时间必须充足** — AI回复需要15-25秒，尤其是搜索+多轮推理（DeepSeek深度思考更久）
+3. **textbox ref每次navigate都会变** — ref编号每次页面加载都重新生成
+4. **browser_press Enter可能不触发发送** — 某些网站（如Doubao）需要点发送按钮而不是按Enter
+5. **Gemini对话不持久** — Gemini在新标签页中打开时对话状态会丢失，回复不可靠
+
+### 提取方法优先级（已验证）
+
+| 方法 | 适用网站 | 效果 |
+|------|---------|------|
+| `browser_console(expression='document.body.innerText.slice(0,6000)')` | DeepSeek, 智谱清言 | ✅ 可靠 |
+| `browser_vision(question=...)` | 所有网站 | ✅ 有效但模型需支持vision |
+| CDP Runtime.evaluate (shadow DOM脚本) | ChatGPT | ⚠️ 有时返回空 |
+| `web_extract(url)` | 非AI网站 | ✅ 静态页面最快 |
+
+### 多AI站并行采集策略
+
+不要同时打开多个AI网站（每个browser_navigate会覆写当前标签页）。正确方式：**串行处理，逐个完成**。
+
+```
+1. 开豆包 → 输入 → Enter → 等待 → 提取 → 完成
+2. 开DeepSeek → 输入 → Enter → 等待 → 提取 → 完成
+3. 开智谱清言 → 输入 → Enter → 等待 → 提取 → 完成
+4. 开Gemini → 输入 → Enter → 等待 → 提取 → 完成
+```
+
+## AI网站内容提取（Shadow DOM专用，备用方案）
 
 ChatGPT、豆包、智谱清言等使用 **shadow DOM**，标准 `document.querySelector` 返回空。必须用特殊JS脚本提取。
 
