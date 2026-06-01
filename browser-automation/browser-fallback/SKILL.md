@@ -10,12 +10,18 @@ triggers:
 
 # Browser Fallback（浏览器控制降级）
 
-## 优先级
-1. **Browser工具** (`browser_navigate/click/type`) — 主要，完全可用
+## 优先级（已确认 2026-06-01）
+
+1. **Browser工具 CDP engine** (`browser_navigate/click/type/snapshot`) — 主要，完全可用
+   - 直连 `http://127.0.0.1:9222`（用户真实Chrome）
+   - 不走 MCP bridge，MCP失败不影响
 2. **Playwright CDP** (`ws://localhost:9333`) — 备用，需要Chrome开启debug端口
 
 ## 降级触发
-当 `mcp_chrome_chrome_navigate` 返回 "Failed to connect to MCP server" 时，切换到 `browser_navigate`。
+
+当 `browser_navigate` 报错（独立Chromium实例问题）时，尝试：
+1. `computer_use` 控制用户真实Chrome（已登录态）
+2. Playwright CDP 直连 `ws://localhost:9333`（需要chrome-debug Chrome在跑）
 
 ## 验证结果
 - MCP chrome bridge: 报错 "Failed to connect to MCP server"
@@ -25,18 +31,21 @@ triggers:
 ## 已验证可用的AI对话网站
 | 网站 | 状态 | 备注 |
 |------|------|------|
-| Gemini | ✅ 可访问 | 需要debug profile登录态 |
-| 豆包 | ❌ 需登录 | Playwright临时实例无cookies，显示登录按钮 |
-| ChatGLM | ❌ 需登录 | Playwright临时实例无cookies，显示登录按钮 |
+| Gemini | ✅ 可访问 | 需要用户Chrome登录态 |
+| 豆包 | ❌ 需登录 | 临时实例无cookies |
+| ChatGLM | ❌ 需登录 | 临时实例无cookies |
 | DeepSeek | ⚠️ 429限速 | 未登录 |
 | ChatGPT | ⚠️ 403 | 未登录 |
 | Grok | ✅ 可访问 | 未登录 |
 
-## 当前限制
-- browser工具Playwright临时实例：无用户cookies，每次session重新创建
-- MCP chrome bridge：报错 "Failed to connect to MCP server"
-- **所有AI网站在临时实例里均需重新登录或被风控拦截**
-- 长期方案：用户手动在chrome-debug Chrome登录，cookies持久化
+## 架构结论（2026-06-01 确认）
+
+用户Chrome（9222）已达最优，无需额外配置：
+- `browser_navigate` → 307元素Accessibility Tree，@eN ref_id可用
+- 1688/淘宝/京东/AI网站：直接操作，不需要截图/VLM
+- 只有Canvas验证码/复杂图表才需要Vision
+
+**browser工具临时实例**：无用户cookies，每次session重新创建，适合不需要登录的网页操作。
 
 ## 相关
 - chrome-debug: Chrome debug配置

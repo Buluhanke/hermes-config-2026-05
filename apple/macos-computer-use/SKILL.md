@@ -226,6 +226,44 @@ your conversation context.
 2. 用户说"好了" → 立刻用Playwright CDP读token验证，不反复问
 3. token过期 → 自己处理刷新或让用户重新扫码，不废话
 
+## AppleScript控制用户Chrome的能力与限制
+
+### 能做到的
+AppleScript可以直接控制用户的Chrome：
+```bash
+# 打开URL
+osascript -e 'tell application "Google Chrome" to open location "https://..."'
+
+# 获取当前URL
+osascript -e 'tell application "Google Chrome" to get URL of active tab of front window'
+
+# 获取窗口标题
+osascript -e 'tell application "Google Chrome" to get title of active tab of front window'
+
+# 在当前标签页加载URL
+osascript -e 'tell application "Google Chrome" to set URL of active tab of front window to "https://..."'
+
+# 执行JS（返回值是missing value，因为Chrome沙盒限制）
+osascript -e 'tell application "Google Chrome" to execute javascript "..."'
+```
+
+### 做不到的（Chrome渲染进程隔离）
+- AppleScript**无法读取网页DOM内容**——Chrome的渲染进程是独立沙盒，AppleScript只能操作Chrome应用层
+- cua-driver的capture能看到Chrome窗口的742个元素，但全是Chrome框架元素（地址栏、标签栏、菜单），不是网页内容
+- 网页内容在渲染进程里，Chrome不向AppleScript暴露
+
+### 正确工作流：控制用户Chrome的正确方式
+1. **用AppleScript打开/导航**：`open location`或`set URL of active tab`
+2. **但无法读取页面内容**——这是Chrome沙盒的限制，无法绕过
+3. 如果需要完整控制（读取DOM+操作网页），需要Chrome开启remote-debugging-port：
+   - 用户手动开启：`/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9333`
+   - 或Chrome默认启动时就带`--remote-debugging-port`参数
+
+### 替代方案：Playwright控制临时Chrome
+- `browser_navigate`等browser工具会自动启动独立Chrome实例
+- 用户能看到窗口但这是Playwright的，不是用户日常Chrome
+- 如果需要读页面内容，用`browser_console`或`browser_snapshot`（Playwright实例内）
+
 ## 验证登录状态的正确方法
 
 ❌ 错误方法（会导致误判）：
@@ -261,6 +299,30 @@ osascript -e 'tell application "Google Chrome" to set URL of active tab of windo
 
 - CDP `curl localhost:9333/json` 返回15个tab，但AppleScript只看到2个 → CDP有缓存延迟，以AppleScript为准
 - Grok页面browser_navigate有时超时 → 重试或用AppleScript导航
+
+## 核心场景：控制用户已登录的Chrome访问AI网站
+
+当用户说"通过浏览器去各AI网站实际对话获取知识"时：
+
+**旧路径（错误）：**
+- 用 `browser_navigate` 开新browser实例 → 没有登录态 → 遇到登录墙
+
+**正确路径：**
+```
+1. computer_use(action="capture", app="Chrome", mode="ax")
+   → 读取用户Chrome的AX Tree（文本，不需要vision模型）
+   
+2. 找到已登录AI网站的标签页/输入框
+   
+3. computer_use(action="click", element=N) 控制用户Chrome
+```
+
+**关键点：**
+- `mode="ax"` 返回纯文本AX树，不需要vision模型（当前模型MiniMax-M2.7不支持vision，但ax模式可以工作）
+- 用户Chrome里AI网站已登录 → 直接读结构操作，不需要截图
+- 只有Canvas验证码/复杂图表才用 `mode="som"` + vision
+
+---
 
 ## When NOT to use `computer_use`
 

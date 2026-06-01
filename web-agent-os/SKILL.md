@@ -38,6 +38,7 @@ observe() → encode_state() → GoalController.filter() → UCB1.select()
 - `references/tool-inventory-check.md` — 68工具分类核查记录（快速验证命令）
 - `references/ai-website-login-status.md` — AI网站登录访问模式（豆包/ChatGLM/DeepSeek/Gemini/ChatGPT/Grok登录态现状+解决方案）
 - `references/verified-cdp-ws-agent-test.md` — CDP WebSocket连接测试记录
+- `references/architecture-20260601.md` — 浏览器架构确认记录（2026-06-01验证：9222用户Chrome已达最优，307元素Accessibility Tree可用）
 ## 运行
 
 ```bash
@@ -64,6 +65,70 @@ BROWSER_CDP_URL=ws://127.0.0.1:9333  # 不修改 config.yaml，用环境变量
 ### 相关工具
 - `dom_tools.py`（`~/.hermes/hermes-agent/tools/`）— 生产级注册工具：`dom_snapshot`、`dom_click`、`dom_fill`、`dom_tabs`
 - 详见 `dom-js-inject` skill
+
+## 工具优先级（最新 2026-06）
+
+❌ **旧路径（已废弃）：** 截图 → VLM识别 → 找按钮/输入框（慢、贵、Token消耗大）
+
+✅ **正确路径：**
+```
+第一步：web_extract / browser_get_web_content (直接拿文本)
+        ↓ 快（文本）、准（结构化）
+
+第二步：CDP DOM.getDocument (读取DOM结构)
+        ↓ 比Accessibility Tree更稳定
+
+第三步：只有以下情况才截图/VLM：
+        - Canvas验证码图片
+        - 复杂图表
+        - 动态渲染无法用文本提取时
+```
+
+**原则：永远优先用网页文本提取，而不是截图识别。**
+
+### AI网站已登录状态访问（核心场景）
+
+用户Chrome已登录AI网站时，**必须用`computer_use`控制用户真实Chrome**，而不是开新browser实例：
+
+```
+computer_use(action="capture", app="Chrome", mode="ax")
+     ↓
+读取AX Tree，找到对应标签页元素
+     ↓
+computer_use(action="click", element=N)  控制已登录的Chrome
+```
+
+**browser工具Chrome（agent-browser）≠ 用户Chrome。** agent-browser是独立临时实例，没有AI网站登录态。
+
+### `computer_use` vs `browser_*` 工具 决策树
+
+```
+任务需要读网页内容？
+├── 用户Chrome已打开该页面 且 已登录
+│   └── 用 computer_use 控制用户Chrome（读已登录状态）
+├── 需要主动开新页面/新标签
+│   └── 用 browser_navigate（独立Chromium实例）
+└── 两者都要
+    └── 先 computer_use 确认用户Chrome状态，再 browser_navigate 打开新页面
+```
+
+### 扁平化 Accessibility Tree + Playwright 语义定位
+
+**顶级Agent（如Browser Use、Agent-E）的核心架构：**
+
+```python
+# 扁平化AX Tree：单层列表，模型直接读
+# 每个节点带语义标签（role、name、value）
+page.get_by_role("button", name="登录")
+page.get_by_label("搜索框")
+page.get_by_text("提交")
+```
+
+**优势：**
+- 嵌套AX Tree要"爬树"，扁平化直接读
+- Playwright语义定位比XPath/CSS更稳（页面结构变了一般不坏）
+
+---
 
 ## 已知限制
 

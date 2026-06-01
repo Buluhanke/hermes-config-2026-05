@@ -92,9 +92,56 @@ els.forEach(el => {
 **两种完全独立的Chrome运行方式：**
 
 | 实例 | 用途 | 启动方式 | 端口 |
-|------|------|---------|------|
+|------|------|---------|-----|
 | agent-browser Chromium | browser_navigate/click等工具 | hermes-agent自动管理 | 无调试端口 |
-| chrome-debug profile | Playwright CDP | 需手动启动launcher | 9333 |
+| chrome-debug profile | Playwright CDP / 原生CDP | 需手动启动launcher | 9333 |
+| 用户真实Chrome (已登录) | computer_use / CDP直连 | 用户日常使用 | 9222 |
+
+**browser工具Chrome ≠ 用户日常Chrome。** browser_navigate用agent-browser起独立headless Chromium，与用户Chrome完全独立。
+
+**关键端口区分：**
+- **端口 9222**：用户真实Chrome调试端口（`--remote-debugging-port=9222`），可访问已登录的AI网站会话
+- **端口 9333**：独立的chrome-debug profile，无登录态，仅用于dom_tools
+
+**用户真实Chrome (9222) 已验证可用！**（2026-06-01 确认）
+```python
+# 成功验证：CDP WebSocket 直连用户Chrome (2026-06-01)
+ws_url = "ws://127.0.0.1:9222/devtools/page/<tab_id>"
+# DOM.getDocument 返回根节点，包含2个子节点
+# Page.getLayoutMetrics 返回 clientWidth=1200, clientHeight=864
+```
+
+**Hermes Browser (CDP engine) 直连 9222，不走 MCP bridge**
+- MCP chrome bridge 报错 `Failed to connect to MCP server` — 不影响
+- `browser_navigate("https://www.1688.com")` → 307元素 Accessibility Tree，@eN ref_id可用
+- 结论：CDP engine 已是最优方案，不需要等 MCP bridge 修
+
+**读取用户已登录AI网站的正确方式：**
+```bash
+# 1. 先确认端口
+curl http://127.0.0.1:9222/json/version
+# 返回: Chrome/148.0.7778.179
+
+# 2. 列出标签页（找到已登录的AI网站标签）
+curl http://127.0.0.1:9222/json/list
+
+# 3. 用原生Python WebSocket连接（不依赖Playwright）
+python3 << 'EOF'
+import websocket, json
+tab_id = "<目标标签页ID>"
+ws = websocket.create_connection(f"ws://127.0.0.1:9222/devtools/page/{tab_id}", timeout=10)
+cmd = {"id": 1, "method": "DOM.getDocument", "params": {"depth": 3}}
+ws.send(json.dumps(cmd))
+result = json.loads(ws.recv())
+print(result)
+ws.close()
+EOF
+```
+
+**computer_use vs CDP直连的选择：**
+- `computer_use`：读取用户可见窗口的AX Tree，适合需要用户参与的场景
+- CDP WebSocket直连(9222)：纯后台读取，适合自动化场景
+- `browser_navigate`：开独立实例，无用户登录态
 
 **browser工具Chrome ≠ 用户日常Chrome。** browser_navigate用agent-browser起独立headless Chromium，与用户Chrome完全独立。
 

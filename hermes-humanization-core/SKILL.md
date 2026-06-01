@@ -413,6 +413,7 @@ C. **把你日常Chrome的Cookies复制到Hermes Chrome profile**
 解决：用户Chrome开启调试端口后，用Playwright CDP连接，不走computer_use。
 
 **推荐1688自动化路径（2026-05-28验证成功）**：
+**推荐1688自动化路径（2026-05-28验证成功）**：
 
 1. 用户Chrome开启调试端口（加 `--remote-allow-origins=*`）：
    ```
@@ -427,6 +428,23 @@ C. **把你日常Chrome的Cookies复制到Hermes Chrome profile**
 5. 向tab发`Page.navigate`命令
 
 **完整代码模板见 `references/1688-cdp-automation.md`**
+
+**2026-06-01 新增：操作用户真实Chrome（已验证）**
+
+browser工具控制的是Hermes专属Chrome（无用户登录态）。要操作用户已登录的AI网站（豆包/ChatGLM等），需要直连用户Chrome：
+
+```bash
+# 杀掉现有Chrome，用用户真实profile启动debug端口
+pkill -9 "Google Chrome"
+sleep 2
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+  --remote-debugging-port=9333 \
+  --user-data-dir="/Users/aimac/Library/Application Support/Google/Chrome/Profile 1"
+```
+
+然后用Python CDP WebSocket连接 `ws://127.0.0.1:9333/devtools/page/<id>`，用 `Runtime.evaluate` 执行JS操作页面。
+
+**完整操作流程见 `references/user-chrome-cdp-control.md`**
 
 **关键坑**：
 - Chrome必须加`--remote-allow-origins=*`，否则WebSocket handshake返回403
@@ -462,6 +480,16 @@ C. **把你日常Chrome的Cookies复制到Hermes Chrome profile**
 document.querySelector('[class*="message"], .conversation-item')?.innerText
 document.body.innerText.substring(0, 8000)
 ```
+
+**用户纠正（2026-06-01）：不要走后台浏览器，走用户打开的浏览器**
+
+用户明确指出：Hermes应该直接操作用户日常Chrome，而不是Playwright临时实例。
+
+**操作用户Chrome的两种方式**：
+- AppleScript：快速发指令（`open location`），但读不到DOM
+- Chrome Debug Port + CDP WebSocket：完整控制（读DOM、执行JS、截图）
+
+详见 `references/user-chrome-cdp-control.md`
 
 **SearXNG MCP 不是独立服务**：
 - `npx -y searxng-mcp` 需要 serverUrl 参数，不是直接可运行的服务

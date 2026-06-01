@@ -127,7 +127,7 @@ screen_trigger_handler 在调用 VLM 前先做场景过滤。**不分析**以下
 - `references/ollama-api-endpoint-chat-vs-generate-2026-05-30.md` — ⚠️ 重要：/api/chat vs /api/generate 性能差异，错误端点导致120s超时
 - `references/insiderllm-m4-2026-guide-2026-05-31.md` — InsiderLLM M4 2026 最新推荐：Qwen 3.6-27B dense（M4 24GB "tight but doable"），vision 内建于基座
 - `references/response-normalization-2026-06-02.md` — ⚠️ 重要：get_scene_type() response 标准化，取第一行+小写+trim标点
-- `references/production-snapshot-2026-06-01-0716.md` — 产线快照：YOLO预分类28次空闲检测全部正确，unknown率0.54%，双层分类器稳定运行
+- `references/production-snapshot-2026-06-01-2306.md` — 晚间巡检：过程死亡恢复+YOLO uncertain回退验证+Gateway污染稳定
 - `references/screen-trigger-handler-telegram-fix-2026-05-30.md` — Telegram推送失败修复（hermes_tools → 直接Bot API）+ 场景分类prompt幻觉bug修复
 - `references/smolvlm2-structured-json-2026-05-29.md` — smolvlm2 JSON 输出测试详情（响应时间、清理函数、可靠性评估）
 - `references/screen-trigger-handler-auto-execute-2026-05-28.md` — Auto-Execute 集成设计文档
@@ -253,6 +253,50 @@ subprocess.Popen(
 - Handler: `~/.hermes/scripts/screen_trigger_handler.py`
 - Stale lock: `~/.hermes/screenshots/.handler_lock`
 
+## 进程死亡恢复手册（2026-06-01 晚间实测验证）
+
+screen_watcher 和 Ollama 在系统空闲数小时后会双双消失（可能是 macOS 内存压力调度或进程老化）。这是**周期性复发**问题，不是一次性故障。
+
+### 一键恢复序列（2026-06-01 晚间实测：~40s 全链路恢复）
+
+```bash
+# 第1步：启动 Ollama（macOS Login Item，后台自动启动）
+open -a Ollama
+sleep 8
+
+# 第2步：验证 Ollama 就绪
+curl -sf --max-time 8 http://127.0.0.1:11434/api/tags > /dev/null 2>&1 || {
+    echo "Ollama 未就绪，尝试等待..."
+    sleep 15
+    curl -sf --max-time 8 http://127.0.0.1:11434/api/tags > /dev/null 2>&1
+}
+
+# 第3步：启动 screen_watcher（background daemon）
+python3 ~/.hermes/scripts/screen_watcher.py &
+
+# 第4步：验证 ①进程存活 ②截图新鲜 ③handler 触发 ④dry-run 增长
+sleep 10
+ls -lt ~/.hermes/screenshots/current.png
+tail -5 ~/.hermes/logs/screen_trigger.log
+grep -c 'AUTO-EXEC-DRY' ~/.hermes/logs/screen_trigger.log
+```
+
+**检查要点**：
+| # | 检查项 | 命令 | 通过条件 |
+|---|--------|------|---------|
+| 1 | Ollama 进程 | `ps aux \| grep [o]llama` | 至少 1 行 |
+| 2 | VLM 模型在线 | `curl -sf http://127.0.0.1:11434/api/tags` | 返回 qwen3-vl:2b |
+| 3 | screen_watcher 进程 | `ps aux \| grep [s]creen_watcher` | 至少 1 行 |
+| 4 | 截图新鲜度 | `ls -lt ~/.hermes/screenshots/current.png` | 时间戳在最近 5 分钟内 |
+| 5 | handler 触发 | `tail -3 ~/.hermes/logs/screen_trigger.log` | 有最近的 "触发！" 记录 |
+| 6 | YOLO 预分类 | `tail -3 ~/.hermes/logs/screen_trigger.log \| grep YOLO` | idle 或 uncertain 均可 |
+| 7 | 场景分类（active 时） | `tail -3 \| grep '场景类型'` | 非 unknown 即可 |
+| 8 | lock 残留 | `ls ~/.hermes/screenshots/.handler_lock 2>/dev/null` | 返回空（无文件） |
+
+**坑**：
+- 不要同时启动 Ollama 和 screen_watcher — 等 Ollama 就绪后再启动 watcher，否则 handler 首次触发会请求 VLM 失败的 Ollama 端点
+- `pkill -f screen_watcher` 后再启动（旧进程活着会截图不更新）
+
 ## 生产验证状态（2026-06-01 07:00 更新）
 
 以下指标为 2026-06-01 07:00 巡检确认的健康基线（含本 session 修复的关键问题）：
@@ -304,8 +348,12 @@ subprocess.Popen(
 | 05-31 06:00 | 468 | 40% | 280(May-31) | — | 50% |
 | 06-01 01:50 | 672 | 45% | — | 13% | 35% |
 | 06-01 02:30 | 715 | 42% | — | 18% | 33% |
+| 06-01 22:00 (process death) | 989 | 36% | 0% (restarted) | — | YOLO ready |
+| **06-01 23:06 (本session)** | **989** | **36%** | **4.3% (June 1 分片)** | **YOLO uncertain(2UI)→desktop ✅** | **2 action, still < condition ③** |
 | **06-01 04:45** | **843** | **36%** | **0.8%** **(今日)** | **15%** | **28%** |
 | **06-01 07:16** | **967** | **36%** | **0.54%** **(当日 369 other / 2 unknown / 1 desktop / 1 browser)** | **YOLO idle 28次正确跳过** | **YOLO预分类已产线稳定** |
+
+**2026-06-01 22:00 产线数据**: screen_watcher+Ollama 双双死亡 ~4h。23:05 恢复，40s内全链路恢复。详见 `references/production-snapshot-2026-06-01-2306.md`
 
 other 从 88→129（+41）说明否定词检测持续生效：更多原被分类为 browser 的场景正确降级为 other + [silent]。unknown 占比从 45%→42%（下降 3pp，因 other 增长稀释）。
 
