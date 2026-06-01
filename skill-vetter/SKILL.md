@@ -9,11 +9,14 @@ description: Security-first skill vetting for AI agents. Use before installing a
 Security-first vetting protocol for AI agent skills. **Never install a skill without vetting it first.**
 
 ## When to Use
-
 - Before installing any skill from ClawdHub
 - Before running skills from GitHub repos
-- When evaluating skills shared by other agents
+- When evaluating tools/links shared by other agents (even if not framed as "install this")
 - Anytime you're asked to install unknown code
+
+## ⚠️ Pitfall: Load Before Research
+
+When the user shares a link saying "研究一下" or "install this", load `skill-vetter` FIRST — then research using the structured protocol. Don't do the vetting work manually without the protocol; you'll get the right answer but lose the structured record and repeatability.
 
 ## Vetting Protocol
 
@@ -118,6 +121,33 @@ curl -s "https://api.github.com/repos/OWNER/REPO/contents/skills/SKILL_NAME" | j
 curl -s "https://raw.githubusercontent.com/OWNER/REPO/main/skills/SKILL_NAME/SKILL.md"
 ```
 
+## Quick Vet Commands
+
+For GitHub-hosted skills:
+```bash
+# Check repo stats
+curl -s "https://api.github.com/repos/OWNER/REPO" | jq '{stars: .stargazers_count, forks: .forks_count, updated: .updated_at}'
+
+# List skill files
+curl -s "https://api.github.com/repos/OWNER/REPO/contents/skills/SKILL_NAME" | jq '.[].name'
+
+# Fetch and review SKILL.md
+curl -s "https://raw.githubusercontent.com/OWNER/REPO/main/skills/SKILL_NAME/SKILL.md"
+```
+
+## Common Fake Install Patterns
+
+These patterns indicate a promoted/tool-spam link, NOT a real skill:
+
+| Pattern | Example | Indicates |
+|---------|---------|----------|
+| `npx skills add` | `npx skills add author/repo` | ❌ npx has no `skills` subcommand |
+| `npm install -g` + vague name | `npm install -g ai-tool` | ⚠️ Verify npm package legitimacy |
+| No SKILL.md in repo | Repo exists but no skill file | ❌ Not a Hermes-compatible skill |
+| "One command install" without `hermes skills install` | Any non-standard install | Verify against `hermes skills list` |
+
+**Rule: If the install command isn't `hermes skills install <source>`, vet the source carefully before proceeding.**
+
 ## Trust Hierarchy
 
 1. **Official OpenClaw skills** → Lower scrutiny (still review)
@@ -136,3 +166,9 @@ curl -s "https://raw.githubusercontent.com/OWNER/REPO/main/skills/SKILL_NAME/SKI
 ---
 
 *Paranoia is a feature.* 🔒🦀
+
+---
+
+## References
+
+- `references/vetting-records.md` — 历史vetting记录，包含本轮发现的两个工具（LG-token-saver / EverMe）的详细分析

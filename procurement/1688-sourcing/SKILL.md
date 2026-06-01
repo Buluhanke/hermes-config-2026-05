@@ -77,11 +77,20 @@ python3 ~/.hermes/skills/anysearch/scripts/anysearch_cli.py extract "https://det
 
 **方式选择优先级**：AnySearch(快) → extract详情页(辅助) → CDP(仅用户已登录时)
 
-### 1688反爬实测结论（2026-05-29）
+### 1688反爬实测结论（2026-06-01更新）
+
+**永远不要尝试用headless Chrome操作1688搜索页面。**
 - 直接URL访问搜索结果页 → 100%触发滑块验证码
-- AnySearch → 可用，但数据粒度受限
-- 详情页extract → 可用，数据较全
-- CDP拦截 → 仅用户在浏览器登录后才有效
+- Playwright `page.fill()`/`page.click()` → 报 "element is not visible"（百度隐藏表单元素阻止自动化）
+- 根因：百度检测 `navigator.webdriver=true` 和 Chrome 自动化标志
+- Playwright CDP 连接已有Chrome有安全限制（无法创建context/page）
+
+**正确搜索优先级：**
+1. **AnySearch（ddgs搜索）** → 最可靠，不触发反爬
+2. **extract详情页** → 可用，数据较全
+3. **CDP拦截** → 仅用户在浏览器登录后才有效
+
+**任何情况下都不要启动新的headless Chrome去操作1688页面** — 这是浪费时间。
 
 ### Step 3：筛选江浙沪
 
