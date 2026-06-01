@@ -103,6 +103,7 @@ Docker（Colima）已彻底停止，不再使用。
 `~/.hermes/current_context.json` — 跨会话JSON追踪文件
 ## 参考资料
 
+- [macOS 动态壁纸 CPU 问题](./references/macos-wallpaper-cpu-issue.md) — WallpaperAerialsExtension 占用 CPU，临时/永久处理方法
 - [GitHub Push Protection 清理实战](./references/git-push-protection-cleanup-20260602.md) — API key历史清理，filter-branch vs 重建方案
 - [Cron Jobs 配置](./references/cron-jobs-config.md)
 - [Matt Pocock Skills + EvoMap 参考](./references/mattpocock-evomap.md)
@@ -251,6 +252,45 @@ Docker（Colima）已彻底停止，不再使用。
 - 之前 `self_evolution.sh` 有完整框架（hourly/daily/weekly），但内容是假的
 - "真的学"定义：读错误日志 → 识别问题 → 自动修复 → 写笔记
 - 不是：记录版本号/技能数 → 假装在成长
+
+---
+
+## Pitfall：session_search 记忆断裂
+
+**症状**：昨晚的对话存在 DB 里，但今天搜关键词返回 0 结果。原因：
+1. FTS 索引关键词匹配问题（"动态壁纸" vs "壁纸" 词形差异）
+2. 或者昨晚 session 在 compaction 时丢失了关键上下文
+
+**排查步骤**：
+```python
+# 直接查 SQLite 看是否有记录
+import sqlite3
+conn = sqlite3.connect('~/.hermes/hermes-agent/sessions.db')
+cur = conn.execute("SELECT session_id, title, created_at FROM sessions ORDER BY created_at DESC LIMIT 5")
+for row in cur.fetchall():
+    print(row)
+```
+
+**预防**：每次重要对话结束后，主动把结论写入记忆（`memory` 工具）或 holographic fact，不要依赖 session_search 跨会话找回。
+
+**WallpaperExtension 额外教训**：
+- macOS 的 `WallpaperAerialsExtension` 会持续占用 CPU（实测 66 分钟 CPU 时间）
+- `kill` 杀掉后系统会重启，唯一永久解决方案是改壁纸设置
+- 参考：`references/macos-wallpaper-cpu-issue.md`
+
+---
+
+## Pitfall：窗口管理工具残留
+
+**Hammerspoon**（用户手动安装的 macOS 自动化工具）：
+- 占用 84MB 内存，挂在后台
+- 用户没在用，但已设为登录项开机自动启动
+- 关闭方法：
+  1. `kill $(pgrep -f Hammerspoon)`
+  2. `osascript -e 'tell application "System Events" to delete login item "Hammerspoon"'`
+  3. launchctl 确认：`launchctl print gui/$(id -u)/com.hammerspoon.Hammerspoon`
+
+**教训**：hermes 生态外的进程也要定期巡检，用户说"没运行其他东西"但实际上有残留工具在吃内存。
 
 ---
 

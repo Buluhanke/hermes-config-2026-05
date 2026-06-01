@@ -272,15 +272,26 @@ hermes cron update <job_id> --model deepseek-v4-flash --provider deepseek
 
 **Docker（Colima）已彻底停用** — 以下容器未运行是正常的：
 - hindsight/searxng/n8n/open-webui → 已停止，不再使用
-- chromadb → 已迁移到原生 uvicorn 运行（端口8000）
+- Colima 也已 stop，内存释放约 2-4GB
 
-**Ollama 正在运行** — `qwen3-vl:2b` 用于 screen_watcher 视觉分析，是活跃依赖：
-- Ollama 被系统内存压力调度 kill 时 → screen_watcher handler 全部返回 unknown
-- 诊断：`ps aux | grep -i ollama | grep -v grep` — 无输出 = 已挂
-- 修复：`open -a Ollama && sleep 5 && curl -s --max-time 3 http://127.0.0.1:11434/api/tags`
-- 不可忽略 Ollama 故障！
+**Ollama 已退出** — 2026-06-01凌晨决定不用本地模型（内存占用太大，qwen3-vl:latest 6GB压垮系统）
+- 进程可能残留：`kill $(pgrep -f ollama)` 清理
+- screen_watcher 不再依赖 Ollama VLM
+- 搜索降级为 web_search API
 
-如果持续出现这些报警，说明watchdog脚本需要更新到v4版本（位于~/.hermes/scripts/self-healer-watchdog.sh）。
+### Mac资源清理（定期执行）
+
+每次巡检执行，释放残留进程内存：
+```bash
+# Ollama 残留
+kill $(pgrep -f Ollama) 2>/dev/null
+
+# Hammerspoon 残留
+kill $(pgrep -f Hammerspoon) 2>/dev/null
+
+# Dynamic Wallpaper Extension（kill后系统会重启，仅临时）
+kill $(pgrep -f WallpaperAerialsExtension) 2>/dev/null
+```
 
 ### 浏览器CDP断开（Chrome进程挂了）
 

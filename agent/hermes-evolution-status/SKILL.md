@@ -7,7 +7,7 @@ trigger: 每天9点daily进化 或 每周一weekly进化 时更新
 # Hermes Evolution Status Tracker
 
 ## 当前时间
-2026-05-30 23:00 复盘更新
+2026-06-02 12:55 全面记忆系统审计更新
 
 ## 核心技能实际运行状态
 
@@ -39,35 +39,29 @@ trigger: 每天9点daily进化 或 每周一weekly进化 时更新
 ### hermes-evolution-status ✅ 文档存活
 
 ## 系统架构
-### 核心进程
+### 核心进程 (2026-06-01重构后)
 ```
-hermes gateway (PID 91042)
-├── Chrome CDP (PID 1531, :9333)
-├── Ollama (PID 1655, :11434)
-└── MCP Chrome Bridge (PID 91503)
+hermes gateway (node)
+├── Chrome CDP (:9333, chrome-debug profile)
+├── MCP Chrome (:9333 via mcp-chrome-stdio)
+└── MCP servers (github, filesystem, chrome)
 ```
 
 ### 浏览器
-- Chrome with `--remote-debugging-port=9333`（chrome-debug profile）✅
+- Chrome with `--remote-debugging-port=9333`（`~/.hermes/chrome-debug` profile）✅
 - MCP Chrome Extension loaded ✅
-- CUA Driver v0.2.0 at /Applications/CuaDriver.app ✅
 - **Playwright CDP** `~/.hermes/scripts/browser_cdp.py` 可用（备用方案）✅
 
-### Docker 容器（全部运行）
-- hermes-hindsight (8899) ✅
-- searxng (8888) ✅
-- n8nio/n8n (5678) ✅
-- chromadb/chroma (8000) ✅
+### Docker/Colima 状态 ⚠️ 已清空（2026-06-01凌晨决定）
+**决定：不做Docker生态，用本地替代方案。**
+- 所有容器已删除（n8n/open-webui/hindsight/searxng/chromadb）
+- Colima 已 stop（`colima stop`，menu bar残留进程无碍）
+- 内存从 ~23GB 降至 ~8GB 空闲
+- 搜索降级为 web_search API
 
-**注意**：Docker Desktop 需手动启动，容器不会自动跟随系统启动。
-
-### 端口状态（2026-06-02 确认）
+### 端口状态（2026-06-02 更新）
 - 9333: Chrome CDP ✅
-- 11434: Ollama ✅
-- 8899: Hindsight ✅
-- 8888: SearXNG ✅
-- 5678: n8n ✅
-- 8000: ChromaDB ✅
+- 其他Docker端口（8899/8888/5678/8000）：全部下线 ❌
 
 ### venv 路径（⚠️ 注意）
 文档说 `.venv`，**实际是 `venv`**（无前缀点）：
@@ -84,9 +78,9 @@ ls ~/.hermes/hermes-agent/.venv/bin/python  # 不存在
 ~/.hermes/hermes-agent/venv/bin/pip install je-auto-control
 ```
 
-### 磁盘/内存
+### 磁盘/内存（2026-06-02）
 - 磁盘: 241GB空闲 (7% used)
-- 内存: ~203MB RSS，健康
+- 内存: ~15GB used / 24GB total，空闲 ~8.8GB
 
 ## 已发现的问题
 
@@ -139,9 +133,31 @@ ls ~/.hermes/hermes-agent/.venv/bin/python  # 不存在
 - GitHub检测到密钥后阻止推送，31个commit积压本地
 - 解决方向：.gitignore加入.env，或清理历史中的密钥commit
 
-### 12. SearXNG双实例 (2026-05-30)
-- 本地Docker `127.0.0.1:8888` — 运行中，之前切回公共 searx.be
-- 切换方法：改config.yaml中 `SEARXNG_URL`
+### 12. SearXNG降级（2026-06-01）
+- 本地Docker已停止，搜索降级为 web_search API
+- SearXNG本地需Docker，不值得为搜索重开Docker生态
+
+### 13. Dynamic Wallpaper 吃CPU（2026-06-02 ✅ 已解决）
+- 进程：`WallpaperAerialsExtension`（Apple TV Aerial 航拍视频壁纸）
+- CPU时间：66分钟（系统重启前）
+- 解决方案：系统设置 → 壁纸 → 换成静态壁纸
+- `kill $(pgrep -f WallpaperAerialsExtension)` 可临时杀掉，系统唤醒会重启
+- 彻底关掉：壁纸设置里选择静态图片
+
+### 14. Hammerspoon残留（2026-06-02 ✅ 已清理）
+- 进程占用84MB，已kill并删除登录项
+- 开机启动已禁止
+
+### 15. session_search FTS5 AND查询陷阱（2026-06-02 发现）
+- FTS5默认AND查询：多词搜索要求所有词都命中
+- "动态壁纸 屏幕主体" → 0结果；"壁纸" → 能搜到
+- 搜不到时优先减少关键词数量
+
+### 16. MEMORY.md vs fact_store 两套记忆系统（2026-06-02 发现）
+- MEMORY.md（`~/.hermes/memories/MEMORY.md`）：系统prompt快照，324行22KB
+- fact_store（`~/.hermes/memory_store.db`）：结构化推理引擎，仅5条facts
+- 两套独立，重要结论需手动写入fact_store才算"结构化记忆"
+- session_search 用的是 state.db FTS5（9.8万条消息），和前两套完全独立
 
 ### 13. LTM框架文件丢失 (2026-05-30 复盘发现)
 - ltm.py / evolve_context.py / personality.md 全部不存在
