@@ -890,4 +890,5 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/windeskground-multi-window-benchmark-2026-06-02.md` — WinDeskGround (arXiv 2605.16402) 多窗口桌面 GUI grounding 基准，方向 B 新发现
 - `references/mvp-multi-view-prediction-gui-grounding-2026-06-02.md` — MVP (arXiv 2512.08529, CVPR 2026) 多视角预测提升 GUI grounding 坐标稳定性，方向 D 坐标映射链参考
 - `references/ui-oceanus-2604.02345.md` — UI-Oceanus (arXiv 2604.02345): 合成环境动力学替代人类示教，交互物理学习范式，+7% offline/+16.8% online，方向 B 训练方法论
+- `references/agentdog-guardrail-framework-2026-06-02.md` — AgentDoG (arXiv 2601.18491): 诊断式 agent 安全防护框架（4B/7B/8B，开源），三维风险分类 + 根因诊断，方向 C
 - `scripts/direction-b-yaml-dedup.py` — OSU-NLP YAML 全量扫描 + 去重脚本。自动拉取 537 论文、过滤 Desktop、对比 learning_log、去重、输出新发现列表。支持 `--incremental` 和 `--output-ids` 模式。
