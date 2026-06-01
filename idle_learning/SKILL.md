@@ -95,6 +95,7 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 **网络异常时的降级策略（已验证稳定）**：
 1. `github:blocked` → 跳过 GitHub Trending，优先用 HN Firebase API 巡检热点
 2. `github:ok` → 直接 browser_navigate 访问 GitHub 仓库/README（比 web_search 更可靠）
+   - ⚠️ **raw.githubusercontent.com 阻塞时的浏览器 bypass（2026-06-02 实测）**：当 rawgh 被 blocking 但 github.com 正常时，直接用 `browser_navigate` 到 `https://raw.githubusercontent.com/<org>/<repo>/main/<path>` 可以绕过 —— browser_navigate 走浏览器 HTTP 栈，不受终端层代理/防火墙限制。配合 `browser_console(expression='document.body.innerText')` 提取全量内容（raw 页面返回纯文本，JS 提取即可）。
 3. 所有外部网络均失败 → 本次轮次直接标记为"SILENT"，仅更新巡检日志
 
 **已验证稳定的搜索降级链**：
@@ -241,6 +242,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
   - 所有发现一次性写入 learning_log，只产生一条日志 entry
 - **收益**：跨方向发现连贯，减少日志碎片
 - **提前终止条件**：方向 A 不健康时（unknown > 10% 或产线问题），修复后终止，不继续后面的方向
+- **下次学习方向推断规则**：综合巡检（A→B→C→D 全跑完）的日志 entry 末尾可以不写"下次学习方向"（因为是全方向覆盖）。当下一次 cron 触发读到缺少此字段的最后一个 entry 时，**默认从方向 A 开始**。
 
 **方向 B — 看懂内容（理解层）**
 - **目标**：GUI 理解/grounding 前沿论文追踪
@@ -267,6 +269,50 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
        curl -sf --max-time 10 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/README.md" | grep -E "(Technical Report|Computer-use Agents|Desktop|^\d+\.)" | head -60
        ```
      - 饱和阈值：连续3次增量扫描（覆盖三区）无新发现则标记为已覆盖（与 OSU-NLP 独立判断）
+
+   - **ICLR/ACL/NeurIPS 子目录增量扫描（2026-06-02 新增）**：当主 README 增量扫描标记为覆盖后，检查 ZJU repo 是否包含会议子目录（ICLR2026/、ACL2026/、NeurIPS2026/ 等），这些子目录包含完整的会议论文列表且独立于 README 更新。
+     - **检查命令**：
+       ```bash
+       # 轻量法（推荐）：curl 直调 GitHub API，无需浏览器
+       curl -sf --max-time 10 "https://api.github.com/repos/ZJU-REAL/Awesome-GUI-Agents/contents/" | python3 -c "import sys,json; [print(i['name']) for i in json.load(sys.stdin) if i['type']=='dir']"
+       # 浏览器法（备选）：rawgh blocked 时走浏览器 bypass。在 browser_console 中执行:
+       fetch('https://api.github.com/repos/ZJU-REAL/Awesome-GUI-Agents/contents/').then(r=>r.json()).then(d=>d.forEach(f=>console.log(f.name)))
+       # 或直接用 browser_navigate 到目录页面查看
+       ```
+     - **扫描策略**：ICLR2026/Paperlist.md 曾一次性产出 8 篇新论文（全量新发现），远超 README 增量扫描效率
+     - **饱和判断独立**：README 饱和 ≠ 子目录饱和，子目录需要独立扫描
+     - **已知子目录**：
+       - **ICLR2026/**（首次 grounding → 后续全量 11 sections × 74 papers 已覆盖）
+         - 11 sections: Grounding (17) / Navigation (4) / Multi-agent (8) / World Model (2) / Knowledge/Data (5) / RL (14) / Special Ideas (3) / Test-time Scaling (3) / Data Generation (4) / Security (1) / Benchmark (13)
+         - **饱和标记**：全部 11 sections 完整扫描后标记全量覆盖
+       - **AAAI2026/**（长驻子目录）
+         - ⚠️ **2026-06-02 实测修正**：之前误标记为"全覆盖"，实际 AAAI2026/README.md 含 **7 个独立 section**（Benchmark/Grounding & RL/Test-time Scaling/Training Framework/Robustness/Data Collection/Multi-Agent）。ICLR2026 饱和 ≠ AAAI2026 饱和 — **每个子目录需独立扫描和标记饱和**。
+         - **AAAI2026 论文扫描命令**：
+           - ⚠️ curl empty response 陷阱（2026-06-02 实测）：`curl` 到 raw.githubusercontent.com 有时返回空结果（exit code 0 但 body 为空）。检测方法：`wc -c` 确认返回字节数，若 < 100 bytes 则重试一次，仍空则降级 `browser_navigate` 替代。
+           ```bash
+           # 获取 section 列表
+           curl -sf --max-time 15 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/AAAI2026/README.md" | grep "^# "
+           # 获取论文标题列表
+           curl -sf --max-time 15 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/AAAI2026/README.md" | grep -E "^[0-9]+\."
+           # 跨源去重验证（对比 learning_log）
+           curl -sf --max-time 15 "..." | grep -E "^[0-9]+\." | while IFS=. read n title; do
+             hits=$(grep -ci "$title" ~/.hermes/memory/idle_learning_log.md 2>/dev/null || echo 0)
+             echo "[$hits] $title"
+           done
+           ```
+       - **Check**: browser_navigate 到 `https://github.com/ZJU-REAL/Awesome-GUI-Agents/tree/main/` 查看文件树顶层目录，检查是否有新会议子目录（NeurIPS2026/、ACL2026/、CVPR2026/ 等）
+     - **跨源去重**：子目录中的论文可能与 OSU-NLP YAML 或已有 reference 重叠，需用 arxiv_id 交叉验证
+
+  1c. **ZJU README Updates 区独立扫描**（2026-06-02 新增）:
+     - 主 README.md 顶部的 Updates 区包含**不在任何 Paperlist 子目录中的论文**
+     - 典型：ClawGUI (2604.11784)、UI-Copilot (2604.13822)、UI-Zoomer (2604.14113) 均在 Updates 区而非 Paperlist
+     - 扫描：`curl -sf --max-time 10 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/README.md" | head -80 | grep -E "arxiv\.org|arXiv:"`
+     - **饱和判断独立**：README Paperlist 饱和 ≠ Updates 区饱和。Updates 区是活来源
+
+  **方向 B 饱和状态管理**（2026-06-02 新增）：饱和不是永久状态。当以下情况发生时，重新激活全量扫描：
+  - 新会议论文列表发布（ICLR/ACL/NeurIPS/CVPR 等）
+  - 已知 repo 中出现新子目录（如 AAAI2026/、NeurIPS2026/）
+  - Benchmark 排行榜出现新模型
 
   2. **Python 关键词评分过滤**（写 .py 文件执行，不内联 `python3 -c`）:
      ```
@@ -295,13 +341,21 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
 - **饱和确认处理**（2026-06-02 实测）：当第 4 次及以上增量扫描确认 0 新发现时（趋势 30→11→9→0），标记为完全饱和。后续方向 B 轮次执行以下降级流程：
   1. **跳过 OSU-NLP YAML 全量/增量扫描**（已有 34+ 篇桌面论文全部覆盖）
   2. ddgs CLI 2 个关键词搜索（`"GUI agent desktop 2026"` + `"computer use agent security 2026"`）检测是否有新论文发布
-  3. **gentic.news/computer-use 排行榜巡检**（2026-06-02 新增）：
-     - browser_navigate `https://gentic.news/computer-use` → browser_console 提取 leaderboard 数据
+  3. **gentic.news/computer-use 排行榜巡检**（2026-06-02 新增，2026-06-02 补充 curl 轻量法）：
+     - **轻量法（推荐）**：`curl -sf --max-time 10 "https://gentic.news/computer-use" | python3 -c "import sys,json,re; d=json.loads(re.search(r'<script type=\\\"application/ld+json\\\">(.*?)</script>', sys.stdin.read(),re.S).group(1)); [print(q.get('name',''),'→',str(q.get('acceptedAnswer',{}).get('text',''))[:120]) for q in d.get('mainEntity',{}).get('itemListElement',[]) if q.get('@type')=='Question']"` — 提取 FAQ 中的 SOTA 数据（Holo3/Kimi/UI-TARS 等），比 browser 快 10x，不消耗浏览器资源
+     - **浏览器法（备选）**：`browser_navigate` → `browser_console(expression='document.body.innerText.slice(0, 8000)')` — curl 被 blocked 时降级至此
      - 追踪 Screen-level OS Control / Browser-only / Coding-focused 三类 SOTA 变化
      - 重点关注本地/开源 agent 新条目（Hermes 定位匹配）
-  4. HN Firebase API 扫描 top 10（检测热点）
-  5. 产线健康巡检（按方向 A 标准快速巡检）
-  6. 如果以上均无新发现 → 记录"方向 B 饱和维持"后提前进入下一方向
+  ⚠️ **gentic.news 核心洞察（2026-04-24 更新）**：编辑语 _\"the harness — scaffold + sandbox + verifier + recovery — matters more than the model. Independent tests show Cursor's scaffold adds 16pp over the raw model.\"_ — 直接验证 Hermes screen_trigger + RPA 架构方向正确。方向 A/B/D 通用参考文件：`references/gentic-news-computer-use-leaderboard-2026-04-24.md`
+  - **已知 repo 子目录检查**（2026-06-02 新增）：检查 ZJU-REAL/Awesome-GUI-Agents、OSU-NLP-Group/GUI-Agents-Paper-List 等 repo 是否出现了新的会议子目录（如 ICLR2026/、AAAI2026/、ACL2026/）—— 新子目录可一次性产出 8+ 篇新论文，直接重新激活全量扫描
+    - ⚠️ AAAI2026/ 是长驻子目录（非新创建），方向 B 饱和降级时应同时扫描 AAAI2026/ 和 ICLR2026/ 两个目录
+    - 同时检查 README 顶部 Updates 区（ClawGUI/UI-Copilot/UI-Zoomer 等不在 Paperlist 中的论文来源）
+    - 详见 `references/iclr2026-full-scan-2026-06-02.md`
+  5. HN Firebase API 扫描 top 10（检测热点）
+  6. 产线健康巡检（按方向 A 标准快速巡检）
+  7. 如果以上均无新发现 → 记录"方向 B 饱和维持"后提前进入下一方向
+
+⚠️ **饱和可逆（2026-06-02 实测）**：饱和标记不是永久状态。当发现新子目录或新会议论文列表时，方向 B 从"饱和"重回"发现更新中"。ZJU repo 的 ICLR2026/Paperlist.md 一次性产出 8 篇新论文就是典型案例。
 - **最新论文**：详见 `references/direction-b-papers-2026-06.md` 和 `references/direction-b-papers-2026-06-02.md`
 
 **⚠️ 降级路径（OSU-NLP + HN 均无结果时，已验证 2026-06-01）**：
@@ -364,13 +418,36 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
        | Direct risk | 当前产线/配置直接受影响？LOW/MED/HIGH + 理由 |
        | Indirect risk | 架构相似但有防护？LOW/MED/HIGH + 理由 |
        | Action | 明确措施：不改配置 / 新增 reference / 增强防护 |
+  2e. **Adversa AI Security Digest 扫描**（2026-06-02 新增，~30s）：
+     - browser_navigate `https://adversa.ai/blog/top-agentic-ai-security-resources-june-2026/` 获取最新月度安全摘要
+     - **已验证可靠来源**：Adversa AI 独立发现了 SymJack（6个 AI coding agent symlink-hijack RCE）和 TrustFall（Claude Code/Cursor/Gemini CLI/GitHub Copilot 一键 RCE）
+     - **扫描方法**：用 `browser_console(expression='document.body.innerText.slice(0, 8000)')` 提取正文；或 `curl -sf --max-time 10 URL | python3 -c "import sys,re;text=re.sub(r'<[^>]+>',' ',sys.stdin.read());print(text[:3000])"` 快速提取
+     - **关注关键词**：SymJack / TrustFall / RCE / bypass / symlink / trust dialog / codesign / approval prompt
+     - **Hermes 映射重点**：SymJack 的批准提示绕过逻辑直接映射到 Hermes 的 terminal() 沙盒绕过风险；TrustFall 的 trust dialog 回归缺陷映射到 delegate_task subagent 自汇报不验证问题
+     - **已知发现记录**：`references/adversa-ai-security-digest-june-2026.md`（含 SymJack + TrustFall 全量风险矩阵）
+     - **2026-06-02 实测：同一 digest 的 28 篇资源中有 8 篇未被之前扫描覆盖**（占比 29%）— 说明 Adversa digest 需要全量扫描而非仅头部提取。后续方向 C 轮次应确保从 digest 中提取全部 28 篇资源的标题，逐一 cross-reference learning_log 确认覆盖。
+     - **同一 digest 中新发现的 8 篇未覆盖资源**（2026-06-02）：
+       - **MemMorph**: 内存中毒劫持 tool selection，不触及元数据即可偏移 Agent 行为
+       - **Sleeper Memory Poisoning (Hidden in memory)**: 休眠记忆跨 session 触发，难以追溯 → Hermes memory 直接相关
+       - **Copirate 365 (CVE-2026-24299)**: DEF CON 议题 — 间接注入 + 渲染数据窃取 + 持久化 Copilot 后门
+       - **SafeHarbor**: 免训练层级记忆 guardrail，熵基自进化
+       - **ARGUS**: 上下文感知注入防护，provenance-aware influence graph
+       - **AgentShield**: 蜜罐/honeytoken 欺骗检测方案
+       - **ASPI (Ambiguity Seeking → Prompt Injection)**: Agent 询问澄清的行为本身成为新的注入通道 → Hermes delegate_task 中等风险，应考虑在 subagent 中禁用 clarify 能力
+       - **Towards Trustworthy Agentic AI**: 安全/鲁棒/隐私/系统安全综合综述
+     - Adversa AI 每月更新安全摘要，方向 C 轮次应检查是否有新版本
   3. **OSU-NLP YAML 扫描** (~40s，覆盖完整时可跳过)
   4. **产线健康检查** (~30s)：日期分片统计场景分布、unknown率、YOLO预分类、handler lock
      - ⚠️ **Gateway 污染检查要查 delta，不是全量**：`grep -c "screen_watch" ~/.hermes/logs/gateway.log` 返回的是整个日志文件的累积计数，对 cron 巡检没有意义。正确做法：查最近 N 行的增量 `tail -100 ~/.hermes/logs/gateway.log | grep -c "screen_watch"`。
   5. 对照记录
 - **产出要求**：至少一条可执行改进（或确认"无改进必要"），每个发现带风险矩阵评估
 - **最新论文/发现**：详见 `references/projguard-safety-monitoring-2026-06-01.md`、`references/toctou-attacks-cua-2026-06-01.md`、`references/promptarmor-ollama-vulnerabilities-2026-06-02.md`、`references/claude-code-marketplace-plugin-hijacking-2026-06-02.md`、`references/gh-copilot-cli-command-parsing-bypass-2026-06-02.md`、`references/vpi-bench-visual-prompt-injection-2026-06-02.md` 等
-
+- **新增方向 C 参考**：`references/parallax-cognitive-executive-separation-2026-06-02.md`（Parallax 认知-执行分离架构）、`references/semantic-kernel-rce-cve-2026-26030-2026-06-02.md`（MSFT Semantic Kernel RCE）、`references/youngju-computer-use-practical-guide-2026-06-02.md`（实战指南+5阶段采纳路线）、`references/zylos-agentic-ai-security-defense-stack-2026-06-02.md`（OWASP Agentic Top 10 全量防御堆栈）、`references/adversa-ai-june-2026-new-findings.md`（Adversa AI June 2026 Digest：MemMorph/Sleeper Poisoning/Copirate 365/SafeHarbor/ARGUS/AgentShield/ASPI/Trustworthy Survey — 8 篇新发现）
+- **方向 C 安全深度参考（2026-06-02 新增）**：`references/perplexity-nist-security-ai-agents-2026-06-02.md` — Perplexity/NIST AI Agent 安全全览（delegation/confused-deputy/cascading failures，直接映射 Hermes delegate_task 架构脆弱性）
+- **方向 C MCP 供应链参考（2026-06-02 新增）**：`references/csa-mcp-security-crisis-2026-06-02.md` — CSA MCP Security Crisis 报告（STDIO RCE/7 CVEs/200K+ vulnerable instances）
+- **CyberDesserts 2026 AI Agent Security Timeline（2026-06-02 新增）**：`references/cyberdesserts-ai-agent-security-timeline-2026-06-02.md` — 综合覆盖 Claude Code Hooks RCE (CVE-2025-59536)、Mexico Government Breach、ClawHavoc 等 7 大安全事件。方向 C 可靠扫描目标（ddgs → browser_navigate 直读验证 ✅）
+- **GAL 六层自主度框架（2026-06-02 新增）**：`references/gal-gui-agent-autonomy-levels-2026-06-02.md` — arXiv 2602.11514 "How Smart Is Your GUI Agent?"，方向 B 发现 + 方向 D DRY_RUN=False 路线图参考
+- **US DoD Agentic AI Guidance（2026-06-02 新增）**：`references/dod-careful-adoption-agentic-ai-2026-06-02.md` — 29 页美国政府首份 AI Agent 安全官方指南（Apr 30, 2026）
 **方向 D — 手眼配合（执行层）**
 - **目标**：动作执行能力评估 + 执行层改进
 - **标准流程**：
@@ -442,6 +519,8 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
 
      ⚠️ **关键陷阱 2**：当前 scene classification（看场景类型）远不足以支撑 DRY_RUN=False。需要 action-level classifier（看具体操作是否安全）。参见 `references/claude-code-auto-mode-2026-06-02.md` 作为行业参考架构。
 - **运行中参考**：详见 `references/direction-d-execution-layer-analysis-2026-06-01.md`、`references/claude-code-subagent-ecosystem-2026-06-02.md`（subagent 生态安全审查）、`references/claude-code-auto-mode-2026-06-02.md`（DRY_RUN=False 行业架构参考）
+- **Youngju 5-Phase Adoption Model**（见 `references/youngju-computer-use-practical-guide-2026-06-02.md`）：Phases 1→2→3→4→5 路线图，Phase 2（Read-only）→ Phase 3（Approval-gated writes）直接对应 Hermes DRY_RUN=True → False 切换路径。10 项 Production Readiness 检查表可作为 DRY_RUN=False 正式切换前的验收标准。
+- **Zylos Defense Stack**（见 `references/zylos-agentic-ai-security-defense-stack-2026-06-02.md`）：7 层防御堆栈 + OWASP Agentic Top 10，Hermes delegate_task / memory / skills 架构安全性评估参考
 
 ---
 
@@ -667,3 +746,19 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/ui-venus-1.5-technical-report-2026-06-02.md` — UI-Venus-1.5（2B/8B/30B-A3B）端到端 GUI Agent 三规模
 - `references/parallax-cognitive-executive-separation-2026-06-02.md` — Parallax 架构安全范式（4 原则：认知-执行分离/对抗验证/信息流控制/可逆执行），方向 C 架构参考
 - `references/semantic-kernel-rce-cve-2026-26030-2026-06-02.md` — Microsoft Semantic Kernel RCE (eval注入绕过blocklist)，方向 C 安全参考 + delegate_task 架构脆弱性分析
+- `references/youngju-computer-use-practical-guide-2026-06-02.md` — 浏览器/CU agent 实战指南（架构模式+7层guardrail+5阶段采纳路线+10项检查表），方向 C/D 通用参考
+- `references/zylos-agentic-ai-security-defense-stack-2026-06-02.md` — Agentic AI Security 全量防御堆栈（6攻击分类+OWASP Agentic Top 10+7层防御+量化数据），方向 C 安全深度参考
+- `references/direction-b-iclr2026-gui-grounding-2026-06-02.md` — ICLR 2026 GUI Grounding 8 篇新论文（CNRL/ManiCoG/UI-Ins/GUI-R1/GUI-AIMA-3B/GUI-Spotlight/GeneralistScanner/EAM），方向 B 发现来源
+- `references/iclr2026-full-scan-2026-06-02.md` — ICLR 2026 全量 74 论文 11 sections 结构索引，方向 B 完整扫描参考
+- `references/clawgui-unified-framework-2026-06-02.md` — ClawGUI (ZJU-REAL) 统一 RL+Eval+Deploy 框架，方向 B 重大发现
+- `references/perplexity-nist-security-ai-agents-2026-06-02.md` — arXiv 2603.12230 Perplexity/NIST AI Agent Security Considerations，方向 C 安全深度参考（delegation/confused-deputy/cascading failures）
+- `references/csa-mcp-security-crisis-2026-06-02.md` — CSA MCP Security Crisis (2026-05-04)，方向 C MCP 供应链安全参考（STDIO RCE/7 CVEs）
+- `references/gal-gui-agent-autonomy-levels-2026-06-02.md` — GAL 六层自主度框架 (arXiv 2602.11514)，方向 B/D 通用参考
+- `references/cyberdesserts-ai-agent-security-timeline-2026-06-02.md` — 2026 AI Agent 安全事件全览，方向 C 深度参考
+- `references/dod-careful-adoption-agentic-ai-2026-06-02.md` — 美国 DoD AI Agent 官方安全指南 (Apr 2026)，方向 C 参考
+- `references/adversa-ai-security-digest-june-2026.md` — Adversa AI June 2026 安全摘要（SymJack symlink-hijack RCE + TrustFall 一键 RCE），方向 C 扫描来源
+- `references/gentic-news-computer-use-leaderboard-2026-04-24.md` — Computer Use Agents 排行榜 + "harness > model" 核心洞察，方向 A/B/D 通用参考
+- `references/co-epg-aaai-2026.md` — Co-EPG (2511.10705, AAAI 2026): 规划-定位协同进化框架 (GRPO)，方向 B/D 通用
+- `references/mcp-prompt-injection-empirical-study-2026.md` — MCP Prompt Injection 实证研究 (2603.21642): 7 大 MCP 客户端首篇对比，方向 C 安全参考
+- `references/ui-s1-semi-online-rl-gui-2026-06-02.md` — UI-S1 (2509.11543): Semi-online RL for GUI agents，方向 B 新发现 + 方向 D auto_execute 参考
+- `references/a2a-contagion-agent-communication-security-2026.md` — A2A Contagion: Agent-to-Agent 通信安全（语义防火墙/GAF/mTLS/OWASP），方向 C HIGH 风险参考
