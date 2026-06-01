@@ -103,7 +103,8 @@ Docker（Colima）已彻底停止，不再使用。
 `~/.hermes/current_context.json` — 跨会话JSON追踪文件
 ## 参考资料
 
-- [macOS 动态壁纸 CPU 问题](./references/macos-wallpaper-cpu-issue.md) — WallpaperAerialsExtension 占用 CPU，临时/永久处理方法
+- [macOS 动态壁纸 CPU 问题](./references/macos-wallpaper-cpu-issue.md)
+- [记忆系统深度审计](./references/memory-system-audit-20260602.md) — WallpaperAerialsExtension 占用 CPU，临时/永久处理方法
 - [GitHub Push Protection 清理实战](./references/git-push-protection-cleanup-20260602.md) — API key历史清理，filter-branch vs 重建方案
 - [Cron Jobs 配置](./references/cron-jobs-config.md)
 - [Matt Pocock Skills + EvoMap 参考](./references/mattpocock-evomap.md)
@@ -157,17 +158,21 @@ Docker（Colima）已彻底停止，不再使用。
 - 正确做法：`python3 -c "with open('config.yaml','rb') as f: raw=f.read(); idx=raw.find(b'sk-290'); print(raw[idx:idx+50])"`
 - 替换时也要用字节级：`with open('config.yaml','rb') as f: raw=f.read()` → `raw.replace(b'old_bytes', b'new_bytes')` → 写回
 
-**禁止行为（2026-06-06强化版）**：
-- ❌ 列出选项后问"你看选哪个"
-- ❌ 说完"有几个方案"后停下来等回复
-- ❌ "要不我先做A，你确认后我再做B"
-- ❌ 任何形式的"你确定吗？"
-- ❌ "需要我先联系询价吗？"（直接执行就是）
-- ❌ "你确定要开始吗？"
-- ❌ **"发现了X个问题，需要我直接执行修复吗？"（正确做法：直接执行修复，然后统一汇报结果+遗留问题）**
-- ❌ **"要不要我先测试一下？"（直接测，测完汇报结果）**
-- ❌ **"要不要把它写进文档？"（直接写）**
-- ❌ **"这条链接要不要验证一下？"（直接验证）** ← 2026-06-06新增
+**⚠️ "你是Hermes的主人"铁律（2026-06-08强化，最高优先级）：**
+> 用户原话："你才是hermes的主人，有问题需要解决问题不是等我来处理的"
+
+**含义**：Hermes 是系统管理者，不是等待指令的工具。遇到任何系统问题——进程、配置、进程残留、内存占用——**立即处理，不需要等用户说"去做吧"**。
+
+**典型错误场景（本次教训）**：
+- ❌ 列出"Hammerspoon 在跑，关掉吗？" → 应直接关掉
+- ❌ 列出"Ollama残留进程，关掉吗？" → 应直接 kill
+- ❌ "壁纸进程我会重启，先这样？" → 应直接改 plist 永久解决
+- ❌ 发现问题后说"需要我处理吗？" → 直接处理
+- ❌ 问"要不要先测试连通性？" → 直接测，测完汇报
+
+**正确行为**：发现 = 执行，不需要授权，不需要询问，不需要确认。处理完汇报结果。
+
+**唯一例外**：涉及删除用户数据/付款/不可逆操作，才停下去问。
 
 **工具评估工作流（2026-06-06新增）**：
 

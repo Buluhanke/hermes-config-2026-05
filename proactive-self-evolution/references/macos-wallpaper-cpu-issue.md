@@ -1,43 +1,37 @@
 # macOS 动态壁纸 / WallpaperExtension CPU 问题
 
-## 2026-06-01 发现
+## 2026-06-02 实测永久解决方案
 
-**进程**：
-- `WallpaperAerialsExtension.appex` — Apple TV Aerial 航拍视频动态壁纸
-  - CPU时间：66分45秒（持续运行）
-- `WallpaperImageExtension.appex` — 静态壁纸扩展，CPU时间短（正常）
-- `WallpaperAgent` — 系统壁纸管理进程
+**根因**：macOS 把动态壁纸（Sequoia Sunrise.mov）注册在 `com.apple.wallpaper` plist 的 `SystemWallpaperURL`。`WallpaperAerialsExtension` 进程是跟随这个设置的系统扩展，`kill` 后会自动重启。
 
-**路径**：
-```
-/System/Library/ExtensionKit/Extensions/WallpaperAerialsExtension.appex/Contents/MacOS/WallpaperAerialsExtension
-/System/Library/ExtensionKit/Extensions/WallpaperImageExtension.appex/Contents/MacOS/WallpaperImageExtension
-```
-
-## 症状
-- CPU 占用异常高（单核持续跑）
-- 内存占用不大但 CPU 时间累积快
-- 系统每次唤醒（wake from sleep）会重启扩展
-
-## 临时解决方法
+**临时解决**（进程会重启）：
 ```bash
-# 杀掉进程（系统会重启）
 kill $(pgrep -f WallpaperAerialsExtension)
 ```
 
-## 永久解决方法
-**系统设置 → 壁纸 → 把"航拍视频"换成任意静态壁纸**
-
-这是 macOS Sonoma+ 内置功能，不是第三方 App，关掉后不影响其他功能。
-
-## 相关命令
+**永久解决**（一劳永逸，改 plist）：
 ```bash
-# 查看当前壁纸扩展进程
-ps aux | grep -E "WallpaperAerials|WallpaperImage|WallpaperAgent" | grep -v grep
-
-# 查看系统壁纸配置
-open x-apple.systempreferences:com.apple.DesktopSettings
+defaults write com.apple.wallpaper SystemWallpaperURL -string "file:///System/Library/Desktop%20Pictures/Mac%20Blue.heic"
+killall WallpaperAgent wallpaperexportd
+kill $(pgrep -i WallpaperAerial)
 ```
 
+验证：`ps aux | grep -i Aerials | grep -v grep` 应返回空，且 CPU 降到 0%。
+
+**可用静态壁纸路径**：
+- `/System/Library/Desktop Pictures/Mac Blue.heic`
+- `/System/Library/Desktop Pictures/iMac Blue.heic`
+- `/System/Library/Desktop Pictures/Sonoma.heic`
+
+## 进程说明
+
+| 进程 | 说明 | CPU |
+|------|------|-----|
+| `WallpaperAerialsExtension.appex` | 航拍视频壁纸驱动 | 6-13%（持续） |
+| `WallpaperImageExtension.appex` | 静态壁纸扩展 | <1%（正常） |
+| `WallpaperAgent` | 系统壁纸管理 | <1%（正常） |
+| `wallpaperexportd` | 壁纸资源导出（root） | <1%（正常） |
+
 ## session_search 关联
-2026-06-01 发现：昨晚（2026-05-31）的对话里有讨论过动态壁纸，但 session_search 搜"动态壁纸 壁纸"返回0结果，FTS 索引可能有关键词匹配问题。详见 proactive-self-evolution skill 的 Pitfall 章节。
+
+FTS5 AND 查询要求所有词都命中。搜"动态壁纸 屏幕"返回0，搜"壁纸"能找到。重要结论必须写进 memory，不能依赖跨会话搜索。

@@ -791,6 +791,8 @@ ollama pull ahmadwaqar/smolvlm2-agentic-gui:latest
 
 全部位于 `~/.hermes/scripts/`
 
+详见 `references/memory-continuity-failure-20260602.md`（2026-06-02 实测教训：FTS5 AND 查询限制 + MEMORY.md 过时导致跨会话记忆丢失）
+
 ## 实践路径
 1. 先让眼睛（屏幕感知）和手脚（桌面控制）稳定工作
 2. 加上状态记忆（memory_hpc已实现）
