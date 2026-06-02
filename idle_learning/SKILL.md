@@ -103,6 +103,32 @@ document.body.innerText.slice(16000)
 
 ### 第一步：评估当前状态 + 网络预检
 
+**⚠️ GitHub API 实用技巧（2026-06-03 实测）**：
+
+**轻量目录枚举** — 检查 repo 是否有新子目录（无需浏览器）：
+```bash
+curl -sf --max-time 10 "https://api.github.com/repos/<org>/<repo>/contents/" | python3 -c "import sys,json; [print(i['name']) for i in json.load(sys.stdin) if i['type']=='dir']"
+```
+替代方案：`browser_navigate` 到 github.com/tree/main/ 但需浏览器。
+
+**文件内容获取（rawgh 阻塞时的降级）**：
+```bash
+curl -sf --max-time 10 "https://api.github.com/repos/<org>/<repo>/contents/<path>" | python3 -c "
+import sys,json,base64,re
+d=json.load(sys.stdin)
+c=base64.b64decode(d.get('content','')).decode('utf-8')
+clean=re.sub(r'<[^>]+>','',c)  # 剥离 HTML 标签（如 GitHub 渲染后的标题）
+for line in clean.split('\n'):
+    if line.startswith('#'): print(line.strip())
+"
+```
+⚠️ `browser_navigate` 到 raw URL 在 ad-filter 下被阻断，但 GitHub Contents API 不走浏览器层，始终可用。`sha` 字段可用于新鲜度判断（内容变更 → sha 变化）。
+
+**⚠️ GitHub API vs raw.githubusercontent.com**：
+- rawgh 被 blocking 但 github.com 正常 → Contents API 仍然可用
+- github.com blocked → Contents API 也被阻断（两者共享 DNS/路由）
+- 两者独立测试，不可互相替代
+
 **⚠️ 远程库 API 实际返回数据（实测 2026-06-02）**：
 - `https://api.ollama.com/api/tags` 仅返回 39 个超大官方模型（qwen3-vl:235b-instruct 437GB等）
 - **社区模型完全缺失**：smolvlm2-agentic-gui、blaifa/InternVL3_5:4B、qwen3-vl:2b 等均不在列表
@@ -365,6 +391,14 @@ tail -100 ~/.hermes/logs/gateway.log | grep -c "screen_watch" 2>/dev/null || ech
     - 若最后一条 entry 是 `[freshness_skip]` 但本次有**新发现**（ddgs 命中未覆盖论文、HN 出现相关热点等） → 正常写入简版 entry
     - 若最后一条 entry 不是 `[freshness_skip]`（例如是全量扫描） → 这是首次 skip，正常写入简版 entry
   - **效果**：凌晨高频 cron 时段从每小时 12 条 skip entry → 仅首次 skip 写入，后续安静通过。减少 90%+ 日志膨胀。
+  - **⚠️ 动态 trim 替代硬编码行数（2026-06-03 实测）**：使用 `lines[:-12]` 硬编码裁剪行数不可靠——不同 entry 长度不同（12~20行），固定裁剪可能切到上一条 entry 的内容。**正确做法**：在写新 entry 之前，先检查上一条 entry 是否为 `[freshness_skip]`，若是则用 `len(new_entry_lines)` 精确裁剪对应行数，而非固定值。
+    ```python
+    # 动态 trim：用新 entry 的实际行数裁剪，避免硬编码行数
+    new_entry_lines = content.strip().split('\n')
+    trim_count = len(new_entry_lines)
+    with open(log_path) as f: lines = f.readlines()
+    open(log_path, 'w').writelines(lines[:-trim_count])
+    ```
   - **不写日志 ≠ 不做事**：健康检查和 ddgs 旋转仍执行（保障产线监控），仅跳过持久化写操作。
 - **提前终止条件**：方向 A 不健康时（unknown > 10% 或产线问题），修复后终止，不继续后面的方向
 
@@ -486,11 +520,6 @@ tail -100 ~/.hermes/logs/gateway.log | grep -c "screen_watch" 2>/dev/null || ech
        "
        ```
      - **已知 AAAI2026 高价值论文**：Co-EPG (规划-定位协同进化, AAAI 2026)、TongUI (合成训练轨迹)、UI-R1 (RL action prediction)、Mobile-Agent-RAG (多Agent协调)
-     - 主 README.md 顶部的 Updates 区包含**不在任何 Paperlist 子目录中的论文**
-     - 典型：ClawGUI (2604.11784)、UI-Copilot (2604.13822)、UI-Zoomer (2604.14113) 均在 Updates 区而非 Paperlist
-     - 扫描：`curl -sf --max-time 10 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/README.md" | head -80 | grep -E "arxiv\.org|arXiv:"`
-     - **饱和判断独立**：README Paperlist 饱和 ≠ Updates 区饱和。Updates 区是活来源
-     - **⚠️ 效率优先原则（2026-06-13 实测）**：Updates区 head -80 是方向 B 最有效的新论文发现来源（实测：4篇新增论文全部来自 Updates 区，主 Paper List 和子目录均无新发现）。**扫描顺序**：Updates区 → 主 Paper List → 子目录。Updates区 有新发现时继续深度扫描，无新发现时才检查子目录。
 
   **方向 B 饱和状态管理**（2026-06-02 新增，2026-06-02 扩展）：饱和不是永久状态。当以下情况发生时，重新激活全量扫描：
   - 新会议论文列表发布（ICLR/ACL/NeurIPS/CVPR 等）
@@ -719,25 +748,22 @@ Stage 3 Context Assembly（最关键安全节点，poisoned context → 全链�
          ⚠️ **Ollama 没有 Starlette 依赖** — Ollama 是 Go 二进制（Go 1.22+ 的 net/http），不使用 Python/Starlette。搜索 "Ollama Starlette CVE" 时，应检查 Ollama 的 Go HTTP 栈（如 Go net/http CVE），而非 Python 依赖。
        - **Python 工具链**：检查 hermes-agent venv 中关键依赖（httpx, aiohttp, requests 等）的 CVE
          ```bash
-         # ✅ 推荐：单次 Python 调用列出 venv 关键依赖版本
-         # 避免 for 循环多 pip show 调用（cron 上下文会误判为长进程）
-         $HOME/.hermes/hermes-agent/venv/bin/python3 -c "
-         import subprocess, sys
-         r = subprocess.run(['$HOME/.hermes/hermes-agent/venv/bin/pip3', 'list', '--format=columns'],
-             capture_output=True, text=True, timeout=30)
-         # 过滤关键包
-         key_pkgs = ['httpx','aiohttp','requests','pydantic','uvicorn','fastapi','starlette',
-                     'websockets','httpcore','anyio','httptools']
-         for line in r.stdout.split('\n'):
-             for p in key_pkgs:
-                 if line.lower().startswith(p.lower()):
-                     print(line.strip())
-                     break
+         # ✅ 推荐：单次 Python 调用直接 import 各包（比 subprocess pip list 更可靠）
+         ~/.hermes/hermes-agent/venv/bin/python3 -c "
+         import sys
+         pkgs = ['httpx','aiohttp','requests','pydantic','uvicorn','fastapi','starlette',
+                  'websockets','httpcore','anyio','httptools']
+         for p in pkgs:
+             try:
+                 m = __import__(p)
+                 ver = getattr(m, '__version__', 'unknown')
+                 print(f'{p} {ver}')
+             except ImportError:
+                 pass
          "
          ```
-         ⚠️ **Hermes venv 中 `pip3` 而非 `pip`（2026-06-02 实测）**：`/Users/aimac/.hermes/hermes-agent/venv/bin/` 目录下只有 `pip3` 和 `pip3.11`，没有 `pip` 二进制。用 `subprocess.run(['/path/to/pip', ...])` 会报 `FileNotFoundError`。必须使用 `pip3` 替代 `pip`。
-         备选一行命令（当 Python subprocess 不可用时）：`/Users/aimac/.hermes/hermes-agent/venv/bin/pip3 list --format=columns | grep -iE "httpx|aiohttp|starlette|fastapi"`
-         ⚠️ **Cron 上下文陷阱（2026-06-02 实测）**：纯 bash `for` 循环中多次调用 `pip show`（如旧版 `for pkg in ...; do pip show ...; done`）会被 cron 上下文误判为启动长进程（返回 `"starting a long-lived server/watch process"` 错误）。**必须使用单次 Python 调用**（如上）一次性过滤所有目标依赖。备选：用 `/Users/aimac/.hermes/hermes-agent/venv/bin/pip list --format=columns | grep -iE "httpx|aiohttp"` 一行完成。
+         ⚠️ **Hermes venv 中 `pip3` 而非 `pip`（2026-06-02 实测）**：`/Users/aimac/.hermes/hermes-agent/venv/bin/` 目录下只有 `pip3` 和 `pip3.11`，没有 `pip` 二进制。
+         ⚠️ **Cron 上下文陷阱**：纯 bash `for` 循环中多次调用 `pip show` 会被 cron 上下文误判为长进程。必须使用单次 Python 调用（如上）一次性检查所有目标依赖。
        - **检查方法**：ddgs 关键词搜索 `"CVE <tool> <version> 2026"` 而非全量 CVE 数据库遍历
        - 已知高危 CVE 记录写入 reference 文件，含风险矩阵（直接/间接/行动）
      - **优先级**：高于通用安全新闻扫描（如果 CVE 影响 Hermes venv 依赖则直接威胁产线）
@@ -828,8 +854,9 @@ Stage 3 Context Assembly（最关键安全节点，poisoned context → 全链�
      ```bash
      # 按日期分片，避免历史数据干扰
      grep "2026-06-NN" ~/.hermes/logs/screen_trigger.log | grep "Would execute:" | sed 's/.*Would execute: //' | sort | uniq -c | sort -rn
-     # 场景分布
-     grep "2026-06-NN" ~/.hermes/logs/screen_trigger.log | grep "scene=" | sed 's/.*scene=//' | tr -d ')' | sort | uniq -c | sort -rn
+     # 场景分布 — ⚠️ 已废弃！Handler v2 输出 YOLO预分类，不是 scene=
+     # ❌ grep "scene=" — 会返回 0 结果
+     # ✅ 正确：用 YOLO 预分类分布代替（方向 A 健康检查中已有）
      ```
   4. 坐标映射链验证（nclick）：检查 get_scene_type() 是否输出坐标（当前仅做 scene classification，不输出坐标 → 映射链未接线）。
      ```bash
