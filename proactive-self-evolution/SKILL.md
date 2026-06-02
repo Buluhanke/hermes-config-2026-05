@@ -63,6 +63,41 @@ grep -E "error|ERROR|exception" ~/.hermes/logs/gateway.log | tail -20
 
 之前的hindsight方案已废弃（2026-06-01确认）：Docker停用，Ollama退出，hindsight容器不再重建。
 
+## 学习源优先级（官方路径）
+
+按以下顺序学习，永远从高层级开始：
+
+| 优先级 | 来源 | 地址 | 备注 |
+|--------|------|------|------|
+| ① | 官方文档 | `hermes-agent.nousresearch.com/docs` | 首发权威 |
+| ② | GitHub | `github.com/NousResearch/hermes-agent` | 活跃开发，今日有 commit |
+| ③ | Discord | `discord.gg/nousresearch` | 社区讨论 |
+| ④ | 中文社区 | `hermesagent.org.cn` ✅ / `hermesai.top` ⚠️ | 国内用户聚集 |
+| ⑤ | 技能市场 | `agentskills.io` / `xiaping.coze.com` / `skillhub.cn` | 实战验证 |
+| ⑥ | 进阶资源 | `hermesatlas.com` / `mudrii/hermes-agent-docs` | 深度文档 |
+
+## 源码重点（读代码优先级）
+
+```
+hermes/skills/        → 技能生成机制
+hermes/memory/        → 记忆系统实现
+cron/                 → 调度器
+gateway/              → 消息网关
+tools/mcp_tool.py     → MCP 接入逻辑
+```
+
+## GEPA 闭环（学习执行框架）
+
+```
+Goal（定义目标）→ Execute（执行搜索）→ Publish（归档）→ Atlas（统一查询）
+```
+
+**搜索降级链**：官方文档 → GitHub → Discord → 中文社区 → 技能市场 → 本地存档
+
+> ⚠️ 严禁只用模型内置知识——那是滞后的，必须走以上路径实时学。
+
+---
+
 ## 搜索后端（ddgs）
 
 当前使用 **ddgs**（DuckDuckGo搜索Python SDK）替代旧的SearXNG（Docker）：
@@ -101,7 +136,37 @@ Docker（Colima）已彻底停止，不再使用。
 
 ### 当前状态追踪
 `~/.hermes/current_context.json` — 跨会话JSON追踪文件
-## 参考资料
+**学习源优先级（2026-06-02 更新）**：
+
+| 优先级 | 来源 | URL | 状态 |
+|--------|------|-----|------|
+| ① | 官方文档 | hermes-agent.nousresearch.com/docs | ✅ |
+| ② | GitHub | github.com/NousResearch/hermes-agent | ✅ 活跃 |
+| ③ | Discord | discord.gg/nousresearch | ✅ |
+| ④ | 中文社区 | hermesagent.org.cn | ✅ |
+| ④ | 中文社区 | hermesai.top | ⚠️ 400 |
+| ⑤ | 技能市场 | agentskills.io | ✅ |
+| ⑤ | 技能市场 | xiaping.coze.com | ✅ |
+| ⑤ | 技能市场 | skillhub.cn | ✅ |
+| ⑥ | 进阶 | hermesatlas.com | ✅ 静态页/存档站 |
+| ⑥ | 进阶 | mudrii/hermes-agent-docs | 待验证 |
+
+**升级检查工作流（2026-06-02 新增）**：
+1. `hermes --version` 查当前版本 + commit 落后数
+2. 落后 > 50 commits → `hermes update`
+3. 验证：`hermes --version` 确认 commit 数归零
+
+**源码阅读优先级**：
+```
+hermes/skills/    → 技能生成逻辑
+hermes/memory/    → 记忆系统实现
+cron/             → 调度器
+gateway/          → 消息网关
+tools/mcp_tool.py → MCP 接入
+```
+
+**GEPA 闭环**：
+Goal（定义目标）→ Execute（执行搜索）→ Publish（归档）→ Atlas（统一查询）
 
 - [macOS 动态壁纸 CPU 问题](./references/macos-wallpaper-cpu-issue.md)
 - [记忆系统深度审计](./references/memory-system-audit-20260602.md) — WallpaperAerialsExtension 占用 CPU，临时/永久处理方法

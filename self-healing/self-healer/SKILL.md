@@ -288,6 +288,60 @@ hermes cron update <job_id> --model deepseek-v4-flash --provider deepseek
 - 系统 force kill 诊断：检查 `/api/tags` 不可用 + 日志中 unknown 率异常上升 -> `open -a Ollama && sleep 5` 恢复
 - 内存释放（仅非必要时）：`pkill -9 -f ollama`（screen_watcher 关联中断）
 
+### n8n MCP 进程残留（动态启动，未登记在 config.yaml）
+
+**症状**：MCP stderr 日志持续出现 JSONRPC 格式错误，`hermes mcp list` 看不到 n8n，但 `ps aux | grep n8n` 有进程在跑。
+
+**根因**：n8n 是 catalog MCP，install 时写入 config.yaml，后来被手动删除配置。但进程是 `npm exec n8n-mcp` / `npx n8n-mcp` 动态启动的，不是从 config.yaml 启动的，所以 `hermes mcp list` 看不到。进程由 npm/npx 缓存维持，重启后依然存活。
+
+**彻底清除流程**：
+```bash
+# 1. 找进程（可能多个 PID）
+ps aux | grep n8n-mcp | grep -v grep
+
+# 2. 找安装目录（可能被 npm 缓存）
+find ~/.hermes -name "n8n-mcp" -type d 2>/dev/null
+find ~/.npm/_npx -name "n8n-mcp" -type d 2>/dev/null
+
+# 3. 删除目录
+rm -rf ~/.hermes/n8n-mcp/
+rm -rf ~/.npm/_npx/*/node_modules/.bin/n8n-mcp
+
+# 4. 杀进程（全部）
+pkill -f "n8n-mcp"
+
+# 5. 验证干净
+ps aux | grep n8n | grep -v grep  # 应无输出
+tail -20 ~/.hermes/logs/mcp-stderr.log | grep n8n  # 应无新错误
+
+# 6. 重启 gateway（确保 MCP 服务器重新初始化）
+launchctl kickstart "gui/$(id -u)/ai.hermes.gateway"
+```
+
+**验证重启后干净**：`tail -30 ~/.hermes/logs/mcp-stderr.log` 应只显示 config.yaml 中登记的 5 个服务器（chrome/filesystem/github/memory/searxng），无 n8n。
+
+**预防**：删除 MCP 时同时删目录 + 杀进程，不能只删 config.yaml 条目。
+
+### 记忆系统关闭后验证
+
+**症状**：用户决定关闭主动记忆召回（`memory.memory_enabled: false`，`memory.provider: ""`）。
+
+**验证记忆真的关闭**：
+```bash
+grep -E "memory_enabled|user_profile_enabled|provider" ~/.hermes/config.yaml
+# memory_enabled: false ✅
+# user_profile_enabled: false ✅  
+# provider: "" ✅（空字符串，不是空格）
+```
+
+**验证 memory_v2.py 默认画像为空**：
+```bash
+grep "load_profile" ~/.hermes/hermes-memory-hpc/memory_v2.py
+# 应返回空值 {} 而非硬编码默认值（如 "中" / ["1688"]）
+```
+
+**真人化原则**：记忆召回关闭后，对话中不应出现 `[用户特征]` 等标签。记忆应无形，不在回复里加标记。
+
 ### Mac资源清理（定期执行）
 
 每次巡检执行，释放残留进程内存：

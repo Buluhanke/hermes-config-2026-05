@@ -283,6 +283,106 @@ grep "registered.*tool.*from chrome" ~/.hermes/logs/agent.log | tail -3
 
 If the binary and Chrome extension are both healthy (stdio works standalone), the keepalive drop is an internal MCP session issue — restarting the gateway re-spawns the stdio subprocess and re-registers all tools.
 
+### Removing an MCP Server (Full Cleanup)
+
+When an MCP server is deprecated, broken, or you confirmed you don't need it, remove it from **all four** locations. Partial cleanup leaves orphan processes that keep logging errors and wastes disk.
+
+**Use the CLI when possible** — it validates the change and updates `~/.hermes/config.yaml` correctly:
+```bash
+hermes mcp remove <name>
+```
+
+Manual cleanup (when the CLI isn't an option, or for a thorough wipe):
+
+#### Step 1 — Config
+
+Edit `~/.hermes/config.yaml` and remove the entry under `mcp_servers:`.
+
+#### Step 2 — Kill orphan processes (BEFORE deleting files)
+
+`npx`-installed servers spawn a subprocess that **holds the binary open**. Deleting the cache directory does NOT terminate the process — `pkill` first, then delete.
+
+```bash
+ps aux | grep -iE "<name>" | grep -v grep    # find live processes
+pkill -9 -f "<name>-mcp"                     # kill them
+```
+
+#### Step 3 — Data + cache (sizes vary wildly)
+
+| Path | What it is | Typical size |
+|---|---|---|
+| `~/<name>/` (e.g. `~/.n8n/`) | Server's own data dir (sqlite, logs, config) | 10–100 MB |
+| `~/<name>-mcp/` | MCP wrapper config/cache | <1 MB |
+| `~/.npm/_npx/<hash>/` | npm-cached MCP package (one folder per package) | 100–200 MB |
+| `~/.local/bin/<name>-wrapper` | Dead wrapper scripts from manual installs | <1 KB |
+
+```bash
+du -sh ~/<name>/ ~/<name>-mcp/ ~/.npm/_npx/*/ 2>/dev/null   # size first
+rm -rf ~/<name>/ ~/<name>-mcp/ ~/.npm/_npx/<hash> ~/.local/bin/<name>-wrapper
+```
+
+The npm cache is the usual surprise — a single MCP server can leave 150+ MB there.
+
+#### Step 4 — Env vars and logs
+
+```bash
+# Strip any <NAME>_* keys (encryption key, api key, base url, etc.) from ~/.hermes/.env
+sed -i.bak '/^<NAME>_[A-Z_]*=/d' ~/.hermes/.env && rm ~/.hermes/.env.bak
+
+# Per-server stderr noise lives at ~/.hermes/logs/<name>.err.log
+rm -f ~/.hermes/logs/<name>.err.log ~/.hermes/logs/<name>.log
+```
+
+#### Step 5 — Verify (one pass, no prompts)
+
+```bash
+ps aux | grep -iE "<name>" | grep -v grep          # should be empty
+ls -d ~/<name> ~/.local/bin/<name>* 2>&1 | head    # "No such file or directory"
+python3 -c "import yaml; print(list(yaml.safe_load(open('/Users/aimac/.hermes/config.yaml'))['mcp_servers'].keys()))"
+# <name> should not appear in the list
+```
+
+**Pitfall: orphan processes survive file deletion.** If you `rm -rf` the npm cache while the server is running, the process keeps running using the in-memory binary. Always `pkill` first, then delete.
+
+**Pitfall: dead wrapper scripts in `~/.local/bin/`.** Manual installs sometimes leave scripts like `n8n-wrapper` pointing at paths that no longer exist (`exec /usr/local/bin/node /Users/aimac/.local/bin/n8n` where the inner target is gone). Check `~/.local/bin/` during cleanup — they're invisible to most diagnostics but break subsequent installs.
+
+**Pitfall: stderr noise ≠ fatal failure.** Some npm MCP packages (e.g. `n8n-mcp` v2.46+) **degrade gracefully** when their backend CLI is missing — they still register 8–9 read-only tools and log `Cannot find module '/path/to/<name>'` to stderr. Looks like a crash; isn't. Check `agent.log` for "registered N tool(s)" before concluding the server is broken. If the read-only tools are useful, the noise can be ignored; otherwise, full removal as above.
+
+#### Diagnostic: which implementation is running?
+
+Some MCP servers have **multiple implementations** of the same logical tool (Python wrapper + npm package are both common). Process tree and config evidence disambiguate:
+
+```bash
+# Process list reveals the truth
+ps aux | grep -iE "<name>" | grep -v grep
+#   - node /.../<name>-mcp/.../dist/index.js   → npm
+#   - python3 /.../server.py                   → Python (git-installed)
+#   - /opt/homebrew/bin/python3 ...             → system Python wrapper
+
+# Config evidence
+grep -B1 -A5 "<name>:" ~/.hermes/config.yaml
+# command: npx   args: [-y, <name>-mcp]         → npm
+# command: python3   args: [/path/to/server.py] → Python
+```
+
+If both are installed, both spawn on startup. The one that connected first wins the tool slot; the other becomes an orphan process still consuming resources. Cleaning up one without killing the other leaves the second running.
+
+#### Clean removal checklist (one-shot)
+
+When the user says "delete it" / "全删" / "remove this", execute the full cleanup in one pass without prompting between steps:
+
+```bash
+# 1. Config (CLI: hermes mcp remove <name>)
+# 2. Processes
+pkill -9 -f "<name>-mcp"
+# 3. Data + cache
+rm -rf ~/<name>/ ~/<name>-mcp/ /path/to/npm-cache ~/.local/bin/<name>-wrapper
+# 4. Env + logs
+sed -i '/^<NAME>_/d' ~/.hermes/.env
+rm -f ~/.hermes/logs/<name>.*.log
+# 5. Verify (4-5 greps, no "should I?" prompts)
+```
+
 ### MCP server wraps REST API but tool calls fail with "Connection refused"
 
 If your MCP server is a wrapper around a REST API (common pattern: Python/Node script that forwards MCP tool calls to a local REST service), the underlying REST service **must stay running**. The MCP server process itself can stay alive while the backend REST API dies silently.
