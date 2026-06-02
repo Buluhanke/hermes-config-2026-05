@@ -993,6 +993,7 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/cron-script-execution.md` — Cron script execution limits
 - `references/direction-b-dedup-technique.md` — OSU-NLP paper dedup with KNOWN_ARXIV set
 - `references/direction-b-cves-2026-06-03.md` — Direction B new papers (A11y-Compressor/WindowsWorld/uxCUA) + CVE-2026-44287 FastGPT RCE
+- `references/qwen3.7-plus-2026-06-03.md` — Qwen3.7-Plus (June 2, 2026) cloud multimodal agent — 5 agentic capabilities, Vision Arena rank 16, NOT on Ollama, no local impact
 - `references/zju-awesome-gui-agents-2026-06-02.md` — ZJU-REAL/Awesome-GUI-Agents 增量扫描结果 + 7篇新论文
 - `references/snowflake-cortex-sandbox-escape-2026-06-02.md` — Snowflake Cortex Code CLI sandbox escape + subagent context loss（Hermes 高风险，delegate_task 架构相似）
 - `references/gh-copilot-cli-command-parsing-bypass-2026-06-02.md` — GitHub Copilot CLI 命令解析绕过漏洞（Hermes 高风险）
@@ -1019,8 +1020,8 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/clawgui-unified-framework-2026-06-02.md` — ClawGUI (ZJU-REAL) 统一 RL+Eval+Deploy 框架，方向 B 重大发现
 - `references/perplexity-nist-security-ai-agents-2026-06-02.md` — arXiv 2603.12230 Perplexity/NIST AI Agent Security Considerations，方向 C 安全深度参考（delegation/confused-deputy/cascading failures）
 - `references/csa-mcp-security-crisis-2026-06-02.md` — CSA MCP Security Crisis (2026-05-04)，方向 C MCP 供应链安全参考（STDIO RCE/7 CVEs）
-- `references/gal-gui-agent-autonomy-levels-2026-06-02.md` — GAL 六层自主度框架 (arXiv 2602.11514)，方向 B/D 通用参考
-- `references/cyberdesserts-ai-agent-security-timeline-2026-06-02.md` — 2026 AI Agent 安全事件全览，方向 C 深度参考
+- `references/continual-gui-agents-gui-aif-2026-06-03.md` — Continual GUI Agents (arXiv 2601.20732, Jan 2026, revised Mar 2026): GUI-AiF RL fine-tuning framework with APR-iF + ARR-iF dual rewards for continual GUI grounding under distribution shift. First continual learning framework for GUI agents. Authors: Ziwei Liu et al. (NTU). Direction B new paper + Direction D screen_watcher generalization reference.
+- `references/awesome-ai-agent-attacks-timeline-2026-06-02.md` — 2026 AI Agent 安全事件全览，方向 C 深度参考
 - `references/dod-careful-adoption-agentic-ai-2026-06-02.md` — 美国 DoD AI Agent 官方安全指南 (Apr 2026)，方向 C 参考
 - `references/owasp-genai-exploit-roundup-q1-2026.md` — OWASP GenAI Exploit Round-up Q1 2026（CVE-2026-2256 / SemJack / Mexico government breach），方向 C 安全来源
 - `references/adversa-ai-security-digest-june-2026.md` — Adversa AI June 2026 安全摘要（SymJack symlink-hijack RCE + TrustFall 一键 RCE），方向 C 扫描来源
