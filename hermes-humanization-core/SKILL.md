@@ -525,7 +525,29 @@ document.body.innerText.substring(0, 8000)
 2. 次选：browser_navigate → browser_console 读 innerText（需要AI网站有登录态）
 3. 备选：1688 CDP 提取商品详情（已验证）
 
-### 真人化六维度进度（2026-06-02 更新）
+**2026-06-02 重要更新：`human_click` 必须返回 `(x, y)` — 已修复**
+
+`hermes_human_biometrics.py` 中 `human_click` 的 `mouseReleased` 事件处理器缺少 `return (x, y)`，
+导致 reactor_v3 调用时 `TypeError: cannot unpack non-iterable NoneType object`。
+
+**修复**（hermes_human_biometrics.py 约第269行）：
+```python
+def mouseReleased(self, x, y, button, modifiers):
+    self._pos = (x, y)
+    self._pressed = False
+    return (x, y)   # ← 必须添加
+```
+函数返回类型注解从 `-> None` 改为 `-> tuple[float, float]`。
+
+所有调用 `human_click` 的地方必须接收这个返回值作为下次鼠标起点：
+```python
+cx, cy = self._mouse_pos
+self._mouse_pos = await human_click(cdp, tab_id, target_x, target_y, cx, cy)
+```
+
+---
+
+**真人化六维度进度（2026-06-02 更新）**
 
 | 方向 | 优先级 | 状态 | 说明 |
 |------|--------|------|------|

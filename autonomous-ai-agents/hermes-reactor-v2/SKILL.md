@@ -57,6 +57,68 @@ async with websockets.connect(tab["webSocketDebuggerUrl"], max_size=50*1024*1024
 
 ---
 
+## Pitfall 22: `human_click` 返回 `None` 导致 v3 TypeError 崩溃
+
+### 现象
+```
+TypeError: cannot unpack non-iterable NoneType object
+  File "hermes_reactor_v3.py", line 640, in act
+    x, y = await human_click(...)
+```
+
+### 根因
+`hermes_human_biometrics.py` 的 `human_click` 函数在 `mouseReleased` 事件后缺少 `return (x, y)`，返回 `None`。v3 的贝塞尔滑行依赖上一次鼠标位置做起点，解包时崩溃。
+
+### 修复
+`hermes_human_biometrics.py` 第 269 行左右，`mouseReleased` 块末尾添加：
+```python
+def mouseReleased(self, x, y, button, modifiers):
+    self._pos = (x, y)
+    self._pressed = False
+    return (x, y)   # ← 必须加这行
+```
+同时改函数返回类型注解 `-> None` → `-> tuple[float, float]`。
+
+### Guardrail
+所有 `human_click` / `human_mouse_click` 的封装必须显式 `return (x, y)`，reactor 层依赖这个返回值做下一次的起点。
+
+---
+
+## Pitfall 23: v2/v3 多轮对话机制 — `initial_message` 只在 INIT 检查一次
+
+### 现象
+v2 reactor 在 COMPLETED 后不会自动重新输入新消息；多次调用时行为相同。
+
+### 根因
+`initial_message` 只在 `stage == "INIT"` 时注入一次，COMPLETED 后状态机重置但 `initial_message` 变量已消费。
+
+### 解法
+每次运行前清记忆文件：
+```bash
+rm -f /tmp/hermes_memory_<tab>.json
+python3 hermes_reactor_v2.py deepseek 30 "新问题"
+```
+
+### v3 改进方向
+`initial_message` 改为每次从外部参数传入，或支持消息队列，COMPLETED 后不自动结束而是等待下一条指令。
+
+---
+
+## Pitfall 24: MCP `mcp_chrome_*` 工具 ≠ `browser_cdp`（WebSocket 路径区分）
+
+### 澄清
+| 工具族 | 底层协议 | 适用场景 |
+|--------|----------|----------|
+| `mcp_chrome_*` (MCP tools) | HTTP CDP（curl 路径） | 简单导航、截图、获取元素 |
+| `browser_cdp` | WebSocket CDP | `Input.dispatchKeyEvent`、逐字输入、天眼拦截 SSE |
+
+`Input.dispatchKeyEvent`、`Runtime.evaluate` 等 WebSocket 专属命令在 HTTP CDP 路径返回 `Unknown command`。
+
+### Guardrail
+涉及逐字输入、键盘模拟、天眼拦截 SSE → 必须用 `browser_cdp` 工具或直接调 WebSocket。`mcp_chrome_*` 工具族适合做页面导航、元素获取、截图等简单操作。
+
+---
+
 ## Pitfall 20: CDP HTTP 路径不支持 WebSocket 专属命令
 
 ### 现象
@@ -278,14 +340,15 @@ class CDP:
 **风控效果**：Mouse Tracking 捕获贝塞尔曲线点阵（cos-S 速度）+ Keyboard Timing 捕获非匀速生物节律（高斯 + 爆发 + 笔误），双重真人化特征。
 **算法详解**：`~/.hermes/skills/hermes-humanization-core/references/human-biometrics-algorithms.md`
 
-## Support 文件
+## Support Files
 
+- `references/deepseek-input-chain.md` — DeepSeek 完整链路文档（6次验证，逐字输入→天眼→SSE解析）
 - `references/decision-design.md` — 4 个核心设计决策的"为什么"(body_growing 替代 stopBtn / 18 周期阈值 / 状态锁冷却 / Enter 兜底)
-- `references/pitfalls.md` — 所有踩过的坑（含 DeepSeek React 清空值 / CDP HTTP 命令失效 / execute_code 授权误判）
+- `references/pitfalls.md` — 所有踩过的坑（含 23 条 Pitfall）
 - `templates/auto_chat_sop.json` — AI 自动对话 SOP 模板（8阶段，带 loops 和 self_heal 配置）
 - `templates/1688_sop.json` — 1688 sourcing SOP 模板（5阶段：导航→搜索→选品→联系客服→记录）
 - `scripts/diagnose_button_misidentification.py` — 按钮误识别静态探针
-- `scripts/auto_web_chat.py` — **Playwright 免授权脚本**，支持 ChatGLM/DeepSeek/豆包，替代 CDP 逐字输入方案
+- `scripts/auto_web_chat.py` — Playwright 免授权脚本，支持 ChatGLM/DeepSeek/豆包
 
 ## Pitfalls 速查 — 详见 references/pitfalls.md
 

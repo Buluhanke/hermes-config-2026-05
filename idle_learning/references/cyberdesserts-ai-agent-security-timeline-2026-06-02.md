@@ -27,6 +27,10 @@ Comprehensive overview of 2026 AI agent security incidents, with MCP as the comm
 - **Mexico Breach**: First confirmed AI agent attack — attacker used Claude + ChatGPT, no technical expertise needed.
 - **Hermes mapping**: delegate_task subagent self-reporting without verification mirrors supply chain trust issues.
 
+## Updates
+- **April 2026**: Practitioner’s Guide version noted (LinkedIn post, "OpenClaw Crisis, MCP Exposures, and Supply Chain")
+- **June 2026**: URL still live — `https://adversa.ai/blog/top-agentic-ai-security-resources-june-2026/` ✅ confirmed reachable 2026-06-03
+
 ## Status
 - [x] Full article extracted — browser_navigate ✅
 - [x] Registered under idle_learning skill references

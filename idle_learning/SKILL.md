@@ -120,7 +120,8 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 ✅ 只取前10条，每条超时4s，合计约40s内完成
 
 ```python
-# /tmp/hn_fast.py — 快速版（取 top 10，每条4s超时）
+# /tmp/hn_$(date +%s).py — 快速版（取 top 10，每条4s超时）
+# ⚠️ 必须用时间戳文件名，防止并行 cron 互相覆盖
 import urllib.request,json
 base = 'https://hacker-news.firebaseio.com/v0/item/'
 r = urllib.request.urlopen('https://hacker-news.firebaseio.com/v0/topstories.json',timeout=8)
@@ -133,8 +134,41 @@ for sid in ids:
         print(f"ERR {sid}")
 ```
 ```bash
-# 执行（⚠️ 用 write_file 写 .py 文件，不能用 heredoc 或 python3 -c）
-python3 /tmp/hn_fast.py
+# 执行（⚠️ 用 cat > file << 'EOF' 写 .py 文件，不能用 write_file 嵌套在 heredoc 里）
+# write_file 是独立工具，不能在 bash heredoc 中调用（会被当作字面字符串）
+# ⚠️ 必须用时间戳命名：/tmp/hn_$(date +%s).py
+cat > /tmp/hn_$(date +%s).py << 'PYEOF'
+import urllib.request,json
+base='https://hacker-news.firebaseio.com/v0/item/'
+r=urllib.request.urlopen('https://hacker-news.firebaseio.com/v0/topstories.json',timeout=8)
+ids=json.loads(r.read())[:15]
+for sid in ids:
+    try:
+        s=json.loads(urllib.request.urlopen(base+str(sid)+'.json',timeout=4).read())
+        print(f"[{s.get('score',0)}] {s.get('title','')} | {s.get('url','')[:60]}")
+    except:
+        print(f"ERR {sid}")
+PYEOF
+python3 /tmp/hn_$(date +%s -d '1 second ago').py
+```
+
+**⚠️ `write_file` vs `terminal` 嵌套陷阱（2026-06-03 实测）**：
+```bash
+# ❌ 错误：write_file 在 heredoc 中被当作字面字符串
+cat > /tmp/script.py << 'EOF'
+write_file /tmp/out.txt "hello"   # write_file 不会被执行
+EOF
+
+# ✅ 正确：单独使用 write_file（不是 heredoc 内）
+cat > /tmp/script.py << 'EOF'
+# python 代码
+EOF
+write_file /tmp/out.txt "content"   # 独立调用，这才是工具调用
+
+# ✅ 或者全部用 cat heredoc（不用 write_file）
+cat > /tmp/out.txt << 'EOF'
+hello
+EOF
 ```
 
 判断今天应该学习哪个方向（轮流覆盖四个层次）。
@@ -174,14 +208,15 @@ python3 /tmp/hn_fast.py
   5. 二元决策：pull / 不 pull
 
 **A/Vision 推荐来源（按可靠性排序）**：
-1. **InsiderLLM**（insiderllm.com）✅ 已验证：深度 Mac 指南，定期更新
-2. **LeetLLM**（leetllm.com）✅ 已验证：Local Qwen 部署权威指南，完整 variant 表
-3. **Apple Machine Learning Research**（machinelearning.apple.com/research/）✅ 已验证：Apple 官方 VLM/视觉模型论文，可浏览器直读
-4. **Qwen 官方博客**（qwen.ai/blog）✅ 第一手资料
-5. **gentic.news/computer-use**（✅ 2026-06-02 实测）Computer Use Agents SOTA 排行榜，覆盖 OSWorld-V / BrowseComp / WebVoyager 等 8 benchmark。方向 A 模型评估时用作 benchmark 对比，方向 B/D 作 landscape 巡检。
-6. **Ollama 官方 library**（ollama.com/library/）— browser_navigate 直接抓取 benchmark
-7. **ddgs CLI** — 快速关键词搜索
-8. **HN Firebase API** — 热点技术文章
+1. **Steel.dev AI Agent Leaderboards**（leaderboard.steel.dev）✅ 2026-06-02 实测：browser_navigate 直接可读，覆盖 7 个权威 benchmark（WebVoyager/BrowseComp/WebArena/SWE-bench/OSWorld/GAIA/Online-Mind2Web），静态 HTML，`browser_console` JS 提取稳定。**首选 SOTA 来源**。
+2. **InsiderLLM**（insiderllm.com）✅ 已验证：深度 Mac 指南，定期更新
+3. **LeetLLM**（leetllm.com）✅ 已验证：Local Qwen 部署权威指南，完整 variant 表
+4. **Apple Machine Learning Research**（machinelearning.apple.com/research/）✅ 已验证：Apple 官方 VLM/视觉模型论文，可浏览器直读
+5. **Qwen 官方博客**（qwen.ai/blog）✅ 第一手资料
+6. **gentic.news/computer-use**（⚠️ 降级）— 2026-06-02 起 Firecrawl credits exhausted，schema 已弃用（JSON-LD FAQPage 结构被页面放弃）。**降为备选**：仅在 Steel.dev 不可用时使用。
+7. **Ollama 官方 library**（ollama.com/library/）— browser_navigate 直接抓取 benchmark
+8. **ddgs CLI** — 快速关键词搜索
+9. **HN Firebase API** — 热点技术文章
 
 **产线健康巡检命令集**：
 ```bash
@@ -375,11 +410,12 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
      - **跨源去重**：子目录中的论文可能与 OSU-NLP YAML 或已有 reference 重叠，需用 arxiv_id 交叉验证
      - **⚠️ 标题 HTML 标签陷阱（2026-06-02 实测）**：GitHub 的 README.md 渲染为 HTML 后，论文标题可能被 `<font style="color:...">` 等标签包裹。直接用 `grep -ci "$title"` 时匹配会失败（因为标题含隐藏 HTML）。**建议去重方法**：从 curl 原始内容中用 Python `re.sub(r'<[^>]+>', '', text)` 先剥离 HTML 标签，再用剥离后的纯文本标题做 grep 匹配。详见本次轮次 AAAI2026 扫描中的实战示范。
 
-  1c. **ZJU README Updates 区独立扫描**（2026-06-02 新增）:
+  1c. **ZJU README Updates 区独立扫描**（2026-06-02 新增，2026-06-13 效率优化）:
      - 主 README.md 顶部的 Updates 区包含**不在任何 Paperlist 子目录中的论文**
      - 典型：ClawGUI (2604.11784)、UI-Copilot (2604.13822)、UI-Zoomer (2604.14113) 均在 Updates 区而非 Paperlist
      - 扫描：`curl -sf --max-time 10 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/README.md" | head -80 | grep -E "arxiv\.org|arXiv:"`
      - **饱和判断独立**：README Paperlist 饱和 ≠ Updates 区饱和。Updates 区是活来源
+     - **⚠️ 效率优先原则（2026-06-13 实测）**：Updates区 head -80 是方向 B 最有效的新论文发现来源（实测：4篇新增论文全部来自 Updates 区，主 Paper List 和子目录均无新发现）。**扫描顺序**：Updates区 → 主 Paper List → 子目录。Updates区 有新发现时继续深度扫描，无新发现时才检查子目录。
 
   **方向 B 饱和状态管理**（2026-06-02 新增，2026-06-02 扩展）：饱和不是永久状态。当以下情况发生时，重新激活全量扫描：
   - 新会议论文列表发布（ICLR/ACL/NeurIPS/CVPR 等）
@@ -445,7 +481,16 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
      - **浏览器法（推荐）**：`browser_navigate` → `browser_console(expression='document.body.innerText.slice(0, 8000)')` — gentic.news 是轻量静态页，加载快，不受 Firecrawl 配额限制。稳定可靠。
      - 追踪 Screen-level OS Control / Browser-only / Coding-focused 三类 SOTA 变化
      - 重点关注本地/开源 agent 新条目（Hermes 定位匹配）
-  ⚠️ **gentic.news 核心洞察（2026-04-24 更新）**：编辑语 _\"the harness — scaffold + sandbox + verifier + recovery — matters more than the model. Independent tests show Cursor's scaffold adds 16pp over the raw model.\"_ — 直接验证 Hermes screen_trigger + RPA 架构方向正确。方向 A/B/D 通用参考文件：`references/gentic-news-computer-use-leaderboard-2026-04-24.md`
+  **⚠️ gentic.news 降级说明（2026-06-02）**：gentic.news 页面 schema 已从 FAQPage 改为 WebSite/Organization，JSON-LD 提取脚本不再有效。Steel.dev 是稳定的直接替代，browser_navigate + browser_console JS 提取已验证。方向 B/D 巡检时应优先使用 Steel.dev。
+
+**方向 C 安全来源补充**：
+- **OWASP GenAI Exploit Round-up Q1 2026**（2026-01 至 2026-04-11）— genai.owasp.org/quarterly-exploit-roundup，涵盖 Mexico government breach（2025-12 下→2026-01→2026-02-25 公开）等真实事件。浏览器法已验证：`browser_navigate` + `browser_console` 提取 Q&A 列表。每季度第一周更新。
+  - 2026-06-02 发现：CVE-2026-2256 (AI SDK 漏洞，3 大云厂商受影响)、SemJack (AI coding agents symlink hijack RCE)
+  - 详见 `references/owasp-genai-exploit-roundup-q1-2026.md`
+
+**⚠️ CyberDesserts 2026 AI Agent Security Timeline（2026-06-02 新增）**：ddgs 搜索发现的新来源。综合覆盖 Claude Code Hooks RCE (CVE-2025-59536)、Mexico Government Breach、ClawHavoc 等 7 大安全事件。ddgs → browser_navigate 直读验证 ✅。已验证可靠，方向 C 轮次应定期扫描。
+
+**⚠️ gentic.news 核心洞察（2026-04-24 更新）**：编辑语 _\"the harness — scaffold + sandbox + verifier + recovery — matters more than the model. Independent tests show Cursor's scaffold adds 16pp over the raw model.\"_ — 直接验证 Hermes screen_trigger + RPA 架构方向正确。方向 A/B/D 通用参考文件：`references/gentic-news-computer-use-leaderboard-2026-04-24.md`
   - **已知 repo 子目录检查**（2026-06-02 新增）：检查 ZJU-REAL/Awesome-GUI-Agents、OSU-NLP-Group/GUI-Agents-Paper-List 等 repo 是否出现了新的会议子目录（如 ICLR2026/、AAAI2026/、ACL2026/）—— 新子目录可一次性产出 8+ 篇新论文，直接重新激活全量扫描
     - ⚠️ AAAI2026/ 是长驻子目录（非新创建），方向 B 饱和降级时应同时扫描 AAAI2026/ 和 ICLR2026/ 两个目录
     - 同时检查 README 顶部 Updates 区（ClawGUI/UI-Copilot/UI-Zoomer 等不在 Paperlist 中的论文来源）
@@ -728,6 +773,7 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
 - 详见 `screen-watcher-vision/references/ollama-api-endpoint-chat-vs-generate-2026-05-30.md`
 
 **候选新模型记录（已在 reference 文件中评估，不重复拉取）**：
+- **MAI-UI (Qwen3-VL-2B-MAI-UI-NOESIS-NF4)** (ScreenSpot-Pro 73.5%, NF4 量化, 2026-06-02 发现) — 见 `references/mai-ui-qwen3-vl-2b-2026-06-02.md`
 - Vocaela-500M (ScreenSpotV2 85.8%, 437MB GGUF) — 见 references
 - UI-TARS-2B (94.2% ScreenSpot-V2) — 见 references
 - Gemma 4 E4B (~5.5GB, 57 tok/s) — 已验证不优于 qwen3-vl:2b 对 scene classification
@@ -867,6 +913,7 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 
 ## 主要参考文件
 
+- `references/mai-ui-qwen3-vl-2b-2026-06-02.md` — MAI-UI Qwen3-VL-2B fine-tune SOTA (ScreenSpot-Pro 73.5%)
 - `references/zonui-3b-wacv2026.md` — ZonUI-3B (WACV 2026) 3B 轻量 GUI Grounding SOTA, ScreenSpot-v2 86.4%
 - `references/r-vlm-acl2025.md` — R-VLM: Region-Aware VLM ACL 2025, +13% grounding accuracy
 - `references/coasty-open-computer-use.md` — coasty-ai/open-computer-use 82% OSWorld 多 agent 编排架构参考
@@ -904,7 +951,7 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/direction-d-execution-analysis-2026-06-02.md` — Direction D 执行分析 + DRY_RUN precondition 6项评估实测
 - `references/claude-code-auto-mode-2026-06-02.md` — Claude Code Auto Mode 全架构分析，DRY_RUN=False 行业参考（两阶段分类器 + 三权许可 + subagent handoff）
 - `references/gentic-news-computer-use-leaderboard-2026-06-02.md` — Computer Use Agents 2026 SOTA 排行榜，方向 A/B/D 通用参考
-- `references/ai-agent-security-2026-attack-surfaces.md` — AI Agent Security 2026: MCP / Function Calling / Computer-Use 三攻击面，方向 C 深度参考
+- `references/ai-agent-security-2026-attack-surfaces.md` — AI Agent Security 2026: MCP / Function Calling / Computer-Use 三攻击面，方向 C 深度参考（Programming Helper May 2026）
 - `references/promptarmor-ollama-vulnerabilities-2026-06-02.md` — Ollama 桌面应用未修复漏洞（UI 覆写 + 零点击数据泄露），方向 C 安全公告
 - `references/vlex-screen-takeover-attack-2026-06-02.md` — vLex 屏幕接管攻击（HTML overlay 通过间接提示注入），方向 C computer_use 安全参考
 - `references/redhat-npm-mcp-supply-chain-2026-06-02.md` — Red Hat npm 供应链攻击（29 包被投毒含 3 个 MCP 包），方向 C MCP 攻击面实际验证
@@ -925,6 +972,7 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/gal-gui-agent-autonomy-levels-2026-06-02.md` — GAL 六层自主度框架 (arXiv 2602.11514)，方向 B/D 通用参考
 - `references/cyberdesserts-ai-agent-security-timeline-2026-06-02.md` — 2026 AI Agent 安全事件全览，方向 C 深度参考
 - `references/dod-careful-adoption-agentic-ai-2026-06-02.md` — 美国 DoD AI Agent 官方安全指南 (Apr 2026)，方向 C 参考
+- `references/owasp-genai-exploit-roundup-q1-2026.md` — OWASP GenAI Exploit Round-up Q1 2026（CVE-2026-2256 / SemJack / Mexico government breach），方向 C 安全来源
 - `references/adversa-ai-security-digest-june-2026.md` — Adversa AI June 2026 安全摘要（SymJack symlink-hijack RCE + TrustFall 一键 RCE），方向 C 扫描来源
 - `references/gentic-news-computer-use-leaderboard-2026-04-24.md` — Computer Use Agents 排行榜 + "harness > model" 核心洞察，方向 A/B/D 通用参考
 - `references/co-epg-aaai-2026.md` — Co-EPG (2511.10705, AAAI 2026): 规划-定位协同进化框架 (GRPO)，方向 B/D 通用
