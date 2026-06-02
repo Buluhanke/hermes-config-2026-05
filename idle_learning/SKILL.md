@@ -43,6 +43,20 @@ browser_snapshot（text模式） → 交互后刷新内容
 VLM/vision_analyze / 截图 → 仅用于：CAPTCHA、富文本编辑器、验证码
 ```
 
+**⚠️ browser_console 结果截断陷阱（2026-06-03实测）**：
+`browser_console(expression='...')` 返回结果在 CDP supervisor 层被截断（~8000字符），大页面内容会丢失但不报错。
+**特征**：结果包含完整开头但无结尾，或明显语句被切断。
+**解决**：对大页面用分片提取：
+```javascript
+// 分片1：前8000
+document.body.innerText.slice(0, 8000)
+// 分片2：8000-16000
+document.body.innerText.slice(8000, 16000)
+// 分片3：16000+
+document.body.innerText.slice(16000)
+```
+对已知长页面（Steel.dev leaderboard、Adversa AI digest 等）直接用多次 slice 并在 terminal 拼接。
+
 **规则**：
 - 收到任务后先想用什么工具**最轻量**，不是最强大
 - 截图/VLM是**最后手段**，不是第一选择
@@ -62,6 +76,18 @@ VLM/vision_analyze / 截图 → 仅用于：CAPTCHA、富文本编辑器、验�
 **⚠️ 生命体基本原则（必须内化，不能跳过）：**
 发现问题 → 立刻解决 → 再继续。不等授权，不问用户，不跳过。
 网络不通 = 阻塞事件，必须优先修复。
+
+**⚠️ screen_watcher 自动重启协议（2026-06-03 新增）：**
+当方向 A 健康检查发现 screen_watcher 进程不存在或截图目录为空时：
+1. `ps aux | grep [s]creen_watcher` 无输出 → 进程死亡
+2. `ls ~/.hermes/screenshots/` 为空 → 无截图更新
+3. **立即执行**：
+   ```bash
+   mkdir -p ~/.hermes/screenshots
+   nohup python3 ~/.hermes/scripts/screen_watcher.py > ~/.hermes/logs/screen_watcher.log 2>&1 &
+   ```
+4. `sleep 4` 后验证进程存在 + current.png 更新
+5. 记录修复动作到 learning_log（"screen_watcher DEAD，PID XXX 已重启"）
 
 **⚠️ 自主执行原则（核心铁律）：**
 - 中小问题/多选择场景 → AI 自主决定执行，不等确认
@@ -91,6 +117,7 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 **⚠️ 重要区分**：检查 HN.com 和 Firebase API 是独立测试：
 - `news.ycombinator.com` 失败 ≠ `hacker-news.firebaseio.com` 也失败
 - 各域名独立验证，不可假设永久状态
+- **⚠️ Firebase API timeout 新模式（2026-06-03 实测）**：即使 `news.ycombinator.com` 返回 ok，`hacker-news.firebaseio.com` 仍可能超时（python3 urllib 14s+ alarm clock）。这是 Firebase 服务端限制，非网络路径问题。**实测症状**：`curl -sf --max-time 10 https://hacker-news.firebaseio.com/v0/topstories.json` 返回成功，但 python3 urllib 会在 signal.alarm(20) 后触发 "Alarm clock" 并发 SIGALRM。**降级**：当 HN Firebase API 超时，立即改用 ddgs 搜索。
 
 **⚠️ 网络状态变更 → 新鲜度门控 override（2026-06-02 新增）**：
 当 github 从 `blocked` 变为 `ok`，即使 commit 时间无变化也不应跳过全量扫描。
@@ -137,6 +164,7 @@ for sid in ids:
 # 执行（⚠️ 用 cat > file << 'EOF' 写 .py 文件，不能用 write_file 嵌套在 heredoc 里）
 # write_file 是独立工具，不能在 bash heredoc 中调用（会被当作字面字符串）
 # ⚠️ 必须用时间戳命名：/tmp/hn_$(date +%s).py
+# ⚠️ macOS BSD date 不支持 -d 参数；用 python 计算时间戳（见下方）
 cat > /tmp/hn_$(date +%s).py << 'PYEOF'
 import urllib.request,json
 base='https://hacker-news.firebaseio.com/v0/item/'
@@ -149,7 +177,8 @@ for sid in ids:
     except:
         print(f"ERR {sid}")
 PYEOF
-python3 /tmp/hn_$(date +%s -d '1 second ago').py
+# macOS 兼容：用 python3 计算 1 秒前的时间戳（BSD date 无 -d 参数）
+python3 /tmp/hn_$(python3 -c "from datetime import datetime, timedelta; print((datetime.now()-timedelta(seconds=1)).strftime('%s'))").py
 ```
 
 **⚠️ `write_file` vs `terminal` 嵌套陷阱（2026-06-03 实测）**：
@@ -232,6 +261,13 @@ grep "2026-06-01" ~/.hermes/logs/screen_trigger.log | grep "AUTO-EXEC-DRY" | wc 
 grep -c "screen_watch" ~/.hermes/logs/gateway.log
 ```
 
+**⚠️ YOLO预分类解析陷阱（2026-06-03实测）**：
+`grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep "YOLO预分类:" | awk -F'YOLO预分类: ' '{print $2}' | awk '{print $1}'`
+上面这条命令在某些日志格式下会误取到时间戳字段而非实际类别名。**验证方法**：输出后立即 `head -5` 确认是分类标签（如 `idle`/`other`/`cursor`）而非时间格式（如 `02:01:32]`）。若第一列是时间戳，改用：
+```bash
+grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep "YOLO预分类:" | sed 's/.*YOLO预分类: //' | awk '{print $1}' | sort | uniq -c | sort -rn
+```
+
 ### Quick Direction A Health Check Protocol (cron-friendly, <60s)
 
 **Probe**:
@@ -243,23 +279,23 @@ import sys,json; d=json.load(sys.stdin)
 for m in d.get('models',[]): print(m['name'], round(m['size']/1e9,2), 'GB')
 "                                               # models loaded?
 ls ~/.hermes/screenshots/.handler_lock 2>/dev/null || echo "no_lock"
-# --- YOLO & scene stats ---
+# --- YOLO pre-class stats (handler v2 refactored to YOLO-first output) ---
 DATE=$(date +%Y-%m-%d)
-echo "--- YOLO pre-class ---"
+echo "--- YOLO pre-class distribution ---"
 grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep "YOLO预分类:" | awk -F'YOLO预分类: ' '{print $2}' | awk '{print $1}' | sort | uniq -c | sort -rn
-echo "--- scene types ---"
-grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep "场景类型:" | awk '{print $NF}' | sort | uniq -c | sort -rn
-echo "--- unknown count / total triggers ---"
-UNK=$(grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep -c "场景类型: unknown" 2>/dev/null || echo 0)
-TOT=$(grep -c "$DATE" ~/.hermes/logs/screen_trigger.log 2>/dev/null || echo 0)
-echo "unknown: $UNK / total: $TOT"
+echo "--- YOLO idle skip count ---"
+grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep -c "YOLO判断空闲界面" 2>/dev/null || echo 0
+echo "--- total triggers today ---"
+grep -c "$DATE" ~/.hermes/logs/screen_trigger.log
 echo "--- dry-run count ---"
 grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep -c "AUTO-EXEC-DRY" 2>/dev/null || echo 0
-echo "--- gateway pollution ---"
-grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gateway_log"
+echo "--- gateway pollution delta (last 100 lines) ---"
+tail -100 ~/.hermes/logs/gateway.log | grep -c "screen_watch" 2>/dev/null || echo "no_recent_pollution"
 ```
 
-**Pass criteria** (all must green): Ollama PID ✓ | screenshot <24h ✓ | qwen3-vl:2b loaded ✓ | no_lock ✓ | unknown rate < 10% ✓ | YOLO idle skips > 0 ✓
+**Pass criteria** (all must green): Ollama PID ✓ | screenshot <24h ✓ | qwen3-vl:2b loaded ✓ | no_lock ✓ | YOLO idle skips > 0 ✓ | dry-run count growing normally ✓
+
+**⚠️ Log format note (2026-06-03)**: Handler v2 refactored scene classification to YOLO-first output. The old `场景类型: <scene>` log lines are deprecated — health checks must now grep `YOLO预分类:` and `YOLO判断空闲界面` instead. The `场景类型:` grep will return zero matches even when the system is healthy. `unknown rate` metric is replaced by `YOLO idle skip ratio`.
 
 **Report template**:
 ```markdown
@@ -882,6 +918,7 @@ sed -i '' 's/model: ahmadwaqar\/smolvlm2-agentic-gui:latest/model: qwen3-vl:2b/'
 | **`/tmp` 文件路径竞争**（2026-06-02 实测） | **兄弟 subagent 同时写入同名 `/tmp/xx.py` 互相覆盖** | 必须用时间戳命名（`/tmp/hn_$(date +%s).py`），不要用固定路径 |
 | **`write_file` 不展开 shell 变量**（2026-06-02 实测） | 写入路径含 `$(date +%s)` 或 `$(date +%H%M%S)` 时当作字面文件名 | 先用 `terminal` 获取时间戳赋值到拼好的路径（如 `/tmp/idle_log_20260602_015816.md`），再用 `write_file` 写入固定路径。或：仅 `terminal cat >>` 追加时用 shell 变量，不用在 `write_file` 路径中放 `$()` |
 | **macOS `grep -P` 不支持**（2026-06-02 实测） | BSD grep 无 `-P`（Perl 正则）选项，`grep -oP 'pattern'` 报 `invalid option -- P` | 用 `grep -E`（扩展正则）替代，或改用 `python3 -c "import re; ..."` 做复杂正则。管道到 `python3` 比 BSD grep 更可靠 |
+| **macOS `date` 不支持 GNU 日期语法**（2026-06-03 实测） | 技能 HN 脚本中 `date -d '1 second ago'` 在 macOS BSD date 上报错：`illegal time format` | **用 Python datetime 计算相对时间**替代 shell date：`python3 -c "from datetime import datetime, timedelta; print((datetime.now()-timedelta(seconds=1)).strftime('%Y%m%d_%H%M%S'))"`。不要在 heredoc 的 shell 命令中使用 GNU date 特有的 `-d`/`--date` 参数。 |
 
 ---
 
@@ -955,6 +992,7 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/hn-firebase-api-cron-safe.md` — HN API cron-safe calling
 - `references/cron-script-execution.md` — Cron script execution limits
 - `references/direction-b-dedup-technique.md` — OSU-NLP paper dedup with KNOWN_ARXIV set
+- `references/direction-b-cves-2026-06-03.md` — Direction B new papers (A11y-Compressor/WindowsWorld/uxCUA) + CVE-2026-44287 FastGPT RCE
 - `references/zju-awesome-gui-agents-2026-06-02.md` — ZJU-REAL/Awesome-GUI-Agents 增量扫描结果 + 7篇新论文
 - `references/snowflake-cortex-sandbox-escape-2026-06-02.md` — Snowflake Cortex Code CLI sandbox escape + subagent context loss（Hermes 高风险，delegate_task 架构相似）
 - `references/gh-copilot-cli-command-parsing-bypass-2026-06-02.md` — GitHub Copilot CLI 命令解析绕过漏洞（Hermes 高风险）
