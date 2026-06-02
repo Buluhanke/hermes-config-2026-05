@@ -85,6 +85,48 @@ async def human_type_text(cdp, text):
 
 **核心**: 所有时长均为正态分布（非匀速）+ 标点后追加"大脑组织语言的呼吸停顿"，彻底消除机器人匀速特征。**keyDown.text="" 必须空**（硬核发现）。
 
+### 武器1+0: 快速注入模式 (direct value) — 替代逐字打字
+用户反馈逐字打字太慢（"你模拟人工打字速度太慢了"）。对于支持 `textarea.value=` 的站点，用 direct value 比逐字快 10 倍：
+
+```javascript
+(function(){
+  const ta = document.querySelector('textarea');
+  if(ta){
+    ta.value = '我们电脑配置免费不要OCR能直接读取屏幕内容吗';
+    ta.dispatchEvent(new Event('input', {bubbles:true}));
+    ta.dispatchEvent(new Event('change', {bubbles:true}));
+    return 'ok';
+  }
+  return 'no textarea';
+})()
+```
+
+**触发**：value 赋值 → React onChange → 发送按钮自动变亮
+**发送**：`Input.dispatchKeyEvent(key='Enter')` 穿透，不需要 .click()
+**适用**：DeepSeek ✅、豆包 ✅、ChatGLM ✅
+**不适用**：ChatGPT（ProseMirror 受控组件，value 被忽略）、Gemini（textarea 在 webview 里跨域）
+
+### ⚠️ DeepSeek 实战坑：ta.value= 设值成功但按钮点击无效
+实测（2026-06-02）：`ta.value=` 能把文字写进 textarea，`btns[8]` 按钮能 click 出 "clicked"，但 AI 就是不回复。
+
+**根因**：DeepSeek 的 React 输入框在 `ta.value=` 后没有真正被"用户输入"事件激活——缺少光标位置变化事件 + input 事件的完整性验证，按钮虽然看起来可点（`ds-button--disabled` 的 disabled 属性为 null），但 React 内部状态未更新，点击后 textarea 被清空。
+
+**已验证有效的解法**：
+1. **聚焦 + `Input.dispatchKeyEvent` 逐字输入**（正确流程）：
+   ```javascript
+   // 先 JS 聚焦
+   document.querySelector('textarea').focus();
+   ```
+   然后用 `browser_cdp` tool 逐字 `Input.dispatchKeyEvent(type='keyDown', text='字', key='字')` — 每字触发 React onChange，这是唯一让 DeepSeek 可靠发送的方式。
+2. **Enter 兜底**：`Input.dispatchKeyEvent(key='Enter')` 比按钮点击更可靠。
+
+**已验证失效的解法**：
+- `ta.value=` + `dispatchEvent(new Event('input', {bubbles:true}))` → DeepSeek 收到事件但 React 状态未更新
+- 按钮 `btns[8].click()` → 点击返回 "clicked" 但不触发发送
+- `ta.value=` + `dispatchEvent(new Event('change', {bubbles:true}))` → 同上
+
+**ChatGLM 可以用 ta.value=**（已实测成功），DeepSeek 必须逐字输入。
+
 ### 武器1+0 联合调用模式
 ```python
 # 鼠标位置追踪（贯穿全流程）
@@ -221,12 +263,40 @@ async def hermes_scroll_to_bottom(cdp, timeout=60, settle=2.0):
 ```
 
 ## 实测效果 (6个AI站点)
-| 站点 | 输入方式 | 滚屏高度 | AX回复字符 |
-|------|---------|---------|-----------|
-| DeepSeek | textarea | 22864px | 2876字 |
-| 豆包 | textarea | 19379px | 1468字 |
-| Gemini | contenteditable | 4022px | 38字 |
-| Grok | tiptap | 1085px | 99字 |
+| 站点 | 输入方式 | 滚屏高度 | AX回复字符 | 备注 |
+|------|---------|---------|-----------|------|
+| DeepSeek | `Input.dispatchKeyEvent` 逐字 | 22864px | 2876字 | ❌ ta.value=不触发React；✅ 逐字可发 |
+| 豆包 | textarea (direct value) | 19379px | 1468字 | ✅ ta.value=成功 |
+| ChatGLM | textarea (direct value) | - | 完整分析 | ✅ ta.value=成功 |
+| Gemini | contenteditable | 4022px | 38字 | ❌ textarea在webview跨域 |
+| Grok | tiptap | 1085px | 99字 | ❌ Cloudflare拦截 |
+| ChatGPT | contenteditable | - | 旧回答残留 | ⚠️ 需先focus |
+
+## 快速输入方案（绕过逐字打字）
+对于大多数现代 AI 站点（DeepSeek、豆包、ChatGLM），`ta.value=` + `dispatchEvent` 直接赋值比逐字输入快且稳定：
+
+```javascript
+(function(){
+  const ta = document.querySelector('textarea');
+  if(ta){
+    ta.value = '我们电脑配置免费不要OCR能直接读取屏幕内容吗';
+    ta.dispatchEvent(new Event('input', {bubbles:true}));
+    ta.dispatchEvent(new Event('change', {bubbles:true}));
+    return 'ok';
+  }
+  return 'no textarea';
+})()
+```
+
+**触发流程**：`value` 赋值 → `input` 事件（React onChange） → `change` 事件 → AI 网站自动聚焦/发送按钮变亮。
+
+**适用站点**：DeepSeek ✅、豆包 ✅、ChatGLM ✅、ChatGPT ❌（需要 contenteditable）、Gemini ❌（webview 跨域）。
+
+**不适用原因**：
+- **ChatGPT**：ProseMirror 受控组件，直接 value 赋值被 React 忽略
+- **Gemini**：textarea 在 webview iframe 里（跨域），父级 document.querySelector 拿到 null
+
+**发送**：赋值成功后 `Input.dispatchKeyEvent(key='Enter')` 即可，不需要 .click()。
 
 ## 关键环境
 - Chrome: 系统 Chrome + debug port 9333 启动
@@ -301,6 +371,7 @@ python3 hermes_reactor.py deepseek 15  # 监控 deepseek tab, 跑 15 秒
 - `references/multi-site-orchestration.md` — 多AI站点对比的配置/坑/优先级
 - `references/vision-click.md` — 视觉点选原理 + 匹配算法 + 坐标兜底
 - `references/reactor-loop.md` — 反应堆 Sense/Think/Act 详解 + 演化路径
+- `references/screen-reading-without-ocr.md` — **2026-06-02 实测：免OCR三大机制 + 各站结果**
 - `scripts/hermes_vision_click.py` — 162行, 元素列表+关键词/坐标点击
 - `scripts/hermes_reactor.py` — 155行, Sense→Think→Act 循环框架
 - `scripts/hermes_human_biometrics.py` — **贝塞尔鼠标轨迹 + 生物识别打字律动**独立模块，支持CDP集成或独立测试

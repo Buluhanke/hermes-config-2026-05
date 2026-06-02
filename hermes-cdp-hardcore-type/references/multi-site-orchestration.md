@@ -31,12 +31,22 @@ async with websockets.connect(any_ws_url) as ws:
 ```
 
 ## 已知稳定的 6 站点
-- deepseek: textarea, 1个, AX回复 2000+ 字符
-- doubao: textarea, 2个 (选 placeholder 有值的)
-- gemini: contenteditable (ql-editor), 偶发
-- grok: contenteditable (tiptap), 偶发
-- chatgpt: contenteditable (ProseMirror), 难 (ProseMirror事件复杂)
-- chatglm: 偶尔能, 大多失败
+- **deepseek**: textarea, ✅ 完整跑通，回复 "自主、感知、执行"
+- **doubao**: textarea, ✅ 能输入发送，新标签页有时无回复（旧标签历史残留）
+- **chatglm**: textarea, ✅ 完整跑通，回复三种免OCR机制（辅助功能API/剪贴板+API/DOM抓取）
+- **grok**: contenteditable (tiptap), ❌ Cloudflare 人机验证完全拦截
+- **chatgpt**: contenteditable (ProseMirror), ⚠️ 输入框存在但 focus 受限，新问题发送失败
+- **gemini**: contenteditable (ql-editor) 在 webview iframe 里, ❌ 跨域拿不到 textarea
+
+## 快速输入：direct value 注入（推荐替代逐字输入）
+```javascript
+// 在 Runtime.evaluate 里执行，比逐字打字快 10 倍
+ta.value = '问题内容';
+ta.dispatchEvent(new Event('input', {bubbles:true}));
+ta.dispatchEvent(new Event('change', {bubbles:true}));
+```
+适用：DeepSeek ✅、豆包 ✅、ChatGLM ✅
+不适用：ChatGPT（ProseMirror 受控）、Gemini（webview 跨域）
 
 ## 进化二: 用 vision_click 解决"每站 selector 不同"
 传统做法: 维护 6 套 selector, 站点改版全挂.

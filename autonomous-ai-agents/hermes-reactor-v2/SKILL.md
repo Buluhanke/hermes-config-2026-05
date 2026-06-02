@@ -6,7 +6,87 @@ category: autonomous-ai-agents
 keywords: [reactor, autonomy, memory, sop, planning, self-healing, sense-think-act, cdp, llm-think, data-buffer]
 ---
 
-# Hermes Reactor v3 — 自主执行体（生产级）
+## Pitfall 19: DeepSeek React textarea 值被清空（已解决，不需要 Playwright）
+
+### 现象（旧认知，已过时）
+`ta.value = '...'` 能写入，`btns[8].click()` 能执行，但 AI 永远不回复——React 内部状态未更新。
+
+### ✅ 真实解法：WebSocket 逐字输入（已验证 4 次，2026-06-02）
+
+**核心工具**：`browser_cdp` 工具走 WebSocket，**不是** `cdp_type.py`（后者用 curl HTTP，走不通）
+
+**完整链路**：
+```python
+# 1. WebSocket 连接 tab
+async with websockets.connect(tab["webSocketDebuggerUrl"], max_size=50*1024*1024) as ws:
+    # 2. 聚焦 textarea
+    await cdp.send("Runtime.evaluate", {
+        "expression": "document.querySelector('textarea').focus()",
+        "returnByValue": True
+    })
+    # 3. 逐字输入（每字符 keyDown→char→keyUp，间隔 0.05s）
+    for ch in text:
+        await cdp.send("Input.dispatchKeyEvent", {
+            "type": "keyDown", "key": ch, "text": ""
+        })
+        await cdp.send("Input.dispatchKeyEvent", {
+            "type": "char", "text": ch
+        })
+        await cdp.send("Input.dispatchKeyEvent", {
+            "type": "keyUp", "key": ch
+        })
+        await asyncio.sleep(0.05)
+    # 4. Enter 发送
+    await cdp.send("Input.dispatchKeyEvent", {
+        "type": "keyDown", "key": "Enter", "code": "Enter",
+        "text": "\r", "keyCode": 13, "location": 0
+    })
+```
+
+**验证结果**（2026-06-02 实测 4 次）：
+- "1+1等于几" → ✅ 21字正确回复
+- "什么是AI" → ✅ 完整长回答
+- "用三个词形容Hermes" → ✅ 完整
+- "解释量子计算" → ✅ 完整
+
+**关键**：`browser_cdp` 工具调 CDP 走 WebSocket，**不是** `terminal + curl`（后者调 HTTP 走不通）
+
+### ⚠️ cdp_type.py 是错误方案
+`cdp_type.py` 用 `subprocess.run(["curl", "-s", "-X", "POST", ...])` 调 CDP HTTP 接口，
+`Input.dispatchKeyEvent` 等 WebSocket 专属命令返回 `Unknown command`。**废弃**。
+
+---
+
+## Pitfall 20: CDP HTTP 路径不支持 WebSocket 专属命令
+
+### 现象
+`curl -X POST http://127.0.0.1:9333/json/{tab_id}/Input.dispatchKeyEvent` 返回 `Unknown command`。
+
+### 根因
+`Input.dispatchKeyEvent`、`Runtime.evaluate` 等命令只能走 WebSocket（CDP 协议层），HTTP POST 不支持这些命令。
+
+### 修复
+- 只能用 `browser_cdp` 工具走 WebSocket，不能用 `terminal + curl` 替代
+- `execute_code` 需要每次授权，不适合高频循环
+- **结论**：`browser_cdp` 是唯一无需授权且能跑通 WebSocket 命令的工具
+
+---
+
+## Pitfall 21: execute_code 授权 vs browser_cdp 工具调用（用户误感知"每次都要授权"）
+
+### 现象
+用户感觉"每次都要授权"，实际上是 `execute_code` 的审批机制在触发。
+
+### 澄清
+| 工具 | 是否需要授权 |
+|------|------------|
+| `browser_cdp` | ❌ 不需要（工具调用） |
+| `terminal` | ❌ 不需要（shell） |
+| `execute_code` | ✅ 每次需要（Python 执行） |
+| `mcp_chrome_*` | ❌ 不需要（MCP 工具） |
+
+### 结论
+高频 CDP 操作（逐字输入循环）**必须用 `browser_cdp` 工具**，不能用 `execute_code` 或 `terminal + curl` 替代。
 
 ## 是什么
 
@@ -21,9 +101,19 @@ keywords: [reactor, autonomy, memory, sop, planning, self-healing, sense-think-a
 
 ## 何时用
 
-- 24h 挂机跑 AI 站 (DeepSeek / 豆包 / Gemini / ChatGPT) 自动对话
-- 1688 / 拼多多采购工作流（搜 → 选 → 联系 → 记录）
-- 多步骤业务自动化（任何有"输入→等回复→处理"模式的场景）
+- **24h 挂机跑 AI 站** (DeepSeek / 豆包 / Gemini / ChatGPT) 自动对话
+- **1688 / 拼多多采购工作流**（搜 → 选 → 联系 → 记录）
+- **多步骤业务自动化**（任何有"输入→等回复→处理"模式的场景）
+
+### ⚠️ 输入方案优先级（2026-06-02 更新）
+
+| 方案 | 工具 | 适用网站 | 优点 | 缺点 |
+|------|------|---------|------|------|
+| **✅ CDP WebSocket 逐字** | `browser_cdp` 工具 | DeepSeek ✅ ChatGLM ✅ | 触发 React onChange，4次验证稳定，不占额外内存 | 每字符单独调用，速度略慢 |
+| **❌ cdp_type.py (curl HTTP)** | `terminal + curl` | 全部失效 | — | `Input.dispatchKeyEvent` 返回 `Unknown command`，废弃 |
+| ⚠️ Playwright | `page.press_sequentially()` | DeepSeek 备用 | 触发真实 onChange | 多占 200-300MB，execute_code 需授权 |
+
+**结论**：`browser_cdp` 工具走 WebSocket 是 DeepSeek 输入的正确答案，不需要 Playwright。
 
 ## 何时不用
 
@@ -191,9 +281,11 @@ class CDP:
 ## Support 文件
 
 - `references/decision-design.md` — 4 个核心设计决策的"为什么"(body_growing 替代 stopBtn / 18 周期阈值 / 状态锁冷却 / Enter 兜底)
+- `references/pitfalls.md` — 所有踩过的坑（含 DeepSeek React 清空值 / CDP HTTP 命令失效 / execute_code 授权误判）
 - `templates/auto_chat_sop.json` — AI 自动对话 SOP 模板（8阶段，带 loops 和 self_heal 配置）
 - `templates/1688_sop.json` — 1688 sourcing SOP 模板（5阶段：导航→搜索→选品→联系客服→记录）
 - `scripts/diagnose_button_misidentification.py` — 按钮误识别静态探针
+- `scripts/auto_web_chat.py` — **Playwright 免授权脚本**，支持 ChatGLM/DeepSeek/豆包，替代 CDP 逐字输入方案
 
 ## Pitfalls 速查 — 详见 references/pitfalls.md
 
@@ -207,6 +299,7 @@ class CDP:
 8. **RECREATE_TAB 直接关闭 ws** — 用活 tab 的 ws 发 Page.navigate
 9. **PAGE_STUCK 在 AI 输出中被误触发** — 必须满足 `last_body_len > 0`（之前有增长过）
 15. **M3 key 授权范围 ≠ M2.7** — 逐模型验证
+16. **DeepSeek React 输入状态陷阱（已解决）**：用 `browser_cdp` 工具走 WebSocket + `hardcore_type` 逐字输入（keyDown→char→keyUp），4次验证稳定。不需要 Playwright。
 
 ### 🔴 Critical: hermes config 交互界面不持久化 API Key
 

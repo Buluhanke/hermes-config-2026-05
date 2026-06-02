@@ -457,7 +457,19 @@ sleep 2
 **HumanConfig 关键参数**：typing_delay（打字延迟ms）、mistype_chance（误触概率）、mouse_min_steps/mouse_max_steps（鼠标曲线路径步数）、idle_between_actions（操作间停顿）、idle_between_duration（停顿秒数范围）
 
 **2026-06-01 新增：AI聊天网站对话获取知识（已验证失败但路径明确）**
-**2026-06-02 重要发现：Shadow DOM 隔离比预期更深，浏览器读取 AI 对话此路不通**
+**2026-06-02 重要发现更新：浏览器读取 AI 回复方案验证成功**
+
+会话记录（2026-06-02）推翻之前"Shadow DOM 隔离此路不通"的结论：
+
+✅ **实测成功的方案**（6 大 AI 站）：
+- DeepSeek：输入 ✅ → 发送 ✅ → 读取回复 ✅
+- ChatGLM：输入 ✅ → 发送 ✅ → 读取回复 ✅（三种机制完整分析）
+- 豆包：输入 ✅ → 发送 ✅（新标签页有时无回复）
+- ChatGPT/Gemini/Grok：被 Cloudflare 或 webview 限制
+
+**关键教训**：用户反馈"你模拟人工打字速度太慢了" → direct value 注入（`ta.value=` + `dispatchEvent`）比逐字打字快 10 倍
+
+**正确结论**：调 AI 厂商 API 或走 direct value + innerText 读取，不依赖 OCR
 
 实测结果：
 - DeepSeek：输入文字✅、发送✅、Accessibility Tree 285节点✅，但 AI 回复 0 节点

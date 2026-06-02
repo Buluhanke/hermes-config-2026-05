@@ -491,6 +491,10 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
      - 用 `ddgs text -q "agentic AI red team pentesting 2026" -m 5` 搜索 Agentic Red Teaming / Pentesting（2026-06-02 新增，首次查询命中 QueryPie/Strike48/Penligent/Mindgard 4 篇）
      - 这三个关键词组合覆盖预判防御（MCP/FC漏洞）、运行时防护（CU guardrails）、攻击评估（red teaming）三个互补角度
      - 对 ddgs 结果用 `browser_navigate` 直读（跳过 web_extract credits 消耗）
+     - **⚠️ CVE 结果交叉检查（2026-06-02 新增）**：ddgs CVE 搜索结果（如 Flowise CVE-2026-40933 / Anthropic MCP SDK RCE / LangFlow CVE-2026-33017）来自搜索结果摘要，可能不被现有 CVE reference 文件覆盖。发现新 CVE 后：
+       1. 用 `grep -r "CVE-YYYY-NNNNN" ~/.hermes/skills/idle_learning/references/` 确认是否已收录
+       2. 若未收录，立即写入新 reference 文件（命名：`references/mcp-security-cves-YYYY-MM-DD.md`）
+       3. 同步更新 learning_log 的"可执行改进"段落
   2c. **Programming Helper AI Agent Security 扫描**（2026-06-02 新增，~40s）：
      - browser_navigate `https://www.programming-helper.com/tech/ai-agent-security-2026-attack-surfaces-mcp-function-calling`
      - 覆盖三个攻击面：MCP Tool Poisoning / Function Calling Injection / Computer-Use Agent 屏幕操纵
