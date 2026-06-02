@@ -830,7 +830,25 @@ and logs — avoids shell-escaping backslashes in bash.
 - **Config changes:** In gateway: `/restart`. In CLI: exit and relaunch.
 - **Code changes:** Restart the CLI or gateway process
 
-### Skills not showing
+### Provider/Model Configuration — Common UX Pitfalls
+
+**Pitfall: "I deleted the old provider but no model list appeared"**
+After entering a new API base URL, Hermes tries to GET `/models` (or `/v1/models`) to populate the model dropdown. If that endpoint is unreachable, returns an error, or has no readable model list, Hermes shows a WARNING and leaves the model name field blank — it cannot auto-populate.
+
+The correct sequence:
+1. Enter `API base URL` (e.g. `https://api.example.com/v1`)
+2. Enter `API key`
+3. If models auto-populate → select one
+4. If "could not verify" WARNING appears → manually type the exact model name (check the provider's docs for the correct model ID)
+5. Confirm
+
+**Deleting a provider does NOT refresh the model list.** The list stays as-is. To switch providers, just add the new one — no need to delete the old first.
+
+**Pitfall: Model name must match the provider's exact model ID**
+Wrong: `gpt-4o` when the relay expects `gpt-4o-mini` or `openai/gpt-4o`
+Right: Use the exact string the provider's `/models` endpoint returns, or consult the provider's documentation
+
+**Pitfall: `hermes config set` corrupts YAML list values**
 1. `hermes skills list` — verify installed
 2. `hermes skills config` — check platform enablement
 3. Load explicitly: `/skill name` or `hermes -s name`

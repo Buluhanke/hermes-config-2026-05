@@ -19,25 +19,88 @@ Mac Mini 24GB 无 Docker、无 OCR 前提下, 用 Python + CDP 自动化现代 A
 ## 破局方案
 CDP 直连真实 Chrome (debug port 9333) + 4 大武器：
 
-### 武器1: 硬核逐字输入
+### 武器0: 贝塞尔鼠标轨迹（真人化鼠标划行）
 ```python
-async def hardcore_type(cdp, text, delay=0.05, input_type="textarea"):
-    if input_type == "contenteditable":
-        # 清空 + 触发input事件 (ProseMirror/tiptap)
-        await cdp.send("Runtime.evaluate", {
-            "expression": "(() => { const e = document.activeElement; if (e && e.contentEditable === 'true') { e.innerHTML = ''; e.dispatchEvent(new InputEvent('input', {bubbles: true})); } })()"
-        })
-        await asyncio.sleep(0.1)
-    
-    for ch in text:
-        await cdp.send("Input.dispatchKeyEvent", {"type": "keyDown", "key": ch, "text": ""})  # ⚠️ text必须空
-        await cdp.send("Input.dispatchKeyEvent", {"type": "char", "text": ch})  # char事件触发React onInput
-        await cdp.send("Input.dispatchKeyEvent", {"type": "keyUp", "key": ch})
-        await asyncio.sleep(delay)
+def calculate_bezier_point(p0, p1, p2, p3, t):
+    x = (1-t)**3*p0[0] + 3*(1-t)**2*t*p1[0] + 3*(1-t)*t**2*p2[0] + t**3*p3[0]
+    y = (1-t)**3*p0[1] + 3*(1-t)**2*t*p1[1] + 3*(1-t)*t**2*p2[1] + t**3*p3[1]
+    return int(x), int(y)
+
+def generate_human_mouse_path(start, end, steps_count=None):
+    """三阶贝塞尔曲线 + cos 缓动S-curve + 微幅抖动"""
+    x0, y0 = start
+    x1, y1 = end
+    dist = math.sqrt((x1-x0)**2 + (y1-y0)**2)
+    if steps_count is None:
+        steps_count = max(15, int(dist / random.choice([15, 20, 25])))
+    off = dist * 0.2
+    p1 = (x0+(x1-x0)*0.25+random.uniform(-off,off), y0+(y1-y0)*0.25+random.uniform(-off,off))
+    p2 = (x0+(x1-x0)*0.75+random.uniform(-off,off), y0+(y1-y0)*0.75+random.uniform(-off,off))
+    path = []
+    for i in range(steps_count+1):
+        prog = i / steps_count
+        t = (1-math.cos(prog*math.pi)) / 2  # S-curve 缓动：两头慢、中间快
+        x, y = calculate_bezier_point(start, p1, p2, end, t)
+        if i < steps_count:
+            shake = (1.0 - prog)  # 越接近终点抖动越小
+            x += int(random.uniform(-1,1) * shake)
+            y += int(random.uniform(-1,1) * shake)
+        path.append((x, y))
+    return path
+
+async def human_mouse_click(cdp, target_x, target_y, current_mouse_pos=(100, 100)):
+    """贝塞尔轨迹划行 + Hover悬停 + 物理按压时长"""
+    path = generate_human_mouse_path(current_mouse_pos, (target_x, target_y))
+    for x, y in path:
+        await cdp.send("Input.dispatchMouseEvent", {"type": "mouseMoved", "x": x, "y": y, "button": "none"})
+        await asyncio.sleep(random.uniform(0.008, 0.015))   # 8~15ms 高频回报率
+    await asyncio.sleep(random.uniform(0.12, 0.28))      # Hover悬停（真人瞄按钮停顿）
+    await cdp.send("Input.dispatchMouseEvent", {"type": "mousePressed", "x": target_x, "y": target_y, "button": "left", "clickCount": 1})
+    await asyncio.sleep(random.uniform(0.05, 0.10))      # 肉体按压延迟（50~100ms）
+    await cdp.send("Input.dispatchMouseEvent", {"type": "mouseReleased", "x": target_x, "y": target_y, "button": "left", "clickCount": 1})
+    return (target_x, target_y)  # 返回最新位置，供下次划行作起点
 ```
 
-**核心**: keyDown.text="" + char.text=ch, 模拟真人键盘, 触发 React/ProseMirror 事件
+**核心**: 鼠标轨迹从"直线瞬移"变为"物理划行"，服务器抓到的 Mouse Tracking 数据是带惯性微抖动的完美贝塞尔曲线，直接击碎风控特征匹配。
 
+### 武器1: 硬核逐字输入（Biometric Typing）
+```python
+PUNCTUATION = {",", ".", "!", "?", "，", "。", "！", "？", " ", "\n"}
+
+async def human_type_text(cdp, text):
+    """高斯按压时长 + 标点思维停顿，突破匀速打字指纹"""
+    for ch in text:
+        dur = random.gauss(0.05, 0.015)   # 按压时长：高斯分布 30~90ms
+        dur = max(0.03, min(dur, 0.09))
+        await cdp.send("Input.dispatchKeyEvent", {"type": "keyDown", "key": ch, "text": ""})  # text空防双字符
+        await asyncio.sleep(dur)
+        await cdp.send("Input.dispatchKeyEvent", {"type": "char", "text": ch})  # 触发React onChange
+        await cdp.send("Input.dispatchKeyEvent", {"type": "keyUp", "key": ch})
+        iv = random.gauss(0.06, 0.02)    # 字间隔：高斯分布
+        iv = max(0.03, min(iv, 0.15))
+        if ch in PUNCTUATION:
+            iv += random.uniform(0.25, 0.55)  # 标点后额外思维停顿 250~550ms
+        await asyncio.sleep(iv)
+```
+
+**核心**: 所有时长均为正态分布（非匀速）+ 标点后追加"大脑组织语言的呼吸停顿"，彻底消除机器人匀速特征。**keyDown.text="" 必须空**（硬核发现）。
+
+### 武器1+0 联合调用模式
+```python
+# 鼠标位置追踪（贯穿全流程）
+last_pos = (100, 100)
+
+# 1. 贝塞尔滑入输入框 → 2. 真人呼吸打字
+last_pos = await human_mouse_click(cdp, input_x, input_y, current_mouse_pos=last_pos)
+await asyncio.sleep(0.2)
+await human_type_text(cdp, "Hello MiniMax 2.7...")
+
+# 3. 贝塞尔滑到发送按钮 → 4. 物理点击
+last_pos = await human_mouse_click(cdp, send_x, send_y, current_mouse_pos=last_pos)
+```
+
+**效果**: 风控服务器看到的是完美贝塞尔鼠标轨迹 + 非匀速生物识别打字律动，双重真人化特征叠加。
+### 武器2: 智能聚焦 (穿透 Shadow DOM)
 ### 武器2: 智能聚焦 (穿透 Shadow DOM)
 ```python
 # JS直接定位, 不用 querySelector (后者拿不到 Shadow DOM 里的 nodeId)
@@ -240,6 +303,7 @@ python3 hermes_reactor.py deepseek 15  # 监控 deepseek tab, 跑 15 秒
 - `references/reactor-loop.md` — 反应堆 Sense/Think/Act 详解 + 演化路径
 - `scripts/hermes_vision_click.py` — 162行, 元素列表+关键词/坐标点击
 - `scripts/hermes_reactor.py` — 155行, Sense→Think→Act 循环框架
+- `scripts/hermes_human_biometrics.py` — **贝塞尔鼠标轨迹 + 生物识别打字律动**独立模块，支持CDP集成或独立测试
 
 ## 进阶: Network天眼模式 (拿到最原始的AI回复)
 CDP `Network.enable` + 监听 `Network.responseReceived` + `Network.loadingFinished`,

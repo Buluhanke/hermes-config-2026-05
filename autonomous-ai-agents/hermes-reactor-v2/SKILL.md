@@ -135,6 +135,28 @@ python3 scripts/diagnose_button_misidentification.py deepseek
 - `/Users/aimac/.hermes/scripts/chrome_cdp.py` — CDP 底层工具
 - `/tmp/hermes_memory_<tab>.json` — 持久化记忆
 
+## Act 层 — 真人化驱动（贝塞尔鼠标 + 生物识别打字律动）
+
+Act 层 TYPE / SEND / CLICK 动作现已集成人类生物特征，底层调用：
+- **human_mouse_click**: 三阶贝塞尔曲线 + cos S-curve 缓动 + 微幅抖动，替代直线瞬移
+- **human_type_text**: 高斯按压时长 + 标点思维停顿（250~550ms），替代匀速 keyDown 循环
+- **last_pos 贯穿**: 每次鼠标移动返回最新坐标，作为下次贝塞尔划行的起点
+
+```python
+# reactor._mouse_pos 贯穿全反应堆生命周期
+self._mouse_pos = (100, 100)
+
+# TYPE: JS 直接注入 value → 贝塞尔滑入聚焦 → 真人呼吸打字
+self._mouse_pos = await human_mouse_click(self.cdp, inp_x, inp_y, current_mouse_pos=self._mouse_pos)
+await asyncio.sleep(0.2)
+await human_type_text(self.cdp, text)
+
+# SEND/CLICK: 贝塞尔轨迹滑入按钮 → 物理按压
+self._mouse_pos = await human_mouse_click(self.cdp, btn_x, btn_y, current_mouse_pos=self._mouse_pos)
+```
+
+**风控效果**: Mouse Tracking 捕获贝塞尔曲线点阵 + Keyboard Timing 捕获非匀速生物节律，双重真人化特征。
+
 ## Support 文件
 
 - `references/decision-design.md` — 4 个核心设计决策的"为什么"(body_growing 替代 stopBtn / 18 周期阈值 / 状态锁冷却 / Enter 兜底)
@@ -153,8 +175,35 @@ python3 scripts/diagnose_button_misidentification.py deepseek
 7. **body 阈值 800 误判短回复** — 降到 200
 8. **RECREATE_TAB 直接关闭 ws** — 用活 tab 的 ws 发 Page.navigate
 9. **PAGE_STUCK 在 AI 输出中被误触发** — 必须满足 `last_body_len > 0`（之前有增长过）
-10. **minimaxi.com 404 ≠ 429** — 429 是额度，404 是路径
-12. **记忆文件并发覆盖** — per-tab 命名是底线
-13. **hermes config 交互界面遮蔽 key** — 填完立即 curl 验证
-14. **Python urllib SSL EOF** — 测试用 `curl -s --noproxy '*'` 绕开
 15. **M3 key 授权范围 ≠ M2.7** — 逐模型验证
+
+### 🔴 Critical: hermes config 交互界面不持久化 API Key
+
+**问题现象**：`hermes config` 交互界面填写 API Key 后，config show 显示 "AICODEE_API_KEY"（变量名引用），但：
+- `.env` 中无 `AICODEE_API_KEY=...` 行
+- `auth.json` 的 `credential_pool` 中无对应条目
+- `providers` 字典中无 aicodee
+
+**根因**：`hermes config` 的 masked input 写入了 `config.yaml` 的 `api_key_env: AICODEE_API_KEY`（只是变量名），从未写入实际 key 值。
+
+**影响**：所有引用 `AICODEE_API_KEY` 的 provider（aicodee / custom endpoint）运行时 key 为空 → 401。
+
+**解法（按优先级）**：
+```bash
+# 方案A（推荐）：直接追加到 .env
+echo 'AICODEE_API_KEY=*** >> ~/.hermes/.env
+
+# 方案B：用 hermes set 存 secrets（如果支持）
+hermes config set secrets.AICODEE_API_KEY sk-xxx...
+**验证：填完立即 curl 测试（minimaxi.com）**
+```bash
+curl -s --noproxy '*' -H "Authorization: Bearer $MINIMAX_CN_API_KEY" \
+  https://api.minimaxi.com/v1/models
+```
+
+**检查清单**：
+- [ ] `.env` 里有 `MINIMAX_CN_API_KEY=sk-...` 这一行
+- [ ] `curl` 能调通模型端点（返回模型列表，不是 401/429）
+- [ ] `hermes config show` 显示的是实际 key 前缀（`sk-...`），不是变量名
+16. **v2.aicodee.com 中转废弃**：已从 reactor_v3.py 和 .env 中彻底移除，base_url 切换为 `https://api.minimaxi.com/v1`
+17. **hermes config 交互界面 Key 不持久化**：写的是变量名引用而非实际 key，直写 `.env` + curl 验证

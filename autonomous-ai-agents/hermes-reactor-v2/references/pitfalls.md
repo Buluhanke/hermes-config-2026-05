@@ -126,17 +126,16 @@ per-tab 命名 `hermes_memory_<tab>.json` 避免冲突。后续多实例需加 f
 
 ---
 
+## Pitfall 12: API 提供商悄然加锁（裸奔时代终结）
 
 ### 现象
 ```bash
 # 昨天：SSL EOF 协议错误
-
-# 今天：服务端正常但拒绝无认证请求
-→ {"error":{"message":"未提供令牌"...}}
+# 今天：服务端正常但拒绝无认证请求 → {"error":{"message":"未提供令牌"...}}
 ```
 
 ### 根因
-服务端悄然加上了 token 认证，之前裸奔模式不再可用。
+服务端加上了 token 认证，之前裸奔模式不再可用。
 
 ### 判断方法
 ```bash
@@ -149,11 +148,11 @@ per-tab 命名 `hermes_memory_<tab>.json` 避免冲突。后续多实例需加 f
 - 第三方免费 API 随时可能加锁，判断活着与否用 `curl -s --noproxy '*' <base>/v1/models`（不加 key）
 - 接到新 API 后立即记录认证状态
 
-### 当前可用免费 API（2026-06-02）
+### 当前可用 API（2026-06-02 更新）
 | 端点 | 状态 | 备注 |
 |------|------|------|
+| `https://api.minimaxi.com` | ✅ 活着 | M2.7，429=额度耗尽 |
 | `https://api.deepseek.com` | ✅ 活着 | 免费额度有剩余 |
-| `https://api.minimaxi.com` | ✅ 活着 | M2.7 可用，429 额度耗尽 |
 | `https://inference-api.nousresearch.com` | ❌ agent_key 过期 | 无法直调 |
 
 ---
@@ -164,13 +163,17 @@ per-tab 命名 `hermes_memory_<tab>.json` 避免冲突。后续多实例需加 f
 运行 `hermes config providers` → Custom endpoint → 填入 API key 后显示星号 `****`，无法验证是否存成功。
 
 ### 根因
+交互界面填入的内容写入 `config.yaml` 的只是 `api_key_env: VAR_NAME`（变量名引用），不是实际 key 值。运行时从环境变量取，但 `.env` 里没有对应行。
 
 ### 修复
 不依赖交互界面，直接手动编辑配置文件：
 ```bash
-# 1. config.yaml 加 provider
-# 2. .env 加 API_KEY
-# 或用命令行：
+# 方案A（推荐）：直接追加到 .env
+echo 'MINIMAX_CN_API_KEY=*** >> ~/.hermes/.env
+
+# 验证
+curl -s --noproxy '*' -H "Authorization: Bearer $MINIMAX_CN_API_KEY" \
+  https://api.minimaxi.com/v1/models
 ```
 
 ### Guardrail
@@ -182,6 +185,7 @@ per-tab 命名 `hermes_memory_<tab>.json` 避免冲突。后续多实例需加 f
 
 ---
 
+## Pitfall 14: urllib SSL EOF / Python 3.14 TLS 不兼容
 
 ### 现象
 ```python
@@ -189,7 +193,7 @@ urllib.request.urlopen(req)  # SSL EOF
 ```
 
 ### 根因
-urllib（Python 3.14）的 SSL 握手与该服务器不兼容，可能是 TLS 版本或 ALPN 协商差异。
+urllib 的 SSL 握手与某些服务器不兼容，可能是 TLS 版本或 ALPN 协商差异。
 
 ### 修复
 测试阶段用 `curl -s --noproxy '*'` 替代 Python urllib。
@@ -207,3 +211,38 @@ hermes_reactor_v3.py 内部已用 curl 做 API 调用，不受此影响。
 
 ### Guardrail
 接入新模型必须逐个验证，不能假设同一 provider 下的模型全部可用。
+
+---
+
+## Pitfall 16: v2.aicodee.com 中转盘已废弃
+
+### 现象
+hermes_reactor_v3.py 残留 `v2.aicodee.com` 引用，`AICODEE_API_KEY` 环境变量。
+
+### 修复
+从 `.env` 和 `hermes_reactor_v3.py` 中彻底移除：
+- 删除 `AICODEE_API_KEY` 行
+- 删除 `https://v2.aicodee.com/v1` 相关代码
+- base_url 切换为 `https://api.minimaxi.com/v1`
+
+### Guardrail
+接入新 API 后立即更新所有引用点，别让旧中转残留在代码库里。
+
+---
+
+## Pitfall 17: hermes config 交互界面 API Key 不持久化
+
+### 现象
+运行 `hermes config` → 填 API Key → 保存 → 再次 `hermes config show` 显示变量名引用而非实际 key。
+
+### 根因
+同 Pitfall 13，交互界面写入的是 `api_key_env: VAR_NAME` 引用，不是实际值。
+
+### 修复
+不依赖交互界面：
+```bash
+echo 'MINIMAX_CN_API_KEY=*** >> ~/.hermes/.env
+```
+
+### Guardrail
+凡涉及 secrets，优先用 `echo` 直写 `.env`，交互界面只做展示和引导。
