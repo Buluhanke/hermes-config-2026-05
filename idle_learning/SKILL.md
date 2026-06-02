@@ -140,6 +140,22 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
    - browser_snapshot 直接返回页面文本（arxiv、Apple ML Research 已验证 ✅）
    - 跨站路由规则：不同域名独立测试，一个 blocked 不影响其他
 
+**⚠️ browser_navigate ERR_BLOCKED_BY_CLIENT 广告过滤阻断（2026-06-03 实测）**：
+- **症状**：`browser_navigate` 到 Steel.dev / microsoft.ai / arxiv 等域名返回 `net::ERR_BLOCKED_BY_CLIENT`
+- **影响**：打破了"browser_navigate + browser_console 是 Steel.dev 首选"的预期路径
+- **根因**：macOS 端侧广告过滤软件（类似 AdGuard/1Blocker）对企业/ai 相关域名进行阻断
+- **影响范围**：Steel.dev（AI Agent Leaderboard 首选来源）、microsoft.ai（MAI 模型发布页）、arxiv（论文页面）等均被阻断
+- **实测仍可访问**：HN (news.ycombinator.com)、github.com、raw.githubusercontent.com — 不受影响
+- **✅ 已验证降级路径**：
+  - **ddgs CLI**：完全不受浏览器层广告过滤影响，直接发送 HTTP 请求到搜索引擎
+  - **HN Firebase API**：不走浏览器层，python3 urllib 直接访问，同样不受影响
+- **降级策略**：
+  1. Steel.dev 被阻断 → 直接用 ddgs 搜索 "GUI agent benchmark leaderboard 2026" 获取 SOTA 排名
+  2. 论文/文章页面被阻断 → 用 ddgs 摘要 + HN Firebase 热点交叉验证
+  3. 安全类站点阻断 → 优先用 ddgs 关键词搜索，browser_navigate 降级为备选
+- **注意**：web_extract 的 Firecrawl 层也会被 credits exhausted 阻断，与 ad-filter 是两个独立问题，需要分别降级
+- **跨域独立性**：ad-filter 对不同域名的阻断是独立事件，github.com ok ≠ microsoft.ai ok，需要分别测试
+
 **Cron 模式特殊注意**：定时任务环境下 web_search 易 credits 用尽。每次轮次开始时默认走降级路径——先用 ddgs + HN Firebase API。
 
 **HN Firebase API 用法**（免费稳定，无需认证）：
@@ -237,15 +253,15 @@ EOF
   5. 二元决策：pull / 不 pull
 
 **A/Vision 推荐来源（按可靠性排序）**：
-1. **Steel.dev AI Agent Leaderboards**（leaderboard.steel.dev）✅ 2026-06-02 实测：browser_navigate 直接可读，覆盖 7 个权威 benchmark（WebVoyager/BrowseComp/WebArena/SWE-bench/OSWorld/GAIA/Online-Mind2Web），静态 HTML，`browser_console` JS 提取稳定。**首选 SOTA 来源**。
-2. **InsiderLLM**（insiderllm.com）✅ 已验证：深度 Mac 指南，定期更新
-3. **LeetLLM**（leetllm.com）✅ 已验证：Local Qwen 部署权威指南，完整 variant 表
-4. **Apple Machine Learning Research**（machinelearning.apple.com/research/）✅ 已验证：Apple 官方 VLM/视觉模型论文，可浏览器直读
-5. **Qwen 官方博客**（qwen.ai/blog）✅ 第一手资料
-6. **gentic.news/computer-use**（⚠️ 降级）— 2026-06-02 起 Firecrawl credits exhausted，schema 已弃用（JSON-LD FAQPage 结构被页面放弃）。**降为备选**：仅在 Steel.dev 不可用时使用。
-7. **Ollama 官方 library**（ollama.com/library/）— browser_navigate 直接抓取 benchmark
-8. **ddgs CLI** — 快速关键词搜索
-9. **HN Firebase API** — 热点技术文章
+1. **ddgs CLI 搜索** ✅ 2026-06-03 实测：不受浏览器层 ad-filter 影响，直接 HTTP 请求获取结果。**Steel.dev 被阻断时的稳定替代**。
+2. **HN Firebase API** ✅ 免费稳定，无需认证，获取热点技术文章
+3. **InsiderLLM**（insiderllm.com）⚠️ 需验证可访问性，部分时段可能受 ad-filter 影响
+4. **Apple Machine Learning Research**（machinelearning.apple.com/research/）⚠️ 2026-06-03 实测被 ad-filter 阻断，降级用 ddgs 搜索摘要
+5. **Qwen 官方博客**（qwen.ai/blog）⚠️ 需验证可访问性
+6. **gentic.news/computer-use**（⚠️ 降级）— 2026-06-02 起 Firecrawl credits exhausted，schema 已弃用。**降为备选**：仅在 ddgs 无结果时使用。
+7. **Ollama 官方 library**（ollama.com/library/）— 需验证可访问性
+8. **browser_navigate**（⚠️ 条件性可用）— 仅对未被 ad-filter 阻断的域名有效。Steel.dev/microsoft.ai/arxiv 均已验证被阻断。需要逐域测试。
+9. **⚠️ Steel.dev AI Agent Leaderboards（2026-06-03 实测阻断）**：原本首选来源，但 `net::ERR_BLOCKED_BY_CLIENT` 导致浏览器层完全不可访问。降级用 ddgs 搜索 "GUI agent benchmark leaderboard 2026 steel.dev" 获取排名信息。
 
 **产线健康巡检命令集**：
 ```bash
@@ -278,11 +294,11 @@ curl -sf --max-time 5 http://127.0.0.1:11434/api/tags | python3 -c "
 import sys,json; d=json.load(sys.stdin)
 for m in d.get('models',[]): print(m['name'], round(m['size']/1e9,2), 'GB')
 "                                               # models loaded?
-ls ~/.hermes/screenshots/.handler_lock 2>/dev/null || echo "no_lock"
+ls ~/.hermes/logs/.handler_lock 2>/dev/null || echo "no_lock"
 # --- YOLO pre-class stats (handler v2 refactored to YOLO-first output) ---
 DATE=$(date +%Y-%m-%d)
 echo "--- YOLO pre-class distribution ---"
-grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep "YOLO预分类:" | awk -F'YOLO预分类: ' '{print $2}' | awk '{print $1}' | sort | uniq -c | sort -rn
+grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep "YOLO预分类:" | sed 's/.*YOLO预分类: //' | awk '{print $1}' | sort | uniq -c | sort -rn
 echo "--- YOLO idle skip count ---"
 grep "$DATE" ~/.hermes/logs/screen_trigger.log | grep -c "YOLO判断空闲界面" 2>/dev/null || echo 0
 echo "--- total triggers today ---"
@@ -414,8 +430,9 @@ tail -100 ~/.hermes/logs/gateway.log | grep -c "screen_watch" 2>/dev/null || ech
        - **ICLR2026/**（首次 grounding → 后续全量 11 sections × 74 papers 已覆盖）
          - 11 sections: Grounding (17) / Navigation (4) / Multi-agent (8) / World Model (2) / Knowledge/Data (5) / RL (14) / Special Ideas (3) / Test-time Scaling (3) / Data Generation (4) / Security (1) / Benchmark (13)
          - **饱和标记**：全部 11 sections 完整扫描后标记全量覆盖
-       - **AAAI2026/**（长驻子目录）
+       - **AAAI2026/**（高优先级，2026-06-03 产出 13 篇）
          - ⚠️ **2026-06-02 实测修正**：之前误标记为"全覆盖"，实际 AAAI2026/README.md 含 **7 个独立 section**（Benchmark/Grounding & RL/Test-time Scaling/Training Framework/Robustness/Data Collection/Multi-Agent）。ICLR2026 饱和 ≠ AAAI2026 饱和 — **每个子目录需独立扫描和标记饱和**。
+         - 2026-06-03 实测：单次 AAAI2026 扫描产出 13 篇（12 new），是本周最高 yield 子目录
          - **AAAI2026 论文扫描命令**：
            - ⚠️ curl empty response 陷阱（2026-06-02 实测）：`curl` 到 raw.githubusercontent.com 有时返回空结果（exit code 0 但 body 为空）。检测方法：`wc -c` 确认返回字节数，若 < 100 bytes 则重试一次。
            - **GitHub API 替代（推荐，无浏览器开销）**：当 rawgh 返回空时，直接用 GitHub Contents API + base64 解码，比 browser_navigate 更轻量：
@@ -446,7 +463,29 @@ tail -100 ~/.hermes/logs/gateway.log | grep -c "screen_watch" 2>/dev/null || ech
      - **跨源去重**：子目录中的论文可能与 OSU-NLP YAML 或已有 reference 重叠，需用 arxiv_id 交叉验证
      - **⚠️ 标题 HTML 标签陷阱（2026-06-02 实测）**：GitHub 的 README.md 渲染为 HTML 后，论文标题可能被 `<font style="color:...">` 等标签包裹。直接用 `grep -ci "$title"` 时匹配会失败（因为标题含隐藏 HTML）。**建议去重方法**：从 curl 原始内容中用 Python `re.sub(r'<[^>]+>', '', text)` 先剥离 HTML 标签，再用剥离后的纯文本标题做 grep 匹配。详见本次轮次 AAAI2026 扫描中的实战示范。
 
-  1c. **ZJU README Updates 区独立扫描**（2026-06-02 新增，2026-06-13 效率优化）:
+  1c. **ZJU README Updates 区独立扫描**（2026-06-02 新增，2026-06-13 效率优化 + 2026-06-03 实测确认）:
+     - 主 README.md 顶部的 Updates 区包含**不在任何 Paperlist 子目录中的论文**
+     - 典型：ClawGUI (2604.11784)、UI-Copilot (2604.13822)、UI-Zoomer (2604.14113) 均在 Updates 区而非 Paperlist
+     - 扫描：`curl -sf --max-time 10 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/README.md" | head -80 | grep -E "arxiv\.org|arXiv:"`
+     - **饱和判断独立**：README Paperlist 饱和 ≠ Updates 区饱和。Updates 区是活来源
+     - **⚠️ 效率优先原则（2026-06-13 实测）**：Updates区 head -80 是方向 B 最有效的新论文发现来源（实测：4篇新增论文全部来自 Updates 区，主 Paper List 和子目录均无新发现）。**扫描顺序**：Updates区 → 主 Paper List → 子目录。Updates区 有新发现时继续深度扫描，无新发现时才检查子目录。
+
+  1d. **AAAI2026 子目录高优先级扫描（2026-06-03 实测，13篇/次）**:
+     - **效率验证（2026-06-03）**：AAAI2026/README.md 单次扫描产出 13 篇论文（12 new），是本周最高 yield 来源
+     - **⚠️ 扫描顺序**：Updates区 → AAAI2026 → ICLR2026（而非旧版"先子目录后Updates"）
+     - **AAAI2026 7 个 section**：Benchmark / Grounding & RL / Test-time Scaling / Training Framework / Robustness / Data Collection / Multi-Agent
+     - **推荐 GitHub API 提取**（避免 rawgh empty response 陷阱）：
+       ```bash
+       curl -sf --max-time 10 "https://api.github.com/repos/ZJU-REAL/Awesome-GUI-Agents/contents/AAAI2026/README.md" | python3 -c "
+       import sys,json,base64,re
+       d=json.load(sys.stdin)
+       c=base64.b64decode(d.get('content','')).decode('utf-8')
+       clean=re.sub(r'<[^>]+>','',c)
+       for line in clean.split('\n'):
+           if line.startswith('#'): print(line.strip())
+       "
+       ```
+     - **已知 AAAI2026 高价值论文**：Co-EPG (规划-定位协同进化, AAAI 2026)、TongUI (合成训练轨迹)、UI-R1 (RL action prediction)、Mobile-Agent-RAG (多Agent协调)
      - 主 README.md 顶部的 Updates 区包含**不在任何 Paperlist 子目录中的论文**
      - 典型：ClawGUI (2604.11784)、UI-Copilot (2604.13822)、UI-Zoomer (2604.14113) 均在 Updates 区而非 Paperlist
      - 扫描：`curl -sf --max-time 10 "https://raw.githubusercontent.com/ZJU-REAL/Awesome-GUI-Agents/main/README.md" | head -80 | grep -E "arxiv\.org|arXiv:"`
@@ -519,6 +558,15 @@ tail -100 ~/.hermes/logs/gateway.log | grep -c "screen_watch" 2>/dev/null || ech
      - 重点关注本地/开源 agent 新条目（Hermes 定位匹配）
   **⚠️ gentic.news 降级说明（2026-06-02）**：gentic.news 页面 schema 已从 FAQPage 改为 WebSite/Organization，JSON-LD 提取脚本不再有效。Steel.dev 是稳定的直接替代，browser_navigate + browser_console JS 提取已验证。方向 B/D 巡检时应优先使用 Steel.dev。
 
+**⚠️ Marimo CVE-2026-39987 — 首次 LLM Agent 武器化真实攻击（2026-06-03 新增）**：
+来源：Sysdig research + The Hacker News (May 28-29 2026)
+- **事件**：攻击者利用 Marimo notebook RCE (CVE-2026-39987, CVSS 10.0) 获取初始访问后，使用 LLM Agent 驱动后续攻击（窃取云凭据、SSH keys、PostgreSQL 数据）
+- **首例确认**：这是公开确认的首个 LLM Agent 在真实攻击中被武器化的案例
+- **Hermes 映射**：当 Hermes 具有 `terminal()` / `delegate_task` 执行能力时，若攻击者通过其他漏洞获得本地 RCE，Hermes 本身成为"攻击放大器"——攻击者利用 Hermes 的 agent 能力进行后渗透
+- **风险矩阵**：Direct risk LOW（Hermes gateway 无已知 RCE）| Indirect risk MED（本地 RCE + Hermes → 攻击放大器）
+- **防护**：gateway 保持 localhost 不对外暴露
+- Reference: `references/marimo-cve-2026-39987-llm-agent-weaponization-2026-06-03.md`
+
 **⚠️ OpenClaw Security Crisis — 方向C 重大发现来源（2026-06-03 新增）**：
 来源：NeuralCoreTech `neuralcoretech.com/openclaw-security-vulnerabilities/` (April 10, 2026) + Reco.ai
 
@@ -533,15 +581,18 @@ Stage 3 Context Assembly（最关键安全节点，poisoned context → 全链�
 
 **方向 C 安全来源补充**：
 - **OWASP GenAI Exploit Round-up Q1 2026**（2026-01 至 2026-04-11）— genai.owasp.org/quarterly-exploit-roundup，涵盖 Mexico government breach（2025-12 下→2026-01→2026-02-25 公开）等真实事件。浏览器法已验证：`browser_navigate` + `browser_console` 提取 Q&A 列表。每季度第一周更新。
+  - ⚠️ **Q2 2026 Round-up 不存在（2026-06-03 实测）**：ddgs 搜索仅返回 Q1 2026，OWASP Articles 页面仍显示"Q1 2026"。**Q2 2026 (Apr-Jun) exploit roundup 预计 2026-07 发布**。
+  - **⚠️ 同期可用资源**：AI Security Solutions Landscape Q2 2026（genai.owasp.org/resource/ai-security-solutions-landscape-for-agentic-ai-q2-2026/）已上线，涵盖 DevOps-SecOps 全景映射，可作为 Q2 安全趋势参考。
   - 2026-06-02 发现：CVE-2026-2256 (AI SDK 漏洞，3 大云厂商受影响)、SemJack (AI coding agents symlink hijack RCE)
   - 详见 `references/owasp-genai-exploit-roundup-q1-2026.md`
 
 **⚠️ CyberDesserts 2026 AI Agent Security Timeline（2026-06-02 新增）**：ddgs 搜索发现的新来源。综合覆盖 Claude Code Hooks RCE (CVE-2025-59536)、Mexico Government Breach、ClawHavoc 等 7 大安全事件。ddgs → browser_navigate 直读验证 ✅。已验证可靠，方向 C 轮次应定期扫描。
 
-  2i. **Rafter AI Agent Security Timeline（2026-06-03 新增）**：
+  2i. **Rafter AI Agent Security Timeline（2026-06-03 新增，2026-06-03 ad-filter 阻断）**：
      - URL：`https://rafter.so/blog/incidents/ai-agent-security-timeline-2025-2026`
+     - ⚠️ **ad-filter 阻断（2026-06-03 实测）**：`browser_navigate` 返回 `net::ERR_BLOCKED_BY_CLIENT`，与 Steel.dev/microsoft.ai/arxiv 相同模式。**降级**：ddgs 搜索 "site:rafter.so AI agent security" 获取更新，或依赖现有 reference 文件 `references/rafter-ai-agent-security-timeline-2026-06-03.md`（已全量提取）。
      - **独特 CVE 覆盖**（不在其他来源中）：CVE-2026-21852 (Claude Code API Key Exfiltration，ANTHROPIC_BASE_URL 重定向明文API密钥窃取)、CVE-2025-66414 (MCP TypeScript SDK DNS Rebinding，CVSS 7.6)、CVE-2025-68143/44/45 (Anthropic Git MCP Server 三漏洞集)、CVE-2025-61260 (OpenAI Codex CLI Config Exploit，CVSS 9.8)
-     - **扫描方法**：`browser_navigate` → `browser_console(expression='document.body.innerText.slice(0, 16000)')` 全量提取（页面约 6000 字，一次 slice 足够）
+     - **扫描方法（限非阻断环境）**：`browser_navigate` → `browser_console(expression='document.body.innerText.slice(0, 16000)')` 全量提取（页面约 6000 字，一次 slice 足够）
      - **三大攻击模式总结**（跨所有 incident 的共性模式）：
        1. **Config-as-Execution Supply Chain**：项目配置文件（.claude/settings.json、.env、CODEX_HOME）被 AI 工具信任并自动执行
        2. **Localhost Trust Assumption**：localhost 服务假设 127.0.0.1 连接可信，可被 DNS rebinding / 跨域 WebSocket 绕过
@@ -1045,7 +1096,9 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/dod-careful-adoption-agentic-ai-2026-06-02.md` — 美国 DoD AI Agent 官方安全指南 (Apr 2026)，方向 C 参考
 - `references/owasp-genai-exploit-roundup-q1-2026.md` — OWASP GenAI Exploit Round-up Q1 2026（CVE-2026-2256 / SemJack / Mexico government breach），方向 C 安全来源
 - `references/adversa-ai-security-digest-june-2026.md` — Adversa AI June 2026 安全摘要（SymJack symlink-hijack RCE + TrustFall 一键 RCE），方向 C 扫描来源
+- `references/braveguard-2606.01166-2026-06-03.md` — BraveGuard (arXiv 2606.01166): self-evolving guard model for multi-step execution traces, maps to Hermes screen_trigger loop
 - `references/rafter-ai-agent-security-timeline-2026-06-03.md` — Rafter AI Agent Security Timeline 2025-2026：CVE-2026-21852/CVE-2025-66414/Git MCP 三漏洞集/Codex CLI RCE，三大攻击模式（Config-as-Execution/Localhost Trust/AI Reading Untrusted），方向 C 深度参考
+- `references/marimo-cve-2026-39987-llm-agent-weaponization-2026-06-03.md` — Marimo CVE-2026-39987 LLM Agent 武器化（首次真实攻击案例，Sysdig research）
 - `references/gentic-news-computer-use-leaderboard-2026-04-24.md` — Computer Use Agents 排行榜 + "harness > model" 核心洞察，方向 A/B/D 通用参考
 - `references/kucoin-45m-ai-agent-breach-2026-06-03.md` — KuCoin $45M AI Agent Breach (Apr 2, 2026): memory layer + execution protocol vulnerability, 88% of AI agent orgs attacked, 方向 C 安全事件
 - `references/co-epg-aaai-2026.md` — Co-EPG (2511.10705, AAAI 2026): 规划-定位协同进化框架 (GRPO)，方向 B/D 通用
