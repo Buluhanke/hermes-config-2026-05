@@ -457,7 +457,19 @@ sleep 2
 **HumanConfig 关键参数**：typing_delay（打字延迟ms）、mistype_chance（误触概率）、mouse_min_steps/mouse_max_steps（鼠标曲线路径步数）、idle_between_actions（操作间停顿）、idle_between_duration（停顿秒数范围）
 
 **2026-06-01 新增：AI聊天网站对话获取知识（已验证失败但路径明确）**
+**2026-06-02 重要发现：Shadow DOM 隔离比预期更深，浏览器读取 AI 对话此路不通**
 
+实测结果：
+- DeepSeek：输入文字✅、发送✅、Accessibility Tree 285节点✅，但 AI 回复 0 节点
+- 豆包/Grok：同样 Shadow DOM 隔离，读不到任何回复内容
+
+根因：现代 AI 聊天网站（DeepSeek/豆包/Grok/ChatGPT 等）使用 custom elements + closed shadowRoot + 虚拟化列表，DOM 遍历和 AX Tree 都无法穿透。
+
+**正确结论**：不要通过浏览器读取 AI 对话内容，直接调 AI 厂商 API。
+- ✅ 可用：AX Tree 读页面结构、填输入框、点按钮、读历史对话列表
+- ❌ 不可用：读 AI 实时回复（Shadow DOM 隔离）
+
+**2026-06-01 新增：AI聊天网站对话获取知识（已验证失败但路径明确）**
 **症状**：豆包/ChatGLM 在 Playwright 无头浏览器中打开后：
 - 页面正常加载，有输入框
 - 发送消息后 AI 不回复（限流或风控拦截）
@@ -484,10 +496,10 @@ document.body.innerText.substring(0, 8000)
 **用户纠正（2026-06-01）：不要走后台浏览器，走用户打开的浏览器**
 
 用户明确指出：Hermes应该直接操作用户日常Chrome，而不是Playwright临时实例。
-
 **操作用户Chrome的两种方式**：
 - AppleScript：快速发指令（`open location`），但读不到DOM
 - Chrome Debug Port + CDP WebSocket：完整控制（读DOM、执行JS、截图）
+详见 `references/user-chrome-cdp-control.md`
 
 详见 `references/user-chrome-cdp-control.md`
 

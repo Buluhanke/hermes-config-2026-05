@@ -120,27 +120,31 @@ macOS上容易出现多个Playwright版本（1.58.0/1.59.1/1.60.0）：
 - 文件对话框 → 需要人工介入
 - Gemini API视觉 → 网络墙不可靠
 
-## AI聊天网站登录态限制（2026-06-01发现，2026-06-02更新）
+### AI聊天网站登录态限制（2026-06-01发现，2026-06-02更新）
 
-**问题**：Playwright启动的是干净浏览器实例，没有用户Chrome的cookies。
+**问题**：Playwright启动的是干净浏览器实例，没有用户Chrome的cookies和session。
 
 豆包、ChatGLM、DeepSeek、ChatGPT等AI网站：
 - 打开后显示"登录"按钮或需要手机验证
 - AI对话功能不可用（显示转圈但无回复）
-- `browser_snapshot` / `browser_console` 读不到动态渲染的AI回复（JS懒加载）
 
-**关键发现（2026-06-02）**：
-- `computer_use capture app=Chrome` 返回0x0是因为活动标签是`about:blank`，不是Chrome GPU问题
-- `screencapture -x` 可以绕过Chrome GPU合成层，成功截取活动标签的页面内容
-- 切换到AI站点标签后，截屏可见登录页面（证明内容是真实的）
-- **登录态仍是核心障碍**：即使能截屏，AI对话功能需要账号登录
+**Shadow DOM / 懒加载导致DOM查询失效（2026-06-02更新）**：
+- ~~DeepSeek、ChatGLM、豆包等使用 Shadow DOM + 懒加载~~
+- ~~`browser_snapshot` 读不到AI对话内容，即使登录态正常也不行~~
+- ~~CDP `Runtime.evaluate` 对这些tab返回空text nodes~~
+- **已解决**：Accessibility.getFullAXTree 对所有AI站点的Shadow DOM完全可用，返回285节点（DeepSeek），可读取对话历史链接/输入框/模式选择等所有内容
+
+**computer_use capture返回0x0的原因（已澄清）**：
+- 不是Chrome GPU问题，是活动标签是`about:blank`
+- 切换到AI站点标签后，screencapture能完整捕获页面内容
 
 **当前解法（按优先级）**：
-1. **screencapture + Vision OCR** — 切到AI站点标签后截屏，用Vision OCR读文字（60ms）
-2. **用户配合看屏幕** — 用户能看到Playwright浏览器窗口，直接口头告诉AI回复内容
-3. **Bing搜索替代** — 用Python curl调用Bing搜索获取信息（见 references/ai-chat-sites-status.md）
+1. **Accessibility.getFullAXTree（推荐）** — 直接读取浏览器Accessibility Tree，~50ms，无OCR，Chrome原生API
+2. **CDP Runtime.evaluate + JS** — 直接执行JS读innerText/DOM
+3. **screencapture + 视觉模型读取** — 切到AI站点标签 → 截屏 → 视觉模型分析（MiniMax不支持，需Claude/Gemini）
+4. **CDP直接注入（无回复需求时）** — 向已登录站点的输入框写内容并发送
 
 **不要做的事**：
-- 不要反复等 `browser_snapshot` 期待AI回复出现 — 动态内容查不到
 - 不要花时间调 `browser_vision` — API key无效，短期内无法修复
-- 不要依赖CDP `Page.captureScreenshot` — Chrome GPU合成层返回空
+- 不要依赖CDP `Page.captureScreenshot` — Chrome GPU合成层返回空（但Accessibility Tree不受影响）
+- 不要用当前MiniMax模型分析截图 — 不支持图片输入（纯文字模型）

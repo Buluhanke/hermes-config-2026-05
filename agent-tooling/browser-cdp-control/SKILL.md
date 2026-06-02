@@ -21,11 +21,27 @@ Priority order:
 4. `browser_vision` / `computer_use` — last resort only (dynamic rendering, CAPTCHA, rich text that resists text extraction)
 
 ## Architecture
-
+## Architecture
 ### Chrome Setup (macOS)
 
 ### CDP Port Requirement
 Chrome 148+ **refuses** `--remote-debugging-port` on the default user data directory. You must use a **custom** directory.
+
+### Critical: Chrome CDP Does NOT Support JSON-RPC 2.0
+
+**This is the #1 pitfall.** Chrome's CDP WebSocket protocol is **not** JSON-RPC 2.0 compliant.
+
+❌ WRONG (will cause `-32600` errors):
+```python
+msg = {"jsonrpc": "2.0", "id": 1, "method": "Page.bringToFront"}
+```
+
+✅ CORRECT:
+```python
+msg = {"id": 1, "method": "Page.bringToFront"}  # No jsonrpc field
+```
+
+This single issue causes CDP to fail silently for many tasks. Always omit the `jsonrpc` field.
 
 ### Gateway Restart Recovery (proven workflow)
 After gateway restart/Chrome crash:
@@ -134,34 +150,73 @@ ws.close()
 ## AI网站交互工作流（实战验证）
 
 ### 正确流程（问题→发送→等待→提取）
+## 正确流程（问题→发送→等待→提取）
 
 AI聊天网站（ChatGPT/豆包/DeepSeek/智谱清言/Gemini）使用 WebSocket 流式输出+虚拟DOM渲染，**必须在同一页面完成发送+等待+提取，不能刷新或导航离开。**
 
 ```
-Step 1: browser_navigate(url)                  → 打开目标AI网站
-Step 2: browser_type(ref, text)                → 向textbox输入问题
-Step 3: browser_press(key='Enter')             → 发送消息
-Step 4: terminal("sleep 20")                   → 等待AI回复（必须等待！）
-Step 5: browser_console(expression=...)        → 用CDP提取页面文本
-       or browser_vision(question=...)         → 截图提取（模型支持时）
+Step 1: curl http://localhost:9333/json           → 找到tab ID
+Step 2: WebSocket连接 + Page.bringToFront         → 激活目标tab
+Step 3: Runtime.evaluate (JS填充)                  → 向输入框写入问题
+Step 4: Input.dispatchKeyEvent (Enter)            → 提交
+Step 5: sleep 15-25秒                            → 等待AI回复（深度思考模式更久）
+Step 6: Accessibility.getFullAXTree               → 读取回复内容（推荐，无OCR）
+       或 Runtime.evaluate (innerText)            → 直接读DOM文本
 ```
 
-### ⚠️ 关键坑
+### 推荐：Accessibility Tree 读取内容
 
-1. **不要 browser_navigate 刷新** — 导航离开当前对话页面会丢失整个对话。SPA页面不保存状态。想在同一个页面内等待回复。
-2. **等待时间必须充足** — AI回复需要15-25秒，尤其是搜索+多轮推理（DeepSeek深度思考更久）
-3. **textbox ref每次navigate都会变** — ref编号每次页面加载都重新生成
-4. **browser_press Enter可能不触发发送** — 某些网站（如Doubao）需要点发送按钮而不是按Enter
-5. **Gemini对话不持久** — Gemini在新标签页中打开时对话状态会丢失，回复不可靠
+**为什么优先于截图/OCR**：Chrome原生API，~50ms，不需要模型支持视觉，可读取所有Shadow DOM内容。
 
-### 提取方法优先级（已验证）
+```python
+import json, asyncio, websockets
 
-| 方法 | 适用网站 | 效果 |
-|------|---------|------|
-| `browser_console(expression='document.body.innerText.slice(0,6000)')` | DeepSeek, 智谱清言 | ✅ 可靠 |
-| `browser_vision(question=...)` | 所有网站 | ✅ 有效但模型需支持vision |
-| CDP Runtime.evaluate (shadow DOM脚本) | ChatGPT | ⚠️ 有时返回空 |
-| `web_extract(url)` | 非AI网站 | ✅ 静态页面最快 |
+async def read_ai_site(tab_id):
+    async with websockets.connect(f"ws://localhost:9333/devtools/page/{tab_id}") as ws:
+        await ws.send(json.dumps({"id": 1, "method": "Page.bringToFront"})); await ws.recv()
+        await asyncio.sleep(0.5)
+        await ws.send(json.dumps({"id": 2, "method": "Accessibility.getFullAXTree", "params": {"depth": 25}}))
+        resp = json.loads(await ws.recv())
+        nodes = resp["result"]["nodes"]
+        
+        # 提取有意义的元素
+        for n in nodes:
+            role = n["role"]["value"]
+            name = n["name"]["value"][:100]
+            if role in ["link", "button", "textbox", "radio", "heading"] and name:
+                print(f"[{role}] {name}")
+```
+
+**读取到的内容类型**：对话历史链接(21条DeepSeek历史)/输入框/backendDOMNodeId/模式选择(radio)。
+
+### 备选：Runtime.evaluate 读取innerText
+
+当Accessibility Tree不够时，用JS直接读DOM：
+
+```javascript
+// 递归遍历shadow DOM（通用方法）
+(function(){
+    function extractText(node, depth) {
+        if(depth > 8) return '';
+        var texts = [];
+        if(node.nodeType === 3 && node.textContent.trim()) {
+            texts.push(node.textContent.trim());
+        }
+        if(node.shadowRoot) {
+            Array.from(node.shadowRoot.childNodes).forEach(function(c){
+                texts.push(extractText(c, depth+1));
+            });
+        }
+        if(node.childNodes) {
+            Array.from(node.childNodes).forEach(function(c){
+                texts.push(extractText(c, depth+1));
+            });
+        }
+        return texts.join(' ');
+    }
+    return extractText(document.body, 0).substring(0, 8000);
+})()
+```
 
 ### 多AI站并行采集策略
 
@@ -366,6 +421,73 @@ python3 scripts/pending_tasks.py status
 ## Quick Verify
 ```bash
 curl -s http://127.0.0.1:9222/json/version | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"Chrome {d.get('Browser-Version','?')}\")"
+```
+
+## Critical Limitation: AI Chat Replies Are Unreadable via CDP
+
+**Root cause**: Modern AI chat sites (DeepSeek, 豆包, ChatGPT, ChatGLM) render messages inside **Web Components Shadow DOM**. Both `Runtime.evaluate` and `Accessibility.getFullAXTree` cannot penetrate Shadow DOM boundaries — the messages exist in a private, encapsulated tree that CDP cannot traverse.
+
+**What you CAN read**:
+- Page structure (sidebars, nav links, buttons, headings)
+- Input textboxes, form fields, radio buttons
+- Structured content (1688 product listings, news articles, tables)
+- AX tree returns 200-500+ nodes for navigation/structure
+
+**What you CANNOT read**:
+- AI chat reply text content (Shadow DOM isolated)
+- Streaming message fragments mid-generation
+- Canvas/验证码/image内文字
+
+**Workaround for AI sites**:
+```
+Instead of browser → read reply → process
+Do: browser → send message → call AI API directly
+
+DeepSeek  → direct DeepSeek API (free tier available)
+ChatGPT   → direct OpenAI API  
+Gemini    → direct Google API
+豆包      → direct ByteDance API (if available)
+```
+
+This session confirmed: JS shadow DOM traversal found 0 message texts, AX tree showed 280 nodes but all StaticText were page chrome (sidebar links, nav), no AI reply content anywhere.
+
+## Verified Working: hermes_cdp_bot.py
+
+The canonical working script is `scripts/hermes_cdp_bot.py`. It:
+- Connects via WebSocket to existing Chrome tab (no new browser launch)
+- Uses correct CDP message format (no `jsonrpc` field)
+- Gets full 36-char tab ID from HTTP `http://localhost:9333/json`
+- Fills textarea via `Runtime.evaluate` + `dispatchEvent`
+- Sends via `KeyboardEvent('keydown', {key:'Enter', ...})`
+- Reads AX tree for structure confirmation
+- Supports multiple AI sites via command-line: `python3 hermes_cdp_bot.py deepseek`
+
+### Screenshot Fallback (CDP screenshots return 0 bytes on this Mac)
+
+`Page.captureScreenshot` returns empty on this macOS setup (GPU compositing issue). Use macOS native instead:
+
+```bash
+screencapture -x /tmp/ai_screenshots/chrome_full.png
+```
+
+### Port Architecture (2026-06-02 verified)
+
+| Port | Chrome Instance | Login State | Notes |
+|------|---------------|-------------|-------|
+| **9222** | User's real Chrome (`--remote-debugging-port=9222`) | ✅ Has login state | User's daily Chrome, already open |
+| **9333** | `chrome-debug` profile (`--user-data-dir=...chrome-debug`) | ❌ No login | Independent instance |
+
+**Key insight**: Do NOT copy user Chrome profile to chrome-debug — cookies are encrypted with user Keychain and won't work in a different profile. Instead, connect CDP directly to user's real Chrome at **port 9222** (already running with debug port).
+
+```python
+# Connect to user's real Chrome (port 9222)
+with urllib.request.urlopen('http://localhost:9222/json') as f:
+    tabs = json.load(f)
+# Find the AI site tab you want to interact with
+for t in tabs:
+    if 'deepseek' in t.get('url','') and t.get('type') == 'page':
+        tab_id = t['id']  # full 32-char ID
+        break
 ```
 
 ## Connected AI Sites (pre-authenticated)

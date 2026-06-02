@@ -85,6 +85,9 @@ els.forEach(el => {
 - 依赖 Chrome CDP 9333(chrome-debug实例)运行
 - Chrome内部页面(chrome://)无法通过CDP访问
 - 反爬站点(百度等)可能注入隐藏UI → JS已用getBoundingClientRect过滤零尺寸元素
+- **Chrome CDP不支持JSON-RPC 2.0** — 发送CDP命令时禁止包含`jsonrpc`字段
+  - ❌ `{"jsonrpc": "2.0", "id": 1, "method": "..."}` 会导致`-32600`错误
+  - ✅ `{"id": 1, "method": "..."}`
 - iframe内元素需分别连接对应frame的target
 
 ## Chrome双实例架构（重要更新 2026-06-03）
@@ -340,118 +343,41 @@ open -a "Google Chrome" --args --remote-debugging-port=9222  # ❌ open 不接�
 - `--user-data-dir` 指定用户的 Default profile，保留已登录状态
 
 **读取AI网站对话内容（如ChatGPT、豆包、智谱清言）：用 CDP Runtime.evaluate，不截图**
-
-```python
-import websocket, json, urllib.request
-
-# 获取目标标签页
-with urllib.request.urlopen('http://127.0.0.1:9222/json/list') as f:
-    tabs = json.loads(f.read())
-tab_id = tabs[0]['id']
-
-ws = websocket.create_connection(f"ws://127.0.0.1:9222/devtools/page/{tab_id}", timeout=15)
-ws.send(json.dumps({"id":1,"method":"Runtime.enable"})); ws.recv()
-
-# 用JS提取页面对话内容（ChatGPT为例）
-ws.send(json.dumps({
-    "id": 2,
-    "method": "Runtime.evaluate",
-    "params": {
-        "expression": """
-(function(){
-    var items = document.querySelectorAll('[data-testid*="conversation"] article, .markdown-comment, [class*="assistant"]');
-    var texts = [];
-    items.forEach(function(el){
-        if(el.innerText.trim()) texts.push(el.innerText.substring(0,3000));
-    });
-    return JSON.stringify(texts.slice(-6));
-})()
-""",
-        "returnByValue": True
-    }
-}))
-msg = json.loads(ws.recv())
-val = msg.get('result',{}).get('result',{}).get('value','')
-if val:
-    texts = json.loads(val)
-    for t in texts:
-        print(t[:1500])
-ws.close()
-```
-
-**什么时候用这个 vs. 截图：**
-| 场景 | 正确方式 |
-|------|---------|
-| AI网站对话内容（ChatGPT、豆包等） | CDP Runtime.evaluate（文本提取） |
-| 动态渲染页面（React/Vue SPA） | CDP Runtime.evaluate |
-| 页面有验证码/CAPTCHA | browser_vision 截图 |
-| 表单/列表/普通网站 | dom_tag_and_extract |
-
 **读取AI网站对话内容（如ChatGPT、豆包、智谱清言）：用 CDP Runtime.evaluate，不截图**
 
-> ⚠️ **教训（2026-06-02）**：AI网站内容在DOM里，直接提取文本。走截图是绕弯路，token消耗大且慢。但很多AI网站用shadow DOM，标准DOM查询返回空——需要递归遍历shadowRoot。
+> ⚠️ **重要发现（2026-06-02）**：大多数现代AI聊天网站（DeepSeek、豆包、ChatGPT等）将对话内容渲染在 Shadow DOM 自定义组件的私有 `shadowRoot` 里。递归遍历 shadowRoot 仍返回空——这些组件使用了更深的 DOM 隔离（custom elements + closed shadowRoot + 虚拟化列表）。
+
+**实战结果（2026-06-02）**：
+- DeepSeek：输入文字✅、发送✅、但AI回复 0 节点（Shadow DOM 隔离）
+- 豆包：同上的 shadow DOM 隔离
+- Grok：同上
+
+**正确解法：不要通过浏览器读取 AI 对话内容，直接调 AI 厂商 API**
 
 ```python
-import websocket, json, urllib.request
-# 获取目标标签页
-with urllib.request.urlopen('http://127.0.0.1:9222/json/list') as f:
-    tabs = json.loads(f.read())
-tab_id = tabs[0]['id']
-
-ws = websocket.create_connection(f"ws://127.0.0.1:9222/devtools/page/{tab_id}", timeout=15)
-ws.send(json.dumps({"id":1,"method":"Runtime.enable"})); ws.recv()
-
-# 递归遍历shadow DOM，提取所有文本（通用方法）
-ws.send(json.dumps({
-    "id": 2,
-    "method": "Runtime.evaluate",
-    "params": {
-        "expression": """
-(function(){
-    function extractText(node, depth) {
-        if(depth > 8) return '';
-        var texts = [];
-        if(node.nodeType === 3 && node.textContent.trim()) {
-            texts.push(node.textContent.trim());
-        }
-        if(node.shadowRoot) {
-            Array.from(node.shadowRoot.childNodes).forEach(function(child){
-                texts.push(extractText(child, depth+1));
-            });
-        }
-        if(node.childNodes) {
-            Array.from(node.childNodes).forEach(function(child){
-                texts.push(extractText(child, depth+1));
-            });
-        }
-        return texts.join(' ');
-    }
-    return extractText(document.body, 0).substring(0, 8000);
-})()
-""",
-        "returnByValue": True
-    }
-}))
-msg = json.loads(ws.recv())
-val = msg.get('result',{}).get('result',{}).get('value','')
-print(val[:3000] if val else "空")
-ws.close()
+# ✅ 正确方案：绕开浏览器，直接调 DeepSeek API
+import openai
+client = openai.OpenAI(
+    api_key="你的DeepSeek API Key",
+    base_url="https://api.deepseek.com"
+)
+response = client.chat.completions.create(
+    model="deepseek-chat",
+    messages=[{"role": "user", "content": "请用3句话说清楚你是谁"}],
+    max_tokens=200
+)
+print(response.choices[0].message.content)
 ```
 
 **什么时候用这个 vs. 截图：**
 | 场景 | 正确方式 |
 |------|---------|
-| AI网站对话内容（ChatGPT、豆包等） | CDP Runtime.evaluate + 递归shadow DOM（文本提取） |
+| AI 网站对话（DeepSeek/豆包/Grok等） | **直接调厂商 API**（绕开浏览器） |
 | 动态渲染页面（React/Vue SPA） | CDP Runtime.evaluate |
 | 页面有验证码/CAPTCHA | browser_vision 截图 |
 | 表单/列表/普通网站 | dom_tag_and_extract |
 
-**正确判断流程（按顺序，禁止跳过）：**
-1. `web_extract` 或 `browser_get_web_content` → 有内容？✅ 直接用
-2. CDP Runtime.evaluate + 递归shadow DOM JS → 有内容？✅ 直接用
-3. 以上皆空或不完整 → `browser_vision` 截图 ✅（最终兜底）
-
-**教训（2026-06-02）**：AI网站内容在DOM里，直接提取文本。走截图是绕弯路，token消耗大且慢。
+**教训（2026-06-02）**：Shadow DOM + closed shadowRoot 是比预期更深的隔离——**正确战略是不走浏览器这条路**。
 
 ### 问题H（2026-06-01 新增）：accessibility Tree 为空的正确解读
 
@@ -550,3 +476,4 @@ MCP chrome bridge (`mcp-chrome-stdio`) 因Chrome扩展通信架构问题不可�
 - **注入脚本**: `scripts/dom_label.py` — inject/click/navigate三种命令
 - **排障参考**: `references/mcp-chrome-debugging.md`
 - **阿里云盘token提取**: `references/aliyundrive-token-extraction.md`
+- **Shadow DOM 隔离与 AI 对话**: `references/shadow-dom-ai-chat-isolation.md`
