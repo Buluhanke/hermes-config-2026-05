@@ -92,7 +92,7 @@ tools/mcp_tool.py     → MCP 接入逻辑
 Goal（定义目标）→ Execute（执行搜索）→ Publish（归档）→ Atlas（统一查询）
 ```
 
-**搜索降级链**：官方文档 → GitHub → Discord → 中文社区 → 技能市场 → 本地存档
+**搜索降级链**：ddgs → GitHub API（免认证）→ browser直接访问（2026-06-02更新：SearXNG公开实例已全军覆没，从降级链移除）
 
 > ⚠️ 严禁只用模型内置知识——那是滞后的，必须走以上路径实时学。
 
@@ -155,6 +155,25 @@ Docker（Colima）已彻底停止，不再使用。
 1. `hermes --version` 查当前版本 + commit 落后数
 2. 落后 > 50 commits → `hermes update`
 3. 验证：`hermes --version` 确认 commit 数归零
+4. **若显示 "Up to date" 但 commit 仍落后**（误报）→ `rm ~/.hermes/.update_check` 清理缓存后重新验证
+
+**正确升级流程（源码手动同步）**：
+```bash
+cd ~/.hermes/hermes-agent
+git fetch origin main
+# 确认本地 HEAD 和 origin/main 对齐
+git branch -f main origin/main && git checkout main
+# 重装依赖（可能有新包）
+uv pip install -e . -q
+# 清理版本缓存（防止误报）
+rm ~/.hermes/.update_check
+hermes --version  # 应显示 Up to date
+```
+
+**⚠️ `.update_check` 缓存陷阱（2026-06-02 发现）**：
+- 文件 `~/.hermes/.update_check` 缓存 `behind: N` 计数
+- 即使 `git fetch` 后 HEAD 已对齐，版本命令仍从缓存返回旧值
+- 升级后必须删除此文件，否则持续误报 `N commits behind`
 
 **源码阅读优先级**：
 ```
@@ -180,6 +199,7 @@ Goal（定义目标）→ Execute（执行搜索）→ Publish（归档）→ At
 - [深度学习结果归档(2026-05-31)](./references/deep_learning_results_20260531.md)
 - [深度学习结果归档(2026-06-01)](./references/deep_learning_results_20260601.md)
 - [系统深层检查清单(2026-05-30)](./references/deep_check_audit_20260530.md)
+- [SearXNG MCP 故障应急方案(2026-06-02)](./references/searxng-mcp-failure-20260602.md)
 
 ## 脚本
 
@@ -468,21 +488,43 @@ for row in cur.fetchall():
 - 遇到多步骤任务 → 先 checkpoint，再执行
 - 简单任务30分钟内出结果，不要反复查日志
 
-## 网络故障应急方案（已实战验证）
+### 网络故障应急方案（已实战验证）
 
-### web_search 失败 → GitHub API 替代
-Firecrawl 额度耗尽时，用 execute_code + curl + GitHub API，无需认证：
+**搜索后端稳定性排序（2026-06-02 实测）：**
+| 方案 | 状态 | 备注 |
+|------|------|------|
+| ddgs（ DuckDuckGo SDK）| ✅ 稳定首选 | 免费，无需 API key，即装即用 |
+| GitHub API | ✅ 稳定备用 | 免认证，rate limit 宽松 |
+| SearXNG 公开实例 | ❌ 不可用 | 测试 50+ 实例：95%+ 已死或限流（429/403/530/000） |
+| Docker SearXNG | ❌ 不可用 | Docker Desktop 未安装 |
+| Firecrawl | ⚠️ 需付费 | 免费 tier 额度极低 |
+
+**⚠️ SearXNG 公开实例已全军覆没（2026-06-02）**：
+- `searx.be` → HTTP 200 但 JSON 返回 403 Forbidden
+- `searx.party` → HTTP 200 但持续 429 Too Many Requests（等待 90s+ 仍限流）
+- `searxng.vern.cc` / `searx.li` / `searx.tuxcloud.net` 等 → 429 或 404
+- 其余 40+ 实例 → 000 超时
+- 根因：公开 SearXNG 被大量滥用，所有稳定实例都加了严格限流或已下线
+
+**结论**：不要依赖 SearXNG 公开实例作为搜索后端。ddgs 是日常主力，GitHub API 是备用。
+
+### web_search 失败 → ddgs / GitHub API 替代
+
+主搜索后端是 ddgs（Python DuckDuckGo SDK），无需 API key，免费稳定：
 
 ```python
-import subprocess, json
-cmd = 'curl -s "https://api.github.com/search/repositories?q=omniparser&sort=stars&per_page=5"'
-r = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-data = json.loads(r.stdout)
-for item in data['items']:
-    print(f"{item['stargazers_count']}★ {item['full_name']}")
+from ddgs import DDGS
+with DDGS() as ddgs:
+    results = list(ddgs.text("query", max_results=5))
 ```
 
-已验证成功获取 OmniParser(24k★)、CloakBrowser(21k★)、Agent-S(11k★)。
+降级链（按优先级）：
+1. ddgs — 首选，日常搜索
+2. GitHub API（免认证）— ddgs 失败时用
+3. browser_navigate — 直接访问目标站点
+4. 本地存档 — 全部失败时读 Brain_Lab 最新
+
+⚠️ SearXNG MCP 依赖公开实例，稳定性差，不能作为主搜索后端。
 
 ### 浏览器AI对话站点全被 Cloudflare 挡
 ChatGPT / Claude.ai / Perplexity 均返回"正在进行安全验证"，**无法使用**，不要重试。

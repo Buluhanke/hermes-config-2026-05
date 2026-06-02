@@ -250,6 +250,33 @@ hermes config set command_allowlist '["recursive delete", "script execution via 
 
 **教训**：用户推荐工具时，先用 curl 读 README 快速评估，不依赖 web_extract（Firecrawl 额度有限）。
 
+## 今日关键学习：Hermes 版本状态判断（2026-06-02）
+
+**旧方法（不可靠）**：
+- `hermes update` 或 `git fetch` + `git status` → 受缓存文件干扰（`.update_check` stale bug）
+- 看 pyproject.toml 版本号 → 发版时才更新，滞后于实际代码
+
+**新方法（可靠）**：
+```bash
+# Step 1: GitHub 最新 release tag + 发布时间
+curl -s https://api.github.com/repos/NousResearch/hermes-agent/releases/latest \
+  | python3 -c "import sys,json; r=json.load(sys.stdin); print(r.get('tag_name'), r.get('published_at'))"
+
+# Step 2: 本地最新 commit 的实际时间戳
+git show --no-patch --format=%ai HEAD
+
+# Step 3: 对比判断
+# commit时间 > release发布时间 → 本地代码更新（超前）
+# commit时间 < release发布时间 → 本地代码落后（需 pull）
+```
+
+**实战结果**：
+- v0.15.2 release：`2026-05-29T13:37:26Z`
+- 本地 40ae170 commit：`2026-06-02 14:03`（北京时间）
+- 结论：本地代码比 v0.15.2 **更新**，不是落后
+
+**教训**：`git describe --tags` + pyproject.toml 的组合会给出错误信号（版本号落后 ≠ 代码落后）。用 commit 时间戳对比才是真。`.update_check` 缓存会放大这个误解。
+
 ## 今日关键学习：Cron Error 诊断模式
 
 **现象**：cron job 显示 `error` 状态，但脚本手动跑完全正常。

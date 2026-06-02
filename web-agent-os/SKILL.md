@@ -67,9 +67,41 @@ BROWSER_CDP_URL=ws://127.0.0.1:9333  # 不修改 config.yaml，用环境变量
 - 详见 `dom-js-inject` skill
 
 ## 工具优先级（最新 2026-06）
+## 搜索后端：ddgs 优先，SearXNG 降级
+
+**2026-06-02 验证：SearXNG 公开实例（Searx.be / searx.party）全部失效（403/429），ddgs 为可用且稳定的备选。**
+
+`config.yaml` 配置：
+```yaml
+web:
+  backend: ddgs        # ✅ 已验证可用，稳定
+  search_backend: ddgs
+  extract_backend: firecrawl
+```
+
+**ddgs 优势：**
+- Python 包 `ddgs` 已装在 hermes venv，无需外部实例
+- 通过 DuckDuckGo 搜索，无 429 限流
+- 不依赖 Docker / 本地服务
+- 延迟低，响应快
+
+**若 ddgs 不可用（包丢失）：**
+```bash
+/Users/aimac/.hermes/hermes-agent/venv/bin/pip install ddgs
+```
+
+**搜索后端优先级（2026-06-02 确认）：**
+```
+ddgs > anysearch > searxng（公网实例均已不可用）
+```
+
+**⚠️ 不要依赖 SearXNG 公网实例** — 公开实例脆弱，无 SLA，随时可能 403/429/下线。本地 Docker 部署是唯一可靠方案，但占用资源。
+
+---
+
+## 工具优先级（最新 2026-06）
 
 ❌ **旧路径（已废弃）：** 截图 → VLM识别 → 找按钮/输入框（慢、贵、Token消耗大）
-
 ✅ **正确路径：**
 ```
 第一步：web_extract / browser_get_web_content (直接拿文本)

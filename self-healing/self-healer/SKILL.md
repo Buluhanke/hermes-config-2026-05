@@ -60,7 +60,7 @@ tail -5 ~/.hermes/logs/gateway.log | grep -c "memory_monitor\\|platform connecte
 ---
 
 ## 健康检查清单（每次自我诊断必须执行）
-
+## 健康检查清单（每次自我诊断必须执行）
 ```
 1. Gateway存活？        → ps aux | grep hermes_cli | grep gateway
 2. TTS能生成音频？      → text_to_speech("测试中文")
@@ -74,6 +74,53 @@ tail -5 ~/.hermes/logs/gateway.log | grep -c "memory_monitor\\|platform connecte
 10. Web后端可用？         → web_search("test") 测试Firecrawl/Parallel/Tavily是否可用
 11. Cron引用的skill是否存在？→ 检查cron job列表中skill字段，对应目录是否在~/.hermes/skills/下存在
 12. Memory剩余空间？      → memory工具检查是否接近满（上限1375字符）
+```
+
+## Hermes 版本/升级误报排障（2026-06-02 新增）
+
+**症状**：`hermes --version` 显示 `Update available: N commits behind`，但 `git -C ~/.hermes/hermes-agent log --oneline origin/main -1` 确认 HEAD 已是最新的。
+
+**根因**：Hermes 用 `~/.hermes/.update_check` JSON 文件缓存升级检查结果：
+```json
+{"ts": 1780361406.390379, "behind": 151, "rev": null, "ver": "0.15.1"}
+```
+该文件 timestamp + version 与当前部署一致时返回缓存的 `behind` 值。升级后若不清理缓存，会持续误报落后 N commits。
+
+**精准诊断流程**：
+```bash
+# 1. 确认真实状态（不依赖缓存）
+cd ~/.hermes/hermes-agent
+git fetch origin main
+HEAD_REV=$(git rev-parse --short HEAD)
+REMOTE_REV=$(git rev-parse --short origin/main)
+if [ "$HEAD_REV" = "$REMOTE_REV" ]; then
+    echo "✅ HEAD 已是最新的 ($HEAD_REV)"
+else
+    echo "⚠️ 落后 $(git log --oneline origin/main..HEAD | wc -l) commits"
+fi
+
+# 2. 查看缓存内容（验证误报来源）
+cat ~/.hermes/.update_check
+
+# 3. 清理缓存文件（升级后必须执行）
+rm ~/.hermes/.update_check
+
+# 4. 重新验证（应显示 "Up to date"）
+hermes --version
+```
+
+**触发场景**：
+- 手动 `git pull` 或源码升级后立即查版本 → 缓存未更新
+- `hermes update` 执行后 → 缓存仍保留旧数据
+
+**预防**：`hermes update` 执行后自动清理缓存，当前版本会在下次 `hermes --version` 时自动清理。若手动源码升级，手动 `rm ~/.hermes/.update_check` 即可。
+
+**验证是否需要升级的正确顺序**：
+```bash
+# 正确（不依赖hermes --version的缓存）
+cd ~/.hermes/hermes-agent && git fetch origin && \
+git log --oneline origin/main..HEAD | wc -l   # 0 = 最新
+hermes --version                                # 用这个确认"Up to date"
 ```
 
 ## 常见故障自动修复方案
