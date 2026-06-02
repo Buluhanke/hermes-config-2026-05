@@ -1,0 +1,87 @@
+{
+  "name": "1688智能sourcing",
+  "description": "在1688搜索指定商品,提取前3个供应商,自动联系客服发压价话术",
+  "version": "1.0",
+  "stages": [
+    {
+      "name": "NAVIGATE",
+      "desc": "导航到1688搜索页",
+      "url": "https://s.1688.com/company/company_search.htm",
+      "expect": "搜索框可见"
+    },
+    {
+      "name": "INPUT_KEYWORD",
+      "desc": "在搜索框输入商品关键词",
+      "expect": "搜索框.value包含关键词"
+    },
+    {
+      "name": "TRIGGER_SEARCH",
+      "desc": "点击搜索按钮或按Enter",
+      "expect": "URL 变成搜索结果页"
+    },
+    {
+      "name": "WAIT_RESULTS",
+      "desc": "等待搜索结果加载",
+      "expect": "商品列表出现"
+    },
+    {
+      "name": "SELECT_TOP3",
+      "desc": "用语义锚定抓前3个商品标题+价格+供应商名",
+      "actions": ["list_interactive_elements", "extract_top3_products"]
+    },
+    {
+      "name": "OPEN_PRODUCT_1",
+      "desc": "打开第1个商品详情页",
+      "actions": ["click_first_product", "wait_for_detail_page"]
+    },
+    {
+      "name": "EXTRACT_SUPPLIER_INFO_1",
+      "desc": "提取供应商信息(公司名, 联系方式, 主营, 认证)",
+      "actions": ["read_supplier_block", "save_to_session"]
+    },
+    {
+      "name": "FIND_CONTACT_BTN_1",
+      "desc": "找到'联系卖家'或'在线询盘'按钮",
+      "actions": ["scan_page", "find_contact_button"]
+    },
+    {
+      "name": "OPEN_CHAT_1",
+      "desc": "点击联系按钮,打开客服对话框",
+      "actions": ["click_contact", "wait_for_chat_panel"]
+    },
+    {
+      "name": "TYPE_NEGOTIATION_MSG_1",
+      "desc": "输入DeepSeek生成的压价话术",
+      "expect": "textarea包含压价话术"
+    },
+    {
+      "name": "SEND_NEGOTIATION_1",
+      "desc": "发送压价消息",
+      "actions": ["click_send_or_enter", "wait_for_reply"]
+    },
+    {
+      "name": "LOOP_TO_PRODUCT_2",
+      "desc": "回到搜索结果, 处理第2个商品",
+      "actions": ["navigate_back", "repeat_for_product_2_and_3"]
+    },
+    {
+      "name": "COMPARE_REPLIES",
+      "desc": "对比3家供应商的回复, 选最便宜",
+      "actions": ["read_chat_replies", "rank_by_price"]
+    },
+    {
+      "name": "COMPLETED",
+      "desc": "sourcing完成, 输出对比报告"
+    }
+  ],
+  "anti_bot": {
+    "delay_between_actions_ms": [2000, 5000],
+    "human_typing_speed_cps": 8,
+    "max_consecutive_searches": 10,
+    "cooldown_after_blocked_minutes": 30
+  },
+  "extraction_targets": {
+    "product": ["title", "price_range", "moq", "sales_count"],
+    "supplier": ["company_name", "years_on_platform", "verification_badges", "location"]
+  }
+}

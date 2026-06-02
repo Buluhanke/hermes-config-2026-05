@@ -973,13 +973,10 @@ hermes fallback list
 ```
 
 **Current working three-tier config (MiniMax relay → MiniMax direct):**
-- Primary: `MiniMax-M2.7-highspeed` via `custom` provider (`v2.aicodee.com` relay)
 - Fallback 1: `MiniMax-M2.7` via `minimax-cn` (direct)
 
-**⚠️ Pitfall: v2.aicodee.com model names differ from official names**
 The relay only exposes specific model names. Always query the relay's `/v1/models` endpoint first to confirm the exact model ID:
 ```bash
-curl -s https://v2.aicodee.com/v1/models -H "Authorization: Bearer <key>" | python3 -c "import json,sys; [print(m['id']) for m in json.load(sys.stdin)['data']]"
 ```
 Known relay model names: `MiniMax-M2.7-highspeed` (not `MiniMax-M2.7`), `MiniMax-M2.5-highspeed`.
 
