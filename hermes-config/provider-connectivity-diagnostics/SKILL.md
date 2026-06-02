@@ -249,6 +249,13 @@ Custom provider key truncation and full fallback sync — see `references/2026-0
 
 ### 2026-06-02 复盘后 API 归集总结
 
+**⚠️ Cron Job 模型路由规则（2026-06-02 强制）：**
+- 所有 cron jobs 默认使用 `MiniMax-M2.7-highspeed` + `minimax-cn`，**禁止使用第三方付费模型**（DeepSeek/Groq/Cerebras 等）
+- **根因**：night-001 cron job（idle_learning）使用 `deepseek-v4-flash`，6月1日单日消耗 DeepSeek 291M tokens（占总消耗 96.6%），账单 214 元
+- **创建新 cron job 时**：model 留空跟随系统默认，或显式指定 `provider: minimax-cn`
+- **检查现有 cron jobs**：`cronjob list` 中若有 `provider: deepseek` 或 `model: deepseek-*`，立即 `cronjob update` 改为 minimax-cn
+- **验证**：`grep "night-001" ~/.hermes/logs/agent.log | grep "API call" | wc -l`（正常值应 < 20/晚）
+
 **核心原则（已纠正）：**
 > "所有api以最新为准，以前的可能没用了，如果能测试尽量测试一下，能用再保存。不要又把之前过期的来覆盖了最新当前的，那就适得其反了。"
 

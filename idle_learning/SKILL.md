@@ -271,7 +271,16 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
   - **不写日志 ≠ 不做事**：健康检查和 ddgs 旋转仍执行（保障产线监控），仅跳过持久化写操作。
 - **提前终止条件**：方向 A 不健康时（unknown > 10% 或产线问题），修复后终止，不继续后面的方向
 
-**⚠️ Cron 高效模式：一次执行跑完四个方向（2026-06-02 实战优化）**
+**Cron 任务成本控制规范（2026-06-02 修正）：**
+- **⚠️ 模型使用强制规则（2026-06-02 新增）**：所有 cron jobs 默认使用 `MiniMax-M2.7-highspeed` + `minimax-cn`，不使用 deepseek-v4-flash 等第三方付费模型（6月1日实测：night-001 消耗 DeepSeek 291M tokens，占总消耗 96.6%）
+  - **创建新 cron job 时**：model 留空跟随系统默认，或显式指定 `provider: minimax-cn`
+  - **现有 cron job 检查**：`cronjob list` 中若有 `provider: deepseek` 或 `model: deepseek-*`，立即用 `cronjob update` 改为 minimax-cn
+- **每晚最大 API calls 上限**：night-001 加 `--max-calls 20` 限制每晚最多 20 次 API 调用（减少 76% tokens）
+- **缩短触发间隔**：从 `*/5` 改为 `*/15` 或 `*/30`（减少 3-6倍触发次数）
+- **验证命令**：`grep "night-001" ~/.hermes/logs/agent.log | grep "API call" | wc -l`
+- **临时关闭**：`cronjob disable night-001` 而非删除
+
+⚠️ **Cron 高效模式：一次执行跑完四个方向（2026-06-02 实战优化）**
 - 传统模型每次只跑一个方向（A→下一个），需要 4 次 cron 轮次才能完成全周期
 - **更高效模式**（新鲜度门控通过后执行）：一次 cron 调用跑完 A→B→C→D 全部四个方向（只要时间预算够）
   - 时间预估：A（~30s）+ B 饱和降级（~40s）+ C 安全扫描（~15s）+ D 执行层（~10s）≈ 95s 以内

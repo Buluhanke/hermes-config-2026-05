@@ -592,13 +592,16 @@ cd /Users/aimac/.hermes/hermes-agent
 
 ### 定时任务全部失败
 
-**症状**：cronjob list 显示多个 error 状态
+**症状**：cronjob list 显示多个 error 状态，或 launchd service 状态为 `not running`
 
 **自动修复流程**：
-```
 1. 检查skill是否存在：pro-buyer / idle_learning / 1688-automation
 2. 缺失skill → 从hub重新拉取或通知用户skill缺失
 3. 检查cron脚本是否存在
+4. **检查 launchd service 的 ProgramArguments 脚本是否存在**（详见 `references/launchd-service-missing-script-diagnosis.md`）
+   - `self-evolution-daily.plist` 指向不存在的 `run_daily.sh` → 修复为 `self_evolution.sh daily`
+   - `self-evolution-weekly.plist` 指向不存在的 `run_weekly.sh` → 修复为 `self_evolution.sh weekly`
+5. 报告哪些任务已恢复、哪些需要用户授权
 4. 报告哪些任务已恢复、哪些需要用户授权
 ```
 
@@ -618,6 +621,7 @@ cd /Users/aimac/.hermes/hermes-agent
 
 | 文件 | 内容 |
 |------|------|
+| `references/launchd-service-missing-script-diagnosis.md` | launchd service ProgramArguments 指向不存在脚本的诊断与修复流程 |
 | `references/gateway-sigterm-diagnostics.md` | SIGTERM诊断、launchd重启风暴机制、gateway-exit-diag.log分析 |
 | `references/api-key-centralization.md` | API Key 集中化管理流程、key 状态总表 |
 | `references/docker-hindsight-recovery.md` | Docker Hub 网络阻断诊断、Hindsight 容器恢复流程 |
