@@ -538,6 +538,24 @@ Stage 3 Context Assembly（最关键安全节点，poisoned context → 全链�
 
 **⚠️ CyberDesserts 2026 AI Agent Security Timeline（2026-06-02 新增）**：ddgs 搜索发现的新来源。综合覆盖 Claude Code Hooks RCE (CVE-2025-59536)、Mexico Government Breach、ClawHavoc 等 7 大安全事件。ddgs → browser_navigate 直读验证 ✅。已验证可靠，方向 C 轮次应定期扫描。
 
+  2i. **Rafter AI Agent Security Timeline（2026-06-03 新增）**：
+     - URL：`https://rafter.so/blog/incidents/ai-agent-security-timeline-2025-2026`
+     - **独特 CVE 覆盖**（不在其他来源中）：CVE-2026-21852 (Claude Code API Key Exfiltration，ANTHROPIC_BASE_URL 重定向明文API密钥窃取)、CVE-2025-66414 (MCP TypeScript SDK DNS Rebinding，CVSS 7.6)、CVE-2025-68143/44/45 (Anthropic Git MCP Server 三漏洞集)、CVE-2025-61260 (OpenAI Codex CLI Config Exploit，CVSS 9.8)
+     - **扫描方法**：`browser_navigate` → `browser_console(expression='document.body.innerText.slice(0, 16000)')` 全量提取（页面约 6000 字，一次 slice 足够）
+     - **三大攻击模式总结**（跨所有 incident 的共性模式）：
+       1. **Config-as-Execution Supply Chain**：项目配置文件（.claude/settings.json、.env、CODEX_HOME）被 AI 工具信任并自动执行
+       2. **Localhost Trust Assumption**：localhost 服务假设 127.0.0.1 连接可信，可被 DNS rebinding / 跨域 WebSocket 绕过
+       3. **AI Reading Untrusted Content with Privileged Context**：AI 工具在处理攻击者控制输入的同时拥有私有代码/凭据/破坏性功能访问权限
+     - 这三个模式直接映射 Hermes 的 delegate_task 架构脆弱性（Config-as-Execution → skill loading；Localhost Trust → ws://localhost:18789 gateway；AI Reading Untrusted → screen content as context）
+     - **与 Hermes 架构映射**：详见下方风险矩阵
+       | 维度 | 说明 |
+       |------|------|
+       | Direct risk | Hermes gateway ws://localhost:18789 无认证 → Localhost Trust Assumption 攻击面敞口 |
+       | Indirect risk | delegate_task subagent 自汇报不验证 → 与 "AI Reading Untrusted" 模式同类 |
+       | Action | 不改配置（gateway 已在本地网络），监控 Rafter 新 CVE 推送 |
+     - **页面结构**：静态博客页，标题按月份组织（CamoLeak/RoguePilot/Claude Code Hooks/Replit/Codex CLI/MCP SDK/Git MCP/OpenClaw 等），每个 incident 含 severity/product/researcher/CVE/vector/impact/status
+     - **饱和判断**：Rafter 持续更新（Last updated: 2026年4月5日），每次方向 C 轮次检查 last_updated 字段是否有更新
+
 **⚠️ gentic.news 核心洞察（2026-04-24 更新）**：编辑语 _\"the harness — scaffold + sandbox + verifier + recovery — matters more than the model. Independent tests show Cursor's scaffold adds 16pp over the raw model.\"_ — 直接验证 Hermes screen_trigger + RPA 架构方向正确。方向 A/B/D 通用参考文件：`references/gentic-news-computer-use-leaderboard-2026-04-24.md`
   - **已知 repo 子目录检查**（2026-06-02 新增）：检查 ZJU-REAL/Awesome-GUI-Agents、OSU-NLP-Group/GUI-Agents-Paper-List 等 repo 是否出现了新的会议子目录（如 ICLR2026/、AAAI2026/、ACL2026/）—— 新子目录可一次性产出 8+ 篇新论文，直接重新激活全量扫描
     - ⚠️ AAAI2026/ 是长驻子目录（非新创建），方向 B 饱和降级时应同时扫描 AAAI2026/ 和 ICLR2026/ 两个目录
@@ -919,6 +937,8 @@ sed -i '' 's/model: ahmadwaqar\/smolvlm2-agentic-gui:latest/model: qwen3-vl:2b/'
 | **`write_file` 不展开 shell 变量**（2026-06-02 实测） | 写入路径含 `$(date +%s)` 或 `$(date +%H%M%S)` 时当作字面文件名 | 先用 `terminal` 获取时间戳赋值到拼好的路径（如 `/tmp/idle_log_20260602_015816.md`），再用 `write_file` 写入固定路径。或：仅 `terminal cat >>` 追加时用 shell 变量，不用在 `write_file` 路径中放 `$()` |
 | **macOS `grep -P` 不支持**（2026-06-02 实测） | BSD grep 无 `-P`（Perl 正则）选项，`grep -oP 'pattern'` 报 `invalid option -- P` | 用 `grep -E`（扩展正则）替代，或改用 `python3 -c "import re; ..."` 做复杂正则。管道到 `python3` 比 BSD grep 更可靠 |
 | **macOS `date` 不支持 GNU 日期语法**（2026-06-03 实测） | 技能 HN 脚本中 `date -d '1 second ago'` 在 macOS BSD date 上报错：`illegal time format` | **用 Python datetime 计算相对时间**替代 shell date：`python3 -c "from datetime import datetime, timedelta; print((datetime.now()-timedelta(seconds=1)).strftime('%Y%m%d_%H%M%S'))"`。不要在 heredoc 的 shell 命令中使用 GNU date 特有的 `-d`/`--date` 参数。 |
+| **macOS `head -n -N` 不支持**（2026-06-03 实测） | `head -n -13` 在 BSD/macOS 上报错：`illegal line count`。GNU coreutils 特有语法，macOS 无效。 | **用 Python 替代**：`python3 -c "with open('file','r') as f: lines=f.readlines(); open('file','w').writelines(lines[:-N])"`。不要用 `head -n -N` 做文件尾部裁剪。 |
+| **尾部行截除的正确实现**（2026-06-03 实测） | 二次门控跳过日志写入时需要从文件末尾移除 N 行，但 BSD `head -n -N` 不可用 | 正确 Python 实现（用于 learning_log 去重/截尾）：<br>`python3 -c "with open('/path/to/log.md','r') as f: lines=f.readlines(); open('/path/to/log.md','w').writelines(lines[:-N])"`。其中 N=要删除的行数。这是在 macOS BSD 环境下截除文件尾行的唯一可靠方法。 |
 
 ---
 
@@ -1025,7 +1045,9 @@ nohup bash ~/.hermes/scripts/idle-marathon.sh > ~/Brain_Lab/marathon.log 2>&1 &
 - `references/dod-careful-adoption-agentic-ai-2026-06-02.md` — 美国 DoD AI Agent 官方安全指南 (Apr 2026)，方向 C 参考
 - `references/owasp-genai-exploit-roundup-q1-2026.md` — OWASP GenAI Exploit Round-up Q1 2026（CVE-2026-2256 / SemJack / Mexico government breach），方向 C 安全来源
 - `references/adversa-ai-security-digest-june-2026.md` — Adversa AI June 2026 安全摘要（SymJack symlink-hijack RCE + TrustFall 一键 RCE），方向 C 扫描来源
+- `references/rafter-ai-agent-security-timeline-2026-06-03.md` — Rafter AI Agent Security Timeline 2025-2026：CVE-2026-21852/CVE-2025-66414/Git MCP 三漏洞集/Codex CLI RCE，三大攻击模式（Config-as-Execution/Localhost Trust/AI Reading Untrusted），方向 C 深度参考
 - `references/gentic-news-computer-use-leaderboard-2026-04-24.md` — Computer Use Agents 排行榜 + "harness > model" 核心洞察，方向 A/B/D 通用参考
+- `references/kucoin-45m-ai-agent-breach-2026-06-03.md` — KuCoin $45M AI Agent Breach (Apr 2, 2026): memory layer + execution protocol vulnerability, 88% of AI agent orgs attacked, 方向 C 安全事件
 - `references/co-epg-aaai-2026.md` — Co-EPG (2511.10705, AAAI 2026): 规划-定位协同进化框架 (GRPO)，方向 B/D 通用
 - `references/mcp-prompt-injection-empirical-study-2026.md` — MCP Prompt Injection 实证研究 (2603.21642): 7 大 MCP 客户端首篇对比，方向 C 安全参考
 - `references/ui-s1-semi-online-rl-gui-2026-06-02.md` — UI-S1 (2509.11543): Semi-online RL for GUI agents，方向 B 新发现 + 方向 D auto_execute 参考
