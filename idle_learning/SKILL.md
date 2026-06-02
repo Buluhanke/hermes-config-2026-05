@@ -139,6 +139,16 @@ python3 /tmp/hn_fast.py
 
 判断今天应该学习哪个方向（轮流覆盖四个层次）。
 
+⚠️ **`launchctl load` I/O error 不等于进程崩溃（2026-06-02 实测）**：
+当 launchctl 报 `I/O error` 时，gateway 进程可能仍在正常运行（ps 有 PID）。这是 **launchd 服务注册损坏**，不是进程问题。诊断顺序：
+1. `ps aux | grep hermes_cli.main gateway` — 有输出 = 进程活着
+2. `launchctl list | grep ai.hermes.gateway` — status 0 = 服务未注册
+3. 修复：`launchctl unload` → `launchctl load`（可能需多次）
+不要仅因 launchctl 报错就判断 gateway 已死。**进程存活优先于服务注册状态**。
+
+⚠️ **Watchdog 连续 kickstart = 服务注册损坏（2026-06-02 08:54 实测）**：
+`watchdog.log` 中出现连续多次 `Could not find service "ai.hermes.gateway"` + `kickstart` 记录，说明 launchd plist 注册已损坏。6次 kickstart 后恢复，但期间网关不可用。处理：unload → load plist 重建注册。
+
 ### 第二步：联网搜索学习
 
 根据当天方向，搜索对应主题（全部免费资源）。

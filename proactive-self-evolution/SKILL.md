@@ -338,7 +338,18 @@ for row in cur.fetchall():
 - 只有"明确的方向性决策"才需要停，"等待用户手动操作"类的句子都是继续执行的信号
 - 典型错误：看到"用户说'登录完告诉我'"就停下来等，而不是继续推进任务
 
-**⚠️ 核心铁律（2026-05-31强化）：多选择时不停顿，优先自主执行**
+## 模型使用铁律（2026-06-02确立）
+
+**所有需要使用模型的场景默认 MiniMax-M2.7-highspeed + minimax-cn，不再使用 deepseek-v4-flash 等第三方付费模型。**
+
+**根因**：night-001 cron job 硬编码 `deepseek-v4-flash`，2026-06-01 消耗 DeepSeek 291M tokens（占总消耗 96.6%），导致 aicodee 额度提前耗尽，触发 403/429 错误影响所有业务。
+
+**规则**：
+- 创建新 cron job 时：model 留空跟随系统默认，或显式指定 `provider: minimax-cn`
+- 检查现有 cron job：`cronjob list` 中若有 `provider: deepseek` 或 `model: deepseek-*`，立即用 `cronjob update` 改为 minimax-cn
+- 验证命令：`grep "deepseek" ~/.hermes/logs/agent.log | grep "API call" | wc -l`
+
+## ⚠️ 核心铁律（2026-05-31强化）：多选择时不停顿，优先自主执行
 - **症状**：用户说"你一直在等命令" / "纯浪费资源" / "以上任务全部做也花不了多少时间" → 说明已违反此原则
 - **触发**：推荐技能列表、多个方案、多个工具安装 → **直接执行推荐项**，不等确认
 - **唯一例外**：涉及付款、删除重要数据、方向性抉择，才停下来问

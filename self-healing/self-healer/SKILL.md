@@ -601,7 +601,27 @@ cd /Users/aimac/.hermes/hermes-agent
 4. **检查 launchd service 的 ProgramArguments 脚本是否存在**（详见 `references/launchd-service-missing-script-diagnosis.md`）
    - `self-evolution-daily.plist` 指向不存在的 `run_daily.sh` → 修复为 `self_evolution.sh daily`
    - `self-evolution-weekly.plist` 指向不存在的 `run_weekly.sh` → 修复为 `self_evolution.sh weekly`
-5. 报告哪些任务已恢复、哪些需要用户授权
+5. **launchd I/O error 修复（2026-06-02 新发现）**：若 `launchctl load` 报错 I/O error 但进程仍在运行，说明 launchd 服务注册异常。修复步骤：
+   ```bash
+   # 1. 确认进程还在（Gateway PID 仍存在）
+   ps aux | grep "hermes_cli.main gateway" | grep -v grep
+
+   # 2. unload（即使报错也要做）
+   launchctl unload ~/Library/LaunchAgents/ai.hermes.gateway.plist
+
+   # 3. 重新 load（若还报 I/O error，多试几次）
+   launchctl load ~/Library/LaunchAgents/ai.hermes.gateway.plist
+
+   # 4. 验证服务状态
+   launchctl list | grep ai.hermes.gateway
+   # 显示 PID xxx 表示正常，status 0 表示未运行
+   ```
+   **注意**：Gateway 进程在 `launchctl load` 报错 I/O error 时可能仍在运行——这是 launchd 服务注册问题，不是进程问题。unload → load 循环修复服务注册，不影响进程。
+6. **区分两种 gateway 不稳定模式（2026-06-02 新增）**：
+   - **June 1 SIGTERM storm**：`gateway-exit-diag.log` 中大量 `success: false` + `replace: false` 条目，时间间隔 60-180 秒。parent_pid=21945（身份不明），loadavg=2.70 触发。这是**外部强杀**不是 launchd 重启。
+   - **June 2 08:54 launchd 服务消失**：`watchdog.log` 报告 `Could not find service "ai.hermes.gateway" in domain for user`，6次 kickstart 才拉起。这是**launchd plist 注册损坏**，不是 SIGTERM。
+   两种模式的诊断命令不同（SIGTERM 看 `gateway-exit-diag.log`，服务消失看 `watchdog.log`）。
+7. 报告哪些任务已恢复、哪些需要用户授权
 4. 报告哪些任务已恢复、哪些需要用户授权
 ```
 
@@ -629,9 +649,10 @@ cd /Users/aimac/.hermes/hermes-agent
 | `references/hermes-repo-rebuild-plan.md` | Hermes 源码重建方案 |
 | `references/github-push-block-large-repo.md` | GitHub Push Protection 拦截修复 |
 
----
-
-## 执行模板（自检流程）
+| `references/gateway-sigterm-storm-2026-06-02.md` | SIGTERM诊断、launchd重启风暴机制、gateway-exit-diag.log分析 |
+| `references/gateway-control-message-trap.md` | "⚠️ Gateway shutting down" 控制消息陷阱成因与处置 |
+| `references/aicodee-429-fallback-chain.md` | aicodee 429 导致命令响应慢的诊断与处置 |
+| `references/watchdog-false-positive-detection.md` | Watchdog 误检测：Gateway 运行中但被判断为 DOWN |
 
 ```
 [时间] 自我诊断开始

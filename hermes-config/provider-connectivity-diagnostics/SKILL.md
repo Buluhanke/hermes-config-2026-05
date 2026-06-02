@@ -241,7 +241,8 @@ See `references/free-model-scan-results.md` for the latest full scan output.
 | openai/gpt-oss-120b:free | 131K | ✅ Responds |
 | z-ai/glm-4.5-air:free | 131K | ✅ Responds |
 | deepseek/deepseek-v4-flash:free | 1M | ❌ 429 rate-limited |
-| qwen/qwen3-coder:free | 1M | ❌ 429 rate-limited |
+| `references/2026-06-02-groq-fallback-analysis.md` | Groq 403 拦截分析，IP被Cloudflare屏蔽，非key问题 |
+| `references/aicodee-rate-limit-interactive-commands.md` | aicodee 429导致 /model、/new 等命令响应慢的诊断与处置 |
 
 ## May 2026 Update (2026-05-31)
 
