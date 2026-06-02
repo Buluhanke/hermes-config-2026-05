@@ -120,7 +120,7 @@ macOS上容易出现多个Playwright版本（1.58.0/1.59.1/1.60.0）：
 - 文件对话框 → 需要人工介入
 - Gemini API视觉 → 网络墙不可靠
 
-## AI聊天网站登录态限制（2026-06-01发现）
+## AI聊天网站登录态限制（2026-06-01发现，2026-06-02更新）
 
 **问题**：Playwright启动的是干净浏览器实例，没有用户Chrome的cookies。
 
@@ -129,11 +129,18 @@ macOS上容易出现多个Playwright版本（1.58.0/1.59.1/1.60.0）：
 - AI对话功能不可用（显示转圈但无回复）
 - `browser_snapshot` / `browser_console` 读不到动态渲染的AI回复（JS懒加载）
 
-**当前解法**：
-1. **用户配合看屏幕** — 用户能看到Playwright浏览器窗口，直接告诉AI回复了什么
-2. **Bing搜索替代** — 用Python curl调用Bing搜索获取信息（见 references/ai-chat-sites-status.md）
-3. **手动cookies导入** — 用户从Chrome导出cookies JSON，导入Playwright（技术可行但麻烦）
+**关键发现（2026-06-02）**：
+- `computer_use capture app=Chrome` 返回0x0是因为活动标签是`about:blank`，不是Chrome GPU问题
+- `screencapture -x` 可以绕过Chrome GPU合成层，成功截取活动标签的页面内容
+- 切换到AI站点标签后，截屏可见登录页面（证明内容是真实的）
+- **登录态仍是核心障碍**：即使能截屏，AI对话功能需要账号登录
+
+**当前解法（按优先级）**：
+1. **screencapture + Vision OCR** — 切到AI站点标签后截屏，用Vision OCR读文字（60ms）
+2. **用户配合看屏幕** — 用户能看到Playwright浏览器窗口，直接口头告诉AI回复内容
+3. **Bing搜索替代** — 用Python curl调用Bing搜索获取信息（见 references/ai-chat-sites-status.md）
 
 **不要做的事**：
 - 不要反复等 `browser_snapshot` 期待AI回复出现 — 动态内容查不到
 - 不要花时间调 `browser_vision` — API key无效，短期内无法修复
+- 不要依赖CDP `Page.captureScreenshot` — Chrome GPU合成层返回空

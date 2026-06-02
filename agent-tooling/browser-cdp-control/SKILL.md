@@ -178,6 +178,10 @@ Step 5: browser_console(expression=...)        → 用CDP提取页面文本
 
 ChatGPT、豆包、智谱清言等使用 **shadow DOM**，标准 `document.querySelector` 返回空。必须用特殊JS脚本提取。
 
+## AI网站内容提取（Shadow DOM专用，备用方案）
+
+ChatGPT、豆包、智谱清言等使用 **shadow DOM**，标准 `document.querySelector` 返回空。必须用特殊JS脚本提取。
+
 ### 方法A：全页面递归文本提取（通用首选）
 ```javascript
 // 递归遍历所有shadow DOM，提取所有文本内容
@@ -243,6 +247,105 @@ ChatGPT、豆包、智谱清言等使用 **shadow DOM**，标准 `document.query
 
 ### 方法C：browser_vision截图（最终兜底）
 在 **方法A/B都返回空或内容不完整** 时，才用 `browser_vision`。
+
+## 批量打开多标签页（纯HTTP）
+
+Chrome 的 CDP HTTP API 支持直接创建新标签页，无需走 WebSocket：
+
+```python
+import urllib.request, json
+
+# 创建新标签（HTTP POST，无需 WebSocket）
+req = urllib.request.Request(
+    'http://localhost:9333/json/new',
+    method='POST',
+    headers={'Content-Type': 'application/json'}
+)
+with urllib.request.urlopen(req, timeout=10) as f:
+    new_tab = json.loads(f.read())
+print(f"新标签ID: {new_tab['id']}")
+
+# 批量为多个站点创建标签
+sites = [
+    ('https://chatgpt.com/', 'ChatGPT'),
+    ('https://chat.deepseek.com/', 'DeepSeek'),
+    ('https://www.doubao.com/chat', 'Doubao'),
+    ('https://chatglm.cn/main/alltoolsdetail?lang=zh', 'ChatGLM'),
+    ('https://grok.com/z', 'Grok'),
+    ('https://gemini.google.com/app', 'Gemini'),
+]
+tab_ids = {}
+for url, name in sites:
+    req = urllib.request.Request('http://localhost:9333/json/new', method='POST')
+    with urllib.request.urlopen(req, timeout=10) as f:
+        tab = json.loads(f.read())
+    tab_ids[name] = tab['id']
+    # 用 CDP Page.navigate 导航到目标 URL
+    ws = websocket.create_connection(f"ws://localhost:9333/devtools/page/{tab['id']}", timeout=15)
+    ws.send(json.dumps({"id":1,"method":"Page.navigate","params":{"url":url}}))
+    ws.recv(); ws.close()
+    time.sleep(2)
+```
+
+**关键点**：
+- `/json/new` 是 **HTTP POST**，返回新标签信息（含 id、webSocketDebuggerUrl）
+- 导航需用 WebSocket 发 `Page.navigate`，因为 HTTP 没有这个方法
+- 标签 ID 在本次 session 内持久，Chrome 重启后会变
+- Gemini tab 的 `type` 是 `webview` 而非 `page`，某些 CDP 操作会受限
+
+## pending_tasks 持久化脚本
+
+轻量任务跟踪，重启后自动续命：
+
+```python
+#!/usr/bin/env python3
+"""pending_tasks.py — 任务持久化管理"""
+import json, pathlib, datetime, sys
+
+TASK_FILE = pathlib.Path.home() / '.hermes' / 'pending_tasks.json'
+
+def load():
+    if TASK_FILE.exists():
+        return json.loads(TASK_FILE.read_text())
+    return {'tasks': [], 'last_updated': None}
+
+def save(data):
+    data['last_updated'] = datetime.datetime.now().isoformat()
+    TASK_FILE.write_text(json.dumps(data, indent=2))
+
+def add(title):
+    data = load()
+    tid = max([t['id'] for t in data['tasks']], default=0) + 1
+    data['tasks'].append({'id': tid, 'title': title, 'status': 'pending', 'created': datetime.datetime.now().isoformat()})
+    save(data); print(f'✅ Added #{tid}: {title}')
+
+def complete(tid):
+    data = load()
+    for t in data['tasks']:
+        if t['id'] == int(tid):
+            t['status'] = 'completed'; t['completed'] = datetime.datetime.now().isoformat()
+    save(data); print(f'✅ Completed #{tid}')
+
+def status():
+    data = load()
+    pending = [t for t in data['tasks'] if t['status'] == 'pending']
+    completed = [t for t in data['tasks'] if t['status'] == 'completed']
+    print(f"Pending: {len(pending)}, Completed: {len(completed)}, Last updated: {data.get('last_updated', 'N/A')}")
+    if pending:
+        print('Active:')
+        for t in pending: print(f"  #{t['id']}: {t['title']}")
+
+if __name__ == '__main__':
+    cmd = sys.argv[1] if len(sys.argv) > 1 else 'status'
+    {'add': lambda: add(sys.argv[2]), 'complete': lambda: complete(sys.argv[2]), 'status': status}[cmd]()
+```
+
+用法：
+```bash
+python3 scripts/pending_tasks.py add "AI知识采集"
+python3 scripts/pending_tasks.py complete 3
+python3 scripts/pending_tasks.py status
+```
 
 **判断流程（严格按顺序）：**
 1. `browser_get_web_content` → 有内容？✅ 用

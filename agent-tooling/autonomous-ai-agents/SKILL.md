@@ -66,6 +66,9 @@ This skill governs: agent frameworks, tool integrations that extend agent capabi
 2. Use raw Python WebSocket + CDP directly (see `references/cdp-raw-websocket.md`)
 3. Do NOT try to open a new Chrome window/instance — the existing Chrome profile is already logged in
 
+### websockets library (2026-06-02)
+`pip install websockets` in venv enables `websocket.create_connection()` directly without SOCKS proxy failures on clean Mac environments. The SOCKS proxy issue occurs when the system has a proxy configured AND `python-socks` is absent — on a clean Mac Mini with no proxy, `websockets` works out of the box. Install: `~/.hermes/hermes-agent/venv/bin/pip install websockets -q`.
+
 ### browser-use + python-socks (2026-06-01)
 `browser-use` 连接已有Chrome时需要 `python-socks`，否则报 `python-socks is required to use a SOCKS proxy`：
 ```bash
