@@ -172,3 +172,4 @@ These patterns indicate a promoted/tool-spam link, NOT a real skill:
 ## References
 
 - `references/vetting-records.md` — 历史vetting记录，包含本轮发现的两个工具（LG-token-saver / EverMe）的详细分析
+- `references/github-repo-deploy.md` — Python项目从GitHub克隆到运行的完整流程（uv sync → playwright install → post-install验证），基于Microsoft Fara-7B实战

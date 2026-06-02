@@ -1,7 +1,7 @@
 ---
 name: github-repo-management
 description: "Clone/create/fork repos; manage remotes, releases."
-version: 1.1.0
+version: 1.2.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -636,6 +636,45 @@ When a user shares a GitHub link and asks to evaluate or deploy it, see `referen
 - Feasibility assessment
 - Quick deployment with `uv sync` for Python projects
 - Output verification
+
+## 13. Python Project Clone + Install Pattern
+
+When a user asks to "try" or "install" a GitHub repo, use this standard flow:
+
+```bash
+# 1. Clone (background for large repos)
+git clone https://github.com/OWNER/REPO.git
+
+# 2. Enter directory
+cd REPO
+
+# 3. Check available tools
+which uv && uv --version   # preferred
+which pip && pip --version # fallback
+
+# 4. Install deps — uv sync is fast and self-contained
+uv sync 2>&1 | tail -20
+
+# 5. Verify
+ls .venv/bin/ | head -10
+.venv/bin/python --version
+
+# 6. Check for post-install steps
+cat README.md | grep -A5 "Quick Start\|Installation"
+```
+
+**Background clone for large repos:**
+```bash
+terminal(background=true, command="git clone https://github.com/owner/repo.git", notify_on_complete=true)
+process(action='wait', session_id=proc_xxx, timeout=120)
+```
+
+**Common post-install steps:**
+- `playwright install` — browser automation repos need this separately
+- `npm install && npm run build` — Node.js dashboards
+- `vllm serve` — ML projects need NVIDIA GPU (Mac CPU = very slow)
+
+**web_extract payswall:** Firecrawl credits exhausted on GitHub → use `curl -sL raw.githubusercontent.com/...` instead.
 
 ## Quick Reference Table
 

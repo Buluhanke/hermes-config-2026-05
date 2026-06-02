@@ -128,7 +128,9 @@ Deliver the assessment in a table + verdict format:
 6. **GitHub API rate limit** is 60 req/hr unauthenticated. Prefer raw.githubusercontent.com for README content and save API calls for metadata.
 7. **npx does not have a `skills add` subcommand**. This is not a legitimate install command. Real tools use pip, npm (direct), cargo, go install, brew, or Docker. Anything involving `npx skills` is fake.
 8. **User may share the wrong repo first** (a similar-named abandoned project) and then correct to the right one. Don't commit to a verdict until you've confirmed which repo they mean.
-9. **web_extract credits can be exhausted** — "Payment Required" error means Firecrawl credits are out. Fall back to curl raw.githubusercontent.com or browser_navigate.
+9. **web_extract credits can be exhausted** — "Payment Required" error means Firecrawl credits are out. Fall back to curl raw.githubusercontent.com or mcp_github_get_file_contents.
+10. **`mcp_github_search_repositories` returns empty** — this MCP tool can return `{"items": []}` even for valid repos. Use web search as the primary discovery tool instead.
+11. **Browser automation repos need extra install steps** — `uv sync` installs Python deps, but Playwright-based projects (Fara, browser-use, etc.) need `playwright install` separately to download browser binaries. Check the README for post-install commands.
 
 ## Linked Files
 
