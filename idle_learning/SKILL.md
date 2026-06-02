@@ -558,6 +558,14 @@ tail -100 ~/.hermes/logs/gateway.log | grep -c "screen_watch" 2>/dev/null || ech
      - 重点关注本地/开源 agent 新条目（Hermes 定位匹配）
   **⚠️ gentic.news 降级说明（2026-06-02）**：gentic.news 页面 schema 已从 FAQPage 改为 WebSite/Organization，JSON-LD 提取脚本不再有效。Steel.dev 是稳定的直接替代，browser_navigate + browser_console JS 提取已验证。方向 B/D 巡检时应优先使用 Steel.dev。
 
+**⚠️ 新增 MCP CVE — CVE-2026-23744 / CVE-2026-42271（2026-06-03 发现）**：
+- **CVE-2026-23744**：MCPJam Inspector RCE（≤ 1.4.2），ZDI May 2026 Review 来源
+- **CVE-2026-42271**：LiteLLM Unauthenticated RCE，链式利用 CVE-2026-48710 (Starlette BadHost) 绕过认证
+- **攻击链**：Starlette auth bypass → LiteLLM RCE → 完整系统权限
+- **Hermes 风险**：LOW（starlette=1.2.1 已修复，Hermes 不使用 LiteLLM/MCPJam）
+- **启示**：链式利用已成 2026 年主流攻击模式（单个 CVE 难以奏效，组合拳才是威胁）
+- Reference: `references/mcp-security-cves-2026-06-03.md`
+
 **⚠️ Marimo CVE-2026-39987 — 首次 LLM Agent 武器化真实攻击（2026-06-03 新增）**：
 来源：Sysdig research + The Hacker News (May 28-29 2026)
 - **事件**：攻击者利用 Marimo notebook RCE (CVE-2026-39987, CVSS 10.0) 获取初始访问后，使用 LLM Agent 驱动后续攻击（窃取云凭据、SSH keys、PostgreSQL 数据）
@@ -696,12 +704,13 @@ Stage 3 Context Assembly（最关键安全节点，poisoned context → 全链�
        - **Hermes gateway 依赖栈**：检查 venv 中的 Starlette/FastAPI/httpx 版本
          ```bash
          # ✅ 正确：检查 Hermes venv（不是系统 Python）
-         ~/.hermes/hermes-agent/venv/bin/pip show starlette 2>/dev/null | grep Version
-         ~/.hermes/hermes-agent/venv/bin/pip show fastapi 2>/dev/null | grep Version
-         # 或直接用 dist-info 目录确认
+         # 方法1（推荐）：直接 import — pip show 可能返回空但 import 始终有效
+         ~/.hermes/hermes-agent/venv/bin/python3 -c "import starlette; print('starlette', starlette.__version__)"
+         ~/.hermes/hermes-agent/venv/bin/python3 -c "import fastapi; print('fastapi', fastapi.__version__)"
+         # 方法2：dist-info 目录列举
          ls ~/.hermes/hermes-agent/venv/lib/python*/site-packages/starlette-*.dist-info/ 2>/dev/null
+         # ⚠️ pip show 在某些包上返回 exit code 1 空输出（如 starlette），不要依赖
          # ❌ 不要用系统 pip — Hermes 不使用系统 Python 的包
-         # pip3 show starlette   # ← 获取的是系统 Python 版本，和 Hermes 无关
          ```
        - **Ollama 网络绑定检查**（Go 二进制，无 Python 依赖）：
          ```bash
@@ -995,8 +1004,21 @@ sed -i '' 's/model: ahmadwaqar\/smolvlm2-agentic-gui:latest/model: qwen3-vl:2b/'
 
 ## 马拉松学习模式（Marathon Mode）
 
-### 触发条件
-用户说"从现在到明天这段时间你不能停下来"、"马拉松式学习直到[时间]"等
+## 触发条件
+检查是否已连续5分钟无用户指令。如果有活跃对话，说明用户在活跃使用Hermes，跳过本次执行。
+
+⚠️ **`sessions.json` updated 字段不可靠（2026-06-03 实测）**：
+Telegram session 的 `updated` 字段始终返回 `0`，sessions.json 的 mtime 也可能陈旧（8000s+）。
+**判断方法**：改用 `session_search` 的 `limit=1, sort='newest'` 直接查询最近一条用户消息的时间戳，
+而非依赖 sessions.json 的元数据字段。
+```python
+# ⚠️ sessions.json updated 字段不可用，用 session_search 代替
+from your_tool import session_search
+r = session_search(query="", limit=1, sort="newest")
+# 检查 r['sessions'][0]['when'] 是否 < 5 分钟前
+# 如果无最近会话，再检查 sessions.json mtime 作为 fallback
+```
+Cron 环境下 sessions.json mtime 仅供参考，不能作为用户活跃与否的权威判断。
 
 ### 执行逻辑
 ```
