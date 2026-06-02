@@ -483,6 +483,18 @@ grep -c "screen_watch" ~/.hermes/logs/gateway.log 2>/dev/null || echo "no_gatewa
      - 重点关注本地/开源 agent 新条目（Hermes 定位匹配）
   **⚠️ gentic.news 降级说明（2026-06-02）**：gentic.news 页面 schema 已从 FAQPage 改为 WebSite/Organization，JSON-LD 提取脚本不再有效。Steel.dev 是稳定的直接替代，browser_navigate + browser_console JS 提取已验证。方向 B/D 巡检时应优先使用 Steel.dev。
 
+**⚠️ OpenClaw Security Crisis — 方向C 重大发现来源（2026-06-03 新增）**：
+来源：NeuralCoreTech `neuralcoretech.com/openclaw-security-vulnerabilities/` (April 10, 2026) + Reco.ai
+
+**核心数据**：OpenClaw 138 CVEs (April 2026)；CVE-2026-25253 (CVSS 8.8) Token Theft RCE；ClawJacked (CVSS 8.8) Browser-to-Localhost Takeover
+
+**OpenClaw 7-Stage Agentic Loop（与 Hermes delegate_task 直接类比）**：
+Stage 3 Context Assembly（最关键安全节点，poisoned context → 全链路受影响）→ Stage 6 On-Demand Skill Loading（SKILL.md 注入风险）→ Stage 7 Memory Persistence（MEMORY.md/SOUL.md 被污染则跨 session 持久化）
+
+**Hermes 架构映射**：Gateway ws://localhost:18789 对应 Ollama API http://127.0.0.1:11434（默认无认证，相同架构缺陷）；SKILL.md loading 对应 hermes-agent skill 加载（malicious skill 注入风险）；ReAct loop tool calls 对应 delegate_task / terminal()（subagent 自汇报不验证，已知脆弱性）。
+
+**Reference**: `references/openclow-security-crisis-2026-06-03.md`
+
 **方向 C 安全来源补充**：
 - **OWASP GenAI Exploit Round-up Q1 2026**（2026-01 至 2026-04-11）— genai.owasp.org/quarterly-exploit-roundup，涵盖 Mexico government breach（2025-12 下→2026-01→2026-02-25 公开）等真实事件。浏览器法已验证：`browser_navigate` + `browser_console` 提取 Q&A 列表。每季度第一周更新。
   - 2026-06-02 发现：CVE-2026-2256 (AI SDK 漏洞，3 大云厂商受影响)、SemJack (AI coding agents symlink hijack RCE)

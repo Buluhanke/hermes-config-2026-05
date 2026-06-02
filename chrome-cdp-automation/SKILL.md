@@ -104,12 +104,25 @@ Three patterns in the wild (verified across DeepSeek, Doubao, Kimi, Grok, ChatGP
 - `<textarea>` × 1 — DeepSeek, Grok, ChatGPT. Standard `DOM.querySelector("textarea")` + `DOM.focus`.
 - `<textarea>` × 2+ — Doubao (user input + hidden search box), some 1688 composer pages. **Don't blindly pick the first** — use a JS pick: `visible + non-readonly + has placeholder` (priority 1) → first non-readonly → last.
 - `<div contenteditable="true">` — **Kimi** (`.chat-input-editor`), Claude.ai, Notion-style editors. Focus via `document.querySelector('[contenteditable=true]').focus()`. Note: `textarea.value` reads empty after typing into a contenteditable; read `textContent` instead.
+## AI response completion signal = bodyLen growth, not stopBtn (2026-06-02 verified)
+Modern AI sites render the "停止生成" button inside private Shadow DOM. `Runtime.evaluate` and AX tree both return nothing for it. The robust completion signal is `document.body.innerText.length` monotonic growth. Poll every 2s, compare to previous cycle's bodyLen. If grew → still generating. If stable for 5+ cycles (10s) → done. This works for React/Vue/Vanilla.
 
-Full multi-textarea pick pattern and per-site quirks: see `references/multi-site-orchestration.md`.
+## 6大AI网站browser工具链（2026-06-03 全部验证通过）
 
-## ✅ Verified working: DeepSeek full-pipeline (2026-06-02)
+| 网站 | 输入框ref | 发送方式 | 读回复 | 备注 |
+|------|---------|---------|--------|------|
+| **DeepSeek** | e17 (textarea) | `browser_press(Enter)` | `browser_snapshot` StaticText | ⚠️ ta.value=不触发React，必须逐字Input或Enter |
+| **ChatGPT** | e19 (textarea) | `browser_click(e25)` | `browser_snapshot` StaticText | |
+| **豆包** | e44 (textarea) | `browser_click(e59)` | `browser_vision` | |
+| **智谱清言** | e21 (textarea) | `browser_press(Enter)` | `browser_vision` | e41按钮无效 |
+| **Gemini** | e17 (textarea) | `browser_click(e18)` | `browser_vision` | |
+| **Grok** | e81 (textarea) | `browser_press(Enter)` | `browser_snapshot` | |
 
-**Production script**: `/tmp/network_sniffer3.py` (180 lines) — 4 consecutive successful runs (1+1, AI definition, three-word description, quantum computing).
+**通用流程**：browser_navigate → browser_snapshot找ref → browser_type填入 → **browser_press(Enter)优先**（比按钮点击更稳定）→ 等待 → browser_snapshot读AX树验证
+
+**读回复优先级**：`browser_snapshot`(AX树) > `browser_vision`(截图)。browser_vision有rate limit（usage limit exceeded 2056），触发后用browser_snapshot替代。
+
+**DeepSeek坑**：输入后点按钮文字被清空（React状态未更新）。解法：browser_press(Enter)穿透，或用Input.dispatchKeyEvent逐字触发React onChange。
 
 **Complete working pipeline**:
 ```python
