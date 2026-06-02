@@ -513,16 +513,23 @@ document.body.innerText.substring(0, 8000)
 2. 次选：browser_navigate → browser_console 读 innerText（需要AI网站有登录态）
 3. 备选：1688 CDP 提取商品详情（已验证）
 
-### 真人化六维度进度（2026-05-29 更新）
+### 真人化六维度进度（2026-06-02 更新）
 
 | 方向 | 优先级 | 状态 | 说明 |
 |------|--------|------|------|
-| 一、鼠标轨迹 | ⭐⭐⭐⭐⭐ | ✅已完成 | WindMouse已安装(1.0.2)，算法验证通过，45点/100步曲线 |
+| 一、鼠标轨迹 | ⭐⭐⭐⭐⭐ | ✅**完全体** | cos-S 贝塞尔 (二阶导数连续) + 过冲 + 渐进减抖 + 末端悬停，详见 `references/human-biometrics-algorithms.md` |
 | 二、反浏览器检测 | ⭐⭐⭐⭐ | ✅已完成 | CloakBrowser已装已验证，CDP 9222端口全流程跑通 |
-| 三、算子拟人化 | ⭐⭐⭐ | ✅已部分 | CloakBrowser HumanConfig已覆盖 |
+| 三、算子拟人化 | ⭐⭐⭐ | ✅**完全体** | 生物识别打字：cos-S 速度 + 高斯+爆发+笔误+手交替+思维停顿 |
 | 四、全屏感知 | ⭐⭐⭐⭐ | ✅已完成 | CDP WebSocket截图+Runtime.evaluate提取，1688详情页数据完整拿到 |
 | 五、移动端 | ⭐⭐ | ❌未完成 | 零进展 |
 | 六、语音真人化 | ⭐⭐⭐ | ⚠️部分 | Moss-TTS音色已配，情感/停顿未搞 |
+
+**2026-06-02 重大升级：完全体真人化驱动**
+- 独立模块：`~/.hermes/scripts/hermes_human_biometrics.py` (24KB)
+- 鼠标：cos-S 三次贝塞尔 + 双控制点偏移 + 过冲修正 + 渐进减抖
+- 键盘：8 维生物特征（高斯延迟+爆发模式+思维停顿+笔误纠正+手交替+Shift时序+特殊键+标点停顿）
+- 算法详解：`references/human-biometrics-algorithms.md`
+- reactor_v3 act() 已切换到完全体，旧版简化函数保留作 fallback
 
 **2026-05-29 重大突破：1688采购全流程跑通**
 - 搜索"纸箱" → 34页商品列表，标题/价格/供应商/起订量全部提取

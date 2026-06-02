@@ -170,7 +170,6 @@ per-tab 命名 `hermes_memory_<tab>.json` 避免冲突。后续多实例需加 f
 ```bash
 # 方案A（推荐）：直接追加到 .env
 echo 'MINIMAX_CN_API_KEY=*** >> ~/.hermes/.env
-
 # 验证
 curl -s --noproxy '*' -H "Authorization: Bearer $MINIMAX_CN_API_KEY" \
   https://api.minimaxi.com/v1/models
@@ -246,3 +245,28 @@ echo 'MINIMAX_CN_API_KEY=*** >> ~/.hermes/.env
 
 ### Guardrail
 凡涉及 secrets，优先用 `echo` 直写 `.env`，交互界面只做展示和引导。
+
+---
+
+## Pitfall 18: Telegram SSL Handshake Failure 消息延迟
+
+### 现象
+```
+gateway.log:
+2026-06-02 21:53:17 WARNING [Telegram] Network error on send (attempt 1/3)...
+2026-06-02 21:53:17 WARNING [Telegram] send_exec_approval failed...
+2026-06-02 21:54:27 WARNING [Telegram] send_exec_approval failed...
+2026-06-02 21:54:27 WARNING gateway.run: Button-based approval failed, falling back to text
+```
+消息延迟约 4 分钟才送达，用户感知为"卡住"。
+
+### 根因
+Telegram polling 模式下，TLS 握手被网络中间设备干扰或对端拒绝，触发 3 次重试（每次 1s + 超时），最终降级到文本模式。**这不是 API Key 问题，是网络抖动**。
+
+### 修复
+Gateway 自带 3 次重试 + 降级逻辑，无需人工干预。消息最终送达，但延迟 3-5 分钟。
+
+### Guardrail
+- SSL handshake 报错 ≠ API Key 失效，不应触发 key 轮换
+- Telegram 消息延迟期间，agent 仍在正常运行（可通过 api_server `:8642` 验证）
+- 若持续报此错误，检查 Mac Mini 网络状况或 Telegram Bot API Token 是否被限流

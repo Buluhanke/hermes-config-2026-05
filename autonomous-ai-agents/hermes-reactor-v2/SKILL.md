@@ -135,27 +135,58 @@ python3 scripts/diagnose_button_misidentification.py deepseek
 - `/Users/aimac/.hermes/scripts/chrome_cdp.py` — CDP 底层工具
 - `/tmp/hermes_memory_<tab>.json` — 持久化记忆
 
-## Act 层 — 真人化驱动（贝塞尔鼠标 + 生物识别打字律动）
+## Act 层 — 真人化驱动（完全体：贝塞尔 cos-S + 生物识别）
 
-Act 层 TYPE / SEND / CLICK 动作现已集成人类生物特征，底层调用：
-- **human_mouse_click**: 三阶贝塞尔曲线 + cos S-curve 缓动 + 微幅抖动，替代直线瞬移
-- **human_type_text**: 高斯按压时长 + 标点思维停顿（250~550ms），替代匀速 keyDown 循环
-- **last_pos 贯穿**: 每次鼠标移动返回最新坐标，作为下次贝塞尔划行的起点
+Act 层 TYPE / SEND / CLICK 动作现已升级到**完全体真人化**。底层从 reactor 内部简化版切到独立模块 `hermes_human_biometrics.py`：
 
+**鼠标端**（贝塞尔 cos-S 物理曲线 + 过冲修正 + 渐进减抖）：
+- 三次贝塞尔曲线 + 双控制点侧向偏移
+- S 型速度曲线 `t' = (1 - cos(t·π)) / 2`（二阶导数连续，无拐点冲击）
+- 18% 概率过冲 + 8 步修正回拉（真人冲过头）
+- 末端悬停 3 步 + 18ms 延迟
+- 亚像素抖动 **越接近目标越小**（`shake_reduce = 1.0 - progress`，神经集中"对准"）
+- 距离自适应步数 28-55
+- 按下持续 60-150ms，悬停犹豫 30-90ms
+
+**键盘端**（生物识别打字律动）：
+- 高斯分布键间延迟 142±38ms
+- 3-7 字符爆发-停顿模式
+- 4% 概率思维停顿 600-1400ms
+- 0.6% 笔误率 + 退格纠正
+- 双手交替延迟（同手 +20ms, 异手 -10ms）
+- Shift/Backspace 真实时序
+
+**接入模式**（reactor_v3.py 中的 `act()`）：
 ```python
-# reactor._mouse_pos 贯穿全反应堆生命周期
-self._mouse_pos = (100, 100)
+try:
+    from hermes_human_biometrics import human_click, human_type
+    HUMAN_BIOMETRICS_OK = True
+except ImportError:
+    HUMAN_BIOMETRICS_OK = False
 
-# TYPE: JS 直接注入 value → 贝塞尔滑入聚焦 → 真人呼吸打字
-self._mouse_pos = await human_mouse_click(self.cdp, inp_x, inp_y, current_mouse_pos=self._mouse_pos)
-await asyncio.sleep(0.2)
-await human_type_text(self.cdp, text)
-
-# SEND/CLICK: 贝塞尔轨迹滑入按钮 → 物理按压
-self._mouse_pos = await human_mouse_click(self.cdp, btn_x, btn_y, current_mouse_pos=self._mouse_pos)
+# TYPE: cos-S曲线滑入 + 生物识别打字
+if HUMAN_BIOMETRICS_OK:
+    cx, cy = self._mouse_pos
+    self._mouse_pos = await human_click(self.cdp, self.tab["id"], inp_x, inp_y, cx, cy)
+    await human_type(self.cdp, self.tab["id"], text)
+else:
+    # 降级到 reactor 内部简化版
+    self._mouse_pos = await human_mouse_click(self.cdp, inp_x, inp_y, current_mouse_pos=self._mouse_pos)
+    await human_type_text(self.cdp, text)
 ```
 
-**风控效果**: Mouse Tracking 捕获贝塞尔曲线点阵 + Keyboard Timing 捕获非匀速生物节律，双重真人化特征。
+**CDP 客户端 session_id 扩展**：`Input.dispatchMouseEvent` / `Input.dispatchKeyEvent` 必须带 `sessionId: <tab_id>` 才能命中具体 tab：
+```python
+class CDP:
+    async def send(self, method, params=None, session_id=None):
+        payload = {"id": CDP.msg_id, "method": method, "params": params or {}}
+        if session_id:
+            payload["sessionId"] = session_id
+        await ws.send(json.dumps(payload))
+```
+
+**风控效果**：Mouse Tracking 捕获贝塞尔曲线点阵（cos-S 速度）+ Keyboard Timing 捕获非匀速生物节律（高斯 + 爆发 + 笔误），双重真人化特征。
+**算法详解**：`~/.hermes/skills/hermes-humanization-core/references/human-biometrics-algorithms.md`
 
 ## Support 文件
 
@@ -207,3 +238,6 @@ curl -s --noproxy '*' -H "Authorization: Bearer $MINIMAX_CN_API_KEY" \
 - [ ] `hermes config show` 显示的是实际 key 前缀（`sk-...`），不是变量名
 16. **v2.aicodee.com 中转废弃**：已从 reactor_v3.py 和 .env 中彻底移除，base_url 切换为 `https://api.minimaxi.com/v1`
 17. **hermes config 交互界面 Key 不持久化**：写的是变量名引用而非实际 key，直写 `.env` + curl 验证
+18. **Python urllib 被系统代理劫持导致 SSL EOF**：macOS Clash 代理（默认 7897）会劫持所有 `https_proxy`/`http_proxy` 环境变量，Python `urllib.request.urlopen` 经代理访问 `v2.aicodee.com` 会触发 `[SSL: UNEXPECTED_EOF_WHILE_READING]`。**解法**：用 `curl --noproxy '*'` subprocess 替代 urllib，curl 会绕过系统代理直连。完整模式见 `templates/curl_no_proxy_pattern.md`（如不存在则参考 reactor_v3.py 的 `_call_via_curl`）
+19. **M2.7-highspeed 等推理模型响应在 `reasoning_content` 而非 `content`**：调用后 `msg["content"]` 永远是空字符串，真实答案在 `msg["reasoning_content"]`。**解析必须 fallback**：`content = msg.get("content") or msg.get("reasoning_content") or ""`
+20. **`no_proxy=*` 在 Python urllib 不生效**：必须用 curl 或在程序启动时 `os.environ.pop("https_proxy", None)` 才能真正直连。`requests` 库在 macOS 上同样有这个问题

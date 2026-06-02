@@ -43,12 +43,55 @@ nodes = r["result"]["nodes"]
 ```
 Speed: ~50ms. Returns `link`/`button`/`textbox`/`radio`/`heading` with their accessible name. Verified on 1688 product pages (1964 nodes) and DeepSeek sidebar (all 20 chat history links).
 
+## Reading AI reply text — the 3-tier hierarchy (2026-06-02 verified)
+
+Modern AI sites (DeepSeek, Doubao, ChatGPT, Kimi, Grok) put the assistant's reply inside custom elements + private Shadow DOM. Reading it requires trying strategies in order from cleanest to noisiest:
+
+### Tier 1: `Runtime.evaluate` + site-specific CSS selector (BEST, 100% clean)
+**Verified 2026-06-02 against DeepSeek** — reads full reply in a single `Runtime.evaluate` call, no OCR noise, no AX tree walking. Zero dependencies on Accessibility tree or shadow DOM traversal.
+
+```python
+# DeepSeek (verified)
+r = await cdp.send("Runtime.evaluate", {
+    "expression": """
+    (() => {
+        const els = document.querySelectorAll('.ds-markdown');
+        if (els.length === 0) return {err: 'no .ds-markdown'};
+        return {full: els[els.length-1].innerText};
+    })()
+    """,
+    "returnByValue": True
+})
+reply = r["result"]["result"]["value"]["full"]
+```
+
+This works because `.ds-markdown` is a regular DOM element outside the Shadow DOM boundary — the AI reply text is mounted as a child. Same pattern works for many other sites (see `references/ai-site-dom-selectors.md` for the working selector dictionary).
+
+**Key advantage over AX tree**: returns the actual text content directly. AX tree returns `StaticText` nodes that need walking, and breaks on old tabs.
+
+### Tier 2: `Accessibility.getFullAXTree` (clean text, fragile on old tabs)
+Returns `StaticText` nodes that you walk and concatenate. Works for ~50% of sites when the tab is fresh (just created via `Target.createTarget`). Old tabs with conversation history: Shadow DOM blocks AX. Pattern: if AX returns empty on first try, open a fresh tab and retry. Verified on DeepSeek (full reply, 1000-2000 chars) and Doubao (partial, 150-300 chars).
+
+### Tier 3: `screencapture` + `ocrmac` OCR (FALLBACK only)
+Only when both DOM and AX fail (rare — currently no known site requires this for AI reply text). Use:
+```python
+import subprocess
+from ocrmac import ocrmac
+subprocess.run(['screencapture', '-x', '-t', 'png', '/tmp/reply.png'], check=True)
+annotations = ocrmac.OCR('/tmp/reply.png').recognize()
+full = "\n".join(str(a[0]) for a in annotations if str(a[0]).strip())
+```
+**WARNING**: OCR reads the entire screen including chrome UI, browser chrome, status bar — heavy noise, need post-processing. End-to-end 244ms screenshot + 418ms OCR = 662ms, but cleanup cost > the time saved vs Tier 1.
+
+**Decision rule**: Always try Tier 1 first. If `.ds-markdown` (or equivalent) returns empty, try Tier 2. Use Tier 3 only as last resort. This is faster, cleaner, and more reliable than the AX-only approach.
+
 ## Reading Shadow DOM content
 The Accessibility tree CANNOT pierce Web Components' private Shadow DOM. This is a hard limit of the Web Platform, not a CDP bug. Workarounds ranked by speed:
 
 1. **Direct API call** — fastest, but doesn't share context with the visible chat. Use when the task is "ask X" and you don't care about the visible conversation history.
-2. **Screenshot + vision model** — ~200-500ms, ~95% accurate. `subprocess.run(["screencapture", "-x", "-t", "png", path])` then `vision_analyze(image_url=path)`. Fall back to this when CDP `Page.captureScreenshot` returns empty bytes (some Chrome GPU compositing issues).
-3. **Network response capture** + stream parsing — fragile, sites change their streaming protocol often. Not recommended.
+2. **`Runtime.evaluate` + site-specific selector (TIER 1 above)** — second fastest, 100% clean, works on old tabs. **This is now the recommended path** for AI sites that mount the reply in a named class outside Shadow DOM.
+3. **Screenshot + vision model** — ~200-500ms, ~95% accurate. `subprocess.run(["screencapture", "-x", "-t", "png", path])` then `vision_analyze(image_url=path)`. Fall back to this when CDP `Page.captureScreenshot` returns empty bytes (some Chrome GPU compositing issues).
+4. **Network response capture** + stream parsing — fragile, sites change their streaming protocol often. Not recommended.
 
 ### ⚠️ Tab state matters for AX tree reading
 
@@ -83,10 +126,26 @@ To ask the same question to N AI sites and read all replies, run sites **seriall
 - **DeepSeek submit key:** plain Enter submits; Shift+Enter is newline. If the textarea doesn't clear after Enter, you're probably in 识图模式 (image mode) or 深度思考 (deep thinking) toggled differently.
 - **`screencapture -x` works** when CDP `Page.captureScreenshot` returns 0 bytes (Chrome GPU layer issue on some macOS versions).
 - **Login state:** do NOT launch a fresh `chromium.launch()` — it has no cookies. Either reuse the user's Chrome via debug port, or copy the entire `Default/` profile directory before launch.
+- **macOS system proxy breaks Python urllib SSL (2026-06-02 verified)**: HTTP/HTTPS proxy env vars (e.g. Clash at `127.0.0.1:7897`) cause `[SSL: UNEXPECTED_EOF_WHILE_READING]` on `urllib.request.urlopen` to any external HTTPS endpoint. `no_proxy=*` is **NOT respected** by Python's urllib on macOS. **Fix**: use `subprocess.run(['curl', '-s', '--noproxy', '*', ...])` instead of urllib — curl respects `--noproxy` and bypasses the proxy correctly. Pattern (verified for v2.aicodee.com / api.minimaxi.com):
+
+  ```python
+  import subprocess, json
+  result = subprocess.run([
+      'curl', '-s', '--noproxy', '*', '-X', 'POST', url,
+      '-H', 'Content-Type: application/json',
+      '-H', f'Authorization: Bearer {api_key}',
+      '-d', json.dumps(payload),
+      '--max-time', str(timeout)
+  ], capture_output=True, text=True, timeout=timeout + 5)
+  resp = json.loads(result.stdout)
+  ```
+- **AI response completion signal = bodyLen growth, not stopBtn (2026-06-02 verified)**: Modern AI sites render the "停止生成" button inside private Shadow DOM. `Runtime.evaluate` and AX tree both return nothing for it. The robust completion signal is `document.body.innerText.length` monotonic growth. Poll every 2s, compare to previous cycle's bodyLen. If grew → still generating. If stable for 5+ cycles (10s) → done. This works for React/Vue/Vanilla.
 
 ## See also
 - `references/cdp-react-vue-bypass.md` — full technique writeup with the double-character gotcha explained
 - `references/multi-site-orchestration.md` — multi-AI comparison pattern (input element detection, per-site quirks, site table)
+- `references/ai-site-dom-selectors.md` — working CSS selectors for reading AI reply text across sites (DeepSeek verified, others TBD)
 - `scripts/cdp_ask_ai.py` — minimal working bot (asks DeepSeek, screenshots, prints path for vision readback)
 - `scripts/multi_ai_ask.py` — ask the same question to N AI sites, read replies from AX tree
+- `scripts/ask_ai_sites.py` — end-to-end demo (real input → wait → DOM read reply → JSON result) using Tier 1 selector + bodyLen completion signal
 - Working production version: `~/.hermes/scripts/hermes_web_bot_v2.py`
