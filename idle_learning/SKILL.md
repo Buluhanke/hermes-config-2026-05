@@ -170,7 +170,7 @@ curl -s --max-time 5 https://news.ycombinator.com -o /dev/null && echo "hn:ok" |
 - **症状**：`browser_navigate` 到 Steel.dev / microsoft.ai / arxiv 等域名返回 `net::ERR_BLOCKED_BY_CLIENT`
 - **影响**：打破了"browser_navigate + browser_console 是 Steel.dev 首选"的预期路径
 - **根因**：macOS 端侧广告过滤软件（类似 AdGuard/1Blocker）对企业/ai 相关域名进行阻断
-- **影响范围**：Steel.dev（AI Agent Leaderboard 首选来源）、microsoft.ai（MAI 模型发布页）、arxiv（论文页面）等均被阻断
+- **影响范围**：Steel.dev（AI Agent Leaderboard 首选来源）、microsoft.ai（MAI 模型发布页）、arxiv（论文页面）、**microsoft.com/en-us/security/blog**（微软安全博客，2026-06-03 实测）均被阻断
 - **实测仍可访问**：HN (news.ycombinator.com)、github.com、raw.githubusercontent.com — 不受影响
 - **✅ 已验证降级路径**：
   - **ddgs CLI**：完全不受浏览器层广告过滤影响，直接发送 HTTP 请求到搜索引擎
@@ -624,25 +624,31 @@ Stage 3 Context Assembly（最关键安全节点，poisoned context → 全链�
   - 详见 `references/owasp-genai-exploit-roundup-q1-2026.md`
 
 **⚠️ CyberDesserts 2026 AI Agent Security Timeline（2026-06-02 新增）**：ddgs 搜索发现的新来源。综合覆盖 Claude Code Hooks RCE (CVE-2025-59536)、Mexico Government Breach、ClawHavoc 等 7 大安全事件。ddgs → browser_navigate 直读验证 ✅。已验证可靠，方向 C 轮次应定期扫描。
+  **⚠️ CyberDesserts 2026 AI Agent Security Timeline（2026-06-02 新增）**：ddgs 搜索发现的新来源。综合覆盖 Claude Code Hooks RCE (CVE-2025-59536)、Mexico Government Breach、ClawHavoc 等 7 大安全事件。ddgs → browser_navigate 直读验证 ✅。已验证可靠，方向 C 轮次应定期扫描。
 
-  2i. **Rafter AI Agent Security Timeline（2026-06-03 新增，2026-06-03 ad-filter 阻断）**：
-     - URL：`https://rafter.so/blog/incidents/ai-agent-security-timeline-2025-2026`
-     - ⚠️ **ad-filter 阻断（2026-06-03 实测）**：`browser_navigate` 返回 `net::ERR_BLOCKED_BY_CLIENT`，与 Steel.dev/microsoft.ai/arxiv 相同模式。**降级**：ddgs 搜索 "site:rafter.so AI agent security" 获取更新，或依赖现有 reference 文件 `references/rafter-ai-agent-security-timeline-2026-06-03.md`（已全量提取）。
-     - **独特 CVE 覆盖**（不在其他来源中）：CVE-2026-21852 (Claude Code API Key Exfiltration，ANTHROPIC_BASE_URL 重定向明文API密钥窃取)、CVE-2025-66414 (MCP TypeScript SDK DNS Rebinding，CVSS 7.6)、CVE-2025-68143/44/45 (Anthropic Git MCP Server 三漏洞集)、CVE-2025-61260 (OpenAI Codex CLI Config Exploit，CVSS 9.8)
-     - **扫描方法（限非阻断环境）**：`browser_navigate` → `browser_console(expression='document.body.innerText.slice(0, 16000)')` 全量提取（页面约 6000 字，一次 slice 足够）
-     - **三大攻击模式总结**（跨所有 incident 的共性模式）：
-       1. **Config-as-Execution Supply Chain**：项目配置文件（.claude/settings.json、.env、CODEX_HOME）被 AI 工具信任并自动执行
-       2. **Localhost Trust Assumption**：localhost 服务假设 127.0.0.1 连接可信，可被 DNS rebinding / 跨域 WebSocket 绕过
-       3. **AI Reading Untrusted Content with Privileged Context**：AI 工具在处理攻击者控制输入的同时拥有私有代码/凭据/破坏性功能访问权限
-     - 这三个模式直接映射 Hermes 的 delegate_task 架构脆弱性（Config-as-Execution → skill loading；Localhost Trust → ws://localhost:18789 gateway；AI Reading Untrusted → screen content as context）
-     - **与 Hermes 架构映射**：详见下方风险矩阵
-       | 维度 | 说明 |
-       |------|------|
-       | Direct risk | Hermes gateway ws://localhost:18789 无认证 → Localhost Trust Assumption 攻击面敞口 |
-       | Indirect risk | delegate_task subagent 自汇报不验证 → 与 "AI Reading Untrusted" 模式同类 |
-       | Action | 不改配置（gateway 已在本地网络），监控 Rafter 新 CVE 推送 |
-     - **页面结构**：静态博客页，标题按月份组织（CamoLeak/RoguePilot/Claude Code Hooks/Replit/Codex CLI/MCP SDK/Git MCP/OpenClaw 等），每个 incident 含 severity/product/researcher/CVE/vector/impact/status
-     - **饱和判断**：Rafter 持续更新（Last updated: 2026年4月5日），每次方向 C 轮次检查 last_updated 字段是否有更新
+    2i. **Rafter AI Agent Security Timeline（2026-06-03 新增，2026-06-03 ad-filter 阻断）**：
+       - URL：`https://rafter.so/blog/incidents/ai-agent-security-timeline-2025-2026`
+       - ⚠️ **ad-filter 阻断（2026-06-03 实测）**：`browser_navigate` 返回 `net::ERR_BLOCKED_BY_CLIENT`，与 Steel.dev/microsoft.ai/arxiv 相同模式。**降级**：ddgs 搜索 "site:rafter.so AI agent security" 获取更新，或依赖现有 reference 文件 `references/rafter-ai-agent-security-timeline-2026-06-03.md`（已全量提取）。
+       - **独特 CVE 覆盖**（不在其他来源中）：CVE-2026-21852 (Claude Code API Key Exfiltration，ANTHROPIC_BASE_URL 重定向明文API密钥窃取)、CVE-2025-66414 (MCP TypeScript SDK DNS Rebinding，CVSS 7.6)、CVE-2025-68143/44/45 (Anthropic Git MCP Server 三漏洞集)、CVE-2025-61260 (OpenAI Codex CLI Config Exploit，CVSS 9.8)
+       - **三大攻击模式总结**（跨所有 incident 的共性模式）：
+         1. **Config-as-Execution Supply Chain**：项目配置文件（.claude/settings.json、.env、CODEX_HOME）被 AI 工具信任并自动执行
+         2. **Localhost Trust Assumption**：localhost 服务假设 127.0.0.1 连接可信，可被 DNS rebinding / 跨域 WebSocket 绕过
+         3. **AI Reading Untrusted Content with Privileged Context**：AI 工具在处理攻击者控制输入的同时拥有私有代码/凭据/破坏性功能访问权限
+       - 这三个模式直接映射 Hermes 的 delegate_task 架构脆弱性（Config-as-Execution → skill loading；Localhost Trust → ws://localhost:18789 gateway；AI Reading Untrusted → screen content as context）
+       - **与 Hermes 架构映射**：详见下方风险矩阵
+         | 维度 | 说明 |
+         |------|------|
+         | Direct risk | Hermes gateway ws://localhost:18789 无认证 → Localhost Trust Assumption 攻击面敞口 |
+         | Indirect risk | delegate_task subagent 自汇报不验证 → 与 "AI Reading Untrusted" 模式同类 |
+         | Action | 不改配置（gateway 已在本地网络），监控 Rafter 新 CVE 推送 |
+       - **页面结构**：静态博客页，标题按月份组织（CamoLeak/RoguePilot/Claude Code Hooks/Replit/Codex CLI/MCP SDK/Git MCP/OpenClaw 等），每个 incident 含 severity/product/researcher/CVE/vector/impact/status
+       - **饱和判断**：Rafter 持续更新（Last updated: 2026年4月5日），每次方向 C 轮次检查 last_updated 字段是否有更新
+
+    2j. **IETF MCP Security Considerations Draft（2026-06-03 新增）**：
+       - 来源：`draft-mohiuddin-mcp-security-considerations`（14h前发布，约2026-06-02傍晚）
+       - **降级**：ddgs 搜索 "draft-mohiuddin-mcp-security-considerations" 获取摘要
+       - **重要性**：IETF draft 代表官方标准安全考量开始制定，MCP 协议安全性走向规范化的早期信号
+       - **饱和判断**：IETF draft 生命周期短（→ RFC / → 废弃），每次方向 C 轮次用 ddgs 增量检查是否有更新版本
 
 **⚠️ gentic.news 核心洞察（2026-04-24 更新）**：编辑语 _\"the harness — scaffold + sandbox + verifier + recovery — matters more than the model. Independent tests show Cursor's scaffold adds 16pp over the raw model.\"_ — 直接验证 Hermes screen_trigger + RPA 架构方向正确。方向 A/B/D 通用参考文件：`references/gentic-news-computer-use-leaderboard-2026-04-24.md`
   - **已知 repo 子目录检查**（2026-06-02 新增）：检查 ZJU-REAL/Awesome-GUI-Agents、OSU-NLP-Group/GUI-Agents-Paper-List 等 repo 是否出现了新的会议子目录（如 ICLR2026/、AAAI2026/、ACL2026/）—— 新子目录可一次性产出 8+ 篇新论文，直接重新激活全量扫描
@@ -671,6 +677,7 @@ Stage 3 Context Assembly（最关键安全节点，poisoned context → 全链�
 - **目标**：安全 guardrail 前沿追踪 + 产线健康巡检
 - **标准巡检协议**（5 步，~2-3 分钟）：
   1. **HN Firebase API 安全告警巡检** (~20s)：top 15 stories，过滤 promptarmor/agent/safety/security 关键词
+     - **空结果 = 正常**（top stories 不含安全关键词 ≠ 扫描失败），直接跳过即可，无需报告为 gap
   2. **PromptArmor 扫描** (~60s)：
      - browser_navigate promptarmor.com/resources/threat-intelligence → browser_console JS 提取
      - **⚠️ 已知陷阱：侧栏文章链接点击会重定向到 chatgpt.com！** 不要在侧栏列表页点击文章链接。
@@ -962,10 +969,17 @@ Stage 3 Context Assembly（最关键安全节点，poisoned context → 全链�
 ⚠️ **`write_file` 完全覆盖文件！** — 不要直接用 write_file 写目标文件。
 ✅ **正确做法（推荐）**：`write_file` 写 `/tmp/idle_log_YYYYMMDD_HHMMSS.md`，再用 `terminal cat >>` 追加。
 ✅ 或用 `patch` 替换最后一组的"下次学习方向"行（替换为新内容 + 续行）。
-⚠️ **patch 唯一性陷阱（2026-06-02 实测）**：若日志中多次出现相同的"**下次学习方向**：X"文本，patch 会报"Found 3 matches"。**正确做法**：
+⚠️ **`patch` 唯一性陷阱（2026-06-02 实测）**：若日志中多次出现相同的"**下次学习方向**：X"文本，patch 会报"Found 3 matches"。**正确做法**：
    - 用 `read_file tail` 获取日志末尾 → 构造包含前文"可执行改进"段落（至少3行）的 unique old_string，使匹配范围收敛到最近一条
    - 格式：`old_string='**可执行改进**：\n1. ...\n2. ...\n\n**下次学习方向**：X'`
    - 即：把最后一条 entry 的"可执行改进" + "下次学习方向"一起作为 old_string 匹配
+   - **动态行数裁剪**：若需删除上一条 freshness_skip entry 再写入新 entry，用新 entry 的实际行数 `len(new_entry_lines)` 精确裁剪，而非硬编码行数
+   ```python
+   new_entry_lines = content.strip().split('\n')
+   trim_count = len(new_entry_lines)
+   with open(log_path) as f: lines = f.readlines()
+   open(log_path, 'w').writelines(lines[:-trim_count])
+   ```
 ⚠️ `/tmp` 路径竞争：必须用时间戳文件名（`/tmp/idle_log_YYYYMMDD_HHMMSS.md`），不能被并行 cron 覆盖。
 ⚠️ **`write_file` 不展开 shell 变量**：路径中含 `$(date +%s)` 会被当作字面文件名。正确做法：先用 `terminal("echo $(date +%Y%m%d_%H%M%S)")` 获取时间戳，再用固定路径调用 write_file。
 
