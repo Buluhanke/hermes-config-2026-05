@@ -351,15 +351,25 @@ async def hermes_scroll_to_bottom(cdp, timeout=60, settle=2.0):
 8. 必要时 screencapture + vision_analyze
 ```
 
-## 实测效果 (6个AI站点)
-| 站点 | 输入方式 | 滚屏高度 | AX回复字符 | 备注 |
-|------|---------|---------|-----------|------|
-| DeepSeek | `Input.dispatchKeyEvent` 逐字 | 22864px | 2876字 | ❌ ta.value=不触发React；✅ 逐字可发 |
-| 豆包 | textarea (direct value) | 19379px | 1468字 | ✅ ta.value=成功 |
-| ChatGLM | textarea (direct value) | - | 完整分析 | ✅ ta.value=成功 |
-| Gemini | contenteditable | 4022px | 38字 | ❌ textarea在webview跨域 |
-| Grok | tiptap | 1085px | 99字 | ❌ Cloudflare拦截 |
-| ChatGPT | contenteditable | - | 旧回答残留 | ⚠️ 需先focus |
+## 实测效果 (6个AI站点, 2026-06-03 全部重新验证)
+| 站点 | 输入方式 | 发送方式 | 回复读法 | 状态 |
+|------|---------|---------|---------|------|
+| DeepSeek | `Input.insertText` ✅ | `[role="button"].ds-button--primary` click ✅ | `document.body.innerText` ✅ | ✅ 完全通过 |
+| 豆包 | `Input.insertText` ✅ (2026-06-03 突破) | send-btn click ✅ (2026-06-03 突破) | `document.body.innerText` growth ✅ | ✅ 完全通过 |
+| ChatGLM | `Input.insertText` ✅ | `Input.dispatchKeyEvent` Enter ✅ | `document.body.innerText` ✅ | ✅ 完全通过 |
+| Grok | React fiber parent `__reactProps` ✅ | `button[aria-label="提交"]` click ✅ | `document.body.innerText` (~60-90s) ✅ | ✅ 完全通过 |
+| ChatGPT | `Input.insertText` on `pmViewDesc.contentDOM` ✅ | `composer-submit-btn` click ✅ | `document.body.innerText` ✅ | ✅ 完全通过 |
+| Gemini | ❌ 协议限制 | ❌ zone.js 无 `nativeVirtualKeyCode` | — | ❌ 无法解决 |
+
+### 豆包 2026-06-03 突破
+ByteDance `sync-input-engine-infra-interactive` 的内部状态曾导致所有派发方式失效。2026-06-03 实测：`Input.insertText` 触发完整 keydown/keyup/char 事件链 → React 状态更新 → 发送按钮激活。**成功断言**：
+- `ta.value` 从问题长度变为 0（已发送）
+- URL 从 `/chat/` 跳转到 `/chat/<uuid>`（新对话创建）
+- `body.innerText` 从 ~610 增长到 ~3158+ 字符（回复生成中）
+- 完整回复约 30-60 秒后出现在 DOM
+
+### Gemini 协议层限制（无法绕过）
+Gemini 使用 Quill 编辑器 (`.ql-editor`) + Angular zone.js。`Input.dispatchKeyEvent` 的 `browser_cdp` 工具缺少 `nativeVirtualKeyCode: Int32` 字段，无法触发 Angular 的 `ɵzone_symbol__ZENUNBOUND__` 事件链。这是工具栈协议层约束，前端代码无法修复。
 
 ## 快速输入方案（绕过逐字打字）
 对于大多数现代 AI 站点（DeepSeek、豆包、ChatGLM），`ta.value=` + `dispatchEvent` 直接赋值比逐字输入快且稳定：

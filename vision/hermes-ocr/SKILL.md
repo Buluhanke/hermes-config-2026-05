@@ -101,6 +101,27 @@ uv pip install pymupdf --python ~/.hermes/hermes-agent/venv/bin/python3
 
 **注意**：系统pip受PEP 668保护，不能用普通`pip install`。一律用 `uv pip install --system` 或 `uv pip install --python <venv_path>`。Vision OCR只能走Homebrew Python（有pyobjc）。
 
+## 补充工具层（2026-06 实测新增）
+
+以下工具与 Hermes OCR 引擎互补，按需调用：
+
+| 工具 | 场景 | 内存 | 安装 |
+|------|------|------|------|
+| **uitag** | 文字+图标双检测，YOLO加持 90.8% 准确率 | 低 | `pip install "uitag[yolo]"` |
+| **EasyScreenOCR** | 日常快捷键截图，菜单栏常驻 | 低 | App Store / 官网 |
+| **DeepSeek-OCR** | 复杂文档/表格/公式，MPS 加速 | 高 | 本地 Web 服务 |
+
+```bash
+# uitag 示例（文字+图标双识别）
+uitag screenshot.png --yolo -o ./output
+
+# DeepSeek-OCR 启动
+git clone https://github.com/xiumaoprompt/DeepSeek-OCR_macOS.git
+cd DeepSeek-OCR_macOS && python setup.py
+python -m macos_workflow.app
+# 访问 http://127.0.0.1:7860
+```
+
 ## 快速找字（屏幕坐标）
 
 新增 `find` 子命令，毫秒级定位文字 + 返回屏幕坐标：

@@ -151,7 +151,7 @@ Modern AI sites render the "停止生成" button inside private Shadow DOM. `Run
 | **ChatGPT** | e19 (textarea) | `browser_click(e25)` | `browser_snapshot` StaticText | |
 | **豆包** | e44 (textarea) | `browser_click(e59)` | `browser_vision` | |
 | **智谱清言** | e21 (textarea) | `browser_press(Enter)` | `browser_vision` | e41按钮无效 |
-| **Gemini** | e17 (textarea) | `browser_click(e18)` | `browser_vision` | |
+| **Gemini** | textarea (Quill/Angular) | ❌ Protocol limit | `document.body.innerText` | **2026-06-03: Quill `.ql-editor` + Angular zone.js blocks ALL input strategies. `Input.dispatchKeyEvent` keyDown fails to trigger Angular's `ɵzone_symbol__ZENUNBOUND__` event chain (missing `nativeVirtualKeyCode: Int32` field in CDP tool). `quill.setText()` can write text but cannot trigger send. No `[data-testid="send-button"]` exists in DOM. This is a tool protocol limitation, not a frontend code fix.** |
 | **Grok** | e81 (textarea) | `browser_press(Enter)` | `browser_snapshot` | |
 
 **通用流程**：browser_navigate → browser_snapshot找ref → browser_type填入 → **browser_press(Enter)优先**（比按钮点击更稳定）→ 等待 → browser_snapshot读AX树验证
@@ -215,7 +215,7 @@ To ask the same question to N AI sites and read all replies, run sites **seriall
 | Site | Input | AX readable? | Notes |
 |------|-------|--------------|-------|
 | DeepSeek | textarea×1 | optional (works without) | ✅ full reply | **2026-06-03 update: UI uses `<div role="button">` not `<button>`. Send button = `[role="button"].ds-button--primary.ds-button--filled.ds-button--circle`, find by walking UP 5 levels from textarea. `Input.insertText` after focus works. ⚠️ Reply streaming trap: after click, `body.innerText` may show ONLY the conversation title for 30-60s before the SSE stream completes — DO NOT abort early. Poll bodyLen until stable 10s = done. Full reply ~2000 chars after ~60-90s total.** |
-| Doubao (豆包) | textarea×1 (Semi Design) | yes for full features | ⚠️ (partial) | **2026-06-03 deep-dive: Semi Design + React 18 + ByteDance `SyncInputEngine` (sync-input-engine-infra-interactive.71f86969.js) maintains internal state separate from React. `ta.value=` + dispatchEvent FAILS — engine's debounce keeps send-btn disabled. React fiber `__reactProps` direct call needs COMPLETE SyntheticEvent template (with `nativeEvent` + all the preventDefault/stopPropagation/persist methods) — if missing `event.target` it crashes. Call `props.onCompositionEnd` FIRST to release IME lock, then onChange/onInput. Real `Input.dispatchKeyEvent` char-by-char is the last-resort path. 2nd textarea is hidden search; use JS pick.** |
+| Doubao (豆包) | textarea×1 (Semi Design) | ✅ `Input.insertText` + send-btn click (2026-06-03) | `document.body.innerText` growth | **2026-06-03: ByteDance `sync-input-engine-infra-interactive` maintains internal state. `Input.insertText` triggers keydown/keyup/char chain → React state update → send-btn click succeeds. Assertion: `ta.value` goes to 0 (sent) AND URL changes to `/chat/<uuid>` (new conversation created). body.innerText grows from ~610 to ~3158 chars. Wait 30-60s for full reply.** |
 | ChatGLM | textarea×1 | yes | ✅ (full reply) | **direct value injection works — 完整三种机制分析** |
 | Kimi | contenteditable div | yes | ❌ (mostly) | textContent read; new tab: AX works |
 | Grok | `textarea` (Tiptap) | `press_sequentially` via Playwright | ⚠️ 60-90s | **2026-06-03: Tiptap wrapper means `__reactProps` is on `t.parentElement` not the textarea itself. `Input.insertText` fails to populate via CDP; use React fiber parent-props path with `onCompositionEnd` first. Send button: `button[aria-label="提交"]`. Reply in `document.body.innerText` after ~60-90s (xAI Reasoning slow). `press_sequentially` via Playwright Chromium 147 WORKS (2026-06-03 verified — same pattern as ChatGPT).** |
@@ -409,7 +409,8 @@ insert_text(question)
 - **AI response completion signal = bodyLen growth, not stopBtn (2026-06-02 verified)**: Modern AI sites render the "停止生成" button inside private Shadow DOM. `Runtime.evaluate` and AX tree both return nothing for it. The robust completion signal is `document.body.innerText.length` monotonic growth. Poll every 2s, compare to previous cycle's bodyLen. If grew → still generating. If stable for 5+ cycles (10s) → done. This works for React/Vue/Vanilla.
 
 ## See also
-- `references/ai-site-input-strategies.md` — **input-strategy decision tree per site** (which input method works for ChatGPT/豆包/DeepSeek/ChatGLM/Gemini/Grok, with the 2026-06-03 verified patterns)
+- `references/doubao-20260603-breakthrough.md` — **Doubao 发送突破完整记录**（insertText + 坐标点击 + 成功断言 + 失效方案列表）
+- `references/ai-site-input-strategies.md` — input-strategy decision tree per site (which input method works for ChatGPT/豆包/DeepSeek/ChatGLM/Gemini/Grok, with the 2026-06-03 verified patterns)
 - `references/ai-site-dom-selectors.md` — working CSS selectors for reading AI reply text across sites
 - `references/ai-sites-verification-20260603.md` — 6 AI sites end-to-end verification results (4/6 passed, strategy comparison, DeepSeek streaming trap)
 - `references/cdp-react-vue-bypass.md` — full technique writeup with the double-character gotcha explained
