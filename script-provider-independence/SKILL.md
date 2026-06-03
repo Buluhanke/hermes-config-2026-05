@@ -1,13 +1,10 @@
 ---
 name: script-provider-independence
 description: |
-  Cron/scheduled scripts that perform health checks or model-pings MUST
-  not hardcode a specific LLM provider or model. If a script needs to
-  verify API connectivity, derive the target from runtime config
-  (`~/.hermes/config.yaml` `default` provider), not from a hardcoded
-  name. If the user later switches providers, the script should keep
-  working or fail silently — never produce stale false-positive alerts.
-triggers:
+  Cron/scheduled scripts that perform health checks or model-pings MUST not hardcode a specific LLM provider or model. If a script needs to verify API connectivity, derive the target from runtime config (`~/.hermes/config.yaml` `default` provider), not from a hardcoded name. If the user later switches providers, the script should keep working or fail silently — never produce stale false-positive alerts.
+
+  ## 已知案例（2026-06-03）
+  `self_optimization.py` 硬编码检查 DeepSeek API key，导致 401 unauthorized 时每日报错。修复：将 `check_api_health()` 改为 `return {}`，避免第三方 API key 失效产生误报。原则：健康检查只验证当前主用模型，不检查备选。
   - Writing any cron / scheduled / `daily_task`-style script that calls a model API
   - Adding a "check_api_health" / "ping" / "verify credentials" function to a script
   - User complains about repeated false alerts from a self-check / monitoring script

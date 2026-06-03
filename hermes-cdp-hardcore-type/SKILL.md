@@ -142,6 +142,95 @@ last_pos = await human_mouse_click(cdp, send_x, send_y, current_mouse_pos=last_p
 ```
 
 **效果**: 风控服务器看到的是完美贝塞尔鼠标轨迹 + 非匀速生物识别打字律动，双重真人化特征叠加。
+
+## 主动寄生式 CDP 脚本规范（2026-06-03 确立）
+
+**三大铁律**：不杀进程、不拉起浏览器、不擅自创建 tab。
+
+所有 CDP 自动化脚本必须遵循。**完整实现参考**：`chrome-cdp-automation` skill 的 `references/ai-site-input-strategies.md` — 包含端口扫描、clear_input 防御、per-site 输入策略决策树。以下是规范核心：
+
+### 端口扫描 — 必须先嗅探再连接（2026-06-03 新增）
+
+不要硬编码单一端口。Chrome 可能在 9333、9444 或 9222 上：
+
+```python
+CDP_PORTS = [9333, 9444, 9222]  # 按可能性排序
+
+def detect_cdp_port() -> tuple[str, int] | None:
+    import urllib.request, json
+    for port in CDP_PORTS:
+        try:
+            tabs = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=3).read())
+            if tabs:
+                return ("127.0.0.1", port)
+        except Exception:
+            continue
+    return None
+```
+
+**已知端口场景**：
+| 端口 | 来源 |
+|------|------|
+| 9333 | 用户手动：`open -a "Google Chrome" --args --remote-debugging-port=9333` |
+| 9444 | `launch_chrome_cdp.sh`（pkill → open → --args --remote-debugging-port=9444）|
+| 9222 | Chrome DevTools 默认值（无 `--remote-debugging-port` 标志）|
+
+**launch_chrome_cdp.sh 可靠性注记（2026-06-03）**：模式 `pkill -9 -f "Google Chrome" && open -a "Google Chrome" --args --remote-debugging-port=9444` 并不能保证新 Chrome 使用 9444——`open -a` 可能激活了未彻底杀死的旧进程，或新 Chrome 忽略 `--args`。如果 9444 扫描失败则回退到 9333。
+
+### 端口错位症状
+- `HTTP Error 502: Bad Gateway` 或 `Connection refused` 连接 CDP 时
+- `curl http://127.0.0.1:9444/json` 返回空 `[]`，但 `lsof -iTCP:9333` 显示 Chrome 在监听
+- **修复**：扫描所有端口，不要假定了。
+
+```python
+import urllib.request, urllib.error
+
+CDP_HOST = "127.0.0.1"
+CDP_PORT = 9333
+CDP_JSON_URL = f"http://{CDP_HOST}:{CDP_PORT}/json"
+
+def get_all_targets() -> list[dict]:
+    """通过 /json 端点嗅探所有 tab。失败则报错，不尝试拉起浏览器。"""
+    try:
+        raw = urllib.request.urlopen(CDP_JSON_URL, timeout=5).read()
+        import json
+        return json.loads(raw)
+    except (urllib.error.URLError, Exception) as e:
+        print(f"❌ 无法连接 Chrome CDP 端点: {e}")
+        return []
+
+def find_target(url_match: str) -> dict | None:
+    """找匹配的 tab，不存在则返回 None（由调用方决定是否报错退出）。"""
+    for t in get_all_targets():
+        if url_match in t.get("url", ""):
+            return t
+    return None
+```
+
+**关键要求**：
+1. **启动前必嗅探** — `find_target()` 返回 None 则报错退出，不自动拉 Chrome
+2. **输入前必清空** — `clear_input(selector)` 在每次填入前强制清空 textarea，防止文本堆叠
+3. **零生命周期** — 脚本只做 CDP 命令发送，不执行任何 `pkill`/`kill`/`open -a` 命令
+
+```python
+def clear_input(self, selector: str) -> bool:
+    """
+    清空输入框：先 focus，再用 JS 直接置空 value，
+    然后派发 input/change 事件通知 React。
+    """
+    self.evaluate(f"document.querySelector('{selector}')?.focus()")
+    time.sleep(0.1)
+    self.evaluate(
+        f"var el = document.querySelector('{selector}');"
+        f"if(el){{ el.value = '';"
+        f"  el.dispatchEvent(new Event('input',{{bubbles:true}}));"
+        f"  el.dispatchEvent(new Event('change',{{bubbles:true}}));}}"
+    )
+    val = self.get_value(selector)
+    return len(val) == 0
+```
+
+已验证脚本：`~/.hermes/scripts/hermes_web_bot_cdp.py`（完整实现三大铁律）
 ### 武器2: 智能聚焦 (穿透 Shadow DOM)
 ### 武器2: 智能聚焦 (穿透 Shadow DOM)
 ```python
@@ -358,6 +447,7 @@ python3 hermes_reactor.py deepseek 15  # 监控 deepseek tab, 跑 15 秒
 
 ## 调试清单 (扩充)
 - 字符重复 → keyDown.text 必须空
+- **文本截断 / 重复提交（2026-06-03 新增）** → `Input.insertText` 被多次调用但 textarea 未清空，导致 "用3句话用3句话用3句话"。**必须**在每次 insertText 前调用 `clear_input(selector)` 清空 textarea（`el.value = ''` + `input`/`change` 事件），即使上一轮脚本已退出。
 - 按钮没反应 → 用 Enter 穿透, 不要 .click()
 - 找不到textarea → 试 contenteditable (ProseMirror/tiptap)
 - 滚屏无效 → 找 virtual-list 容器, 别用 window

@@ -159,8 +159,7 @@ Modern AI sites render the "停止生成" button inside private Shadow DOM. `Run
 
 **DeepSeek坑**：输入后点按钮文字被清空（React状态未更新）。解法：browser_press(Enter)穿透，或用Input.dispatchKeyEvent逐字触发React onChange。
 
-**Complete working pipeline**:
-```python
+**Complete working pipeline**:```python
 import asyncio, json, websockets, urllib.request, base64, os, time, sys
 
 # 1. Find tab
@@ -245,16 +244,144 @@ To ask the same question to N AI sites and read all replies, run sites **seriall
   ```
   This works on most React 16-17 sites. React 18 + Semi Design may still swallow the event because the framework re-checks its own internal state on next render — true char-by-char `Input.dispatchKeyEvent` (keyDown→char→keyUp with `text=""` on keyDown) is the most reliable escape.
 - **`screencapture -x` works** when CDP `Page.captureScreenshot` returns 0 bytes (Chrome GPU layer issue on some macOS versions).
-- **Playwright `press_sequentially` as the universal input strategy (2026-06-03 verified)**: `loc.press_sequentially(text, delay=50)` with a prior `loc.click()` to focus is the single most reliable way to trigger React/Vue/Angular/Tiptap/Semi Design input handlers across ALL tested sites. Verified working: ChatGPT (ProseMirror) ✅, Doubao (SyncInputEngine) ✅, Grok (Tiptap) ✅. The key is that it fires genuine OS-level `keydown`/`keyup`/`input` events through the browser's event system, unlike `element.value =` which only touches the DOM. This is always the **first strategy to try** before falling back to CDP `Input.dispatchKeyEvent` char-by-char. It requires Playwright's own Chromium (NOT the user's debug Chrome via CDP), so it means a fresh browser session with no login cookies — use it when you don't need existing login state.
-- **Login state:** do NOT launch a fresh `chromium.launch()` — it has no cookies. Either reuse the user's Chrome via debug port, or copy the entire `Default/` profile directory before launch.
-- **⚠️ User preference: close browser tabs/windows after use (2026-06-03)**: This user has called out "你调用完浏览器为什么都不关掉？" / "屏幕上全是浏览器" as a recurring complaint. When you create tabs via `Target.createTarget` or `browser_navigate`, **you are responsible for closing them when the task is done**. For multi-site comparison tasks: open → ask → read → close the tab. Do not leave 6 AI sites open on the user's screen after the comparison is done. The exception is when the user explicitly asks to keep a tab open (e.g. "let me see ChatGPT's reply"). Concrete pattern:
-  ```python
-  # After reading reply and saving it, close the tab
-  await cdp.send("Target.closeTarget", {"targetId": tab_id})
-  # Or via browser_cdp tool:
-  browser_cdp(method="Target.closeTarget", params={"targetId": tab_id})
-  ```
-  When using `browser_navigate` (which goes through Browserbase cloud), navigate to `about:blank` at the end instead of leaving the site open.
+- **AI response completion signal = bodyLen growth, not stopBtn (2026-06-02 verified)**: Modern AI sites render the "停止生成" button inside private Shadow DOM. `Runtime.evaluate` and AX tree both return nothing for it. The robust completion signal is `document.body.innerText.length` monotonic growth. Poll every 2s, compare to previous cycle's bodyLen. If grew → still generating. If stable for 5+ cycles (10s) → done. This works for React/Vue/Vanilla.
+
+## Port detection — scan, don't assume (2026-06-03 verified)
+
+CDP scripts must NOT hardcode a single debug port. The user's Chrome may be on any port depending on how it was started. **Always scan** the known ports in priority order:
+
+```python
+CDP_PORTS = [9333, 9444, 9222]  # ordered by likelihood
+
+def detect_cdp_port() -> tuple[str, int] | None:
+    """
+    Returns (host, port) of the first responding CDP endpoint.
+    Tries 9333 first (user manually started Chrome with --remote-debugging-port=9333),
+    then 9444 (what launch_chrome_cdp.sh uses), then 9222 (Chrome DevTools default).
+    """
+    import urllib.request
+    for port in CDP_PORTS:
+        try:
+            url = f"http://127.0.0.1:{port}/json"
+            tabs = json.loads(urllib.request.urlopen(url, timeout=3).read())
+            if tabs:
+                return ("127.0.0.1", port)
+        except Exception:
+            continue
+    return None
+```
+
+**Why not `socket.connect()`**: Chrome's CDP HTTP endpoint returns a JSON tab list — if it responds with any content, the CDP WS is guaranteed to be at `ws://host:port/devtools/...`. A TCP connect check on port 9333 can succeed even when Chrome's CDP HTTP server is dead (stale port).
+
+**Common port scenarios**:
+| Port | How it gets set |
+|------|----------------|
+| 9333 | User manually: `open -a "Google Chrome" --args --remote-debugging-port=9333` |
+| 9444 | The helper script `launch_chrome_cdp.sh` (pkill → open → --args --remote-debugging-port=9444) |
+| 9222 | Chrome DevTools default (no --remote-debugging-port flag) |
+
+**launch_chrome_cdp.sh reliability note (2026-06-03)**: The pattern `pkill -9 -f "Google Chrome" && open -a "Google Chrome" --args --remote-debugging-port=9444` is NOT guaranteed to set the new port on the freshly opened Chrome — `open -a` may reactivate an existing un-killed process or the new Chrome may ignore `--args` if another instance is already running. If port 9444 scan fails, fall back to 9333. The user may already have a stable Chrome on 9333 started outside the script.
+
+### Known port mismatch symptoms (2026-06-03)
+- Script error: `HTTP Error 502: Bad Gateway` or `Connection refused` when connecting to CDP
+- `curl http://127.0.0.1:9444/json` returns empty `[]` but `lsof -iTCP:9333` shows Chrome listening
+- **Fix**: Scan all ports. Never assume.
+
+### Text truncation / duplicate submission symptom (2026-06-03)
+If the textarea shows the question repeated 3× (e.g., "用3句话用3句话用3句话"), the `Input.insertText` was called 3 times without clearing the textarea first. The **clear_input()** defense is mandatory — always call it before `insert_text()`:
+```python
+# WRONG (causes duplication)
+insert_text(question)
+
+# CORRECT (clears first)
+clear_input(selector)   # → el.value = '' + input/change events
+insert_text(question)
+```
+
+## 主动寄生式 CDP 脚本三大铁律（2026-06-03）
+
+所有 CDP 自动化脚本必须严格遵循，违反任意一条都会导致用户投诉「屏幕上全是浏览器」：
+
+### 1. 不杀进程、不拉起浏览器
+Chrome debug port 9333 是用户已经运行的浏览器实例，脚本只能「寄生」已有 tab，绝对不能：
+- 执行 `pkill Chrome` / `killall Chrome`
+- 用 `open -a "Google Chrome"` 拉起新窗口
+- 执行任何控制浏览器生命周期的命令
+
+**正确做法**：启动前用 `http://127.0.0.1:9333/json` 嗅探 tab，不存在则报错退出。
+```python
+def find_target(url_match: str):
+    try:
+        tabs = json.loads(urllib.request.urlopen(f"http://127.0.0.1:9333/json").read())
+    except Exception as e:
+        print(f"❌ CDP 端点无响应: {e}"); return None
+    for t in tabs:
+        if url_match in t.get("url", ""): return t
+    print(f"❌ 未检测到 {url_match}，请手动打开并登录"); return None
+```
+
+### 2. 输入前必清空 textarea
+多次运行脚本时，textarea 不会自动清空，`Input.insertText` 会把新文本追加到旧文本后面，导致重复发送。
+
+**正确做法**：每次填入前执行 `clear_input()`：
+```python
+def clear_input(self, selector: str) -> bool:
+    self.evaluate(f"document.querySelector('{selector}')?.focus()")
+    time.sleep(0.1)
+    self.evaluate(
+        f"var el = document.querySelector('{selector}');"
+        f"if(el){{ el.value = '';"
+        f"  el.dispatchEvent(new Event('input',{{bubbles:true}}));"
+        f"  el.dispatchEvent(new Event('change',{{bubbles:true}}));}}"
+    )
+    return len(self.get_value(selector)) == 0
+```
+
+### 3. 任务完成后关闭 tab 或跳转 about:blank
+用户明确投诉「屏幕上全是浏览器」，所以任务完成后必须清理：
+- 读取完回复 → `browser_cdp(method="Target.closeTarget", params={"targetId": tab_id})`
+- 用 `browser_navigate` 时 → 任务完成后 navigate 到 `about:blank`
+
+**例外**：用户明确要求保留 tab（如「让我看看 ChatGPT 的回复」）则不关闭。
+
+### ⚠️ 必读：端口扫描必须在连接前执行
+
+**永远不要硬编码单一端口**。Chrome 9333/9444/9222 都可能。脚本必须先嗅探再连接：
+
+```python
+CDP_PORTS = [9333, 9444, 9222]
+
+def detect_cdp_port() -> tuple[str, int] | None:
+    import urllib.request, json
+    for port in CDP_PORTS:
+        try:
+            tabs = json.loads(urllib.request.urlopen(f"http://127.0.0.1:{port}/json", timeout=3).read())
+            if tabs:
+                return ("127.0.0.1", port)
+        except Exception:
+            continue
+    return None
+```
+
+**常见错位**：脚本报 `HTTP Error 502` 或 `Connection refused` 但 Chrome 进程存在——说明端口不对。`lsof -iTCP:9333` 和 `lsof -iTCP:9444` 同时查，通常只有一个活着。
+
+### ⚠️ Text truncation / 重复提交根因（2026-06-03）
+
+如果 textarea 显示问题被重复塞入（如 "用3句话用3句话"），说明 `Input.insertText` 在 textarea 未清空状态下被调用了 3 次。每次运行脚本前必须清空：
+
+```python
+# WRONG — 会导致文本堆叠/重复
+insert_text(question)
+
+# CORRECT — 每次填入前清空
+clear_input(selector)   # → el.value = '' + input + change 事件派发
+insert_text(question)
+```
+
+这与是否在同一个脚本内无关——即使脚本重启，如果用户在 AI 界面手动输入过内容后运行脚本，textarea 仍有旧内容，`insertText` 会追加而非替换。
+
+### 已验证脚本
+- `~/.hermes/scripts/hermes_web_bot_cdp.py` — 完整实现三大铁律，支持 all/chatgpt/deepseek/doubao/chatglm/grok/gemini，输入前清空、不杀进程、不留 tab
 - **macOS system proxy breaks Python urllib SSL (2026-06-02 verified)**: HTTP/HTTPS proxy env vars (e.g. Clash at `127.0.0.1:7897`) cause `[SSL: UNEXPECTED_EOF_WHILE_READING]` on `urllib.request.urlopen` to any external HTTPS endpoint. `no_proxy=*` is **NOT respected** by Python's urllib on macOS. **Fix**: use `subprocess.run(['curl', '-s', '--noproxy', '*', ...])` instead of urllib — curl respects `--noproxy` and bypasses the proxy correctly. Pattern (verified for v2.aicodee.com / api.minimaxi.com):
 
   ```python
