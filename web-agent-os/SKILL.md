@@ -117,6 +117,12 @@ ddgs > anysearch > searxng（公网实例均已不可用）
         - 动态渲染无法用文本提取时
 ```
 
+**2026-06-03 新增：Playwright `press_sequentially` 作为通用输入策略**
+- `loc.click()` + `loc.press_sequentially(text, delay=50)` 触发 OS 级 keydown/keyup/input 事件链
+- 在 ChatGPT(ProseMirror)/豆包(SyncInputEngine)/Grok(Tiptap) 上全部验证通过
+- 适合 Playwright 独立 Chromium（无登录态），速度快，延迟 50ms/字
+- 对于需要复用已登录 Chrome 的场景，仍用 `browser_cdp` 工具 + `Input.insertText`
+
 **⚠️ 致命陷阱（2026-06-02 用户直接纠正）：不要默认用截图！** 用户原话："你方向都不对了，为什么浏览器需要截图去识别"。正确的真人化行为：收到任务后先想用什么工具最轻量，而不是默认最先进的工具。截图/VLM是最后手段，不是第一选择。
 
 **原则：永远优先用网页文本提取，而不是截图识别。**
