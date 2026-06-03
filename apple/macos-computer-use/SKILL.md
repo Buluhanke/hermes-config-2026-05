@@ -334,3 +334,81 @@ osascript -e 'tell application "Google Chrome" to set URL of active tab of windo
 - File edits — use `read_file` / `write_file` / `patch`, not `type` into
   an editor window.
 - Shell commands — use `terminal`, not `type` into Terminal.app.
+
+## 浏览器/桌面App 用完即关（重要工作流，2026-06-03新增，2026-06-03 加强）
+
+任务结束后，**必须**关掉打开的浏览器窗口/标签页/桌面App窗口，否则屏幕全是残留。
+
+**为什么这是问题**：browser 工具打开的窗口用户能看到，残留下来就是视觉污染。`web_extract` 不开浏览器，最干净；必须用浏览器时，关掉是最后一步。
+
+**清理命令优先级**（按可靠性从高到低）：
+
+1. **MCP chrome 工具**（最干净，能关单个 tab）
+```python
+mcp_chrome_chrome_close_tabs(tabIds=[12345])  # 关指定tab
+mcp_chrome_chrome_close_tabs()  # 关所有
+```
+
+2. **AppleScript 关闭 Chrome 所有窗口**（MCP 失效时）
+```bash
+osascript -e 'tell application "Google Chrome" to close every window'
+```
+注：Chrome debug 模式进程（PID 21093 等）会继续在后台跑，不占窗口，OK。
+
+**3. ⚠️ 清理后必须验证窗口数（2026-06-03 实测教训）**
+
+只跑清理命令 ≠ 真的清理了。**必须**用 `System Events` 拿窗口数验证：
+```bash
+osascript -e 'tell application "System Events" to tell process "Google Chrome" to get count of windows'
+# 返回 0 = 干净；返回 N > 0 = 还有残留，重试
+```
+
+**反面教材（2026-06-03 真实事件，第二次犯同样错）**：
+- 第一轮：用户反馈 "调用完浏览器都不关" → 我加了 "用完即关" 规则
+- 第二轮：`computer_use capture` + `osascript close every window` → 以为清理完了
+- 几分钟后用户：*"屏幕上全是浏览器"*
+- 根因：清理命令跑完了但没验证。Chrome 窗口里之前可能打开了多个未列在 osascript active tab 里的 stale 窗口
+- **修复**：在 `osascript close every window` 之后**强制**跑 `count of windows` 验证，期望输出 0
+
+**清理 + 验证的最小脚本（推荐封装为 alias）**：
+```bash
+cleanup_chrome() {
+  osascript -e 'tell application "Google Chrome" to close every window' 2>/dev/null
+  sleep 1
+  local n=$(osascript -e 'tell application "System Events" to tell process "Google Chrome" to get count of windows' 2>/dev/null)
+  if [[ "$n" != "0" ]]; then
+    echo "⚠️ Chrome 还有 $n 个窗口，重试"
+    osascript -e 'tell application "Google Chrome" to close every window' 2>/dev/null
+    sleep 1
+  fi
+  echo "Chrome windows: $n"
+}
+```
+
+**其他 App 同理**：
+```bash
+# Safari
+osascript -e 'tell application "Safari" to close every window'
+
+# Finder 窗口（不影响后台进程）
+osascript -e 'tell application "Finder" to close every window'
+
+# 通用：关掉一个App的所有窗口
+osascript -e 'tell application "<AppName>" to close every window'
+```
+
+**决策树**：
+```
+需要读网页内容？
+  ├─ 是静态文本/JSON/API → web_extract（不开浏览器）
+  ├─ 是SPA/DOM查询 → browser_navigate + browser_console（Playwright实例，任务结束自动关）
+  └─ 是用户Chrome内的已登录页 → computer_use + AppleScript
+        ↓
+   任务结束 → 关掉对应窗口（MCP tab / AppleScript）
+        ↓
+   **验证窗口数=0**（System Events count of windows）
+        ↓
+   不等于0 → 重试一次，再不济用 mcp_chrome_chrome_close_tabs
+```
+
+**原则**：打开→干活→关掉→验证，四步缺一不可。**没有验证的清理等于没清理**。
