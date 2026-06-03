@@ -139,6 +139,7 @@ Three patterns in the wild (verified across DeepSeek, Doubao, Kimi, Grok, ChatGP
 - `<textarea>` × 1 — DeepSeek, Grok, ChatGPT. Standard `DOM.querySelector("textarea")` + `DOM.focus`.
 - `<textarea>` × 2+ — Doubao (user input + hidden search box), some 1688 composer pages. **Don't blindly pick the first** — use a JS pick: `visible + non-readonly + has placeholder` (priority 1) → first non-readonly → last.
 - `<div contenteditable="true">` — **Kimi** (`.chat-input-editor`), Claude.ai, Notion-style editors. Focus via `document.querySelector('[contenteditable=true]').focus()`. Note: `textarea.value` reads empty after typing into a contenteditable; read `textContent` instead.
+- `#prompt-textarea` (ProseMirror DIV) — **ChatGPT**. The `#prompt-textarea` element is a DIV container, NOT a real textarea. Inside it is `.pmViewDesc.contentDOM` (the actual ProseMirror document node). `Input.insertText` on `#prompt-textarea` itself FAILS — must target `contentDOM`. See **ChatGPT ProseMirror workflow** below.
 ## AI response completion signal = bodyLen growth, not stopBtn (2026-06-02 verified)
 Modern AI sites render the "停止生成" button inside private Shadow DOM. `Runtime.evaluate` and AX tree both return nothing for it. The robust completion signal is `document.body.innerText.length` monotonic growth. Poll every 2s, compare to previous cycle's bodyLen. If grew → still generating. If stable for 5+ cycles (10s) → done. This works for React/Vue/Vanilla.
 
@@ -227,11 +228,21 @@ To ask the same question to N AI sites and read all replies, run sites **seriall
 - **Don't reuse msg_id=0** — Chrome's internal events use 0 too, you'll lose responses.
 - **`DOM.enable` is required for `DOM.focus` / `DOM.querySelector`.** Enable before using, disable if you switch tasks.
 - **Direct value injection (fastest for textarea sites)**: For sites that use pure `<textarea>` (DeepSeek, ChatGLM), setting `ta.value = 'text'` + `dispatchEvent(new Event('input', {bubbles:true}))` is 10× faster than char-by-char. Verified working: DeepSeek ✅, ChatGLM ✅. **NOT working: 豆包 Doubao (2026-06-03)** — Semi Design `<Input>` + React 18 concurrent state swallows synthesized input events; `send-btn` stays `disabled`. 2026-06-03 verified.
-- **`Input.insertText` for ProseMirror (ChatGPT) — 2026-06-03 verified**: The cleanest fast path for ProseMirror contenteditable. First `Runtime.evaluate` to focus the editor, then one `Input.insertText` call (no char-by-char) puts the text in the right place AND the ProseMirror node updates correctly. Confirmed against `#prompt-textarea` on chatgpt.com: text appears in `<p data-placeholder="...">` and the `send-button` becomes enabled. Sequence:
+- **`Input.insertText` for ProseMirror (ChatGPT) — 2026-06-03 verified**: The cleanest fast path for ProseMirror contenteditable. First `Runtime.evaluate` to focus the `.pmViewDesc.contentDOM` (the REAL editing node inside the `#prompt-textarea` wrapper div), then one `Input.insertText` call puts the text AND ProseMirror correctly updates. Confirmed: text appears in `<p data-placeholder="...">` and the `send-button` becomes enabled. Sequence:
   ```python
+  # WRONG: focus the wrapper div — insertText silently fails (val stays 0)
   await cdp.send("Runtime.evaluate", {"expression": "document.querySelector('#prompt-textarea').focus()"})
+  
+  # CORRECT: focus the actual ProseMirror document node inside the wrapper
+  await cdp.send("Runtime.evaluate", {
+      "expression": "document.querySelector('#prompt-textarea .pmViewDesc.contentDOM').focus()"
+  })
   await cdp.send("Input.insertText", {"text": "your question here"})
-  # Then dispatchKeyEvent Enter or click the send button
+  
+  # Click send — DO NOT use Enter keyDown (CDP tool int32 nativeVirtualKeyCode issues)
+  await cdp.send("Runtime.evaluate", {
+      "expression": "document.querySelector('.composer-submit-btn')?.click()"
+  })
   ```
   Much faster and more reliable than `Input.dispatchKeyEvent` char-by-char for ProseMirror.
 - **React 18+ controlled input bypass (last resort)**: When neither `dispatchEvent` nor `Input.insertText` work (e.g. Semi Design's dedup on `input` event), the underlying trick is to bypass React's value-tracking dedup:
