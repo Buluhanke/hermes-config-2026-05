@@ -95,6 +95,31 @@ cron 任务的健康检查（API连通性、模型ping等）必须是**通用可
 - 没有通用 key 检查方法时 → 直接返回 `{}` 不检查，比假阳性好
 - 真要检查某 provider → 标注来源（"这是用户当前的default"，不是"必须检查"）
 
+### 规则9：回答"现在用什么模型"要简洁精确（2026-06-03新增）
+用户问"现在是什么模型 / 你用的什么 / 模型是什么"时，**只回答模型名 + provider** ，不超过 1-2 句。
+
+❌ 错误：先解释模型能力、罗列候选、问"要不要切换"
+✅ 正确：`当前模型：MiniMax-M3（via V2enby.aicodee.com）`
+
+**用户原话**："现在是什么模型" / "模型改为当下模型" → 两次都是直接问，没说"详细介绍一下" → 不要过度发挥。
+注意：每次模型切换会在系统提示里被告知，**信任系统提示里写的模型名**，不要自己去 `hermes model` 查再回答。
+
+### 规则10：MCP chrome 熔断时，立刻换 `browser_cdp`（2026-06-03新增）
+`mcp_chrome_*` 工具遇到 12 次连续失败会进入熔断，每次失败都把 cooldown 推后，实际等 1-3 分钟。
+
+**反模式**（会被熔断坑）：
+1. mcp_chrome_get_windows_and_tabs 报 "Auto-retry available in ~56s"
+2. 等 60s 再试
+3. 又失败，cooldown 推到 ~120s
+4. 循环等
+
+**正模式**：
+1. 看到 MCP chrome 熔断 → **立刻切到 `browser_cdp` 工具**
+2. `browser_cdp` 走 Hermes supervisor 层，**不受 MCP 熔断影响**
+3. 只有 `browser_cdp` 也失败时，才考虑原始 WebSocket（带 Origin header）
+
+详见 `browser-fallback` skill 的 "MCP Chrome 12-failure cooldown 陷阱" 章节。
+
 ## 违反示例
 用户原话："需要我现在就去测试吗？对应我们上面的目标，你不应该问出这种白痴的话，都讲的很清楚了，有问题去解决问题，你还是来发起反问？"
 

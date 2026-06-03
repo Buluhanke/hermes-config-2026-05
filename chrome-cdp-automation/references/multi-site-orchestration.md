@@ -92,11 +92,11 @@ r = await cdp.send("Runtime.evaluate", {
 
 | Site | Input | Login needed? | AX read? | Other |
 |------|-------|---------------|----------|-------|
-| DeepSeek | textarea×1 | optional (works without) | ✅ (new tab) | Send via Enter |
-| Doubao | textarea×2 | yes for full features | ✅ (partial) | 2nd textarea is hidden search; use JS pick |
+| DeepSeek | textarea×1 | optional (works without) | ✅ (new tab) | Send via Enter; `ta.value=` direct injection works |
+| Doubao (豆包) | textarea×1 (Semi Design) | yes for full features | ⚠️ (partial) | **2nd textarea is hidden search; use JS pick. 2026-06-03: `ta.value=` + dispatchEvent FAILS — Semi Design + React 18 swallows input event. Use `Input.dispatchKeyEvent` char-by-char (keyDown→char→keyUp with empty `text` on keyDown). Send via Enter (button click ineffective).** |
 | Kimi | contenteditable div | yes | ❌ (mostly) | New tab returns text via AX, established tab Shadow DOM |
 | Grok | textarea×1 | yes (xAI account) | ⚠️ partial | Login redirects to accounts.x.ai; needs cookies in profile |
-| ChatGPT | textarea×1 | yes | ❌ Shadow DOM heavy | Use API instead |
+| ChatGPT | contenteditable (ProseMirror) | yes | ⚠️ ProseMirror | **2026-06-03: `Input.insertText` works for `#prompt-textarea` (cleanest path — focus first, then `Input.insertText`, text appears in `<p data-placeholder="...">`, send button enables). `ta.value=` does NOT work. Reply readable via `article[data-message-author-role="assistant"]:last-of-type` or AX tree on a fresh tab.** |
 | Claude.ai | contenteditable | yes | ❌ Shadow DOM | Use API instead |
 
 ## Real multi-ask script

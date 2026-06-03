@@ -335,6 +335,34 @@ osascript -e 'tell application "Google Chrome" to set URL of active tab of windo
   an editor window.
 - Shell commands — use `terminal`, not `type` into Terminal.app.
 
+## macOS 内存分析（重要：page size = 16384）
+
+Apple Silicon (M1/M2/M3/M4) 的 `vm_stat` page size 是 **16384 字节**，不是旧文档说的 4096。
+旧值会少算 4 倍（曾算出 1.37GB 空闲，实际 5.31GB）。
+
+正确公式：
+```bash
+vm_stat | awk '/Pages free/ {free=$3} END {printf "Free: %.2f GB\n", free*16384/1024/1024/1024}'
+```
+
+`ps -A -o rss` 输出单位是 **KB**，求和公式：
+```bash
+ps -A -o rss | tail -n +2 | awk '{sum+=$1} END {printf "%.2f GB\n", sum/1024/1024}'
+```
+
+**完整内存报告**（已封装到 `scripts/macos-mem-report.py`）：
+```bash
+python3 ~/.hermes/skills/apple/macos-computer-use/scripts/macos-mem-report.py
+```
+输出：按分类汇总（Chrome / Hermes / 系统库 / 代理等）+ Active/Inactive/Wired/Free 全部正确显示。
+
+**内存清理脚本**（Chrome 释放 ~2GB）：
+```bash
+~/.hermes/skills/apple/macos-computer-use/scripts/macos-mem-cleanup.sh --chrome   # 关窗口
+~/.hermes/skills/apple/macos-computer-use/scripts/macos-mem-cleanup.sh --all     # 杀进程
+~/.hermes/skills/apple/macos-computer-use/scripts/macos-mem-cleanup.sh --verify  # 只验证
+```
+
 ## 浏览器/桌面App 用完即关（重要工作流，2026-06-03新增，2026-06-03 加强）
 
 任务结束后，**必须**关掉打开的浏览器窗口/标签页/桌面App窗口，否则屏幕全是残留。
@@ -370,7 +398,22 @@ osascript -e 'tell application "System Events" to tell process "Google Chrome" t
 - 根因：清理命令跑完了但没验证。Chrome 窗口里之前可能打开了多个未列在 osascript active tab 里的 stale 窗口
 - **修复**：在 `osascript close every window` 之后**强制**跑 `count of windows` 验证，期望输出 0
 
-**清理 + 验证的最小脚本（推荐封装为 alias）**：
+**清理 + 验证的最小脚本**（已封装到 `scripts/macos-mem-cleanup.sh`）：
+
+```bash
+# 默认：只关 Chrome 窗口（保留 debug 进程）
+~/.hermes/skills/apple/macos-computer-use/scripts/macos-mem-cleanup.sh --chrome
+
+# 激进：杀 Chrome 全部进程（节省 ~2GB，下次需要时重启 Chrome debug 模式）
+~/.hermes/skills/apple/macos-computer-use/scripts/macos-mem-cleanup.sh --all
+
+# 只验证当前窗口数
+~/.hermes/skills/apple/macos-computer-use/scripts/macos-mem-cleanup.sh --verify
+```
+
+脚本内置：清理→等待→verify→重试→最终 verify 五步，不留残留。
+
+也可手动调用：
 ```bash
 cleanup_chrome() {
   osascript -e 'tell application "Google Chrome" to close every window' 2>/dev/null

@@ -13,18 +13,27 @@ triggers:
 
 # Browser Fallback（浏览器控制降级）
 
-## 优先级（已确认 2026-06-01）
+## 优先级（2026-06-03 修正，新增第三路径）
 
-1. **Browser工具 CDP engine** (`browser_navigate/click/type/snapshot`) — 主要，完全可用
+1. **`browser_cdp` 工具**（Hermes MCP supervisor 桥）— **第一选择**
+   - 走 Hermes MCP 层，已自动处理 Chrome 148+ 的 WebSocket Origin 校验
+   - 不需要自己带 Origin header
+   - 目标 ID 直接从 `Target.getTargets` 拿，不依赖 `/json/new` HTTP 端点
+2. **Browser工具 CDP engine** (`browser_navigate/click/type/snapshot`)
    - 直连 `http://127.0.0.1:9222`（用户真实Chrome）
-   - 不走 MCP bridge，MCP失败不影响
-2. **Playwright CDP** (`ws://localhost:9333`) — 备用，需要Chrome开启debug端口
+   - 不走 MCP chrome bridge，MCP 失败不影响
+   - 但有自己独立的 Chromium 实例管理，**不**复用用户的登录态
+3. **Playwright CDP** (`ws://localhost:9333`) — 备用，需要Chrome开启debug端口
+   - **Chrome 148+ 默认拒绝没有 Origin header 的 WebSocket**（返回 403）
+   - 必须用 Node `ws` 库带 `headers: { 'Origin': 'http://127.0.0.1:9333' }`
+   - **或** Chrome 启动时加 `--remote-allow-origins=*`（更省事，但需要重启 Chrome）
 
 ## 降级触发
 
 当 `browser_navigate` 报错（独立Chromium实例问题）时，尝试：
-1. `computer_use` 控制用户真实Chrome（已登录态）
-2. Playwright CDP 直连 `ws://localhost:9333`（需要chrome-debug Chrome在跑）
+1. `browser_cdp` 工具（Hermes 自带，跨平台最稳）
+2. `computer_use` 控制用户真实Chrome（已登录态）
+3. Playwright CDP 直连 `ws://localhost:9333`（需要chrome-debug Chrome在跑 + 启 Origin 校验）
 
 ## 验证结果
 - MCP chrome bridge: 报错 "Failed to connect to MCP server"
@@ -168,6 +177,42 @@ ps aux | grep -i "chrome" | grep -v grep | grep -v crashpad
 **`stdio-config.json` 缺失**是最常见的 MCP chrome 失败原因。该文件位于 `/Users/aimac/.local/bin/stdio-config.json`，定义了 Chrome CDP URL。如果缺失，MCP chrome server 会报 "Failed to connect to MCP server"。
 
 **解决方案**：直接使用 built-in browser 工具，无需 MCP chrome server。
+
+## ⚠️ MCP Chrome 12-failure cooldown 陷阱（2026-06-03 实测）
+
+MCP chrome 工具遇到连续失败时（如 CDP 端点不可达、扩展未注入），会进入**12-failure 自动熔断**：
+
+```
+MCP server 'chrome' is unreachable after 12 consecutive failures.
+Auto-retry available in ~56s.
+```
+
+**问题**：
+- 报错里说的"56s 后可重试"指的是底层 CDP 端点健康
+- 实际上 `mcp_chrome_*` 工具在熔断期间**持续报错**直到熔断器 reset
+- 等 56s 看似简单，但每次失败都把 pending 计时推后，**实际等待可能 1-3 分钟**
+
+**正确应对**（按优先级）：
+
+1. **立刻换用 `browser_cdp` 工具** — 它走 Hermes supervisor 层，不受 MCP chrome 熔断影响
+   ```python
+   # 替代 mcp_chrome_get_windows_and_tabs
+   browser_cdp(method="Target.getTargets")
+   ```
+2. 如果 `browser_cdp` 也失败 → 用 `osascript` 直接控制 Chrome 应用（不通过任何 bridge）
+3. **不要**反复重试 `mcp_chrome_*` —— 每次失败都把 cooldown 往后推
+
+**验证 MCP Chrome 已恢复**（不要靠猜）：
+```bash
+# 重新打开任意页面，触发 mcp_chrome 的 healthcheck
+mcp_chrome_chrome_navigate(url="about:blank")
+# 如果返回成功 snapshot → 熔断已 reset
+# 如果还是 "Auto-retry available in ~Xs" → 继续等
+```
+
+## 多站点批量打开（2026-06-03 端到端验证）
+
+打开 6 个 AI 网站 → 验证全部已登录 → 提取页面状态的完整 recipe（包含 Chrome 148+ 的 Origin / `/json/new` / param-binding 等所有坑）见 `references/multi-site-batch-open-cdp.md`。
 
 ## Chrome 启动参数（Mac）
 

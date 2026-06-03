@@ -305,7 +305,9 @@ ChatGPT、豆包、智谱清言等使用 **shadow DOM**，标准 `document.query
 
 ## 批量打开多标签页（纯HTTP）
 
-Chrome 的 CDP HTTP API 支持直接创建新标签页，无需走 WebSocket：
+⚠️ **Chrome 148+ 警告**：`/json/new` 端点已被禁用（返回 405 Method Not Allowed）。该章节保留以供旧版 Chrome 参考；新代码应使用 CDP `Target.createTarget` 替代。
+
+Chrome 的 CDP HTTP API 原本支持直接创建新标签页：
 
 ```python
 import urllib.request, json

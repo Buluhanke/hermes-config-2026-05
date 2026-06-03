@@ -50,6 +50,16 @@ fact_store权重检查
 汇报结果到Telegram
 ```
 
+## ⚠️ 自我优化脚本设计原则（2026-06-03 教训）
+
+**不要绑定任何特定 LLM 提供商或 API key**：
+- `self_optimization.py` 之类的健康检查脚本，硬编码检查 DeepSeek/OpenAI/Claude 等特定服务，会因为过期/未使用的 key 产生每日误报
+- 用户实际使用的 provider 是动态的，硬编码任何特定检查都会失真
+- 正确做法：`check_api_health()` 返回 `{}`，让用户自己用 `~/.hermes/scripts/scan_free_models.py` 做完整扫描
+- 触发词：cron、heartbeat、health check、API 健康、连通性
+
+**例外**：用户明确说"检查 X 是否可用"时，可以临时检查单次，但不要写进定时任务。
+
 ### 磁盘健康监控（新增）
 Mac mini M4 24GB，磁盘空间需要主动管理。检查以下目录：
 ```bash
