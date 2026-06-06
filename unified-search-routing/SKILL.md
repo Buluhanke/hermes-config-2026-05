@@ -106,7 +106,7 @@ python3 ~/.hermes/scripts/search.py "Mac mini M5 跑 LLM"
 **支持模式**：`--quick`（低延迟）/ `--deep`（高召回）/ `--debug`
 **支持 plan 注入**：`--plan '{"intent":"...","freshness_mode":"month","subqueries":[...]}'`
 **可选凭据**（`SCRAPECREATORS_API_KEY` / `OPENAI_API_KEY` / `XAI_API_KEY` 等 12 个 env，缺哪个对应源退化）
-**CLI 完整路径**：`python3.12 ~/.hermes/skills/research/last30days/scripts/last30days.py`
+**CLI 完整路径**：`python3.12 ~/.hermes/skills/research/last30days-skill-main/skills/last30days/scripts/last30days.py`（**写真路径，不写软链路径**——软链是给用户命令用的，程序内走真路径避免符号链接失效）
 **完整 SKILL**：`~/.hermes/skills/research/last30days/SKILL.md`（13.5 万字巨细无遗，需要细节再读）
 
 ## 兜底链
@@ -171,12 +171,26 @@ search.py "查询"
 - **fetch_url 缓存**：`~/.hermes/cache/fetch_url/<url_hash>.json`，24h TTL
 - 重复查询秒返，不消耗 API 配额
 
+### 路径选择铁律（v2 新加）
+
+**用户管入口用软链，程序内用真路径**：
+
+- 用户命令/CLI 接口 → 走软链（用户体验好，改路径只动软链）
+  - `~/.hermes/skills/research/last30days` → 软链 → 真路径
+- 程序内部调用 → 写真路径（避开软链失效/被改）
+  - `search.py` 里 `LAST30 = ".../last30days-skill-main/skills/last30days/scripts/last30days.py"`
+
+**为什么**：软链是单点故障——指向 `/tmp` 重启就断、指向不存在的目录就死链。程序内部写真路径直接定位，避开符号链接失效。详细踩坑实录见 `references/free-search-stack-2026-06-07.md` §4。
+
 ## 反模式（不要做）
 
 - ❌ 在 cron / subagent 里直接调 `anysearch_cli.py` 或 `last30days.py` ——绕过路由规则，容易漏一路
 - ❌ 用 hermes 内置 `web_search` 工具做严肃搜索 ——质量/新鲜度/去重都差
 - ❌ 装新搜索引擎（SearXNG 自建等） ——踩过坑，重复造轮
 - ❌ 让用户选通道 ——用户不参与选通道，Telegram bot / QQ bot / cron 全部默认走 `search.py`
+- ❌ 用 `pip3` 给 last30days 装包 ——装到系统 Python 没权限。让 uv 自己选解释器 ——会偷吸 hermes-agent 的 3.11 venv。**永远** `uv pip install --python <具体路径>`。
+- ❌ 软链指向 `/tmp` 或 `~/.local/share/` ——macOS 重启就清，或目标根本不存在。**永远**指向 `~/.hermes/skills/research/last30days-skill-main/skills/last30days`。
+- ❌ 程序内写真实路径还是软链路径混用 ——统一原则：CLI 入口走软链（用户体验），程序内部写真路径（避开软链失效）。
 
 ## 触发词速查
 
@@ -202,8 +216,10 @@ search.py "查询"
 | `~/.hermes/scripts/agg_search.py` | DDGS 多引擎聚合（anysearch 挂了才用） |
 | `~/.hermes/cache/search/` | search 缓存目录（24h TTL） |
 | `~/.hermes/cache/fetch_url/` | fetch_url 缓存目录（24h TTL） |
+| `~/.hermes/skills/research/last30days-skill-main/.venv/bin/python` | last30days 跑这（Python 3.12 独立 venv） |
 | `references/search-pipeline-architecture.md` | 管道架构图+文件清单+依赖表 |
 | `references/last30days-install-and-broken-symlink.md` | **last30days 安装/软链翻车实录+venv 3 坑+升级流程**（用户报告"找不到了"时第一手查这个） |
+| `references/free-search-stack-2026-06-07.md` | **免费联网搜索栈实战笔记**（4 个隐蔽坑：软链指 /tmp、venv 用错解释器、fetch_url 跑哪个 venv、软链 vs 真路径选择） |
 
 ## last30days 升级/翻车速查
 
@@ -213,6 +229,10 @@ search.py "查询"
 
 ## 维护记录
 
+- **v2.0.1 (2026-06-07 深夜)** — 补实战笔记 + 修路径 bug
+  - 新增 `references/free-search-stack-2026-06-07.md`（4 个隐蔽坑的详细复盘：软链 /tmp、venv 用错解释器、fetch_url 跑哪个 venv、软链 vs 真路径）
+  - 修复 SKILL.md 里的 last30days 路径——从软链路径改成真路径（程序内部不应走软链）
+  - 加"路径选择铁律"子章节：用户管入口走软链，程序内写真路径
 - **v2.0.0 (2026-06-07)** — fetch_url.py 新增 + search.py v3 加缓存+三层降级
   - 新增 `~/.hermes/scripts/fetch_url.py`（单文件，零外部依赖，html2text 优先）
   - search.py 加 curl DDG 应急兜底 + 24h 缓存 + 50s last30days 超时
