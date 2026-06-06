@@ -67,8 +67,77 @@ patch(old_string="old content", new_string="new content", path="~/.hermes/memori
 - Use OR or synonyms to expand recall
 - Important conclusions MUST be written to memory.md — don't rely on cross-session search
 
+## User Preferences (embed in body, not just memory)
+
+When the user expresses a **communication-style** or **workflow** preference
+("stop doing X", "remember this style", "default to Y"), the lesson
+belongs in the relevant skill's body — not just in `user.md`. The skill
+that governs the task should carry the preference so the next session
+starts already knowing it. `user.md` captures *who* the user is;
+skills capture *how* to do a class of task for that user.
+
+Concrete defaults the user has set (verified 2026-06-05, see
+`user.md` v2.2/v2.3):
+
+- **v2.2 — Authorization popups default to YES.** Any
+  "Command Approval Required" / terminal destructive op / delete-cleanup
+  prompt: confirm and execute, do NOT pause to ask. Exception: truly
+  irreversible ops (`rm -rf ~`, format system disk, change prod config).
+- **v2.3 — Real-person assistant tone.** Say "我换个思路试试" not
+  "出错了"; say "我刚才跑了 X, 修了 Y" not "完成"; say "我觉得..."
+  not absolute conclusions; occasional fillers ("嗯", "按理说", "说实话")
+  OK; on failure, say what was tried + observed + what to try next.
+
 ## Pending Tasks for Continuity
 - Store incomplete tasks in fact_store with key `pending_tasks`
 - Gateway restart → auto-restore from fact_store
 - Each task: `task_id`, `description`, `status`, `created_at`, `updated_at`
 - Cron checks for tasks stuck >24h and resets them
+
+## Automatic Memory Compression (`memory_transfer.py`)
+
+`memories/MEMORY.md` has a soft cap of ~6,600 chars. When it grows large, use
+`~/.hermes/scripts/memory_transfer.py` to compress it.
+
+### The Pattern: Transfer, Don't Just Delete
+
+```
+MEMORY.md entry
+    ├── core rule / user preference / hard lesson → KEEP in MEMORY.md
+    ├── technical detail / bug pattern / one-off discovery → FACT_STORE (durable)
+    └── temporary / session-specific → DISCARD
+```
+
+### Classification Rules
+
+| Category | What to do | Examples |
+|---|---|---|
+| `keep` | Stay in `memories/MEMORY.md` (full content) | Core behavior rules, user preferences, verified techniques |
+| `fact` | Write to `fact_store.db` (permanent record) | Bash bugs, script quirks, tool failure patterns, one-off discoveries |
+| `remove` | Delete entirely | Session-specific progress, temp file paths, one-off command outputs |
+
+### Running the Transfer
+
+```bash
+# Dry run first — always
+python3 ~/.hermes/scripts/memory_transfer.py --dry-run
+
+# If preview looks right, run for real
+python3 ~/.hermes/scripts/memory_transfer.py
+```
+
+### Embedding in Cron (Weekly)
+
+Add to `self_evolution.sh` weekly流程 or as a standalone cron:
+
+```bash
+# Weekly memory compression (Sunday 22:00)
+0 22 * * 0 /usr/bin/python3 ~/.hermes/scripts/memory_transfer.py >> ~/.hermes/logs/memory_compress.log 2>&1
+```
+
+### Target Size
+
+After compression: `memories/MEMORY.md` should be **< 5,000 chars**.
+The script backs up before writing (`MEMORY.md.bak.{timestamp}`).
+
+**Script**: `scripts/memory_transfer.py` — classification rules are defined at the top of the file; add new rules to the `RULES` list.

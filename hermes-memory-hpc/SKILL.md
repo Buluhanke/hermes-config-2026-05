@@ -239,3 +239,172 @@ remember_conversation(
 - 记忆越多查询越慢，ChromaDB 的分页查询可缓解
 - 当前用 `where={"supplier": name}` 精确过滤 + 向量语义搜索。不支持跨供应商语义搜索
 - ChromaDB 数据持久在 `~/.hermes/supplier_memory/`，不会随聊天 session 消失，但不会自动清理旧数据
+
+## 相关文件
+
+| 文件 | 用途 |
+|------|------|
+| `~/.hermes/scripts/recall.py` | **Hybrid recall 顶层 API**（FTS5+vec 混合） |
+| `~/.hermes/scripts/_fts_trigram_upgrade.py` | 一次性 FTS5→trigram 中文友好迁移 |
+| `references/rag-hybrid-recall-2026-06-05.md` | 完整实战笔记：4 测试 query 评分分布 + 4 个必踩坑 stack trace |
+
+## 附: fact_store (memory_store.db) 维护补充
+
+`memory_store.db.facts` 表与 ChromaDB 是**两个独立系统**——ChromaDB 管商业记忆, fact_store 管系统级技术记忆。两套维护规则不能混。
+
+### fact_store 写入模板 (去重 + 退出码)
+
+```python
+import sqlite3, sys
+FINGERPRINT = "tool_err_2026060400"  # 必带: 日期/小时/类别组合
+c = sqlite3.connect('/Users/aimac/.hermes/memory_store.db')
+r = c.execute('SELECT 1 FROM facts WHERE tags LIKE ?', (f'%{FINGERPRINT}%',)).fetchone()
+if r:
+    c.close(); sys.exit(1)  # 已存在
+c.execute('INSERT INTO facts (content, category, tags, trust_score) VALUES (?, ?, ?, ?)',
+          ('...', 'error_pattern', f'tools,alert,{FINGERPRINT}', 0.7))
+c.commit(); c.close()
+sys.exit(0)  # 新增
+```
+
+### ❌ 常见误操作
+
+1. **`DELETE FROM facts WHERE trust_score < 0.6`** — 危险, 用户的真知识 trust 多 0.5, 一刀切会全删
+2. **`INSERT OR IGNORE`** — content 含时间/数字时失效, 必须用 tags 指纹 + SELECT 预检
+3. **不验证就信 "写成功"** — FTS5 trigger 偶发不同步, 必须 `SELECT * FROM facts WHERE tags LIKE '%fp%'` 验证
+
+### ✅ 正确清理
+
+- 只删 `created_at < 90d AND trust_score < 0.3` 的老 fact (由 `ai_knowledge_collector.sh` 自动跑)
+- 手动删前先 `cp memory_store.db memory_store.db.bak.YYYYMMDD`
+- 想"清空重练"? 改 `DELETE WHERE tags LIKE '%dev_%'` (按 tag 前缀精准删), 不要清全表
+
+### FTS5 验证命令
+
+```bash
+# 验证 fact 入库
+sqlite3 ~/.hermes/memory_store.db "SELECT content, trust_score FROM facts WHERE tags LIKE '%<FINGERPRINT>%'"
+
+# 验证 FTS5 索引同步 (FTS5 偶发不同步, 触发器已修但要测)
+sqlite3 ~/.hermes/memory_store.db "SELECT content FROM facts_fts WHERE facts_fts MATCH '<关键词>'"
+
+# 手动同步 FTS5 (如怀疑不同步)
+sqlite3 ~/.hermes/memory_store.db "INSERT INTO facts_fts(facts_fts) VALUES('rebuild')"
+```
+
+详见 `daily-self-evolution` skill 的"fact_store 维护铁律"小节。
+
+---
+
+## Vector 层 + Hybrid Recall (2026-06-05 落地)
+
+FTS5 解决关键词检索，但**语义检索**（"内存" ≈ "RAM"，"ollama 拉模型" ≈ "下载 GGUF"）需要向量层。本节给出轻量、单 db、零外部依赖的实现。
+
+### 架构
+
+```
+                  ~/.hermes/memory_store.db
+                  ┌────────────────────────────────┐
+                  │ facts (30+ 行)                  │
+                  │ facts_fts (BM25 关键词)        │
+                  │ facts_vec (sqlite-vec, 768d)   │ ← 语义检索
+                  │ entities + fact_entities        │
+                  │ memory_banks                    │
+                  └────────────────────────────────┘
+                          │
+              recall.py 顶层 API
+              ┌──────────────┴──────────────┐
+              │ FTS5 trigram (BM25)         │ → score_f  (0-1)
+              │ sqlite-vec (cosine/L2)     │ → score_v  (0-1)
+              └──────────────┬──────────────┘
+                            │
+                  score = (1-α)·score_f + α·score_v   (默认 α=0.5)
+                            │
+                         top-K
+```
+
+**关键决策**（每一步都有治本理由）：
+
+| 决策 | 不选 | 选 | 理由 |
+|------|------|----|------|
+| 向量库 | qdrant / chroma / milvus | **sqlite-vec 单 extension** | 跟 FTS5 同 db、零额外内存、跟着 fact_store 一起备份 |
+| 维度 | 1536 (OpenAI) | **768 (nomic-embed-text)** | 本地离线，Ollama 已有 Ollama，274MB 模型 |
+| Embed 模型 | text-embedding-3 | **nomic-embed-text** | 离线、不花 token、Mac M4 Metal 跑 19.7 tok/s |
+| 混合权重 | RRF / Cross-encoder | **线性加权 (0.5/0.5)** | 简单可调，5 站内已够用 |
+
+### 一键搭建（实测顺序）
+
+```bash
+# 1. 装 Python binding
+$HOME/.hermes/hermes-agent/venv/bin/python -m pip install sqlite-vec
+
+# 2. 拉 nomic-embed-text (274MB)
+ollama pull nomic-embed-text
+
+# 3. FTS5 升 trigram (中文友好 — 不升命中 0 条中文)
+python3 $HOME/.hermes/scripts/_fts_trigram_upgrade.py
+#    备份会自动建: memory_store.db.pre_vec.bak + .pre_trigram.bak
+
+# 4. 装 vec 虚拟表 + 30 条 reindex
+python3 $HOME/.hermes/scripts/recall.py --reindex
+#    30 条实测 0.876s, 0 失败
+```
+
+### 查 (recall.py 顶层 API)
+
+```bash
+# 5 站内 top-5
+python3 $HOME/.hermes/scripts/recall.py "Mac mini M4 内存配置" -k 5
+
+# 调整 vec/FTS 权重 (0=纯 FTS, 1=纯 vec)
+python3 $HOME/.hermes/scripts/recall.py "AI Agent 框架" --vec-weight 0.7
+
+# 索引状态
+python3 $HOME/.hermes/scripts/recall.py --stats
+#   期望: facts=30, FTS5=30, vec=30, 覆盖率 100.0%
+```
+
+### Hybrid 评分公式
+
+```python
+# FTS5 BM25 归一化 (越小越好, 0=完美, -10=差)
+fts_score = max(0, 1 + bm25 / 10)
+
+# sqlite-vec L2 distance 归一化 (越小越好, 0=相同, 1.5=无关)
+vec_score = max(0, 1 - distance / 1.5)
+
+# 合并
+final = (1 - vec_weight) * fts_score + vec_weight * vec_score
+```
+
+### ⚠️ 4 个必踩坑（已踩过）
+
+1. **host_key 没前导点**：`host_key='.claude.ai'` 查不到。Chrome 实际存的是 `host_key='claude.ai'`。**诊断命令**：
+   ```python
+   conn.execute("SELECT DISTINCT host_key FROM cookies WHERE name='sessionKey'")
+   # 期望: 'claude.ai' (无前导点) — 不是 '.claude.ai'
+   ```
+
+2. **FTS5 hyphen 触发 column 错误**：query `"GPT-5"` 直接报 `no such column: 5`。
+   **修法**：包双引号当 phrase，或 replace `-` 为空格。recall.py 已两层 fallback。
+
+3. **FTS5 默认 unicode61 不支持中文**：`facts_fts MATCH '浏览器'` 命中 0 条。
+   **修法**：trigram tokenizer — 见 `_fts_trigram_upgrade.py`。**单字/双字查询（如 "内存"）仍 0 命中**（trigram 最小 3 字符），多字符查询覆盖率正常。
+
+4. **vec 索引可能 0 行**：`recall.py` 第一次跑报错 → 跑 `recall.py --reindex`。**永远跑完查 `--stats` 确认覆盖率 100% 再上线**。
+
+### 文件清单
+
+| 路径 | 用途 |
+|------|------|
+| `~/.hermes/scripts/recall.py` | **核心 API** — FTS5+vec hybrid，4 站跨 AI 都可读 |
+| `~/.hermes/scripts/_fts_trigram_upgrade.py` | 一次性迁移 FTS5→trigram，**有备份** |
+| `~/.hermes/memory_store.db` (facts_vec) | 768d 向量虚拟表 |
+| `~/.hermes/memory_store.db.pre_*.bak` | vec + trigram 升级前的双备份 |
+| `references/rag-hybrid-recall-2026-06-05.md` | **完整实战笔记**：脚本源码、reindex 耗时、4 测试 query 的 score 分布、4 个坑的完整 stack trace |
+
+### 何时**不**用 RAG
+
+- 查询是 1-2 个英文关键词（如 "GPT-5"）→ **纯 FTS5 够**，关 vec 省 50ms
+- facts 表 < 5 条 → FTS5 比 vec 准（数据少 vec 噪声大）
+- 要跨 9 站 cross-validate 一句话（"AI Agent 框架"）→ **直接 browser_cdp 拉 multi-site 答案**，RAG 是事后归档用

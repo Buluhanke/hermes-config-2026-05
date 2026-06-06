@@ -151,8 +151,8 @@ Modern AI sites render the "停止生成" button inside private Shadow DOM. `Run
 | **ChatGPT** | e19 (textarea) | `browser_click(e25)` | `browser_snapshot` StaticText | |
 | **豆包** | e44 (textarea) | `browser_click(e59)` | `browser_vision` | |
 | **智谱清言** | e21 (textarea) | `browser_press(Enter)` | `browser_vision` | e41按钮无效 |
-| **Gemini** | textarea (Quill/Angular) | ❌ Protocol limit | `document.body.innerText` | **2026-06-03: Quill `.ql-editor` + Angular zone.js blocks ALL input strategies. `Input.dispatchKeyEvent` keyDown fails to trigger Angular's `ɵzone_symbol__ZENUNBOUND__` event chain (missing `nativeVirtualKeyCode: Int32` field in CDP tool). `quill.setText()` can write text but cannot trigger send. No `[data-testid="send-button"]` exists in DOM. This is a tool protocol limitation, not a frontend code fix.** |
-| **Grok** | e81 (textarea) | `browser_press(Enter)` | `browser_snapshot` | |
+| **Gemini** | Quill/Angular zone.js | ✅ **物理外挂（AppleScript）**（2026-06-03） | Quill `.ql-editor` + zone.js 对 CDP `Input.dispatchKeyEvent` 失效（缺 `nativeVirtualKeyCode: Int32`），但 `computer_use` 物理按键（Cmd+V 粘贴 + Return）直接走 Mac 系统事件，完全绕过 zone.js。步骤：① `Target.activateTarget` 激活标签页 ② `Runtime.evaluate` focus `.ql-editor` ③ `echo -n "问题" \| pbcopy` 写入剪贴板 ④ `computer_use key cmd+v` ⑤ `computer_use key return` → Gemini 收到完整问题并生成回复。Reply 读 body.innerText。 |
+| **Grok** | Tiptap + Next.js streaming | ❌ **plain HTML textarea 阻塞**（2026-06-03） | textarea `h=16px y=0` — Next.js 流式占位符，非真实输入框。plain HTML textarea（无 `__reactProps`），JavaScript 写入 value 不触发 React onChange。`form.requestSubmit()` 返回 "submitted" 但 Grok 前端静默失败（认为 textarea 为空）。物理按键（Cmd+V+Return）只写入 DOM value，Grok 的 Next.js React 状态机不感知，submit 仍失败。AppleScript 物理外挂对 Grok 也无效（两者根因不同）。需要寄生到真正的聊天 iframe 内部 session 才能操作。 |
 
 **通用流程**：browser_navigate → browser_snapshot找ref → browser_type填入 → **browser_press(Enter)优先**（比按钮点击更稳定）→ 等待 → browser_snapshot读AX树验证
 
@@ -256,6 +256,103 @@ To ask the same question to N AI sites and read all replies, run sites **seriall
   This works on most React 16-17 sites. React 18 + Semi Design may still swallow the event because the framework re-checks its own internal state on next render — true char-by-char `Input.dispatchKeyEvent` (keyDown→char→keyUp with `text=""` on keyDown) is the most reliable escape.
 - **`screencapture -x` works** when CDP `Page.captureScreenshot` returns 0 bytes (Chrome GPU layer issue on some macOS versions).
 - **AI response completion signal = bodyLen growth, not stopBtn (2026-06-02 verified)**: Modern AI sites render the "停止生成" button inside private Shadow DOM. `Runtime.evaluate` and AX tree both return nothing for it. The robust completion signal is `document.body.innerText.length` monotonic growth. Poll every 2s, compare to previous cycle's bodyLen. If grew → still generating. If stable for 5+ cycles (10s) → done. This works for React/Vue/Vanilla.
+- **⚠️ `browser_navigate` is broken in many sessions — fall back to `browser_cdp` (2026-06-05)**: The `browser_navigate` tool can fail with `[Errno 2] No such file or directory: '/Users/aimac/.hermes/hermes-agent/node_modules/.bin/agent-browser'` even when `agent-browser` is actually installed (e.g. in `node_modules/.bin/`). When this happens, the tool is unusable for that session. **Fallback ladder**:
+  1. `browser_cdp(method="Target.createTarget", params={"url": "..."})` — opens a new tab. Use this for any "open this URL" task.
+  2. `browser_cdp(method="Page.navigate", params={"url": "..."}, target_id=existing_tab_id)` — navigates an existing tab.
+  3. `mcp_cua_driver_launch_app` with `additional_arguments=[--remote-debugging-port=9333, <url>]` — last resort; needs an `additional_arguments` array, NOT a flat string. **Caveat**: cua-driver ignores `--user-data-dir` on macOS and uses the system default Chrome profile, so login state is whatever the foreground user has — usually a bonus.
+- **⚠️ CDP supervisor `Runtime.evaluate` rejects Python `bool` for `returnByValue` (2026-06-05)**: The MCP/Hermes `browser_cdp` wrapper that goes through the CDP supervisor fails with `Failed to deserialize params.returnByValue - BINDINGS: bool value expected at position NNN` if you pass the Python literal `True`/`False`. The wrapper actually wants a JSON boolean, but its deserializer is buggy with the wire format. **Workaround**: drop the `returnByValue` field (you get the full result dict back and read `r["result"]["result"]["value"]` yourself), or pass the field as the string `"true"`/`"false"`. This burned 4 attempts in one session before the diagnosis. Always drop `returnByValue` and read the raw result if you only need a primitive value.
+- **Don't `pkill Chrome` from a CDP script — Chrome is the user's session (2026-06-05)**: The `mcp_cua_driver_launch_app` tool starts a new Chrome process which **takes over port 9333** and pre-empts whatever was there. The user's foreground Chrome is unaffected, but if you `pkill Google Chrome` to "clean up" you will silently drop the user's tabs and login state. The right pattern: leave the new Chrome alive (it has its own profile dir), or close tabs via CDP `Target.closeTarget` if you opened them. See `references/foreground-vs-debug-chrome.md` for the full profile lifecycle.
+
+- **⚠️ Chrome 148+ pushes unsolicited event frames over page WS (2026-06-05 verified)**: After `Page.enable` / `Runtime.enable`, Chrome will push `Runtime.executionContextCreated`, `Page.frameNavigated`, `Runtime.consoleAPICalled`, etc. without you asking. A raw `ws.recv()` after a `send()` may return one of these events instead of the command response, causing `KeyError: 'result'` on the next JSON parse. **Symptom**: `r['result']['result']['value']` raises `'result'` or your script hangs waiting for a response that already came (and was discarded as "event").
+
+**Fix — `sendrecv` pattern that loops past events**:
+```python
+class CDPSession:
+    def __init__(self, ws_url, timeout=5):
+        self.ws = websocket.create_connection(ws_url, timeout=timeout)
+        self.msg_id = 0
+
+    def close(self):
+        self.ws.close()
+
+    def sendrecv(self, method, params=None):
+        self.msg_id += 1
+        my_id = self.msg_id
+        self.ws.send(json.dumps({'id': my_id, 'method': method, 'params': params or {}}))
+        while True:
+            msg = json.loads(self.ws.recv())
+            # event frames have no 'id' (or id != my_id); skip them
+            if 'id' in msg and msg['id'] == my_id:
+                return msg
+```
+
+**Why single `recv()` works sometimes but breaks under load**: a single `Runtime.evaluate` on a fresh quiet tab often works because no events fire in the microsecond window between `send` and `recv`. But once you `Page.enable` first (required for `addScriptToEvaluateOnNewDocument`), Chrome immediately pushes `Runtime.executionContextCreated` for every frame on the page — and you'll get the event, not your response. Use `sendrecv` from the start; never rely on raw `ws.recv()` after `Page.enable` / `Runtime.enable`.
+
+**Compatible with the existing `returnByValue` gotcha** — when you don't get `r['result']['result']['value']`, also check `r.get('error')` and `r['result'].get('exceptionDetails')` before raising. CDP return shape varies slightly between Chrome 146/147/148/150.
+
+## Chrome debug profile 磁盘占用诊断（2026-06-04 added）
+
+`~/.hermes/chrome-debug` 是 Hermes 寄生调试 Chrome 的 user-data-dir，登录态都在里面，**别瞎清**。但因为是 debug Chrome，下载的 on-device AI 模型会无脑塞进去，**几个月后能涨到 5+ GB**，看起来像登录态出问题了。
+
+### 诊断 3 步走
+
+```bash
+# 1. 总大小
+du -sh ~/.hermes/chrome-debug
+
+# 2. 内部 TOP 10（重点关注 OptGuideOnDevice* / optimization_guide* / screen_ai）
+du -sh ~/.hermes/chrome-debug/* | sort -hr | head -10
+
+# 3. 登录态实际大小（应该 < 10MB）
+ls -la ~/.hermes/chrome-debug/Default/Cookies \
+       ~/.hermes/chrome-debug/Default/"Local Storage"/ \
+       ~/.hermes/chrome-debug/Default/"Session Storage"/
+```
+
+### 已知大头（2026-06-04 实测 5.6GB 拆解）
+
+| 文件/目录 | 实测大小 | 是什么 | 跟登录态有关？ | 能删吗 |
+|---|---|---|---|---|
+| `OptGuideOnDeviceModel/` | **4.0 GB** | Chrome 152+ 内置 Gemini Nano 本地 LLM | ❌ 无关 | ✅ 零风险，Chrome 按需重下 |
+| `Default/Cookies` | ~30 KB | 6 个 AI 站登录态 | ✅ 真正担心的 | ❌ 删了重登 |
+| `Default/"Local Storage"/` | ~5 MB | 各站 session 数据 | ✅ 部分 | ⚠️ 删了重登 |
+| `Default/` 整体 | ~800 MB | 浏览器配置/历史/扩展设置 | 部分 | ⚠️ 备份后可清 |
+| `Extensions/` | 228 MB | 装的扩展 | ❌ | ✅ 删了重装 |
+| `component_crx_cache/` | 146 MB | 组件下载缓存 | ❌ | ✅ 零风险 |
+| `screen_ai/` | 123 MB | Chrome 屏幕 AI 识别 | ❌ | ✅ 零风险 |
+| `OptGuideOnDeviceClassifierModel/` | 120 MB | 分类小模型 | ❌ | ✅ 零风险 |
+| `optimization_guide_model_store/` | 76 MB | 优化指南模型 | ❌ | ✅ 零风险 |
+| `Safe Browsing/` | 22 MB | 钓鱼/恶意软件黑名单 | ❌ | ✅ Chrome 重下 |
+
+### 通用清理脚本（保留登录态 + 删 on-device AI）
+
+```bash
+# 清理前：总 5.6GB
+# 清理后：约 800MB（保留 Default / Extensions）
+# 零登录态丢失
+
+du -sh ~/.hermes/chrome-debug
+rm -rf ~/.hermes/chrome-debug/OptGuideOnDeviceModel
+rm -rf ~/.hermes/chrome-debug/OptGuideOnDeviceClassifierModel
+rm -rf ~/.hermes/chrome-debug/optimization_guide_model_store
+rm -rf ~/.hermes/chrome-debug/screen_ai
+rm -rf ~/.hermes/chrome-debug/component_crx_cache
+rm -rf ~/.hermes/chrome-debug/Safe\ Browsing
+du -sh ~/.hermes/chrome-debug
+```
+
+### Chrome 152+ On-Device AI 用途速查（用户问"这 4GB 是干啥的"时用）
+
+| 用途 | 触发场景 | 用户感不感觉得到 |
+|---|---|---|
+| **整页翻译** | 右键 → 翻译成中文 | ✅ 强（替代云端 Google 翻译） |
+| **AI 摘要** | 长文章/报告 | ✅ 中 |
+| **写作/改写** | Gmail "帮我写" | ✅ 弱（用 Gmail 才知道） |
+| **语言检测** | 中英混输自动判语言 | ⚠️ 几乎不知道 |
+| **语法纠错** | 邮件实时挑错 | ⚠️ 不开 Gmail 用不到 |
+| **Screen AI** | 无障碍读屏（盲人辅助） | ❌ 普通用户无感 |
+
+**对 Hermes Agent 用户**：本地 AI 模型**完全不影响** Hermes 的云端 AI 站对话（MiniMax-M3 / ChatGPT / Gemini 等），它们走 CDP 不走 Chrome 内置 API。**删 4.5GB 模型 = Hermes 零影响**。
 
 ## Port detection — scan, don't assume (2026-06-03 verified)
 
@@ -409,6 +506,9 @@ insert_text(question)
 - **AI response completion signal = bodyLen growth, not stopBtn (2026-06-02 verified)**: Modern AI sites render the "停止生成" button inside private Shadow DOM. `Runtime.evaluate` and AX tree both return nothing for it. The robust completion signal is `document.body.innerText.length` monotonic growth. Poll every 2s, compare to previous cycle's bodyLen. If grew → still generating. If stable for 5+ cycles (10s) → done. This works for React/Vue/Vanilla.
 
 ## See also
+- `references/foreground-vs-debug-chrome.md` — **foreground Chrome (已登录) vs debug Chrome 根本不是同一个实例**，Cookie Keychain 加密跨实例不通用问题（2026-06-04 新增）
+- `references/browser-navigate-fallback-20260605.md` — **when `browser_navigate` is broken**, the CDP fallback ladder (Target.createTarget / Page.navigate / cua-driver launch_app) plus the returnByValue bool deserialization gotcha
+- `references/chrome-debug-disk-diagnosis-20260604.md` — 5.6GB on-device AI 拆解脚本 + 4GB 清理 SOP
 - `references/doubao-20260603-breakthrough.md` — **Doubao 发送突破完整记录**（insertText + 坐标点击 + 成功断言 + 失效方案列表）
 - `references/ai-site-input-strategies.md` — input-strategy decision tree per site (which input method works for ChatGPT/豆包/DeepSeek/ChatGLM/Gemini/Grok, with the 2026-06-03 verified patterns)
 - `references/ai-site-dom-selectors.md` — working CSS selectors for reading AI reply text across sites
@@ -419,5 +519,5 @@ insert_text(question)
 - `scripts/multi_ai_ask.py` — ask the same question to N AI sites, read replies from AX tree
 - `scripts/cdp_ask_ai.py` — minimal working bot (asks DeepSeek, screenshots, prints path for vision readback)
 - `scripts/ask_ai_sites.py` — end-to-end demo (real input → wait → DOM read reply → JSON result) using Tier 1 selector + bodyLen completion signal
-- Working production version: `~/.hermes/scripts/hermes_web_bot.py` (12KB, 4 strategies, Playwright Chromium 147)
+- `references/physical-keyboard-bypass.md` — 物理外挂 AppleScript 破解 Gemini zone.js（2026-06-03 验证）
 - Playwright-native bot (no Docker): `scripts/hermes_web_bot.py` — `pip install playwright && playwright install chromium` then run directly

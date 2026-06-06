@@ -77,7 +77,7 @@ BROWSER_CDP_URL=ws://127.0.0.1:9333  # 不修改 config.yaml，用环境变量
 web:
   backend: ddgs        # ✅ 已验证可用，稳定
   search_backend: ddgs
-  extract_backend: firecrawl
+extract_backend: ddgs
 ```
 
 **ddgs 优势：**

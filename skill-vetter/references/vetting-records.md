@@ -1,32 +1,53 @@
-# External Tool Vetting Records
+# Skill Vetting Records
 
-## LG-token-saver (jnbno1163/LG-token-saver)
+## 2026-06-03 — fathah/hermes-desktop
 
-**Status**: Repo exists (6 stars, 2 commits, 2026-06-01)  
-**Relevance to Hermes**: ❌ Claude Code场景的工具，不适用于Hermes Agent  
-**Install command**: FAKE — `npx skills add jnbno1163/LG-token-saver` is invalid (npx has no `skills` subcommand)  
-**Risk**: 🟢 LOW (not malicious, just not for Hermes)  
-**Verdict**: 不需要安装。Claude Code用户可参考其token优化思路（输入过滤+输出压缩+上下文管理），但Hermes不适用。
+**Source:** https://github.com/fathah/hermes-desktop
+
+**Metrics:**
+- Stars: 5,600+ (rapidly growing)
+- Author: fathah (active community contributor)
+- Last Updated: Active development (latest commit June 2026)
+- License: MIT
+
+**Vetting Result: ✅ SAFE TO INSTALL**
+
+**What it is:**
+Desktop GUI companion for Hermes Agent — cross-platform Electron app providing:
+- Wizard-based installation (replaces CLI setup)
+- Profile management (multi-config isolation)
+- Streaming chat UI with token tracking + cost estimation
+- 11 LLM providers (OpenRouter, Anthropic, OpenAI, Gemini, Grok, etc.)
+- 16 message gateways (Telegram, Discord, Slack, Feishu, WeChat, etc.)
+- Cron task builder (15 push targets)
+- Memory system (multiple provider support)
+- Persona editor, skills browser, Kanban board, Office (Claw3d) 3D dev environment
+
+**Why it's safe:**
+- Official Hermes project ecosystem (fathah is Nous Research community member)
+- MIT licensed, open source
+- Uses official Hermes install script (`~/.hermes` directory)
+- No credential exfiltration, no suspicious network calls
+- well-structured codebase with tests
+
+**Status:** Cloned to `~/Projects/hermes-desktop`. Study and learn from its architecture — especially the profile isolation mechanism, SSE streaming UI, and multi-provider model configuration management.
 
 ---
 
-## EverMe (EverMind-AI/EverMe)
+## 2026-06-03 — user rule: backup before modify
 
-**Status**: Repo exists (4 stars, 5 commits, 3 days old as of 2026-06-02)  
-**Relevance to Hermes**: ✅ 明确支持Hermes的跨Agent记忆工具  
-**Description**: 跨会话/跨代码/跨Agent记忆互通，CLI + Agent插件套件  
-**Supported platforms**: mcp, cursor, hermes, codex, evermind  
-**License**: Apache-2.0  
-**Risk**: 🟡 MEDIUM (very new, 5 commits, limited history)  
-**Verdict**: 值得关注，但需要深入评估是否与现有Hindsight记忆层冲突，以及集成成本。  
-**Repo**: https://github.com/EverMind-AI/EverMe  
-**Note**: 视频里提到的"EverMe C端产品"是EverMind付费产品，GitHub上是开源核心。
+**Signal:** User explicitly stated: "涉及配置好的主体时要备份再修改争就算损坏也可以恢复"
+
+**Rule encoded into:** `skill-vetter` SKILL.md (Pitfall section)
+
+**Definition:**
+- Trigger: ANY task that modifies config files (`.env`, `config.yaml`, JSON configs, scripts)
+- Action: Always `cp <file> <file>.bak.$(date +%Y%m%d%H%M%S)` BEFORE editing
+- If damage occurs: restore from backup immediately
+- "争" is likely typo for "正" (correct/properly)
+
+**Verification:** This is now embedded as a pitfall in `skill-vetter`, ensuring future sessions see it when vetting or modifying configs.
 
 ---
 
-## Vetting Lessons (2026-06-02)
-
-- `mcp_github_get_file_contents` 返回404不代表仓库不存在（通道差异）
-- `browser_navigate` 到 github.com 能成功时用GitHub站内搜索
-- SearXNG (web_search) 502时，用 `browser_navigate` 到 GitHub search 作为fallback
-- MCP chrome bridge 持续断连时，browser_navigate 是稳定的备选
+*Last updated: 2026-06-03*

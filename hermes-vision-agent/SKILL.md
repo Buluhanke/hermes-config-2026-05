@@ -45,7 +45,7 @@ description: "视觉感知 + 桌面/浏览器控制。Phase 2 核心：看→想
 - Playwright启动Chrome：0.1s（`channel='chrome'`）
 - DeepSeek响应：0.8s
 - 表单填写+提交：1步完成
-- 1688搜索：遇到滑块验证码（ddddocr可用，待集成）
+- 1688搜索：滑块验证码 → `slide-solver` skill 走 ddddocr 识别 + 仿人轨迹
 
 **进化框架**：任务池(cron 09:00) → 自我优化(cron 02:00) → 结果存日志 → 自我修复 → 汇报
 
@@ -95,6 +95,7 @@ macOS上容易出现多个Playwright版本（1.58.0/1.59.1/1.60.0）：
 | je_auto_control | AX树定位+精确点击 | ⚠️ 仅Homebrew Python，hermes venv无 |
 | Apple Vision OCR | 屏幕文字识别(60ms) | ✅ Homebrew Python |
 | PaddleOCR | 中文高精度OCR | ✅ hermes venv |
+| **ddddocr** | **滑块/点选验证码识别 + 仿人轨迹** | ✅ **2026-06-04 已装**（85MB+66MB onnxruntime，详见 `slide-solver/` 子技能） |
 
 ### AI聊天网站状态
 详见 `references/ai-chat-sites-status.md` — 各平台登录态限制和Bing搜索替代方案
@@ -111,8 +112,8 @@ macOS上容易出现多个Playwright版本（1.58.0/1.59.1/1.60.0）：
 
 - **Ollama 本地VLM** — ❌ 退出，不需要本地备用模型。浏览器DOM+LLM足够
 - **Docker (Colima)** — ❌ 彻底停用。hindsight→holographic，searxng→ddgs
-- **cua_driver** — ❌ 未装，Playwright+PygAutoGUI替代
 - **browser-use** — ❌ 框架太重，用Playwright直连
+- **cua_driver** — ⚠️ 已装运行中（`mcp_cua_driver_*` 工具链），闲置时空转 ~45% CPU，受 30 分钟空闲回收规则管理（见 `~/.hermes/scripts/idle_killer.sh`）
 
 ## 已知限制
 

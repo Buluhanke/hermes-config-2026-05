@@ -446,6 +446,12 @@ sleep 2
 
 **完整操作流程见 `references/user-chrome-cdp-control.md`**
 
+**watchdog 自动关闭（2026-06-04）**：
+- watchdog 脚本（PID 49970）监控端口 9333，无 CDP 客户端连接 30 分钟则自动 kill Chrome
+- 用户登录态在 `~/.hermes/chrome-debug/`，关进程不丢
+- 手动控制：`bash ~/.hermes/scripts/chrome-on-demand.sh {start|stop|status}`
+- 详情：devops/macos-process-lifecycle/skills/SKILL.md
+
 **关键坑**：
 - Chrome必须加`--remote-allow-origins=*`，否则WebSocket handshake返回403
 - 用browser CDP endpoint发`Target.createTarget`，不是tab endpoint

@@ -199,3 +199,25 @@ for port in CDP_PORTS:
         if tabs: break  # found live CDP
     except: continue
 ```
+
+---
+
+## ⚠️ Protocol-Level Blocker: `nativeVirtualKeyCode: Int32` Missing (2026-06-03)
+
+**This is the root cause of Grok and Gemini automation failures.**
+
+The CDP `Input.dispatchKeyEvent` tool does NOT send the `nativeVirtualKeyCode: Int32` field in `KeyboardEvent.nativeEvent`. Modern frameworks use this field to validate keyboard events:
+
+- **Grok (Tiptap)**: Requires `nativeVirtualKeyCode` to propagate through React's keyboard event chain. Without it, events are silently dropped — `form.requestSubmit()` completes but the frontend never receives input, so no AI response is generated.
+- **Gemini (Quill + Angular zone.js)**: zone.js checks `nativeVirtualKeyCode` to route events through Angular's `ɵzone_symbol__ZENUNBOUND__` event chain. Missing field → event dropped silently.
+
+**Symptom checklist** (if you see ALL of these, you've hit this blocker):
+- [ ] `Input.dispatchKeyEvent` returns `{"success": true}` — CDP layer succeeds
+- [ ] But the AI site shows NO new response, no loading indicator, no network request
+- [ ] Textarea/editor value stays frozen at what you wrote (not cleared = not submitted)
+- [ ] No `[data-testid="send-button"]` or visible submit button in DOM
+
+**Current workaround**: None confirmed. Options being explored:
+1. **Screenshot-based loop** — `computer_use` drives the real Chrome GUI instead of CDP
+2. **Find hidden send button coordinates** — probe the UI to locate the actual submit button element and click it via `Input.dispatchMouseEvent` at specific coordinates
+3. **Attach to inner iframe session** — Grok renders the chat editor in a nested frame layer; if you can CDP-attach to that frame directly, the event chain may work differently

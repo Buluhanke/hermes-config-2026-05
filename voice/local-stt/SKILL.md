@@ -120,6 +120,48 @@ print('OK')
 "
 ```
 
+### Telegram 语音消息直接 STT (2026-06-05)
+
+Telegram 收到的语音会被 `gateway` 落盘到 `~/.hermes/audio_cache/audio_<id>.ogg`
+（不是 `.m4a`、不是 `.wav`），文件名随机 hex。`faster_whisper` 直接吃 `.ogg` 路径，
+不需要 `ffmpeg` 转码（faster-whisper 用 ffmpeg-python 内部处理）。
+
+**实战验证** (2026-06-05 19:36, audio_92225838744e.ogg, 22578 bytes):
+
+```python
+from faster_whisper import WhisperModel
+model = WhisperModel('small', device='cpu', compute_type='int8')
+segments, info = model.transcribe(
+    '/Users/aimac/.hermes/audio_cache/audio_92225838744e.ogg',
+    language='zh', beam_size=1
+)
+# → language=zh, probability=1.00, 5.6s 转完
+# → "晚上夜間自我進化的目標和方向是什麼"
+```
+
+**关键点**:
+- `language='zh'` 强制中文 (否则小模型偶尔被空音频的静音概率带偏)
+- `beam_size=1` 在 M4 CPU 上最快, 准确度可接受
+- 5-10 秒的短语音用 `small` 模型 ~5-6 秒转完, 实战够用
+- 失败时 fallback: `language=None` 自动检测, `beam_size=5` 提精度
+- 不要转 .wav 中间步骤 — 直接吃 .ogg, faster-whisper 内部走 ffmpeg
+
+### 已知 pitfalls (实战补充)
+
+- **`transcribe()` 第二个参数是 `language`, 不是 `lang`** — OpenAI
+  原生 whisper 写 `language=`, 旧版 README 示例写 `lang=`,
+  faster-whisper 1.x 只认 `language=`, 写 `lang=` 会 TypeError
+- **Telegram ogg 是 opus codec**, 某些 ffmpeg 老版本不支持
+  — Mac mini M4 自带 ffmpeg 6.x 没问题, 验证 `ffmpeg -version | head -1`
+- **空文件 (0 字节) 转写会 hang** — faster-whisper 不会超时退出,
+  会无限等待静音段。处理: 先 `stat -f %z "$file"` 跳过 0 字节
+- **本机 `~/.hermes/audio_cache/` 不自动清理** — Telegram 一天可能
+  落 10-50 个 ogg, 一周不清会积压几百 MB。加到
+  `cleanup_hermes_logs.sh` (周日凌晨 3:00) 的清理范围, > 7 天归档到
+  `~/Obsidian/.../voice-history/YYYY-MM.tar.gz`
+
+参考实战: `references/2026-06-05-telegram-ogg-stt.md`
+
 ## 集成方向
 
 - n8n workflow 调用本地转写服务

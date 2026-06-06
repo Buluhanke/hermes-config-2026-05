@@ -10,12 +10,24 @@ tags: [OCR, Vision, PaddleOCR, BaiduOCR, ddddocr, pymupdf, PDF]
 
 **一句话**：截图/图片进来，文字出去。自动选最快最好的引擎。
 
-**引擎优先级（自动降级）：**
-1. `Vision OCR` — 60ms，macOS原生，屏幕截图首选
+## 引擎优先级（自动降级）：**
+1. `Vision OCR` — macOS原生，屏幕截图首选（**实测 1.1s/帧，不是 60ms**；首次调用需 41s 编译 Swift 二进制，后续命中缓存。详见下方"⚠️ 60ms 神话"章节）
 2. `PaddleOCR` — 高精度中文，图片/文档
 3. `Baidu OCR` — 云端备份
 4. `ddddocr` — 验证码通杀
 5. `pymupdf` — PDF文字提取（文本型PDF，非扫描件）
+
+## ⚠️ "60ms" 神话 — 2026-06-04 实测校正
+
+老文档/早期博客说 macOS Vision OCR 是 60ms。**端到端实测 1.1 秒**，不是 60ms：
+- 60ms 大概是 Vision 框架内部 inference 时间（纯 CPU 计算部分）
+- 端到端 = 1.3MB PNG 加载 + 图像预处理 + Vision 调用 + JSON 解析 ≈ 1100ms
+- 首次 cold start：swiftc 编译 Swift 源码 ~41s（一次性，缓存在 `~/.hermes/scripts/.cache/vision_ocr_bin`）
+- 二次及之后：~1.1s
+
+**正确预期**：用 vision_ocr.py 跑一张 1080p 截图，正常 1-2 秒出来。如果配了 `--json` 含坐标也是 1-2 秒，**不要相信 "60ms" 这种早期 benchmark 数字**。
+
+实测 129 行中英混排终端截图：1117ms，识别完全准确（含 Swift 关键字、中文标点）。
 
 ## 使用方式
 
@@ -143,6 +155,32 @@ python -m macos_workflow.app
 3. 坐标转换：Vision归一化左下角原点 → Mac屏幕像素左上角原点
 
 **注意**：CGWindowListCreateImage 会被Chrome GPU合成层黑屏，必须用 `screencapture -x`。
+
+## macOS Vision OCR 桥（2026-06-04 新增）
+
+`scripts/ocr.py` 用 Homebrew Python（pyobjc）调 Vision，**仅 macOS 可用**。新增了一个**纯 Swift 子进程版**作为零依赖替代：
+
+**位置**：`~/.hermes/skills/vision/scripts/vision_ocr.py`
+
+**核心优势**：
+- **0 依赖**（不依赖 pyobjc、不依赖 Homebrew Python、不依赖 PaddleOCR）
+- **纯 Swift + Vision.framework + AppKit**，适合任何 macOS
+- **首次调用 41s**（swiftc 编译），之后命中 `~/.hermes/scripts/.cache/vision_ocr_bin` 缓存，**单帧 ~1.1s**
+- **支持中英混排**（recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]）
+- **可选输出坐标**（`--json` 返回 text + confidence + box[4]）
+
+**用法**：
+```bash
+python3 ~/.hermes/skills/vision/scripts/vision_ocr.py <image>          # 纯文本输出
+python3 ~/.hermes/skills/vision/scripts/vision_ocr.py <image> --bench  # +耗时到 stderr
+python3 ~/.hermes/skills/vision/scripts/vision_ocr.py <image> --json   # 完整 JSON
+python3 ~/.hermes/skills/vision/scripts/vision_ocr.py --screen          # 截全屏再 OCR
+```
+
+**何时用它 vs scripts/ocr.py**：
+- 想 0 依赖、要绝对稳：vision_ocr.py
+- 需要 pymupdf/PaddleOCR/ddddocr/坐标找字：scripts/ocr.py
+- 两者**不冲突**，可并存
 
 ## 脚本位置
 

@@ -204,6 +204,7 @@ code-review-and-quality → security-hardening → git-workflow-and-versioning
 ## 支持文件
 
 - [Agent Reach 和 ClawRouter 研究报告](./references/agent-reach-clawrouter-research.md) — 2026-05-28 对比评估两个工具的安装必要性和优势
+- [打工人12技能安装指南](./references/worker-skills-12-guide.md) — 2026-06-03 用户整理的12个技能评估与安装建议（find-skills/skill-creator/brainstorming/humanizer-zh优先）
 - [搜索降级方案](./references/search-fallback.md) — 当 web_search 不可用时的 ddgs 降级流程
 - [网络与代理诊断](./references/network-proxy-debugging.md) — 代理故障排查，HN/HN Firebase/github 分项检测
 - [HN Firebase API 用法](./references/hn-firebase-api-usage.md) —HN 数据获取的正确 Python 脚本模式（cron 环境必备）

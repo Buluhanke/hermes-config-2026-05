@@ -35,7 +35,7 @@ People use Hermes for software development, research, system administration, dat
 
 ```bash
 # Install
-curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash
+curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
 
 # Interactive chat (default)
 hermes
@@ -140,6 +140,10 @@ hermes mcp test NAME        Test connection
 hermes mcp configure NAME   Toggle tool selection
 ```
 
+How the built-in MCP client connects servers (stdio/HTTP), auto-discovers
+their tools, and exposes them as first-class tools, plus catalog install
+(`hermes mcp install <name>`): `skill_view(name="hermes-agent", file_path="references/native-mcp.md")`.
+
 ### Gateway (Messaging Platforms)
 
 ```
@@ -187,6 +191,9 @@ hermes webhook list         List subscriptions
 hermes webhook remove NAME  Remove a subscription
 hermes webhook test NAME    Send a test POST
 ```
+
+Full setup, route config, payload templating, and event-driven agent-run
+patterns: `skill_view(name="hermes-agent", file_path="references/webhooks.md")`.
 
 ### Profiles
 
@@ -345,13 +352,9 @@ $HERMES_HOME/skills/        Installed skills
 ~/.hermes/hermes-agent/     Source code (if git-installed)
 ```
 
-### Disaster Recovery & Backup
+Profiles use `~/.hermes/profiles/<name>/` with the same layout.
 
-See `references/hermes-disaster-recovery-backup.md` — lean backup strategy, GitHub push limits, rclone cloud backup, disaster recovery.
-
-Full config reference: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
-
-Config Sections
+### Config Sections
 
 Edit with `hermes config edit` or `hermes config set section.key value`.
 
@@ -369,13 +372,9 @@ Edit with `hermes config edit` or `hermes config set section.key value`.
 | `delegation` | `model`, `provider`, `base_url`, `api_key`, `max_iterations` (50), `reasoning_effort` |
 | `checkpoints` | `enabled`, `max_snapshots` (50) |
 
-### Disaster Recovery & Backup
-
-See `references/hermes-disaster-recovery-backup.md` — lean backup strategy, GitHub push limits, rclone cloud backup, disaster recovery.
-
 Full config reference: https://hermes-agent.nousresearch.com/docs/user-guide/configuration
 
-Config Sections
+### Providers
 
 20+ providers supported. Set via `hermes model` or `hermes setup`.
 
@@ -454,15 +453,15 @@ Common "why is Hermes doing X to my output / tool calls / commands?" toggles —
 
 ### Secret redaction in tool output
 
-Secret redaction is **off by default** — tool output (terminal stdout, `read_file`, web content, subagent summaries, etc.) passes through unmodified. If the user wants Hermes to auto-mask strings that look like API keys, tokens, and secrets before they enter the conversation context and logs:
+Secret redaction is **on by default** — tool output (terminal stdout, `read_file`, web content, subagent summaries, etc.) is scanned for strings that look like API keys, tokens, and secrets before it enters the conversation context and logs. Leave it enabled for normal use:
 
 ```bash
-hermes config set security.redact_secrets true       # enable globally
+hermes config set security.redact_secrets true       # keep enabled globally
 ```
 
-**Restart required.** `security.redact_secrets` is snapshotted at import time — toggling it mid-session (e.g. via `export HERMES_REDACT_SECRETS=true` from a tool call) will NOT take effect for the running process. Tell the user to run `hermes config set security.redact_secrets true` in a terminal, then start a new session. This is deliberate — it prevents an LLM from flipping the toggle on itself mid-task.
+**Restart required.** `security.redact_secrets` is snapshotted at import time — toggling it mid-session (e.g. via `export HERMES_REDACT_SECRETS=false` from a tool call) will NOT take effect for the running process. Tell the user to change it in config from a terminal, then start a new session. This is deliberate — it prevents an LLM from flipping the toggle on itself mid-task.
 
-Disable again with:
+Disable only when you deliberately need raw credential-like strings for debugging or redactor development:
 ```bash
 hermes config set security.redact_secrets false
 ```
@@ -830,25 +829,7 @@ and logs — avoids shell-escaping backslashes in bash.
 - **Config changes:** In gateway: `/restart`. In CLI: exit and relaunch.
 - **Code changes:** Restart the CLI or gateway process
 
-### Provider/Model Configuration — Common UX Pitfalls
-
-**Pitfall: "I deleted the old provider but no model list appeared"**
-After entering a new API base URL, Hermes tries to GET `/models` (or `/v1/models`) to populate the model dropdown. If that endpoint is unreachable, returns an error, or has no readable model list, Hermes shows a WARNING and leaves the model name field blank — it cannot auto-populate.
-
-The correct sequence:
-1. Enter `API base URL` (e.g. `https://api.example.com/v1`)
-2. Enter `API key`
-3. If models auto-populate → select one
-4. If "could not verify" WARNING appears → manually type the exact model name (check the provider's docs for the correct model ID)
-5. Confirm
-
-**Deleting a provider does NOT refresh the model list.** The list stays as-is. To switch providers, just add the new one — no need to delete the old first.
-
-**Pitfall: Model name must match the provider's exact model ID**
-Wrong: `gpt-4o` when the relay expects `gpt-4o-mini` or `openai/gpt-4o`
-Right: Use the exact string the provider's `/models` endpoint returns, or consult the provider's documentation
-
-**Pitfall: `hermes config set` corrupts YAML list values**
+### Skills not showing
 1. `hermes skills list` — verify installed
 2. `hermes skills config` — check platform enablement
 3. Load explicitly: `/skill name` or `hermes -s name`
@@ -868,181 +849,6 @@ Common gateway problems:
 - **Discord bot silent**: Must enable **Message Content Intent** in Bot → Privileged Gateway Intents.
 - **Slack bot only works in DMs**: Must subscribe to `message.channels` event. Without it, the bot ignores public channels.
 - **Windows-specific issues** (`Alt+Enter` newline, WinError 10106, UTF-8 BOM config, test suite, line endings): see the dedicated **Windows-Specific Quirks** section above.
-
-### Upgrade via pip (Dual venv Pitfall — Mac M4, 2026-05-31)
-
-**⚠️ The running venv is `venv` (Python 3.11), NOT `.venv` (Python 3.13)**
-
-Hermes Agent has a **dual venv architecture** on this Mac M4:
-- `venv` (Python 3.11): Gateway + agent process → `~/.hermes/hermes-agent/venv/`
-- `.venv` (Python 3.13): May not exist or may be empty
-
-**Pip upgrade pitfall:** `pip3 install hermes-agent --upgrade` installs to whichever Python you run. System pip → Python 3.14. `.venv` pip → Python 3.13. After upgrading via system pip, `which hermes` may show the new version but the Gateway process (running on `venv`) stays on the old one.
-
-**Correct upgrade path:**
-```bash
-# Upgrade the ACTUAL running venv
-~/.hermes/hermes-agent/venv/bin/pip install hermes-agent --upgrade
-
-# Then restart gateway
-kill $(pgrep -f "hermes_cli.main gateway")
-~/.hermes/hermes-agent/venv/bin/hermes gateway run --replace &
-```
-
-**Post-upgrade cleanup:**
-- `rm ~/.local/bin/hermes` (old symlink) may remain after pip upgrade
-- Recreate: `ln -s ~/.hermes/hermes-agent/venv/bin/hermes ~/.local/bin/hermes`
-- Verify: `which hermes && hermes version`
-
-**Adding dependencies to the running venv (Mac M4, 2026-05-31):**
-```bash
-# ⚠️ Correct venv is `venv`, NOT `.venv`
-uv pip install --python ~/.hermes/hermes-agent/venv/bin/python <package1> <package2>
-
-# Verified installed (2026-05-31):
-# pyautogui, mss, pynput, cloakbrowser (humanization-core)
-# edge-tts, faster-whisper, chromadb (voice-module + memory-hpc)
-```
-
-**⚠️ faster-whisper blocks ~60s on first import** — downloads Whisper model (~300MB). Expected, not an error. Models cached at `~/.cache/huggingface/`.
-
-### Ollama Memory Management
-
-Ollama runs as a resident background service (`ollama serve`, ~98MB RSS). Models are loaded on-demand and unloaded after inference, freeing memory. For Mac M4:
-- `qwen3-vl:2b` = 1.9GB model file
-- `qwen2.5:1.5b` = 986MB model file
-- Models loaded = +~2-3GB RSS per model
-- Models unloaded = 0MB (memory released)
-**Recommendation:** Keep Ollama resident. Cold start latency (a few seconds) is worse than the ~98MB baseline cost. No need for idle-exit/auto-reap setup.
-
-### Adding Dependencies to hermes-agent venv (Mac M4, 2026-05)
-
-**⚠️ The correct venv is `venv`, NOT `.venv`**
-
-The actual running venv is `~/.hermes/hermes-agent/venv` (Python 3.11), NOT `.venv`. The `.venv` directory may not exist or be empty.
-
-**Correct install command:**
-```bash
-uv pip install --python ~/.hermes/hermes-agent/venv/bin/python <package1> <package2>
-```
-
-**Verified packages installed (2026-05-31):**
-- pyautogui, mss, pynput, cloakbrowser (humanization-core deps)
-- edge-tts, faster-whisper (voice-module deps)
-- chromadb (memory-hpc dependency)
-
-**⚠️ faster-whisper import blocks for ~60s on first use**
-First `import faster_whisper` downloads the Whisper model (~300MB) and blocks the process. This causes `execute_code` and terminal timeouts on initial load. This is expected behavior, not an error. Models are cached at `~/.cache/huggingface/`.
-
-**⚠️ Cron script PATH issue**
-
-When scripts run under cron (vs terminal), the PATH may not include git/python binaries. Symptoms: `sync-skills.sh` fails with "No such file or directory" even though git exists. Fix: add explicit PATH export at the top of cron scripts:
-
-```bash
-#!/bin/bash
-export PATH="/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:$HOME/bin"
-```
-
-**⚠️ Cron script HOME issue**
-
-Cron may set `$HOME` to `/var/empty` or empty string. Never use `$HOME` in cron scripts. Use absolute paths instead:
-
-```bash
-# ❌ WRONG
-cd "${HOME:-/Users/aimac}/.hermes/skills" || exit 0
-
-# ✅ CORRECT
-HERMES_HOME="/Users/aimac/.hermes"
-cd "$HERMES_HOME" || exit 1
-```
-
-**Known scripts with venv path bugs (fixed 2026-05-31):**
-- `hermes-dashboard-start.sh` — used `.venv` instead of `venv`
-- `run_vlm_loop.sh` — used `.venv` instead of `venv`
-- `self_evolution.sh` — used `.venv` instead of `venv`
-- `self-healer-watchdog.sh` — used non-existent MOSS-TTS-Nano path, rewritten to use venv edge-tts
-
-Always verify the actual venv location: `ls ~/.hermes/hermes-agent/ | grep venv`
-
-### Hermes-evolution-context Framework Restoration (2026-05-31)
-
-When the evolution-context skill's framework files are missing but SKILL.md exists, rebuild:
-
-```
-~/.hermes/personality.md           # personality traits (recreated from SKILL.md)
-~/.hermes/ltm/episodic/            # episode events
-~/.hermes/ltm/concepts/            # concept memories
-~/.hermes/ltm/skills/             # procedural memories
-~/.hermes/ltm/semantic.json        # {"facts": []}
-~/.hermes/ltm/procedural.json      # {"procedures": []}
-~/.hermes/scripts/ltm.py           # LTM framework (三层记忆 CRUD + recall)
-~/.hermes/current_context.json     # already existed
-```
-
-The ltm.py framework provides: `remember()`, `memorize()`, `learn()`, `recall()` functions callable from any Python context.
-
-### Three-Tier Model Routing (Fallback Chain)
-### Three-Tier Model Routing (Fallback Chain)
-The fallback chain provides prioritized fail-over when the primary model is unavailable or exhausted. The chain is configured via `fallback_providers` (list format) in `config.yaml`, read by `fallback_config.py::get_fallback_chain()`.
-
-**Verify the chain:**
-```bash
-hermes fallback list
-```
-
-**Current working three-tier config (MiniMax relay → MiniMax direct):**
-- Fallback 1: `MiniMax-M2.7` via `minimax-cn` (direct)
-
-The relay only exposes specific model names. Always query the relay's `/v1/models` endpoint first to confirm the exact model ID:
-```bash
-```
-Known relay model names: `MiniMax-M2.7-highspeed` (not `MiniMax-M2.7`), `MiniMax-M2.5-highspeed`.
-
-**⚠️ Pitfall: `hermes config set` corrupts YAML list values**
-
-`hermes config set fallback_providers "[{'provider': 'minimax-cn', ...}]"` stores the value as a literal string (with quotes and braces intact), not a YAML list. The config parses as a string, not a list of dicts, and `fallback_config.py` silently skips it.
-
-**Correct approach — Python yaml module:**
-```python
-import yaml
-with open('/Users/aimac/.hermes/config.yaml') as f:
-    cfg = yaml.safe_load(f)
-cfg['fallback_providers'] = [
-    {'provider': 'minimax-cn', 'model': 'MiniMax-M2.7'},
-    {'provider': 'deepseek', 'model': 'deepseek/deepseek-v4-flash', 'base_url': 'https://api.deepseek.com'}
-]
-with open('/Users/aimac/.hermes/config.yaml', 'w') as f:
-    yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
-```
-
-**⚠️ Pitfall: `fallback_model` legacy dict takes priority**
-
-If both `fallback_model` (dict, old format) and `fallback_providers` (list, new format) exist in config, `fallback_config.py::get_fallback_chain()` reads both, with `fallback_providers` entries first. Entries targeting the same provider/model/base_url are deduplicated. The legacy dict is migrated on first write to `fallback_providers` but is not auto-deleted.
-
-**Always delete legacy `fallback_model` when migrating:**
-```python
-if 'fallback_model' in cfg:
-    del cfg['fallback_model']
-```
-
-**⚠️ Pitfall: Primary model appears in fallback chain**
-
-`fallback_config.py` deduplicates by `(provider, model, base_url)`. If primary uses `custom` provider with `deepseek/deepseek-v4-flash` and fallback 2 also uses `deepseek` provider with the same model, they are different entries (different `base_url`). This is intentional — same model via different routes.
-
-If you want a distinct兜底 model, use `deepseek/deepseek-chat` or `deepseek-ai/DeepSeek-V3` for the direct endpoint instead of reusing `deepseek-v4-flash`.
-**Recommendation:** Keep Ollama resident. Cold start latency (a few seconds) is worse than the ~98MB baseline cost. No need for idle-exit/auto-reap setup.
-
-### Gemini API Key for Vision (aistudio.google.com)
-
-The `GEMINI_API_KEY` from aistudio.google.com can be used for Hermes vision analysis. Configure via:
-```bash
-hermes config set auxiliary.vision.provider gemini
-hermes config set auxiliary.vision.model gemini-2.5-flash
-hermes config set auxiliary.vision.base_url https://generativelanguage.googleapis.com/v1beta
-```
-`GEMINI_API_KEY` is read from `.env` automatically. Gemini 2.5 Flash supports 1M token context and is significantly stronger than local qwen3-vl:2b, but consumes API quota.
-
-Local alternative (no quota): qwen3-vl:2b via Ollama, already configured.
 
 ### Auxiliary models not working
 If `auxiliary` tasks (vision, compression, session_search) fail silently, the `auto` provider can't find a backend. Either set `OPENROUTER_API_KEY` or `GOOGLE_API_KEY`, or explicitly configure each auxiliary task's provider:

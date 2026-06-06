@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        Hermes 每周日凌晨 3 点自动加密备份到坚果云
+        部署: cp ~/Library/LaunchAgents/ai.hermes.weekly-backup.plist
+        加载: launchctl load ~/Library/LaunchAgents/ai.hermes.weekly-backup.plist
+        状态: launchctl list | grep hermes.weekly-backup
+    -->
+
+    <key>Label</key>
+    <string>ai.hermes.weekly-backup</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>/Users/aimac/.hermes/scripts/hermes_backup.sh</string>
+    </array>
+
+    <!-- 每周日凌晨 3 点 -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Weekday</key>
+        <integer>0</integer>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>0</integer>
+    </dict>
+
+    <!--
+        关键: StandardOutPath 指向 .backups/backup.log
+        脚本里不要用 tee -a, 否则会双倍行 (详见 macos-process-lifecycle/references/launchd-bash-logging-pitfall.md)
+    -->
+    <key>StandardOutPath</key>
+    <string>/Users/aimac/.hermes/.backups/backup.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/aimac/.hermes/.backups/backup.log</string>
+
+    <!-- 网络不通时不重试, 避免堆积 -->
+    <key>Nice</key>
+    <integer>10</integer>
+
+    <!-- 不让 launchd 一直保活 -->
+    <key>KeepAlive</key>
+    <false/>
+
+    <!-- 资源限制: CPU/内存 (防止意外吃光) -->
+    <key>SoftResourceLimits</key>
+    <dict>
+        <key>NumberOfFiles</key>
+        <integer>2048</integer>
+    </dict>
+</dict>
+</plist>

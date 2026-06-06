@@ -154,6 +154,159 @@ M4 Mac 24GB 内存分配建议：
 | chromadb | 常驻 | ~300MB（原生 uvicorn） |
 | colima | 按需启动 | ~50MB，轻量 VM |
 | Ollama app | **用完即杀** ⚠️ | 加载模型时可达 15GB，关窗口不退出 |
+| Ollama CLI (`ollama serve`) | 按需启动 ✅ | 5.7GB RSS，实测 19.7 tokens/s（M4 Metal），无 Docker |
+
+### Ollama CLI + On-Demand Mode (实测 2026-06-05)
+
+**安装（无 Docker，直接 brew）：**
+```bash
+brew install ollama          # v0.30.4
+ollama serve                 # 监听 127.0.0.1:11434
+```
+
+**按需加载模式（默认开启）：**
+```bash
+# ~/.ollama/ollama.env
+OLLAMA_FLASH_ATTENTION=1
+OLLAMA_NUM_THREAD=8
+OLLAMA_CONTEXT_LENGTH=8192      # 8K 够用，省 KV 缓存内存
+OLLAMA_MAX_LOADED_MODELS=1
+OLLAMA_KEEP_ALIVE=0             # ⭐ 推理完自动卸载模型，空闲只占 35-66MB
+```
+
+重启加载配置：`launchctl kickstart -k gui/$(id -u)/homebrew.mxcl.ollama && ollama serve &`
+
+**启动脚本（含内存门卫）：** `~/.hermes/scripts/ollama_hermes.sh`
+- 检查 `vm_stat` 的 free+inactive+speculative 页面数
+- 换算成 GB：`(free_pages × 16384 / 1024^3)`
+- **内存 > 7GB 才预加载模型，否则跳过**
+- 服务常驻，模型按需加载/卸载
+
+**关键坑：`vm_stat` 数字带小数点！**
+```bash
+# ❌ 错误（free=$3 取到带点的字符串）
+free='$3'+0
+
+# ✅ 正确（gsub 去掉点号再转数字）
+gsub(/\./,"",$NF); free=$NF+0
+```
+
+**拉模型 + 自定义 Modelfile：**
+```bash
+ollama pull llama3.1:8b                    # 自动选 Q4_K_M，4.9GB
+ollama create hermes-8b -f ~/Modelfile.hermes8b
+```
+
+**实测内存（2026-06-05）：**
+| 状态 | Ollama RSS |
+|------|-----------|
+| 服务空闲（模型已卸载） | **35-66 MB** |
+| 模型加载中（llama3.1:8b Q4_K_M） | **5.7 GB** |
+| Hermes Gateway | ~405 MB |
+| Mac mini M4 空闲（加载后） | ~16 GB |
+
+> ⭐ 按需模式让 Ollama 平时零内存开销，只有推理时才加载 5.7GB，推理完自动卸载。
+
+**启动脚本已固化路径：** `~/.hermes/scripts/ollama_hermes.sh`
+
+| qwen3-vl:2b / qwen2.5 | 按需 | 卸载后不占内存 |
+| Docker 容器 | 不使用 | 已废弃，改用原生方案 |
+
+> ⚠️ SKILL.md 旧版提到 Hermes Docker 内存限制 — **已废弃**，无 Docker，直接跑在 `~/.hermes/hermes-agent/venv` 里。Ollama 也用 native brew 安装，KEEP_ALIVE=0 按需加载模型。
+
+### 内存管理清单
+
+**安装（无 Docker，直接 brew）：**
+```bash
+brew install ollama          # v0.30.4
+ollama serve                 # 监听 127.0.0.1:11434
+```
+
+**按需加载模式（默认开启）：**
+```bash
+# ~/.ollama/ollama.env
+OLLAMA_FLASH_ATTENTION=1
+OLLAMA_NUM_THREAD=8
+OLLAMA_CONTEXT_LENGTH=8192      # 8K 够用，省 KV 缓存内存
+OLLAMA_MAX_LOADED_MODELS=1
+OLLAMA_KEEP_ALIVE=0             # ⭐ 推理完自动卸载模型，空闲只占 35-66MB
+```
+
+重启加载配置：`launchctl kickstart -k gui/$(id -u)/homebrew.mxcl.ollama && ollama serve &`
+
+**启动脚本（含内存门卫）：** `~/.hermes/scripts/ollama_hermes.sh`
+- 检查 `vm_stat` 的 free+inactive+speculative 页面数
+- 换算成 GB：`(free_pages × 16384 / 1024^3)`
+- **内存 > 7GB 才预加载模型，否则跳过**
+- 服务常驻，模型按需加载/卸载
+
+**关键坑：`vm_stat` 数字带小数点！**
+```bash
+# ❌ 错误（free=$3 取到带点的字符串）
+free='$3'+0
+
+# ✅ 正确（gsub 去掉点号再转数字）
+gsub(/\./,"",$NF); free=$NF+0
+```
+
+**拉模型 + 自定义 Modelfile：**
+```bash
+ollama pull llama3.1:8b                    # 自动选 Q4_K_M，4.9GB
+ollama create hermes-8b -f ~/Modelfile.hermes8b
+```
+
+**实测内存（2026-06-05）：**
+| 状态 | Ollama RSS |
+|------|-----------|
+| 服务空闲（模型已卸载） | **35-66 MB** |
+| 模型加载中（llama3.1:8b Q4_K_M） | **5.7 GB** |
+| Hermes Gateway | ~405 MB |
+| Mac mini M4 空闲（加载后） | ~16 GB |
+
+> ⭐ 按需模式让 Ollama 平时零内存开销，只有推理时才加载 5.7GB，推理完自动卸载。
+
+### Ollama CLI 安装与启动（实测 2026-06-05）
+
+**无 Docker，直接装命令行版：**
+```bash
+brew install ollama          # v0.30.4 已安装
+ollama serve                 # 后台运行，监听 127.0.0.1:11434
+```
+
+**启动脚本（带省内存配置）：**
+```bash
+~/.hermes/scripts/ollama_hermes.sh      # 一键启动 + 验证
+```
+
+**拉模型（Ollama 自动选量化）：**
+```bash
+ollama pull llama3.1:8b        # 默认 Q4_K_M 量化，磁盘 4.9GB
+ollama list                    # 查看已下载模型
+```
+
+**生成自定义省内存模型：**
+```bash
+ollama create hermes-8b -f ~/Modelfile.hermes8b
+```
+
+**Hermes 对接地址（非 Docker，直接连 Ollama）：**
+```yaml
+# ~/.hermes/config.yaml
+model:
+  default: hermes-8b
+  base_url: http://127.0.0.1:11434/v1
+  api_key: ollama
+```
+
+**内存实测（2026-06-05）：**
+| 组件 | 状态 | RSS |
+|------|------|-----|
+| Ollama 服务空闲（KEEP_ALIVE=0，模型已卸载） | 空闲 | **35-66 MB** |
+| Ollama 模型加载中（llama3.1:8b Q4_K_M） | 加载 | **~5.7 GB** |
+| Hermes Gateway（原生 venv，无 Docker） | 常驻 | **~405 MB** |
+| Mac mini M4 空闲（模型已卸载） | — | **~16 GB** |
+
+> ⚠️ SKILL.md 旧版提到 Hermes Docker 内存限制 — **已废弃**，无 Docker，直接跑在 `~/.hermes/hermes-agent/venv` 里。
 | qwen3-vl:2b / qwen2.5 | 按需 | 卸载后不占内存 |
 | Docker 容器 | 不使用 | 已废弃，改用原生方案 |
 
@@ -204,7 +357,8 @@ python3 ~/.hermes/scripts/detect.py <图片路径>
 
 # 运行 rembg 去背景
 python3 -c "from rembg import remove; from PIL import Image; remove(Image.open('input.jpg')).save('output.png')"
-```
+- `references/dl-setup-20260531.md` — Deep learning setup (PyTorch + transformers + MPS verification)
+- `references/ollama-8b-m4-24gb-20260605.md` — Ollama 8B Q4_K_M on Mac mini M4: env vars, Modelfile, Hermes Docker memory cap, 24GB budget table. Cross-validated across DeepSeek + Grok + Doubao.
 
 ## 参考资料
 

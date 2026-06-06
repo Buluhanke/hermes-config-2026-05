@@ -23,9 +23,72 @@ Priority order:
 ## Architecture
 ## Architecture
 ### Chrome Setup (macOS)
-
 ### CDP Port Requirement
 Chrome 148+ **refuses** `--remote-debugging-port` on the default user data directory. You must use a **custom** directory.
+
+### `browser.cdp_url` Config — Critical Pitfall
+
+**Symptom**: `browser_navigate` returns "404 Not Found" or "ERR_BLOCKED_BY_CLIENT" even though Chrome is running on the configured port and `curl localhost:<port>/json/version` returns正确.
+
+**Root cause**: `hermes config set` writes empty-string fields for keys it can't delete. When multiple bad `hermes config set` calls accumulate, the YAML parser or the code that reads `browser.cdp_url` gets confused and the value is never read correctly.
+
+**Proven fix** (2026-06-04):
+```python
+# 1. 先看config.yaml里browser.cdp_url附近的原始内容
+# 找到类似 server: '' 或 cdp_url: '' 这类脏空行
+
+# 2. 用Python精确删除，不要用sed（sed范围匹配可能伤到相邻块）
+import pathlib
+cfg = pathlib.Path('/Users/aimac/.hermes/config.yaml')
+lines = cfg.read_text().splitlines()
+# 精确定位并删除脏行（value为空字符串的那行）
+cleaned = [l for l in lines if not (
+    l.strip().startswith(('server:', 'cdp_url:', 'engine:')) 
+    and l.strip().endswith("''")
+)]
+cfg.write_text('\n'.join(cleaned) + '\n')
+```
+
+**正确的config写法**（手动写入或`hermes config set`后立即人工检查）:
+```yaml
+browser:
+  cdp_url: ws://127.0.0.1:9333   # 格式必须完全正确，不能有相邻空行
+  inactivity_timeout: 120
+  command_timeout: 30
+```
+
+**验证修复成功**:
+```bash
+curl -s http://127.0.0.1:9333/json/version | python3 -c \
+  "import sys,json; d=json.load(sys.stdin); print('OK:', d['Browser'])"
+```
+然后 `browser_navigate https://www.doubao.com` 应该立即返回完整页面（已登录状态）。
+
+### Foreground Chrome Profile — Direct Connection (2026-06-04)
+
+Instead of copying the Chrome profile (which breaks Keychain-encrypted cookies), connect CDP directly to the user's foreground Chrome:
+
+```bash
+# Kill any existing debug Chrome
+pkill -9 -f "Google Chrome" 2>/dev/null; sleep 2
+
+# Launch user's real foreground profile with debug port
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --user-data-dir="/Users/aimac/Library/Application Support/Google/Chrome/Default" \
+  --remote-debugging-port=9333 \
+  --no-first-run --no-default-browser-check \
+  --disable-blink-features=AutomationControlled \
+  --new-window about:blank 2>/dev/null &
+sleep 10
+
+# Verify
+curl -s http://127.0.0.1:9333/json/version | python3 -c \
+  "import sys,json; d=json.load(sys.stdin); print('Chrome:', d['Browser'])"
+```
+
+**Result**: All login states (豆包 session cookies, ChatGPT, DeepSeek, etc.) are preserved — same cookies, same Keychain access, no migration needed. The foreground Chrome IS the logged-in session.
+
+**When NOT to use this approach**: When you need to install extensions (uBlock Origin, etc.) without disturbing the user's daily browsing. Use a separate profile for that.
 
 ### Critical: Chrome CDP Does NOT Support JSON-RPC 2.0
 
@@ -472,12 +535,25 @@ The canonical working script is `scripts/hermes_cdp_bot.py`. It:
 screencapture -x /tmp/ai_screenshots/chrome_full.png
 ```
 
-### Port Architecture (2026-06-02 verified)
+### Port Architecture (2026-06-02 verified, 2026-06-04 updated)
 
 | Port | Chrome Instance | Login State | Notes |
 |------|---------------|-------------|-------|
-| **9222** | User's real Chrome (`--remote-debugging-port=9222`) | ✅ Has login state | User's daily Chrome, already open |
-| **9333** | `chrome-debug` profile (`--user-data-dir=...chrome-debug`) | ❌ No login | Independent instance |
+| **9333** | Foreground Chrome real profile (`--user-data-dir=~/Library/Application Support/Google/Chrome/Default`) | ✅ All sites logged in (same Keychain) | User's daily Chrome, use this |
+| **9222** | (was user real Chrome in earlier session) | — | Older approach, superseded |
+
+**2026-06-04 关键发现：`browser.cdp_url` 配置后 browser_navigate 的行为**
+
+设置 `hermes config set browser.cdp_url ws://127.0.0.1:9333` 后，Hermes browser 工具连接的是**真实 Chrome 当前活跃的 tab**（不是开新 tab）。如果该 tab 是 `chrome://newtab/` 或 `about:blank`，导航到新 URL 会返回 `ERR_BLOCKED_BY_CLIENT`。
+
+**解决**：
+1. 先用 `curl http://localhost:9333/json/list` 找到有效 tab（有 URL 的 page type tab）
+2. 或者用 `Target.createTarget` 在 browser endpoint 创建新 tab（见下方 CDP 脚本模板）
+
+**Keychain 加密cookie复制无效的根本原因**：
+Chrome（macOS）对字节系域名使用 OS X Keychain 主密钥加密 cookie。加密密钥绑定到 Chrome 实例身份，复制 cookie 文件到另一个 profile 后，新 Chrome 实例无法用自己的 Keychain 解密别人的加密值。症状：`value` 字段为空，`encrypted_value` 非空。
+
+**正确解法**：在 debug Chrome 中完成一次登录（session token 是设备 UUID，换设备重新登录即可）。
 
 **Key insight**: Do NOT copy user Chrome profile to chrome-debug — cookies are encrypted with user Keychain and won't work in a different profile. Instead, connect CDP directly to user's real Chrome at **port 9222** (already running with debug port).
 

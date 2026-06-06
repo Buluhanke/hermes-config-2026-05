@@ -1,13 +1,44 @@
 ---
 name: voice-reply-rules
 description: 语音/文字回复规则固化
-version: 2.0.0
+version: 3.0.0
 ---
 
 ## 规则
-用户发语音 → 语音回复（auto_tts=true，Kokoro 本地合成，af_sky 音色）
+用户发语音 → 语音回复（auto_tts=true）
 用户发文字 → 文字回复
 不混用，规则已固化
+
+**通道对应硬规则（用户 2026-06-04 拍板）**：
+- 语音来信 → 一定用语音回（不混文字）
+- 文字来信 → 一定用文字回（不发语音）
+- 跨 session 重建后同样遵守
+- 语音通道默认 TTS 引擎：Edge TTS zh-CN-XiaoxiaoNeural（见下）
+
+**🔒 硬规则（用户 2026-06-04 明确指令）：**
+- 语音来信 → 必须语音回（不掺文字）
+- 文字来信 → 必须文字回（不发语音气泡）
+- 收到空语音（录音失败） → 用 TTS 告诉用户"没听到内容"，不要替用户猜意图
+- 跨 session 重建后同样遵守
+
+**TTS 引擎：Edge TTS（唯一方案，已固化 2026-06-04）**
+```yaml
+tts:
+  provider: edge
+  edge:
+    voice: zh-CN-XiaoxiaoNeural
+```
+
+**为什么用 Edge：**
+- 中文质量稳，免费，无需本地模型
+- Kokoro 已卸载（169MB 模型 + venv + 技能全清，2026-06-04）
+- Kokoro 中文听感差（英文 voice 硬读 cmn 注音）
+
+**切换 Edge 音色方法：**
+```bash
+edge-tts --voice zh-CN-XiaoxiaoNeural --text "测试" --write-media /tmp/sample.ogg
+hermes config set tts.edge.voice zh-CN-XiaoxiaoNeural
+```
 
 ## Voice优先原则
 收到语音消息时，直接TTS回复，不做任何前置检查（不查日志/不验证状态/不跑终端命令）。用户要的是响应速度，不是诊断报告。
@@ -26,67 +57,6 @@ version: 2.0.0
 - 不凭记忆生成答案，不尝试拼凑，不反复查找
 - 用户纠正后立即承认，不要解释过程
 
-## 当前配置（已固化，2026-05-28 备份）
-
-**主 TTS 引擎：Kokoro（本地 ONNX）**
-```yaml
-tts:
-  provider: kokoro
-  kokoro:
-    type: command
-    command: "/Users/aimac/kokoro/venv/bin/python3 /Users/aimac/kokoro/tts_kokoro.py --input {input_path} --output {output_path} --voice {voice} --speed {speed}"
-    voice: af_sky
-    format: wav
-```
-
-**备用（Edge TTS，中文女声）：**
-```yaml
-tts.edge.voice = zh-CN-XiaoxiaoNeural
-```
-
-**⚠️ 语音配置已固化，不可轻易改动。** 备份位置：
-- 恢复脚本：`~/.hermes/backups/tts_config_backup.sh` — 运行 `bash ~/.hermes/backups/tts_config_backup.sh` 一键恢复
-- 配置快照：`~/.hermes/backups/config_snapshot_20260528_语音固化.yaml`
-
-**切换回 Edge TTS 的方法：**
-```bash
-hermes config set tts.provider edge
-# 然后重启 gateway
-```
-
-## Kokoro TTS 详细说明
-
-### 安装位置
-```
-~/kokoro/
-├── tts_kokoro.py          # Hermes command provider wrapper
-├── models/
-│   ├── kokoro-v0_19.fp16.onnx  # 模型文件（169MB）
-│   ├── voices.bin              # 音色文件
-│   └── espeak-ng-data/         # 中文语音数据
-├── venv/                  # 虚拟环境
-└── speak.py               # 简易测试脚本
-```
-
-### Kokoro 音色列表
-- `af_sky`（当前默认）- 美国女声，英文质量好，中文质量差（英文 voice 硬读 cmn 注音，听感像老外说中文）
-- `af` / `af_bella` / `af_nicole` / `af_sarah` - 美国女声
-- `am_adam` / `am_michael` - 美国男声
-- `bf_emma` / `bf_isabella` - 英国女声
-- `bm_george` / `bm_lewis` - 英国男声
-
-### Kokoro 已知问题
-| 坑 | 说明 |
-|---|---|
-| 模型文件名过时 | GitHub release 无 v1.0，实际是 v0_19 |
-| 中文语言码 | `lang="zh"` 报错，必须用 `"cmn"` |
-| espeak-ng 缺中文数据 | 需下载 espeak-ng-data-v1.51.tar.gz 覆盖 espeakng_loader 数据目录 |
-
-### 测试命令
-```bash
-cd ~/kokoro && source venv/bin/activate && python speak.py "你好"
-```
-
 ## 中断系统（TODO - 待实现）
 
 用户要求加入以下功能，让 Hermes 说话时可被打断：
@@ -96,12 +66,6 @@ cd ~/kokoro && source venv/bin/activate && python speak.py "你好"
 - [ ] **Audio Cancel** — 中断信号立即停止当前 TTS 播放
 
 实现后效果：Hermes 说话时用户可以直接插嘴 → Hermes 立刻闭嘴开始听
-
-## 切换音色流程（Edge TTS）
-```bash
-edge-tts --voice zh-CN-XiaoxiaoNeural --text "测试" --write-media /tmp/sample.ogg
-hermes config set tts.edge.voice zh-CN-XiaoxiaoNeural
-```
 
 ## 平台能力速查
 

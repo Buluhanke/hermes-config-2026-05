@@ -138,6 +138,7 @@ screen_trigger_handler 在调用 VLM 前先做场景过滤。**不分析**以下
 - `references/captchas-auto-execute-security-2026-05-30.md` — CAPTCHA agent 检测研究，DRY_RUN=False 时需考虑的 anti-detection 对策
 - `references/hermes-desktop-rpa-osascript-timeout-2026-06-02.md` — osascript 超时是 cron 环境限制（非 PATH 问题），DRY_RUN=False 切换必须在有活跃桌面 session 的环境
 - `references/auto-execute-execution-layer-2026-06-01.md` — ⭐ Auto-Execute 执行层现状分析（方向D调研）：GUI-Libra/LiteGUI/ClawGUI 论文发现、Qwen3-VL 1000×1000 坐标映射公式、动作利用率仅 2.7% 的瓶颈分析、DRY_RUN=False 过渡方案
+- `references/vision-understand-numctx-pitfall-2026-06-04.md` — ⚠️ vision_understand.py 复用了 ollama VLM，但**未设 num_ctx**导致 30s 延迟（vs screen_trigger_handler 3-5s）。**复用规则：所有 ollama VLM caller 必须显式 num_ctx=1024/4096**，永远不用默认 262144
 
 ## 配置项
 
@@ -382,3 +383,25 @@ payload = {
     "options": {"temperature": 0.0, "max_tokens": 20}
 }
 ```
+
+## ⚠️ 2026-06-04 vision_understand.py 选型（不要重蹈）
+
+screen-watcher-vision 选了 qwen3-vl:2b 后，本会话又独立写了 `~/.hermes/skills/vision/scripts/vision_understand.py`（语义理解，不是 OCR）。重新跑了一遍**qwen3-vl:2b vs moondream** 端到端对比，结论与本 skill 一致，但发现**两个补充**：
+
+1. **moondream 会忽略中文 prompt**——强制传 `-p "用中文..."` 仍输出英文。Hermes 全场景中文，**纯英文场景才用 `--model moondream` 备选**
+2. **moondream 短 prompt 极快**（~3s vs qwen3-vl:2b ~15-30s）但有缓存嫌疑——两张相似图输出几乎一字不差，**判断力不可靠**
+
+`vision_understand.py` 默认模型 = **qwen3-vl:2b**，moondream 保留为 `--model moondream` 备选（纯英文场景才用）。
+
+**复用本 skill 的 `num_ctx` 教训**：`vision_understand.py` **没设 num_ctx**（默认 262144），首次跑 30s。**复用规则**：
+
+- `screen_trigger_handler` 的 `get_scene_type()` 用 `num_ctx=1024`，`ask_screen()` 用 `num_ctx=4096`
+- `vision_understand.py` 默认场景**单一图像分析**，建议 `num_ctx=1024`（与 `get_scene_type` 对齐）
+- 长文档/多图分析用 `num_ctx=4096`（与 `ask_screen` 对齐）
+- **永远不**用默认 262144
+
+`vision_understand.py` 端到端实测（2026-06-04）：
+| 模型 | 耗时 | 中文能力 | 备注 |
+|---|---|---|---|
+| qwen3-vl:2b | 15-30s | ✅ 原生 | 默认。点名识别界面元素（"hermes-agent/Ollama/Moondream"）|
+| moondream | 3-7s | ❌ 忽略中文 prompt | 纯英文场景用 `--model moondream` 备选 |

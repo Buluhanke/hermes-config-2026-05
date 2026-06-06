@@ -131,7 +131,11 @@ Deliver the assessment in a table + verdict format:
 9. **web_extract credits can be exhausted** — "Payment Required" error means Firecrawl credits are out. Fall back to curl raw.githubusercontent.com or mcp_github_get_file_contents.
 10. **`mcp_github_search_repositories` returns empty** — this MCP tool can return `{"items": []}` even for valid repos. Use web search as the primary discovery tool instead.
 11. **Browser automation repos need extra install steps** — `uv sync` installs Python deps, but Playwright-based projects (Fara, browser-use, etc.) need `playwright install` separately to download browser binaries. Check the README for post-install commands.
+12. **Apple git (macOS default) 版本太老**：不支持 `--filter=blob:none`、`--sparse`、`diff-filter=ACMRT` 等参数。macOS 上 clone 大仓库用 `git clone --depth 1 --no-checkout` + `git checkout HEAD -- README.md` 代替 `--filter=blob:none`。Apple git 不支持 `--sparse` 时改用 `git ls-tree -r HEAD` 代替 `git ls-files`。
+13. **宣传 vs 实际代码的评估维度**：大项目 README 常常夸大（"63个Agent"实际是33个SKILL.md、"1282安全测试"实际157个测试文件含20个缺失blob、"Agent操作系统"实际是配置集）。必须通过 `git ls-tree -r HEAD` 做代码级验证，不能只看 README。关键验证点：star/fork 比例是否虚高、claimed agents 是否可执行程序还是提示词文件、claimed test count 是否真的是测试文件（注意 missing blob）。
+14. **Shallow clone 时 README 多语言版本**：`--depth 1` 可能只包含 `README.md` 不含 `README.zh-CN.md`。需要单独 `git checkout HEAD -- README.zh-CN.md` 获取。
 
 ## Linked Files
 
 - `references/investigation-patterns.md` — Real-world archetypes (active repos, abandoned projects, fake install commands, misattributed links) with tool preference order and quick signal reference.
+- `references/marketing-vs-code-cases.md` — Real-world cases where marketing claims diverged from codebase reality. Includes detection signal matrix for: "X agents" (usually prompt files not binaries), "Y tests" (check file count + missing blobs), "OS/platform" (usually config pack).

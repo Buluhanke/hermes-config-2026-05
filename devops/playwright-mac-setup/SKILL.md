@@ -30,7 +30,8 @@ Automate the installation and provisioning of Playwright browsers for macOS envi
    |---------|-----|
    | Download times out after 30 s | Set `PUPPETEER_DOWNLOAD_HOST=direct` and retry, or use a mirror. |
    | Cache not found after install | Ensure `~/.cache/ms-playwright` exists and has correct permissions. |
-   | Browser launches headless by default | Run `-‑headless=false` or set `headless: false` in the launch options.
+   | Browser launches headless by default | Run `---headless=false` or set `headless: false` in the launch options. |
+   | `playwright._impl._errors.Error: Executable doesn't exist at ...chromium_headless_shell-1208` | Two playwright installs (system pip + venv). System Python resolves to `/Library/Frameworks/Python.framework/.../playwright` whose cache is `chromium_headless_shell-1208`. Hermes' venv playwright uses `chromium_headless_shell-1217+`. Always use `~/.hermes/hermes-agent/venv/bin/python` in shebang, not `/usr/bin/env python3` or bare `python3`. Run `python3 -m playwright install chromium` in the venv to pre-warm the correct cache. |
 
 ---
 

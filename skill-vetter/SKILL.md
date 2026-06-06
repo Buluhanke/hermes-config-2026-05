@@ -156,6 +156,18 @@ These patterns indicate a promoted/tool-spam link, NOT a real skill:
 4. **New/unknown sources** → Maximum scrutiny
 5. **Skills requesting credentials** → Human approval always
 
+## Pitfall: Research Phase vs. Modification Phase
+
+When the user shares a project/URL with "研究一下" or "学习一下", the vetting phase ends once the repo is cloned and understood. The NEXT phase — actually modifying config files — requires a DIFFERENT rule:
+
+**Backup before modify.** Before editing any config file (`config.yaml`, `.env`, `*.json`, scripts, etc.):
+1. Create a timestamped backup: `cp <file> <file>.bak.$(date +%Y%m%d%H%M%S)`
+2. Make the change
+3. Verify the change works
+4. If damage occurred, restore from backup immediately
+
+This applies to every config modification task, not just vetting. The user has explicitly confirmed this as a standing rule.
+
 ## Remember
 
 - No skill is worth compromising security

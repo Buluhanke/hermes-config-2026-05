@@ -41,7 +41,39 @@ uv pip install mcp
 
 ## Quick Start
 
-Add MCP servers to `~/.hermes/config.yaml` under the `mcp_servers` key:
+### Recommended: use `hermes mcp add` (CLI)
+
+The CLI validates the connection, lists discovered tools, asks which to enable, and writes the right block to `config.yaml` automatically. **Do NOT edit `mcp_servers` by hand or via `hermes config set`** — the latter has no `unset`, sets strings where you meant dicts, and silently creates top-level `servers:` keys that confuse the YAML loader.
+
+```bash
+# stdio server
+hermes mcp add cua-driver --command /Users/aimac/.local/bin/cua-driver --args mcp
+
+# HTTP/StreamableHTTP server
+hermes mcp add my_api --url https://mcp.example.com/mcp
+```
+
+**Pitfall: `hermes mcp add` is interactive and requires a PTY.** The "Enable all N tools? [Y/n/select]" prompt at the end of discovery reads from the TTY. In a non-PTY shell (CI, sandbox, `bash -c`, default `terminal()` tool without `pty=true`), the prompt is skipped and the command is silently cancelled *after* connecting — the server list is empty and nothing gets written. Always invoke with a PTY:
+
+```bash
+# In a real TTY this works
+hermes mcp add cua-driver --command /Users/aimac/.local/bin/cua-driver --args mcp
+# In a non-PTY tool, wrap with a here-string or enable pty:
+hermes mcp add cua-driver --command /Users/aimac/.local/bin/cua-driver --args mcp <<< "Y"   # if your shell supports it
+# Or from the terminal tool:
+terminal(..., pty=true)   # Hermes' `terminal` tool flag
+```
+
+Verify the write took effect:
+
+```bash
+hermes mcp list                                # shows the server with status
+grep -A4 "^mcp_servers:" ~/.hermes/config.yaml # shows the YAML block
+```
+
+### Manual YAML edit (fallback only)
+
+If you must hand-edit, add the server under the **top-level `mcp_servers` key** (NOT under `mcp:`, NOT under `lsp.servers`, NOT under a stray `servers:` block):
 
 ```yaml
 mcp_servers:
@@ -50,13 +82,7 @@ mcp_servers:
     args: ["mcp-server-time"]
 ```
 
-Restart Hermes Agent. On startup it will:
-1. Connect to the server
-2. Discover available tools
-3. Register them with the prefix `mcp_time_*`
-4. Inject them into all platform toolsets
-
-You can then use the tools naturally -- just ask the agent to get the current time.
+The agent's `patch` tool is blocked from writing to `~/.hermes/config.yaml` ("security-sensitive configuration"). To remove a key surgically when no `unset` exists, use `hermes config edit` (opens `$EDITOR`) or `python3 -c` with `yaml.safe_load` / `yaml.safe_dump` — never `sed`, because `servers:` appears under `lsp.`, `mcp.`, and other blocks and a naive range delete can wipe the wrong block (e.g. `sed -i '/^  servers: '\''/,/^'"'"'}}$/d'` ate the entire `mcp_servers:` block on this system once).
 
 ## Configuration Reference
 

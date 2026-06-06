@@ -69,6 +69,35 @@ This file captures specific investigation patterns encountered in real sessions.
 
 **Approach:** Always confirm context. If user says "介绍的是X项目" with a different URL, re-read the corrected URL and investigate the right one. Don't assume the URL in the message is the only one.
 
+## Archetype 5: The Migrated Repo (GSD Core — open-gsd/gsd-core)
+
+**Situation:** User shares a GitHub project that has moved. Original repo `gsd-build/get-shit-done` is archived; active development moved to `open-gsd/gsd-core`. Key signals:
+- 31k+ combined stars (original + new)
+- "Trusted by engineers at Amazon, Google, Shopify, Webflow" — credible endorsement
+- Context Rot problem: quality degradation as AI fills its context window
+- Architecture: main context stays at 30-40%, subagents get fresh 200k-token context per task
+- Atomic commits per task, parallel execution waves
+
+**Fast track:**
+```bash
+# Check if raw README accessible (fastest)
+curl -sL "https://raw.githubusercontent.com/open-gsd/gsd-core/main/README.md" | head -120
+
+# GitHub API for metadata
+curl -s https://api.github.com/repos/open-gsd/gsd-core | python3 -c "
+import sys,json; r=json.load(sys.stdin)
+print(f'Stars: {r[\"stargazers_count\"]}  Forks: {r[\"forks_count\"]}')
+print(f'Pushed: {r[\"pushed_at\"]}  License: {r.get(\"license\",{}).get(\"spdx_id\",\"none\")}')"
+```
+
+**Detection signals for migrated repos:**
+- Original repo README says "migrated to X" or shows archive notice
+- GitHub API on old repo shows `archived: true` + description pointing to new location
+- Stars split across old + new (combined count matters for popularity assessment)
+- User may reference the old URL but mean the new one — always probe for current status
+
+**Verdict:** ✅ 值得参考. Context Rot 解决方案有工程价值，原子化任务执行模式可借鉴到 Hermes。
+
 ## Tool Preference Order
 
 | Tool | Best for | Limitations |
@@ -89,3 +118,4 @@ This file captures specific investigation patterns encountered in real sessions.
 | Install command involves `npx skills` | **Fake.** npx has no `skills add` subcommand |
 | Claims "92%" / "revolutionary" / "shocking" | Marketing language — verify independently |
 | MIT license + CI + docs | Professional-grade open source |
+| README says "migrated to" | Repo is archived — find the active one |
