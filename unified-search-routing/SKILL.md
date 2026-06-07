@@ -30,7 +30,9 @@ trigger_keywords:
 
 ## 一句话总结
 
-> `python3 ~/.hermes/scripts/search.py "你的查询"` —— 自动按意图路由到 **anysearch**（通用/事实/参数） 或 **last30days**（过去 30 天舆情/口碑/趋势），并在模糊地带同时跑两个引擎并联补全。
+> `python3 ~/.hermes/scripts/search.py "你的查询"` —— 自动按意图路由到 **anysearch**（通用/事实/参数） 或 **last30days**（过去 30 天舆情/口碑/趋势），并在模糊地带同时跑两个引擎并联补全。URL 提取走 `fetch_url.py`（**Trafilatura 主提取**，不是 html2text），缓存走 **DiskCache**（不是 JSON 文件），全部免费、零付费后端。
+
+**当用户说"升级联网搜索"/"找更强免费方案"/"全网对比"时（进化触发词）**：先跑 `web_search "best free <组件类> 2026"` 4-6 个候选实测替换，不是打补丁（修补 ≠ 进化，详见 §"进化方法论"）。
 
 ## 为什么用 search.py 而不是直接调底座
 
@@ -222,8 +224,8 @@ search.py "DeepSeek V4 发布"  # DiskCache 缓存
 | `~/.hermes/cache/fetch_url_v2/` | fetch_url 缓存目录（DiskCache，24h TTL） |
 | `references/search-pipeline-architecture.md` | 管道架构图+文件清单+依赖表 |
 | `references/last30days-install-and-broken-symlink.md` | **last30days 安装/软链翻车实录+venv 3 坑+升级流程**（用户报告"找不到了"时第一手查这个） |
-| `references/free-search-stack-2026-06-07.md` | **免费联网搜索栈实战笔记**（4 个隐蔽坑：软链指 /tmp、venv 用错解释器、fetch_url 跑哪个 venv、软链 vs 真路径选择） |
-| `references/free-search-replacement-decision-2026-06-07.md` | **全网对比决策指南**（5 个位置的候选实测 + 排除清单 + 进化方法论） |
+| `references/free-search-stack-2026-06-07.md` | **免费联网搜索栈实战笔记**（6 个隐蔽坑：软链 /tmp、venv 用错解释器、fetch_url 跑哪个 venv、软链 vs 真路径、**DiskCache 替换 JSON、Trafilatura 替换 html2text**） |
+| `references/free-search-replacement-decision-2026-06-07.md` | **全网对比决策指南**（5 个位置的候选实测 + 排除清单 + 进化方法论 + **v1→v3.0.0 升级对照表**） |
 
 ## last30days 升级/翻车速查
 

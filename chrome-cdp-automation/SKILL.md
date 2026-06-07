@@ -390,6 +390,57 @@ def detect_cdp_port() -> tuple[str, int] | None:
 
 **launch_chrome_cdp.sh reliability note (2026-06-03)**: The pattern `pkill -9 -f "Google Chrome" && open -a "Google Chrome" --args --remote-debugging-port=9444` is NOT guaranteed to set the new port on the freshly opened Chrome — `open -a` may reactivate an existing un-killed process or the new Chrome may ignore `--args` if another instance is already running. If port 9444 scan fails, fall back to 9333. The user may already have a stable Chrome on 9333 started outside the script.
 
+### ⚠️ Chrome GUI 打开 ≠ CDP 端口监听（2026-06-07 实测根因）
+
+**症状**：`curl http://127.0.0.1:9333/json` → Connection refused，但 `ps aux | grep Chrome` 显示 Chrome 进程在跑，TCP connect `connect_ex()` 返回 0（端口 TCP 连通）。
+
+**根因**：Chrome 从 Spotlight/Dock/Alfred GUI 启动，**没有带 `--remote-debugging-port` 参数**，CDP HTTP/WS 服务器从未启动。进程在跑但调试端口没开。
+
+**诊断流程**：
+```python
+# Step 1: 确认 Chrome 在跑
+ps aux | grep "Google Chrome" | grep -v grep | grep -v Helper | wc -l
+# → > 0 说明 Chrome 在跑
+
+# Step 2: 确认端口真正监听（TCP ok ≠ HTTP ok）
+python3 -c "
+import socket, urllib.request
+s = socket.socket()
+s.settimeout(2)
+tcp_ok = s.connect_ex(('127.0.0.1', 9333)) == 0
+s.close()
+try:
+    tabs = urllib.request.urlopen('http://127.0.0.1:9333/json', timeout=3)
+    http_ok = True
+except Exception as e:
+    http_ok = False
+print(f'TCP={tcp_ok} HTTP={http_ok}')  # TCP=yes + HTTP=no = GUI启动未带参数
+"
+```
+
+**正确修复**：
+```bash
+# 用 chrome-on-demand.sh（正确的启动方式）
+bash ~/.hermes/scripts/chrome-on-demand.sh start
+
+# 或强制重启
+bash ~/.hermes/scripts/chrome-on-demand.sh --force
+
+# 验证
+curl -s http://127.0.0.1:9333/json/version
+```
+
+**不要用的方法**：
+- ❌ `pkill -9 Chrome` 然后 GUI 重开 — 丢失用户所有 tab
+- ❌ `open -a "Google Chrome"` — 不带调试参数
+- ❌ "Chrome 在另一个 Space" — macOS 上不是这个问题
+
+**keepalive 脚本状态**：
+```bash
+launchctl list | grep chrome-keepalive
+# Should show PID > 0, not "Stop"
+```
+
 ### Known port mismatch symptoms (2026-06-03)
 - Script error: `HTTP Error 502: Bad Gateway` or `Connection refused` when connecting to CDP
 - `curl http://127.0.0.1:9444/json` returns empty `[]` but `lsof -iTCP:9333` shows Chrome listening

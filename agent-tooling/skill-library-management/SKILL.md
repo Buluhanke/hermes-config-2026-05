@@ -133,6 +133,7 @@ cd ~/.hermes/hermes-agent && git pull origin main
 | 搜索路由 | anysearch, unified-search-routing, ddgs-searxng-agg-search | 保留 anysearch + ddgs 兜底 |
 | 主动执行 | proactive-execution, proactive-self-evolution | 保留 proactive-execution |
 | 技能管理 | skill-library-management, skill-vetter | 两者互补，都保留 |
+| 跨平台 agent 感知 | hermes-agent-status-monitor (状态广播) + `cross_platform_skill.sh` 三件套 (白板+看板+索引, 2026-06-07) | **同家族兄弟架构, 暂不合并**: 状态广播管"在线+数量", 三件套管"事件流+审计+索引", 数据流和落点都不一样, 合并会让 SKILL.md 变臃肿。详情见 `hermes-agent-status-monitor/references/cross-platform-skill-awareness.md` |
 
 ## 删除时机
 

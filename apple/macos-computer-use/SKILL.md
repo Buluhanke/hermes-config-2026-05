@@ -5,7 +5,7 @@ description: |
   scroll, drag — without stealing the user's cursor, keyboard focus, or
   Space. Works with any tool-capable model. Load this skill whenever the
   `computer_use` tool is available.
-version: 1.0.0
+version: 1.1.0
 platforms: [macos]
 metadata:
   hermes:
@@ -199,3 +199,74 @@ your conversation context.
 - File edits — use `read_file` / `write_file` / `patch`, not `type` into
   an editor window.
 - Shell commands — use `terminal`, not `type` into Terminal.app.
+
+---
+
+## The macOS GUI-automation ecosystem (don't re-install what you already have)
+
+`computer_use` (this skill) is **one of three** macOS GUI-automation paths
+the Hermes stack can take. They are intentionally separate — see the
+[OpenClaw Peekaboo bridge docs](https://docs.openclaw.ai/platforms/mac/peekaboo)
+for the original distinction. Before installing anything new, check what is
+already running.
+
+| Path | Stack | Background? | Hermes integration | Use when |
+|---|---|---|---|---|
+| **A. cua-driver MCP** (this skill) | TryCua → `cua-driver mcp` running as MCP server | ✅ Yes (no focus steal) | `mcp_cua_driver_*` tools | **Default.** Background automation, don't disturb user |
+| **B. Peekaboo v3** | OpenClaw's Peter Steinberger → `peekaboo` CLI | ❌ No (needs focused window) | Shell out via `terminal` | Broad macOS surface (Dock, menu bar, dialogs) — only when you need what cua-driver doesn't expose |
+| **C. OpenClaw Codex Computer Use** | OpenClaw.app hosts PeekabooBridge + Codex plugin | ❌ No | Separate Codex session | When running Codex-mode agents |
+
+### 2026-06-07 ecosystem snapshot (this machine)
+
+- ✅ **CuaDriver.app + `cua-driver mcp`** — installed, MCP server running
+- ✅ **Peekaboo v3.1.2** — installed via `steipete/tap`, all 3 permissions granted
+- ✅ **OpenClaw.app** — not installed (only CuaDriver + Peekaboo CLI)
+
+**If `mcp_cua_driver_*` tools are available, use them — do not shell out
+to `peekaboo` for routine clicks.** Peekaboo exists for the specific
+PeekabooBridge workflows (menu bar, Dock, dialog primitives) that
+cua-driver doesn't expose. See `references/macos-gui-automation-stack-2026-06-07.md`
+for the full decision matrix.
+
+### Decision rule of thumb
+
+```
+Need to click/type in a Mac app?
+  ├─ MCP tool exists (mcp_cua_driver_*) → use it (this skill)
+  ├─ Only CLI option (peekaboo click, AppleScript) → shell out
+  ├─ Native macOS dialog / menu bar / Dock → peekaboo
+  └─ Browser content → use browser_* tools, not computer_use at all
+```
+
+### Anti-pattern: don't re-install Peekaboo when cua-driver works
+
+The "Peter shipped Peekaboo v3" news from late May 2026 made the rounds,
+but the practical question is not "should I install Peekaboo" — it is
+"which of the three paths is already working on this machine?" On this
+Mac, **CuaDriver MCP is the working path**; Peekaboo is a complementary
+tool for menu-bar / Dock surfaces, not a replacement. If you find yourself
+about to `brew install peekaboo` or recommend it as "new and better",
+stop and run `mcp_cua_driver_get_config` first — the tool you want is
+probably already available. See skill `tool-stack-evolution` for the
+"修补 vs 进化" decision framework that produced this guidance.
+
+### Permissions cheatsheet (this Mac, 2026-06-07)
+
+| Tool | Screen Recording | Accessibility | Event Synth |
+|---|---|---|---|
+| cua-driver (CuaDriver.app) | ✅ Granted | ✅ Granted | ✅ Granted |
+| Peekaboo v3.1.2 | ✅ Granted | ✅ Granted | ✅ Granted |
+
+If you see "Permission denied" errors, ask the user to re-grant via
+System Settings → Privacy & Security → Accessibility / Screen Recording.
+Both CuaDriver.app and Peekaboo need both.
+
+## Maintenance log
+
+- **v1.1.0 (2026-06-07)** — Added "macOS GUI-automation ecosystem" section.
+  - Surface the fact that cua-driver MCP + Peekaboo v3 are BOTH installed
+  - Decision rule: cua-driver first, Peekaboo only for menu-bar/Dock surfaces
+  - Anti-pattern: don't `brew install peekaboo` to "upgrade" — it's already there,
+    and it's NOT a replacement for cua-driver
+  - Cross-link to skill `tool-stack-evolution` for the methodology that produced this
+- **v1.0.0** — Initial release.

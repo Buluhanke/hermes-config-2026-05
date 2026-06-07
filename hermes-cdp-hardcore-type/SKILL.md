@@ -390,6 +390,31 @@ Gemini 使用 Quill 编辑器 (`.ql-editor`) + Angular zone.js。`Input.dispatch
 3. AppleScript `keystroke "v" using command down` 触发 Cmd+V（绕过 zone.js）
 4. `keystroke return` 发送
 
+## CloakBrowser 定位：互补工具，不是替代品（2026-06-07 新增）
+
+**安装**：`pip install cloakbrowser`（Python 3.9+）
+
+**实测结论**：
+- 反检测：58项底层补丁，`bot.sannysoft.com` 满分，`bot.incolumitas.com` behavioral score 0.0074（极低），业界最强
+- API：Playwright 兼容接口，`from cloakbrowser import launch` 即可
+- **致命限制**：CloakBrowser 启动**独立浏览器 profile**，和用户已登录 Chrome **完全不共享 cookies/session**
+- 结果：在 DeepSeek/豆包等站点全部是未登录状态，无法操控已登录会话
+
+**正确用法**：
+- ✅ 需要**无登录态**的爬虫 / 匿名测试 / 反检测验证 → 直接用 CloakBrowser
+- ✅ 作为 `anti_detect_inject.py` 的**增强替代**（58项 vs 12项补丁）
+- ❌ 操控用户已登录站点的对话 → 必须用 CDP 直连用户 Chrome（`chrome-on-demand.sh start` → ws://127.0.0.1:9333）
+
+**验证方法**：
+```python
+from cloakbrowser import launch
+browser = launch(headless=True)
+page = browser.new_page()
+page.goto('https://bot.sannysoft.com')
+page.wait_for_timeout(4000)
+browser.close()
+```
+
 ## 关键环境
 - Chrome: 系统 Chrome + debug port 9333 启动
 - Python: 3.x + websockets 库

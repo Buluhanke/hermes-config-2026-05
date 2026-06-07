@@ -95,3 +95,14 @@
 | last30days 软链指 `/tmp/...` | 软链别指临时目录；用 `find ~/.hermes -type d -name X` 全局验证 |
 | uv pip install 装到 3.11 venv | 显式 `--python .venv/bin/python` 指定解释器 |
 | fetch_url 输出 nav 垃圾 | 别自己写提取器，Trafilatura 已经是社区 #1 |
+| **JSON 缓存慢+手算过期**（v1） | DiskCache 自动 TTL/LRU/原子写，省代码 5x 性能 |
+| **v1 fetch_url 用 html2text+stdlib** | 装 Trafilatura 替换，社区基准 #1 |
+| **看到 searxng 空直接写 fetch_url** | 修补；先全网对比再决定替换（用户 04:20 进化铁律）|
+
+## 升级对照表（v1 → v3.0.0）
+
+| 位置 | v1 方案 | v3.0.0 方案 | 切换命令 |
+|------|---------|--------------|----------|
+| 缓存 | JSON 文件 | DiskCache 5.6.3 | `uv pip install --python ~/.hermes/hermes-agent/venv/bin/python diskcache` |
+| URL 提取 | html2text+stdlib regex | Trafilatura 2.0.0 | `uv pip install --python ~/.hermes/hermes-agent/venv/bin/python trafilatura` |
+| 缓存目录 | `~/.hermes/cache/fetch_url/` | `~/.hermes/cache/fetch_url_v2/` | 旧目录清空 |

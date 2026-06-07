@@ -248,6 +248,42 @@ cron 任务的健康检查（API连通性、模型ping等）必须是**通用可
 □ 用户说"停一下"？→ 立即停
 ```
 
+### 规则24：跨平台 skill 共享是架构事实，不需要额外同步协议（2026-06-07 新增）
+
+**用户问法**：*「同步 QQ/微信/Telegram 的所有信息及技能，让三个 agent 彼此知道对方装过什么 skill」*
+
+**架构事实**：
+- Telegram / QQ / WeChat 三个平台是**同一个 Hermes Gateway 的三个入口**
+- 共用 `~/.hermes/skills/`、`~/.hermes/scripts/`、`~/.hermes/.skill_registry.json`
+- **技能天然互通** — 在任一平台新装的 skill，其他平台下次对话自动可见
+- 对话历史/ session 状态是平台隔离的（这是 Hermes 官方限制，非本次任务范围）
+
+**正解模式**（让共享可见）：
+```
+skill_registry.py   → 扫描所有 skill，生成 .skill_registry.json
+agent_status.py    → 跨平台状态广播工具
+cron job (15min)   → 自动刷新 + 广播技能摘要
+```
+- 这三个工具是**可见性层**，不是"同步协议"
+- 三个平台不需要"知道对方"，因为它们是同一个 agent 的三个入口
+
+**反面教材（别做的事）**：
+- ❌ 建跨平台消息队列 / 实时握手协议
+- ❌ 在 fact_store 里写"X 平台装了 Y skill"
+- ❌ 试图让 A 平台的对话历史流向 B 平台
+
+**验证方法**：
+```bash
+python3 ~/.hermes/scripts/skill_registry.py search "关键词"   # 任一平台可查
+python3 ~/.hermes/scripts/agent_status.py skill_summary       # 任一平台可看
+```
+
+**配套文件**：
+- `~/.hermes/scripts/skill_registry.py` — 技能扫描/搜索工具
+- `~/.hermes/scripts/agent_status.py` — 状态广播工具（含 announce/list/learn/query 命令）
+- `~/.hermes/.skill_registry.json` — 190 个 skill 的中央注册表
+- cron job `311f52c90642` — 每 15 分钟自动刷新 + 广播
+
 ### 规则24：跨平台 handoff 用 daily_notes.md，不用跨 session sync (2026-06-05 新增)
 
 **用户问法信号**：*"两个机器人同步" / "在哪学在哪用" / "跨 platform" / "新会话能看到我之前干的吗"*

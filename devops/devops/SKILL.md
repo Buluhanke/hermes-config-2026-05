@@ -105,13 +105,67 @@ top -l 1 -n 0 -o MEM  # 详细
 **原因**：QQBot API 的 session 30 分钟过期，需要 gateway 自动 rejoin
 **修复**：属于 gateway 适配层，需要改源码，不在运维范围
 
-### 3. CDP Chrome 无响应
-**症状**：`curl http://127.0.0.1:9333/json` 无输出或 0 tabs
-**诊断**：
-- `/json/version` 能响应 → CDP 正常，只是没有 tab 注册（正常状态）
-- `/json` 返回 0 tabs → Chrome 可能在另一个 Space 上或有极少 tab 打开，**不是故障**
-- 两个都无响应 → Chrome 未启动或端口不对
-**修复**：Chrome 可能需要重新打开窗口或使用 `--new-window` 启动。验证用 `/json/version` 而不是 `/json`。
+### 3. CDP Chrome 9333 端口不通（2026-06-07 实测）
+
+**症状**：`curl http://127.0.0.1:9333/json` → Connection refused，但 Chrome 进程在跑
+
+**错误诊断（不要用）**：
+- ❌ "Chrome 没启动" — Chrome 进程在，PID 正常
+- ❌ "端口被占用" — `lsof` 查不到 9333 的 TCP 监听
+- ❌ "Chrome 可能在另一个 Space" — macOS 上不是这样
+
+**正确诊断**：
+```bash
+# 1. 确认 Chrome 进程在跑（≠ 端口监听）
+ps aux | grep "Google Chrome" | grep -v grep | grep -v Helper
+
+# 2. 确认端口真正监听（TCP connect 返回 0 = 成功，但 HTTP 不通）
+python3 -c "
+import socket
+s = socket.socket()
+s.settimeout(2)
+r = s.connect_ex(('127.0.0.1', 9333))
+print('TCP ok' if r == 0 else f'TCP fail {r}')
+s.close()
+"
+
+# 3. 查 Unix socket（9333 可能用了 BSD socket 而非 TCP）
+sudo lsof -n -p $(pgrep -f "Google Chrome" | head -1) 2>/dev/null | grep -E "unix|IPv|9333"
+```
+
+**根因**：Chrome 是从 GUI（Spotlight/Dock/Alfred）打开的，**没有带 `--remote-debugging-port` 参数**，所以调试端口从未真正监听。Chrome 进程在，但 CDP HTTP/WS 服务器没启动。
+
+**正确修复（2026-06-07 实测）**：
+```bash
+# 用 chrome-on-demand.sh 正确启动（带调试端口）
+bash ~/.hermes/scripts/chrome-on-demand.sh start
+# 或强制重启
+bash ~/.hermes/scripts/chrome-on-demand.sh --force
+
+# 验证
+sleep 3 && curl -s http://127.0.0.1:9333/json | python3 -c "
+import sys,json
+tabs = json.load(sys.stdin)
+print(f'✅ {len(tabs)} tabs on 9333')
+"
+
+# 确认 CDP WebSocket 活着
+curl -s http://127.0.0.1:9333/json/version
+```
+
+**不要用的方法**：
+- ❌ `pkill -9 Chrome` 然后手动 GUI 重开 — 会丢失用户 tab
+- ❌ `open -a "Google Chrome"` — 不带调试参数
+
+**keepalive 脚本状态检查**：
+```bash
+# launchd keepalive 是否在跑
+launchctl list | grep chrome-keepalive
+# 应该显示 Running + PID，非 Stopped
+
+# 如果 not running，手动启动
+launchctl load ~/Library/LaunchAgents/ai.hermes.chrome-keepalive.plist
+```
 
 ### 5. Fallback chain 日志垃圾
 **症状**：每 30 分钟 20+ 条 `provider not configured` / `fallback failed` 错误日志，但主模型正常运行
@@ -123,10 +177,47 @@ top -l 1 -n 0 -o MEM  # 详细
 **原因**：历史内存峰值导致 swap 写入，当前不活跃
 **修复**：不影响性能可不管；想降 swap 需重启或清理 Ollama
 
+### 6. 微信 iLink 连接静默断开（2026-06-07 实战）
+
+**症状**：用户发微信消息，bot 不回；Telegram/QQ 正常；gateway 进程在跑
+**根因**：微信 iLink WebSocket 连接断开后，gateway 没有自动重连成功（静默失效）
+**诊断**：
+```bash
+# 1. 看日志 — 最后一条 inbound 时间 vs 当前时间
+grep "weixin" ~/.hermes/logs/gateway.log | grep -i "inbound" | tail -3
+
+# 2. 看连接状态 — 有没有 Disconnected 后没重新 Connected
+grep "weixin" ~/.hermes/logs/gateway.log | grep -iE "disconnect|connect|poll|error" | tail -10
+
+# 3. 对比 QQ — QQ 用 WebSocket 自动重连，微信用 iLink HTTP polling，更脆弱
+```
+**已知老问题**：
+- **rate limited**：`iLink sendmessage rate limited: ret=-2`（20:00 高峰时段频繁出现）
+- **Server disconnected**：poll 被服务端主动断开（约每 2-3 小时一次）
+**修复**：重启 gateway（`hermes gateway restart` 或 `pkill -f 'hermes_cli.main gateway' && hermes gateway start`），微信会重新走 connect → poll 流程。**这个操作不影响 Telegram/QQ 的当前会话。**
+**预防**：在 cron job 中定期检查微信最后一条 inbound 时间，超时 10 分钟自动重启 gateway。
+
+### 7. Gateway PID 文件是 JSON 格式（2026-06-07 实战坑）
+**症状**：`kill $(cat ~/.hermes/gateway.pid)` 失败，报错 "arguments must be process or job IDs"
+**根因**：`~/.hermes/gateway.pid` 是 JSON 对象 `{"pid": 27356, "kind": "hermes-gateway", ...}`，不是纯数字
+**正确做法**：
+```bash
+# 方法1：用 jq 提取
+kill -15 $(cat ~/.hermes/gateway.pid | python3 -c "import sys,json; print(json.load(sys.stdin)['pid'])")
+
+# 方法2：直接 pgrep
+kill -15 $(pgrep -f 'hermes_cli.main gateway' | head -1)
+
+# 方法3：Hermes CLI 自带的（如果有）
+hermes gateway restart
+```
+**注意**：gateway 是 `--replace` 模式，kill 后会自动重启。SIGTERM 如果被忽略（--replace 保护），用 `kill -9`。
+
 ## 参考文件
 - `references/hermes-health-check-2026-05-27.md` — 完整 9 步体检流程 + 故障等级 + 修复优先级
 - `references/state-db-corruption-recovery.md` — state.db 损坏 3 种恢复路径（2026-06-06 实战）
 - `references/skill-broken-invocation.md` — Skill 文件在磁盘但无法调用的诊断流程（两种故障模式：路径错位/缺失 cron）
+- `references/agent-coordination-tools-2026-06-07.md` — 技能注册表（skill_registry.py）+ 跨平台状态同步（agent_status.py）+ 共享知识库，3 平台技能互通工具链
 
 ## 故障模式：Skill 在磁盘但不能调用
 

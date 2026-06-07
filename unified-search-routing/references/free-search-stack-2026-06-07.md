@@ -121,6 +121,74 @@ LAST30 = os.path.expanduser(
 - 用户命令/CLI → 用软链（用户体验好）
 - 程序内部路径 → 用真路径（避免软链失效/被改）
 
+## 5. v3.0.0 升级：缓存层从 JSON 文件 → DiskCache（进化版）
+
+**v1 缓存的短板**（参考 SKILL.md v2.0.0 时代）：自己写 JSON 文件 + 手算 `time.time() - ts > 86400` 判过期。
+
+**v3.0.0 替换为 DiskCache 5.6.3**（BSD 许可，`uv pip install diskcache`）。为什么：
+
+- 自动 TTL（`expire=86400` 参数，不用手算）
+- 自动 LRU 淘汰（磁盘满自动清旧的）
+- 原子写（不用 lock，并发安全）
+- 1000 写 0.063s（JSON 方案 1s+）
+
+**代码模式**（search.py 和 fetch_url.py 都用同一套）：
+
+```python
+import diskcache
+_cache = diskcache.Cache("~/.hermes/cache/search", expiry=86400)
+
+# 写
+_cache.set("query key", output, expire=86400)
+
+# 读（过期自动返 None）
+hit = _cache.get("query key")
+if hit:
+    return hit
+```
+
+**缓存目录**（v3.0.0 后）：
+
+- `~/.hermes/cache/search/`（search.py，DiskCache 格式）
+- `~/.hermes/cache/fetch_url_v2/`（fetch_url.py，DiskCache 格式）
+- ~~`~/.hermes/cache/fetch_url/`~~（v1 的 JSON 方案已删，目录清空）
+
+**降级**：DiskCache 没装时（ImportError）自动 fallback 到"无缓存直跑"模式，不报错。
+
+## 6. v3.0.0 升级：URL 提取从 html2text → Trafilatura（进化版）
+
+**v1 fetch_url 的短板**（自己写 html2text + stdlib regex）：
+
+- html2text 不剥 nav/sidebar，输出"Skip to content / Navigation Menu / Sign in / ..."
+- 实测 GitHub 页面提取：100% 都是 UI 垃圾，没一句正文
+
+**v3.0.0 替换为 Trafilatura 2.0.0**（GPL-3.0，`uv pip install trafilatura`）。为什么：
+
+- scrapinghub 基准测试**击败** readability-lxml/newspaper4k/boilerpipe/goose3
+- 自动识别 nav/aside/script 剥掉
+- 实测同一 URL：输出"Persistent memory and auto-generated skills — it learns your projects and never forgets how it solved a problem."
+
+**代码模式**：
+
+```python
+import trafilatura
+md = trafilatura.extract(html, output_format="markdown",
+                         include_comments=False, include_tables=True)
+```
+
+**降级链**（v3.0.0 fetch_url.py）：
+1. Trafilatura 2.0.0（主）
+2. html2text（兜底，Trafilatura 没装时用）
+3. stdlib regex（终极兜底，零依赖）
+
+**方法论铁律**（用户 04:20 拍板 FIRST-CLASS 规则）：
+
+> 任何组件要改之前，**先 `web_search "best free <类> 2026"` 跑全网对比**，再决定替换什么，不是直接打补丁。
+
+**修补 vs 进化**：
+- 修补：searxng 失败 → 写 fetch_url 替代它
+- 进化：searxng 失败 → 全网对比 → 找到 Trafilatura → 替换整个提取器层
+
 ## 验证清单（每次升级后跑这 4 步）
 
 ```bash
@@ -146,13 +214,25 @@ cd ~/.hermes/skills/research/last30days-skill-main
 # 第二次跑应该看到: 💾 [缓存命中] RTX 5090 价格
 ```
 
-## 性能数据（2026-06-07 实测）
+## 性能数据
+
+### v1（JSON 缓存 + html2text）— 2026-06-07 早
 
 | 场景 | 第 1 次 | 第 2 次（缓存） | 节省 |
 |------|---------|-----------------|------|
 | 模糊查询（双引擎） | 18.5s | 0.023s | 99.9% |
 | 抓取 URL 全文 | 0.5-1s | <0.05s | 90%+ |
 | 舆情查询（last30days 主） | 10.9s | 0.02s | 99.8% |
+
+### v3.0.0（DiskCache + Trafilatura）— 2026-06-07 04:30
+
+| 场景 | 第 1 次 | 第 2 次（缓存） | 节省 |
+|------|---------|-----------------|------|
+| 模糊查询（双引擎） | 4.6s | **0.035s** | 99.2% |
+| 抓取 URL 全文 | 0.4s | 0.16s | 60% |
+| 舆情查询（last30days 主） | 10.9s | 0.035s | 99.7% |
+| **DiskCache 1000 写** | **0.063s** | — | （vs JSON 1s+）|
+| **Trafilatura 提取质量** | 真文 | — | （vs html2text 100% nav 垃圾）|
 
 ## 总结：免费联网搜索栈
 
@@ -182,18 +262,20 @@ cd ~/.hermes/skills/research/last30days-skill-main
         └──────────┘
               +
         ┌─────────────────────┐
-        │ 24h 缓存层(本地文件) │
+        │ 24h 缓存层(DiskCache)│
         │ ~/.hermes/cache/     │
+        │ 自动 TTL+LRU+原子写 │
         └─────────────────────┘
-```
+        ```
 
-**关键文件**：
+        **关键文件**（v3.0.0）：
 
-- `~/.hermes/scripts/search.py`（v3，~200 行 Python）
-- `~/.hermes/scripts/fetch_url.py`（v1，~200 行 Python）
-- `~/.hermes/hermes-agent/venv/`（fetch_url 跑这，html2text 装这里）
-- `~/.hermes/skills/research/last30days-skill-main/.venv/`（3.12，last30days 跑这）
-- `~/.hermes/cache/{search,fetch_url}/`（24h TTL）
+        - `~/.hermes/scripts/search.py`（v3.1，~250 行 Python，统一入口 + DiskCache 缓存）
+        - `~/.hermes/scripts/fetch_url.py`（v2，~250 行 Python，Trafilatura 主提取 + DiskCache 缓存）
+        - `~/.hermes/hermes-agent/venv/`（3.14，fetch_url 跑这，html2text/trafilatura/diskcache 装这）
+        - `~/.hermes/skills/research/last30days-skill-main/.venv/`（3.12，last30days 跑这，3 个核心包）
+        - `~/.hermes/cache/search/`（DiskCache 格式）
+        - `~/.hermes/cache/fetch_url_v2/`（DiskCache 格式）
 
 **关键原则**：
 
