@@ -1,7 +1,7 @@
 ---
 name: unified-search-routing
-description: 统一搜索路由 — 所有 hermes agent 调搜索/提取 URL 的唯一入口。封装 anysearch(最强通用聚合搜索) + last30days(过去30天社媒舆情/趋势) + fetch_url(本地 URL 提取器) 三个引擎,通过 ~/.hermes/scripts/search.py 按查询意图自动路由,带 24h 缓存 + 三层降级。
-version: 2.0.0
+description: 统一搜索路由 — 所有 hermes agent 调搜索/提取 URL 的唯一入口。封装 anysearch(最强通用聚合搜索) + last30days(过去30天社媒舆情/趋势) + fetch_url v2(Trafilatura 本地提取) 三个引擎,通过 ~/.hermes/scripts/search.py 按查询意图自动路由,带 DiskCache 24h 缓存 + 三层降级。
+version: 3.0.0
 created: 2026-06-06
 updated: 2026-06-07
 author: hermes
@@ -12,6 +12,8 @@ tags:
   - anysearch
   - last30days
   - fetch_url
+  - trafilatura
+  - diskcache
   - cache
 trigger_keywords:
   - 搜索/查一下/搜一下/搜个
@@ -121,57 +123,58 @@ search.py "..."
 
 **任何 search 任务的兜底都从 search.py 开始**——你只看到"主路 + 补充路 + 兜底"三层结果，引擎选择是 search.py 的事，不是调用者的事。
 
-## v2 升级（2026-06-07）：fetch_url + 缓存 + 三层降级
+## v3 升级（2026-06-07 04:30）：Trafilatura + DiskCache 替换
 
-### 新增：fetch_url.py — 本地 URL 提取器（web_extract 兜底）
+### 进化方法论（**用户 04:20 拍板的 FIRST-CLASS 规则**）
 
-**痛点**：内置 `web_extract` 后端是 SearXNG（公网实例不稳，常返回空）。**解决方案**：
+> **"先用当下的再去全网搜罗比当下更强的更好的也是免费的来替换当下的方案才是进化，而不是在当下的情况不停地找错，这个不是进化，这是修补"**
 
-```bash
-# 单 URL 抓取
-python3 ~/.hermes/hermes-agent/venv/bin/python ~/.hermes/scripts/fetch_url.py "https://example.com"
+**修补 vs 进化的区别**：
 
-# 多个 URL
-python3 ~/.hermes/hermes-agent/venv/bin/python ~/.hermes/scripts/fetch_url.py "https://a.com" "https://b.com"
+| 行为 | 修补 | 进化 |
+|------|------|------|
+| 看到 searxng 后端空 | 写 fetch_url 替代它 | **先问"当下最强免费方案是什么"**，全网搜（`web_search "best free X 2026"`），找到 Trafilatura 替换整个提取器层 |
+| 发现缓存慢 | 加 in-memory dict 优化 | 搜全网缓存库（`diskcache`/`cachetools`/`fakeredis`），用 DiskCache 替换 |
+| 触发条件 | 用户说"修个 bug" | 用户说"升级"/"找更强的"/"全网对比" |
 
-# 跳过缓存
-python3 ~/.hermes/hermes-agent/venv/bin/python ~/.hermes/scripts/fetch_url.py "https://..." --no-cache
+**铁律**：任何组件要改之前，**先 `web_search "best free <类> 2026"` 跑全网对比**，再决定替换什么，不是直接打补丁。
 
-# 只看标题
-python3 ~/.hermes/hermes-agent/venv/bin/python ~/.hermes/scripts/fetch_url.py "https://..." --title-only
+### v2 → v3 全网对比结果
+
+| 位置 | v2 方案 | 全网最强免费方案 | 验证 |
+|------|---------|------------------|------|
+| URL 提取 | html2text + stdlib regex | **Trafilatura 2.0.0**（社区基准 #1，击败 readability-lxml/newspaper4k/boilerpipe） | 实测 github.com 提取从"一堆 nav 垃圾"→"项目描述+安装命令" |
+| 缓存 | JSON 文件手写 | **DiskCache 5.6.3**（自动 TTL+LRU+原子写+并发安全） | 1000 写 0.063s |
+| 搜索主路 | anysearch | 仍是 anysearch（Brave 2026/2 砍免费、SearXNG 公网连不通） | — |
+| 搜索兜底 | DDGS + curl HTML | 同上 | — |
+| 社媒舆情 | last30days | 没找到更强免费路线 | 保持 |
+
+**排除的候选（实测本机不能跑）**：
+- ❌ Jina Reader (`r.jina.ai`) — DNS 解析到 Facebook IP，10s 超时
+- ❌ Brave Search API — 2026 年 2 月砍掉免费层
+- ❌ SearXNG 公共实例 — 5 个公网实例从本机全部连不通
+
+### v3 升级实际效果
+
+```
+fetch_url.py "https://github.com/NousResearch/hermes-agent"  # Trafilatura
+  → 输出干净的项目描述、模型支持列表、安装命令（v1 输出一堆 nav 菜单）
+
+search.py "DeepSeek V4 发布"  # DiskCache 缓存
+  第 1 次: 4.6s
+  第 2 次: 0.035s  ✅ 缓存命中
 ```
 
-**降级链**（全部免费）：
-1. `html2text`（已装在 hermes venv）→ 最佳质量
-2. `markdownify`（可选） → 备选
-3. 纯 stdlib + 正则（无外部依赖） → 兜底
+### v3 改动清单
 
-**缓存**：`~/.hermes/cache/fetch_url/<hash>.json`，24h TTL。
+| 文件 | 改动 |
+|------|------|
+| `~/.hermes/scripts/fetch_url.py` | v1 → v2：Trafilatura 2.0.0 主提取器 + DiskCache 缓存层 |
+| `~/.hermes/scripts/search.py` | v3 → v3.1：JSON 缓存 → DiskCache |
+| `~/.hermes/cache/fetch_url_v2/` | 新增（v1 的 `fetch_url/` 旧 JSON 已清理） |
+| `~/.hermes/cache/search/` | 从 JSON 改为 DiskCache 格式 |
 
-### 新增：search.py v3 三层降级
-
-```
-search.py "查询"
- ├─ 缓存命中 → 直接返（0.02s）
- ├─ 路由 anysearch ─┐
- │                  ├─ 正常 → 主路 + last30days 补充
- │                  ├─ 挂了 → agg_search.py (DDGS) 兜底
- │                  └─ agg 也挂 → curl 抓 DuckDuckGo HTML 应急
- └─ 路由 last30days → last30days 主 + anysearch 补充
-                     （last30days 50s 超时自动砍掉，不阻塞）
-```
-
-**实际效果**（2026-06-07 实测）：
-- 第 1 次跑：18.5s（拉 anysearch + last30days + 写缓存）
-- 第 2 次跑：**0.023s**（缓存命中，省 18s+）
-
-### 新增：缓存层
-
-- **search 缓存**：`~/.hermes/cache/search/<query_hash>.json`，24h TTL
-- **fetch_url 缓存**：`~/.hermes/cache/fetch_url/<url_hash>.json`，24h TTL
-- 重复查询秒返，不消耗 API 配额
-
-### 路径选择铁律（v2 新加）
+### 路径选择铁律（v1 留下，v3 保留）
 
 **用户管入口用软链，程序内用真路径**：
 
@@ -191,6 +194,7 @@ search.py "查询"
 - ❌ 用 `pip3` 给 last30days 装包 ——装到系统 Python 没权限。让 uv 自己选解释器 ——会偷吸 hermes-agent 的 3.11 venv。**永远** `uv pip install --python <具体路径>`。
 - ❌ 软链指向 `/tmp` 或 `~/.local/share/` ——macOS 重启就清，或目标根本不存在。**永远**指向 `~/.hermes/skills/research/last30days-skill-main/skills/last30days`。
 - ❌ 程序内写真实路径还是软链路径混用 ——统一原则：CLI 入口走软链（用户体验），程序内部写真路径（避开软链失效）。
+- ❌ 看到当下方案有问题就直接打补丁 ——**先全网搜"best free X 2026"对比，再决定替换**（用户 04:20 拍板的进化方法论）。修补 ≠ 进化。
 
 ## 触发词速查
 
@@ -207,19 +211,19 @@ search.py "查询"
 
 | 路径 | 角色 |
 |---|---|
-| `~/.hermes/scripts/search.py` | **统一入口**（所有 agent 唯一调这个，v3 加缓存+三层降级） |
-| `~/.hermes/scripts/fetch_url.py` | **本地 URL 提取器**（v2 新加，web_extract 兜底） |
-| `~/.hermes/hermes-agent/venv/bin/python` | venv 解释器（fetch_url 跑这，html2text 装了） |
+| `~/.hermes/scripts/search.py` | **统一入口**（所有 agent 唯一调这个，v3.1 加 DiskCache + 三层降级） |
+| `~/.hermes/scripts/fetch_url.py` | **本地 URL 提取器 v2**（Trafilatura 主提取 + DiskCache 缓存） |
+| `~/.hermes/hermes-agent/venv/bin/python` | venv 解释器（fetch_url 跑这，html2text/trafilatura/diskcache 都在） |
 | `~/.hermes/skills/anysearch/SKILL.md` | anysearch 完整文档（兜底用） |
 | `~/.hermes/skills/research/last30days/SKILL.md` | last30days 完整文档（13.5 万字） |
 | `~/.hermes/skills/ddgs-searxng-agg-search/SKILL.md` | agg_search.py 兜底链（DDGS 聚合） |
 | `~/.hermes/scripts/agg_search.py` | DDGS 多引擎聚合（anysearch 挂了才用） |
-| `~/.hermes/cache/search/` | search 缓存目录（24h TTL） |
-| `~/.hermes/cache/fetch_url/` | fetch_url 缓存目录（24h TTL） |
-| `~/.hermes/skills/research/last30days-skill-main/.venv/bin/python` | last30days 跑这（Python 3.12 独立 venv） |
+| `~/.hermes/cache/search/` | search 缓存目录（DiskCache，24h TTL） |
+| `~/.hermes/cache/fetch_url_v2/` | fetch_url 缓存目录（DiskCache，24h TTL） |
 | `references/search-pipeline-architecture.md` | 管道架构图+文件清单+依赖表 |
 | `references/last30days-install-and-broken-symlink.md` | **last30days 安装/软链翻车实录+venv 3 坑+升级流程**（用户报告"找不到了"时第一手查这个） |
 | `references/free-search-stack-2026-06-07.md` | **免费联网搜索栈实战笔记**（4 个隐蔽坑：软链指 /tmp、venv 用错解释器、fetch_url 跑哪个 venv、软链 vs 真路径选择） |
+| `references/free-search-replacement-decision-2026-06-07.md` | **全网对比决策指南**（5 个位置的候选实测 + 排除清单 + 进化方法论） |
 
 ## last30days 升级/翻车速查
 
@@ -229,6 +233,13 @@ search.py "查询"
 
 ## 维护记录
 
+- **v3.0.0 (2026-06-07)** — Trafilatura + DiskCache 进化版（**取代 v2 的 html2text + JSON**）
+  - 嵌入"修补 vs 进化"方法论（用户 04:20 拍板）
+  - fetch_url.py v1 → v2：html2text+stdlib → **Trafilatura 2.0.0**（scrapinghub 基准 #1）
+  - 缓存层：JSON 文件 → **DiskCache 5.6.3**（自动 TTL+LRU+原子写+并发安全）
+  - 全网对比了 4 个提取器候选、3 个缓存候选
+  - 排除：Jina Reader（本机连不上）、Crawl4AI（太重）、Brave Search（2026/2 砍免费）、SearXNG 公网（连不上）
+  - 实测：同一 URL 提取从"100% nav 垃圾"→"真正正文"；查询缓存 0.035s 命中
 - **v2.0.1 (2026-06-07 深夜)** — 补实战笔记 + 修路径 bug
   - 新增 `references/free-search-stack-2026-06-07.md`（4 个隐蔽坑的详细复盘：软链 /tmp、venv 用错解释器、fetch_url 跑哪个 venv、软链 vs 真路径）
   - 修复 SKILL.md 里的 last30days 路径——从软链路径改成真路径（程序内部不应走软链）
