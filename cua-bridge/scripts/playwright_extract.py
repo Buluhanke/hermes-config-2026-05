@@ -63,8 +63,18 @@ def check_playwright() -> dict:
                 result["chromium"] = True
                 return result
 
+    # 退路：检查 system Chrome（macOS /Applications/Google Chrome.app）
+    system_chrome = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+    if system_chrome.is_file() and system_chrome.stat().st_mode & 0o111:
+        result["chromium"] = True  # 复用这个字段
+        result["chromium_path"] = str(system_chrome)
+        result["system_chrome"] = True
+        return result
+
     if not result["chromium"]:
-        result["error"] = "chromium not installed. Run: ~/.hermes/hermes-agent/venv/bin/python -m playwright install chromium"
+        result["error"] = ("chromium not installed. Run: "
+                           "~/.hermes/hermes-agent/venv/bin/python -m playwright install chromium "
+                           "(or install Google Chrome.app)")
     return result
 
 
@@ -85,7 +95,14 @@ def extract_via_playwright(url: str, timeout: int = 30, use_cache: bool = True,
     result: dict = {"url": url, "extractor": "playwright"}
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
+            # 优先 system Chrome（已装、免下载）；fallback 到 chromium
+            system_chrome = Path("/Applications/Google Chrome.app/Contents/MacOS/Google Chrome")
+            if system_chrome.is_file():
+                browser = p.chromium.launch(channel="chrome", headless=True)
+                result["browser"] = "system-chrome"
+            else:
+                browser = p.chromium.launch(headless=True)
+                result["browser"] = "chromium-downloaded"
             try:
                 context = browser.new_context(
                     user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
