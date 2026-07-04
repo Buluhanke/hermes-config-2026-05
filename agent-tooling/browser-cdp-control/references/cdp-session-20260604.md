@@ -8,7 +8,7 @@
 ```bash
 /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
   --user-data-dir="/Users/aimac/Library/Application Support/Google/Chrome/Default" \
-  --remote-debugging-port=9333 \
+  --remote-debugging-port=9222 \
   --no-first-run --no-default-browser-check \
   --disable-blink-features=AutomationControlled \
   --new-window about:blank 2>/dev/null &
@@ -18,7 +18,7 @@ All 6 AI sites (豆包, ChatGPT, DeepSeek, Gemini, ChatGLM, Grok) are already lo
 
 ## `browser.cdp_url` Dirty Data Bug (2026-06-04)
 
-**Symptom**: `browser_navigate` returns "404 Not Found" or "ERR_BLOCKED_BY_CLIENT" even when `curl localhost:9333/json/version` works fine.
+**Symptom**: `browser_navigate` returns "404 Not Found" or "ERR_BLOCKED_BY_CLIENT" even when `curl localhost:9222/json/version` works fine.
 
 **Root cause**: `hermes config set` cannot delete keys — it only writes empty-string over them. Repeated calls accumulate `server: ''` / `cdp_url: ''` empty-string fields. YAML parser gets confused by adjacent empty fields and the value silently fails to parse.
 
@@ -36,7 +36,7 @@ cfg.write_text('\n'.join(cleaned) + '\n')
 
 **Then verify**:
 ```bash
-curl -s http://127.0.0.1:9333/json/version   # must return Chrome version
+curl -s http://127.0.0.1:9222/json/version   # must return Chrome version
 browser_navigate https://www.doubao.com       # must return fully rendered page
 ```
 
@@ -46,7 +46,7 @@ browser_navigate https://www.doubao.com       # must return fully rendered page
 
 **Root cause**: mcp-chrome-stdio has a separate stdio-config.json that must match the running Chrome debug port.
 
-**Workaround**: Bypass entirely. Chrome debug port 9333 is directly accessible via HTTP+WebSocket. No bridge needed.
+**Workaround**: Bypass entirely. Chrome debug port 9222 is directly accessible via HTTP+WebSocket. No bridge needed.
 
 ## Critical: Chrome CDP Does NOT Support JSON-RPC 2.0
 

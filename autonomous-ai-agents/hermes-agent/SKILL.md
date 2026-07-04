@@ -1,7 +1,7 @@
 ---
 name: hermes-agent
 description: "Configure, extend, or contribute to Hermes Agent."
-version: 2.1.0
+version: 2.2.0
 author: Hermes Agent + Teknium
 license: MIT
 platforms: [linux, macos, windows]
@@ -30,6 +30,16 @@ People use Hermes for software development, research, system administration, dat
 **This skill helps you work with Hermes Agent effectively** — setting it up, configuring features, spawning additional agent instances, troubleshooting issues, finding the right commands and settings, and understanding how the system works when you need to extend or contribute to it.
 
 **Docs:** https://hermes-agent.nousresearch.com/docs/
+
+## Scope & Verification
+
+This skill is a concise operating guide, not the complete source of truth for every Hermes feature. If a Hermes feature, command, or setting is not mentioned here, do not treat that absence as evidence that it does not exist. Check the live repository and official docs before giving a negative answer.
+
+Good verification targets:
+
+- CLI commands: `hermes --help`, `hermes <command> --help`, and `hermes_cli/main.py`
+- User documentation: https://hermes-agent.nousresearch.com/docs/
+- Source tree: https://github.com/NousResearch/hermes-agent
 
 ## Quick Start
 
@@ -326,7 +336,6 @@ The registry of record is `hermes_cli/commands.py` — every consumer
 /commands [page]     Browse all commands (gateway)
 /usage               Token usage
 /insights [days]     Usage analytics
-/gquota              Show Google Gemini Code Assist quota usage (CLI)
 /status              Session info (gateway)
 /profile             Active profile info
 /debug               Upload debug report (system info + logs) and get shareable links
@@ -343,7 +352,7 @@ The registry of record is `hermes_cli/commands.py` — every consumer
 
 ```
 ~/.hermes/config.yaml       Main configuration
-~/.hermes/.env              API keys and secrets
+~/.hermes/.env              API keys and secrets (under $HERMES_HOME if set)
 $HERMES_HOME/skills/        Installed skills
 ~/.hermes/sessions/         Gateway routing index, request dumps, *.jsonl transcripts (and optional per-session JSON snapshots when sessions.write_json_snapshots: true)
 ~/.hermes/state.db          Canonical session store (SQLite + FTS5)
@@ -446,6 +455,55 @@ Full enumeration lives in `toolsets.py` as the `TOOLSETS` dict; `_HERMES_CORE_TO
 Tool changes take effect on `/reset` (new session). They do NOT apply mid-conversation to preserve prompt caching.
 
 ---
+
+## Project Context Files
+
+Hermes injects project-level instructions into the system prompt by reading context files from the working directory. The discovery order is **first match wins** — only one project context source is loaded per session.
+
+| File (in priority order) | Discovery | Use when |
+|---|---|---|
+| `.hermes.md` / `HERMES.md` | Walks parents up to the git root, stops at git root | You want hierarchical project rules (root + per-package overrides) |
+| `AGENTS.md` / `agents.md` | **Cwd only** — subdirectory and parent copies are ignored | You want portable agent instructions that work the same in Hermes, Claude Code, Codex, etc. |
+| `CLAUDE.md` / `claude.md` | Cwd only | Same as AGENTS.md, Claude-flavored |
+| `.cursorrules` / `.cursor/rules/*.mdc` | Cwd only | Migrating from Cursor |
+
+`SOUL.md` (in `$HERMES_HOME`) is independent and always loaded when present — it sets the agent's identity, not project rules.
+
+### Pick the right one
+
+- **Use `.hermes.md`** when you want Hermes-specific behavior that lives above the cwd (root + subtree), or when you want rules to inherit from a parent directory. The parent walk stops at the git root, so a home-level `.hermes.md` won't leak into every project (a git repo's root is the boundary).
+- **Use `AGENTS.md`** when the same project will also be worked on by other agents (Codex, Claude Code, OpenCode). Those tools all have their own conventions for `AGENTS.md`, and the "cwd only" contract keeps the file portable.
+- **Don't put project rules in `~/.hermes/AGENTS.md`** (or any other home-level location). When Hermes runs with that directory as cwd, the file loads — but only for that one directory. For cross-project context, use `SOUL.md` (in `$HERMES_HOME`, identity-only) or install a skill via `hermes skills install`.
+
+### Size and truncation
+
+Each context file is capped at 20,000 characters. Files longer than that get **head + tail** truncated (the middle is dropped, with a `[...truncated...]` marker). For large project rules, prefer splitting into multiple skills over cramming one file.
+
+### Security
+
+All context files pass through the threat-pattern scanner before reaching the system prompt. Patterns matching prompt injection or promptware are replaced with a `[BLOCKED: ...]` placeholder. This means an `AGENTS.md` containing obvious injection attempts won't reach the model — the scanner blocks the content, not the file, so the rest of the file still loads.
+
+### Disable for one session
+
+`hermes --ignore-rules` skips auto-injection of all project context files (`.hermes.md`, `AGENTS.md`, `CLAUDE.md`, `.cursorrules`) **and** `SOUL.md` identity, plus user config, plugins, and MCP servers. Use it to isolate whether a problem is your setup or Hermes itself.
+
+### Example: a small `.hermes.md`
+
+```markdown
+# My Project
+
+Hermes: when working in this repo, follow these rules.
+
+## Build
+- Always run `make test` before declaring a change done.
+- Use `uv run` for Python, not `pip install`.
+
+## Style
+- Prefer `pathlib.Path` over `os.path`.
+- No `print()` in production code — use the `logger`.
+```
+
+That file at `/home/me/projects/myrepo/.hermes.md` is auto-loaded when Hermes runs in any subdirectory of `/home/me/projects/myrepo`, but not when it runs in `/home/me/other-project`.
 
 ## Security & Privacy Toggles
 
@@ -808,54 +866,39 @@ and logs — avoids shell-escaping backslashes in bash.
 
 ## Troubleshooting
 
-### Voice not working
-1. Check `stt.enabled: true` in config.yaml
-2. Verify provider: `pip install faster-whisper` or set API key
-3. In gateway: `/restart`. In CLI: exit and relaunch.
+For common issues encountered during Hermes operation, see the dedicated troubleshooting skill: `skill_view(name="hermes-troubleshooting")`.
 
-### Tool not available
-1. `hermes tools` — check if toolset is enabled for your platform
-2. Some tools need env vars (check `.env`)
-3. `/reset` after enabling tools
+Key issues covered include:
+- Missing hermes_self_check.sh file (self-check script not found)
+- Context processor degraded function errors
+- Custom provider configuration problems
+- Voice functionality issues
+- General maintenance and verification steps
 
-### Model/provider issues
-1. `hermes doctor` — check config and dependencies
-2. `hermes auth` — re-authenticate OAuth providers (or `hermes auth add <provider>`)
-3. Check `.env` has the right API key
-4. **Copilot 403**: `gh auth login` tokens do NOT work for Copilot API. You must use the Copilot-specific OAuth device code flow via `hermes model` → GitHub Copilot.
+## Quick Reference
 
-### Changes not taking effect
-- **Tools/skills:** `/reset` starts a new session with updated toolset
-- **Config changes:** In gateway: `/restart`. In CLI: exit and relaunch.
-- **Code changes:** Restart the CLI or gateway process
+If you encounter specific errors in logs:
+- `hermes_self_check.sh: No such file or directory` → See hermes-troubleshooting skill
+- `DEGRADED function cannot be invoked` → Check headroom service with `hermes headroom_stats`
+- Custom provider configuration problems → Verify provider is in `custom_providers` list in config.yaml
 
-### Skills not showing
-1. `hermes skills list` — verify installed
-2. `hermes skills config` — check platform enablement
-3. Load explicitly: `/skill name` or `hermes -s name`
+## Gateway & Smart Routing
 
-### Gateway issues
-Check logs first:
-```bash
-grep -i "failed to send\|error" ~/.hermes/logs/gateway.log | tail -20
-```
+**Gateway port: 8642** (confirmed 2026-06-28). Health endpoint: `http://127.0.0.1:8642/health`
 
-Common gateway problems:
-- **Gateway dies on SSH logout**: Enable linger: `sudo loginctl enable-linger $USER`
-- **Gateway dies on WSL2 close**: WSL2 requires `systemd=true` in `/etc/wsl.conf` for systemd services to work. Without it, gateway falls back to `nohup` (dies when session closes).
-- **Gateway crash loop**: Reset the failed state: `systemctl --user reset-failed hermes-gateway`
+All 9 fallback models tested and working. Response times (fastest to slowest):
+1. `gpt-oss-120b` (Cerebras) — 2.7s ⭐ Fastest free option
+2. `qwen/qwen3-coder:free` (OpenRouter) — 2.8s
+3. `gemini-2.5-flash` (Google) — 2.8s
+4. `deepseek-chat` — 2.9s (strong reasoning)
+5. `glm-4-flash` (智谱) — 2.9s
+6. `openrouter/free` — 2.9s
+7. `agnes-2.0-flash` — 2.9s (final fallback)
+8. `nvidia/nemotron-3-super-120b-a12b` — 3.0s
+9. `qwen/qwen3.5-397b-a17b` — 3.2s (主力, large context)
 
-### Platform-specific issues
-- **Discord bot silent**: Must enable **Message Content Intent** in Bot → Privileged Gateway Intents.
-- **Slack bot only works in DMs**: Must subscribe to `message.channels` event. Without it, the bot ignores public channels.
-- **Windows-specific issues** (`Alt+Enter` newline, WinError 10106, UTF-8 BOM config, test suite, line endings): see the dedicated **Windows-Specific Quirks** section above.
-
-### Auxiliary models not working
-If `auxiliary` tasks (vision, compression, session_search) fail silently, the `auto` provider can't find a backend. Either set `OPENROUTER_API_KEY` or `GOOGLE_API_KEY`, or explicitly configure each auxiliary task's provider:
-```bash
-hermes config set auxiliary.vision.provider <your_provider>
-hermes config set auxiliary.vision.model <model_name>
-```
+Full gateway config, custom provider setup, and smart routing reference:
+`skill_view(name="hermes-agent", file_path="references/gateway-and-routing.md")`
 
 ---
 
@@ -880,6 +923,15 @@ hermes config set auxiliary.vision.model <model_name>
 | Source code | `~/.hermes/hermes-agent/` |
 
 ---
+
+## User Interaction Best Practices
+
+- Be specific when asking for help: include file paths, line numbers, and exact error messages.
+- Use an `AGENTS.md` file in your project directory to store recurring instructions (e.g., coding style, test commands). The agent reads it automatically each session.
+- Let the agent use its tools freely; avoid step‑by‑step micromanagement.
+- For complex workflows, prefer to invoke an existing skill (e.g., `/skill github-pr-workflow`) rather than writing a long prompt.
+- CLI shortcuts: `Alt+Enter` / `Ctrl+J` / `Shift+Enter` for newline, `Ctrl+V` to paste an image from clipboard, `Ctrl+C` to interrupt, `hermes -c` to resume last session, `hermes -r "title"` to resume by session title.
+- When given a task, start executing immediately. Do not ask for confirmation unless the action is destructive (e.g., deleting files, modifying system settings).
 
 ## Contributor Quick Reference
 
@@ -908,7 +960,7 @@ hermes-agent/
 └── website/              # Docusaurus docs site
 ```
 
-Config: `~/.hermes/config.yaml` (settings), `~/.hermes/.env` (API keys).
+Config: `~/.hermes/config.yaml` (settings), `~/.hermes/.env` (API keys) — both under `$HERMES_HOME` when it is set.
 
 ### Adding a Tool (3 files)
 

@@ -6,14 +6,14 @@
 
 **Root cause**: MCP chrome bridge (mcp-chrome-stdio) has a separate stdio-config.json that must match the running Chrome debug port. When it can't connect to its configured Chrome instance, it fails silently at port 12306.
 
-**Workaround**: Bypass entirely. Chrome debug port 9333 is directly accessible via HTTP+WebSocket. No bridge needed.
+**Workaround**: Bypass entirely. Chrome debug port 9222 is directly accessible via HTTP+WebSocket. No bridge needed.
 
 ## Verified Working: Python CDP with `websockets`
 
 ```python
 import urllib.request, json, websocket, time
 
-CDP = 'http://localhost:9333'
+CDP = 'http://localhost:9222'
 
 # 1. HTTP: list tabs
 with urllib.request.urlopen(f'{CDP}/json') as f:
@@ -45,7 +45,7 @@ Best method for reading AI site content without OCR/screenshot. Returns 285 node
 import json, asyncio, websockets
 
 async def get_ax_tree(tab_id, depth=20):
-    async with websockets.connect(f"ws://localhost:9333/devtools/page/{tab_id}", max_size=20*1024*1024) as ws:
+    async with websockets.connect(f"ws://localhost:9222/devtools/page/{tab_id}", max_size=20*1024*1024) as ws:
         await ws.send(json.dumps({"id": 1, "method": "Page.bringToFront"}))
         await ws.recv()
         await asyncio.sleep(0.5)
@@ -94,7 +94,7 @@ ws.send(json.dumps({"id": N, "method": "Input.dispatchKeyEvent", "params": {
 
 ## Chrome Debug Port Status
 
-- **Port 9333**: Active and working (user's Chrome with debug flag)
+- **Port 9222**: Active and working (user's Chrome with debug flag)
 - **Chrome PID**: 68636
 - **mcp-chrome-stdio PID**: 93563 (faulty, not listening)
 - **websockets installed**: `~/.hermes/hermes-agent/venv/bin/pip install websockets -q`

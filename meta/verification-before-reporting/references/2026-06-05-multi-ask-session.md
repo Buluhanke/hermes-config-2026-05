@@ -7,9 +7,9 @@
 - 任务: 跑 9 AI 站交叉问
 - agent 行为: 直接 `python3 multi_ask_v3.py "..."`
 - 结果: 6 站全部 "tab不存在", exit 0
-- 根因: `multi_ask_v3` 走 CDP 9333 找已登录 tab, Chrome 根本没启动
+- 根因: `multi_ask_v3` 走 CDP 9222 找已登录 tab, Chrome 根本没启动
 - 用户反馈: "你乱来的, 都没快开本地浏览器, 是不会有 9 AI 站的"
-- 教训: 跑 multi_ask_v3 前必须 `pkill -9 Chrome + chrome-debug-launcher.py + lsof 9333 + browser_navigate 9 站 + curl /json 验证 tab 数`
+- 教训: 跑 multi_ask_v3 前必须 `pkill -9 Chrome + chrome-debug-launcher.py + lsof 9222 + browser_navigate 9 站 + curl /json 验证 tab 数`
 
 ## 失败 2 (13:45): 看 title 报成功
 
@@ -38,7 +38,7 @@
 ## 沉淀结果
 
 - memory 加 2 条:
-  1. "14:00 浏览器硬规则" (本地 Chrome + CDP 9333 + 9 站清单 + 输入方式 + 触发词)
+  1. "14:00 浏览器硬规则" (本地 Chrome + CDP 9222 + 9 站清单 + 输入方式 + 触发词)
   2. "14:55 用户重复确认 = 规则升级信号" (用户对同一条规则重复拍板, 不重加, 直接验证当前状态)
 - skill `verification-before-reporting` 4 个 Failure 模式已覆盖 (1/2/3/4 全在 SKILL.md 里) — **本 session 没新增 lesson, 是 skill 早已在库, agent 自己没去加载**
 
@@ -48,19 +48,19 @@
 # 1. 杀旧 + 启新 Chrome (background=true, 不用 shell &)
 pkill -9 -f "Google Chrome"
 nohup "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
-    --remote-debugging-port=9333 \
+    --remote-debugging-port=9222 \
     --user-data-dir=$HOME/.hermes/chrome-debug \
     --disable-extensions \   # ← uBlock 挡 4 站, 必须禁
     --no-first-run --no-default-browser-check &
 
 # 2. 等 5s + lsof 验证
-sleep 5; lsof -i :9333
+sleep 5; lsof -i :9222
 
 # 3. 9 站 navigate (browser_navigate 工具 或 CDP createTarget + attach + navigate)
 # 4. 等 8s 加载
 
 # 5. 必跑反指纹注入 (SKILL 第一步)
-python3 ~/.hermes/scripts/anti_detect_inject.py --port 9333 --verify
+python3 ~/.hermes/scripts/anti_detect_inject.py --port 9222 --verify
 # 注意: 跑 verify 会关掉所有 page tab (脚本 bug, 第二次跑会清空) — 必须在 navigate 之后跑, 只跑 1 次
 
 # 6. 用 Runtime.evaluate 抓 2-3 个 tab body, **不要看 title**

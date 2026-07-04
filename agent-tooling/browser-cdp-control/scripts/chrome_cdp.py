@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 chrome_cdp.py — Chrome CDP Direct Controller
-Bypasses mcp-chrome-stdio, controls Chrome directly via HTTP+WebSocket on port 9333.
+Bypasses mcp-chrome-stdio, controls Chrome directly via HTTP+WebSocket on port 9222.
 用法: python3 chrome_cdp.py <action> [args]
 Actions:
   list                    — 列出所有标签页
@@ -13,7 +13,7 @@ Actions:
 """
 import urllib.request, json, websocket, time, sys, os, base64, struct, argparse
 
-CDP_URL = 'http://localhost:9333'
+CDP_URL = 'http://localhost:9222'
 
 def list_tabs():
     with urllib.request.urlopen(f'{CDP_URL}/json', timeout=10) as f:

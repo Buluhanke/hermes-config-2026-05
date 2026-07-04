@@ -5,7 +5,7 @@ hermes_cdp_bot.py — CDP直连真实Chrome操作AI网站
 示例: python3 hermes_cdp_bot.py deepseek
 
 依赖: pip install websockets
-CDP端口: 9333 (chrome-debug profile) 或 9222 (用户真实Chrome)
+CDP端口: 9222 (chrome-debug profile) 或 9222 (用户真实Chrome)
 """
 import json, asyncio, websockets, urllib.request, sys
 
@@ -19,7 +19,7 @@ SITES = {
     "grok":     "https://grok.com/z",
 }
 
-CDP_PORT = 9333  # 默认chrome-debug端口
+CDP_PORT = 9222  # 默认chrome-debug端口
 
 def get_tab_id(site_key=None, url=None):
     """通过HTTP API找到对应tab的完整ID"""
