@@ -250,43 +250,71 @@ curl -s http://127.0.0.1:9222/json/version | python3 -c \
 
 **When NOT to use this approach**: When you need to install extensions (uBlock Origin, etc.) without disturbing the user's daily browsing. Use a separate profile for that.
 
-### 操作用户独立运行的 Chrome（2026-07-06 新增）
+### ⚠️ CDP 9222 可能连到镜子 Chrome，不是你的 Chrome（2026-07-06 新增）
 
-**发现背景**：用户日常 Chrome（PID 722）已经在跑，开了 9222 调试端口。Hermes 的 `computer_use` 偶尔返回 0x0（display 虚拟化问题），但 CDP 9222 端口始终正常。
+**症状**：用户说"已经登录了"，但 CDP 看到登录框。
 
-**核心 technique**：不需要重启 Chrome 或复制 profile，直接用 `browser_cdp` + `target_id` 操作用户已有标签页。
+**根因**：9222 端口可能被两套 Chrome 之一占用：
+1. **Hermes mirror Chrome**（`chrome-profile-mirror`）— Hermes 独立启动的 Chrome，cookie store 与用户主 Chrome 完全隔离
+2. **用户主 Chrome**（`Default` profile）— 用户日常用的，需要手动加 `--remote-debugging-port` 才会暴露 9222
 
-```python
-# 1. 发现用户 Chrome 的 tab
-import urllib.request, json
-with urllib.request.urlopen('http://127.0.0.1:9222/json/list') as f:
-    tabs = json.load(f)
-# 找企业微信文档 tab
-for t in tabs:
-    if 'doc.weixin.qq.com' in t.get('url', '') and t.get('type') == 'page':
-        tab_id = t['id']  # 完整 32-char ID
-        ws_url = t['webSocketDebuggerUrl']
-        break
+**鉴别方法**：查 CDP 返回的 `webSocketDebuggerUrl` 对应的 Chrome 版本路径，或对比用户 Chrome PID：
+```bash
+# 用户主 Chrome PID
+ps aux | grep "Google Chrome" | grep -v Helper | grep -v crash | awk '{print $1, $2}'
 
-# 2. 用 browser_cdp 直连（target_id 模式，不需要 WS URL）
-browser_cdp(
-    method="DOM.getDocument",
-    params={"depth": 3},
-    target_id=tab_id  # ← 直接用 /json/list 返回的 id
-)
+# CDP 连的是哪个
+curl -s http://127.0.0.1:9222/json/version
+# 看 Browser 字段里的版本号，是否和用户 Chrome 版本一致
 ```
 
-**关键限制**：
-- ❌ `browser_navigate` 不接受 `ws://` URL（报 "Blocked: URL targets a private or internal address"）
-- ✅ `browser_cdp` 用 `target_id` 不需要 WS URL，是正确路径
-- ✅ `computer_use` 返回 0x0 时，CDP 仍然正常 → 降级到 `browser_cdp`
-- ⚠️ **不要擅自 Page.reload**。用户说"已经登录了"但 CDP 显示登录页 → CDP session 缓存了旧 DOM，先问"你现在屏幕上是登录页还是文档内容"，不要 reload。reload 会丢失用户已在浏览器里完成的登录状态。
+**镜子 Chrome 特征**：
+- CDP 看到企业微信 doc 页面有 `login_frame` iframe（未登录的登录框）
+- 但用户屏幕上同一 URL 已经登录了文档内容
+- `curl /json/list` 的 page URL 和用户屏幕上的 URL 一致，但 session 状态完全不同
 
-**和"Foreground Chrome Profile"方法的区别**：
+**两种解法**：
+
+**解法 A：接用户的 Chrome**（推荐，需要用户配合一次）
+1. 用户关闭自己的 Chrome
+2. 用命令行重启用户 Chrome 并开启 9222：
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --user-data-dir="/Users/aimac/Library/Application Support/Google/Chrome/Default" \
+  --remote-debugging-port=9222 \
+  --no-first-run --no-default-browser-check &
+sleep 5
+```
+→ CDP 9222 现在是用户主 Chrome，cookie/登录态 100% 继承
+
+**解法 B：Chrome 扩展**（无需重启用户 Chrome）
+写一个 `chrome.debugger` API 扩展，装到用户 Chrome 里，通过扩展 transport 把 CDP 暴露出来。这个方案不需要重启，但需要用户手动安装一次扩展。
+
+**解法 C：pasky chrome-cdp-skill**（不需要重启，最理想）
+通过 Unix socket 自动发现运行中的 Chrome 实例，不需要调试端口，不需要重启。详见 `references/pasky-chrome-cdp-skill.md`。
+
+**铁律**：用户说"已经登录了"但 CDP 显示登录页 → 不要 reload、不要 attachToTarget → 先鉴别是镜子 Chrome 还是用户 Chrome → 再决定走哪条解法。
+
+### 操作用户独立运行的 Chrome（2026-07-06 修正）
+
+**之前 technique 失效**：之前认为直接 `browser_cdp` + `target_id` 可以操作用户已有标签页，实测连到的是 mirror Chrome，用户登录态不在里面。
+
+**修正后的 technique**：
+1. 鉴别 — 先 `ps aux` 确认用户 Chrome PID，再 `curl /json/version` 对比版本
+2. 如果是镜子 Chrome → 走上面"解法 A"重启用户 Chrome 开 9222
+3. 如果是用户主 Chrome → 直接 `browser_cdp` + `target_id` 操作
+
+**绝对禁止**：
+- ❌ 不鉴别就 reload（会丢失用户已在浏览器里完成的登录状态）
+- ❌ 不鉴别就在两个 CDP session 之间跳转（mirror vs user 隔离）
+- ❌ 假设 9222 = 用户 Chrome（2026-07-06 实测：9222 是镜子 Chrome）
+
+**和"Foreground Chrome Profile"方法的关系**：
 | 场景 | 方法 |
 |------|------|
-| 用户 Chrome 已在跑 9222 | 直接 `browser_cdp` + `target_id`（本次 technique）|
-| 需要重启 Chrome 或没有 9222 | Foreground Chrome Profile recipe（复制 + 启动）|
+| 镜子 Chrome 占 9222，用户 Chrome 无 9222 | 解法 A：重启用户 Chrome 开 9222 |
+| 用户 Chrome 已开 9222 | 直接 browser_cdp + target_id |
+| 不想重启用户 Chrome | 解法 B：Chrome 扩展 |
 
 
 ### ⚠️ Chrome 149+ CDP 兼容：page-level WS vs browser-level attach (2026-06-21 新增)

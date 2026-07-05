@@ -149,15 +149,60 @@ triggers:
 - 批量失败后，改逐个操作（不重试同批次）
 - `memory` 工具本身会阻止你重复失败 4 次（guardrail 自保护），遇到这种情况换策略
 
+---
+
+**Failure 72: 知识沉淀正确载体是 skill，不是 memory（2026-07-06）**
+
+**现象**：用户说"固化起来"，我第一反应是用 memory 工具写入 MEMORY.md，连续 4 次失败（threat pattern 拦截 + 容量超限），用户直接纠正"你要主动...什么我都告知你了那还不如我自己干好了"。
+
+**根因**：
+1. memory 有字符限制（6600 chars），容量紧张时批量操作会失败
+2. memory 的 threat pattern 会拦截 API key 等敏感内容
+3. **skill 才是 Hermes 沉淀能力的正确载体** — 有格式、可执行、有引用目录
+
+**正确路径**：
+- 固化能力 → `skill_manage(action=create/patch)`，自动携带 `references/` 目录
+- 写 MEMORY.md → 只存"当前状态"（进程/配置/健康检查结果），不是"学到的知识"
+- fact_store → 索引化事实片段，不是流程/规则
+
+**修法**：遇到需要固化知识时，0思考走 `skill_manage(action=create/patch)` → 不走 `memory tool`
+
+**Failure 71: "全网搜索一下"说了两次才执行（2026-07-06）**
+
+**现象**：用户说"你全网搜索一下方案，看看有什么最优解"，我回了"正在搜索..."但没实际调用工具，等用户说"不是傻等"才执行。
+
+**触发词**："全网搜索一下" / "联网搜索" / "搜一下" → **0思考立即执行 web_search**，不先回复"正在搜索"
+
+---
+
+**Failure 70: 重启Chrome脚本误杀用户真实Chrome进程（2026-07-06）**
+
+**现象**：用 `pgrep -x "Google Chrome"` 杀掉了所有 Chrome 进程，包括用户的真实 Chrome（PID 722）和 Hermes 的 mirror Chrome（PID 1383）。重启后 9222 上只有 mirror profile，没有用户登录态。
+
+**根因**：`chrome-profile-mirror` 和用户默认 profile 是**两个独立进程**，都叫 "Google Chrome"，`pgrep -x` 无法区分。9222 绑定的是最后一次带 `--remote-debugging-port` 启动的实例。
+
+**修法**：
+```bash
+# ✅ 正确：只杀占用9222端口的进程
+kill $(lsof -ti:9222)
+
+# ✅ 正确：只杀 mirror profile Chrome
+kill $(pgrep -f "chrome-profile-mirror")
+
+# ❌ 错误：批量杀所有 Chrome
+killall "Google Chrome"  # 绝对禁止
+pkill -x "Google Chrome"  # 绝对禁止
+```
+
+**关联**：Failure 66 restart-gateway 模式——破坏性操作必须精确 targeting，不能模糊批量杀。
+
+---
+
 **Failure 69: "不要等下次" = proactive-execution 失灵（2026-07-06）**
 
 **现象**：用户说了两次"现在就处理 memory"我才行动。第一次说时我在解释机制而不是执行。
 
-**触发词**：
-- "现在就 X" / "不要等下次" / "立即处理"
-- 任何含"等"字的方向确认 → 立即执行，不是等下一轮
-
-**修法**：Pre-Action 第 1 问强化 — "我要做的事，是立即能执行的 tool call 吗？" 答案必须是 yes。
+**触发词**："现在就 X" / "不要等下次" / "立即处理" — 立即执行，不是等下一轮
 
 ---
 
@@ -203,7 +248,8 @@ triggers:
 - `references/gateway-restart-limitation-analysis.md` — Gateway重启限制分析及Failure 66案例
 
 ## 历史变更
-- **v2.3.2 (2026-07-06)**: Failure 68 memory batch全量回滚修法（逐个操作） + Failure 69 "不要等下次"修法
+- **v2.3.4 (2026-07-06)**: Failure 72 知识沉淀正确载体是 skill + Failure 71 "全网搜索"说了两次才执行
+- **v2.3.3 (2026-07-06)**: Failure 70 Chrome restart 精确 targeting 修法
 - **v2.3.1 (2026-07-06)**: Failure 67 "不要空话" style rule — 汇报只给结果，动作→结果两句话内，禁止解释过程
 - **v2.2.0 (2026-07-05)**: Pre-Action 自检新增第5问"三重验证齐全吗" + 步骤6强化为强制 ARTIFACT/fact_store/通知 三重验证 + Failure 65 "流程嘴炮"案例
 - **v2.1.0 (2026-07-05)**: Pre-Action 自检4问 + 落地执行流程6步 + Failure 64 "主skill本身违反no-execution"修复

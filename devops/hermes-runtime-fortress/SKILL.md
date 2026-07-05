@@ -36,7 +36,7 @@ when_to_use: 浏览器自动化选型 / CDP vs AX 决策 / 屏幕识别的本地
 
 **为什么不本地 VLM**: 本地 VLM 吃 17GB RAM，云端 VLM 延迟 1-3s 但精度高 + 0 RAM 占用，**云端成本 < 本地 RAM 成本**。
 
-### 浏览器识别 5 步自检 SOP
+### 浏览器识别 5 步自检 SOP（修订版 2026-07-06）
 
 **每次新会话 / 长时静默后 / 用户首次提问前**，必跑：
 
@@ -44,18 +44,21 @@ when_to_use: 浏览器自动化选型 / CDP vs AX 决策 / 屏幕识别的本地
 # 1. Chrome CDP 9222 在跑?
 lsof -i :9222 2>/dev/null | grep -q LISTEN && echo "CDP OK"
 
-# 2. cua-driver 健康?
+# 2. 哪个 Chrome 在占 9222?（关键！mirror vs 用户真实）
+CHROME_PID=$(lsof -ti:9222)
+ps -p $CHROME_PID -o args= | grep -q "chrome-profile-mirror" && echo "⚠️  MIRROR Chrome (无用户登录态)" || echo "✅ 用户真实 Chrome"
+
+# 3. cua-driver 健康?
 mcp_cua_driver_health_report
 
-# 3. 当前活跃 Chrome 窗口?
+# 4. 当前活跃 Chrome 窗口?
 mcp_cua_driver_list_windows --on_screen_only
-
-# 4. dev-browser domCua 是否装好?
-ls ~/.hermes/node_modules/@sawyerhood/dev-browser 2>/dev/null && echo "domCua OK"
 
 # 5. 有未完成任务?
 ls ~/.hermes/tasks/*.md 2>/dev/null | xargs grep -L "状态: DONE" 2>/dev/null | head -3
 ```
+
+**Step 2 是新增的！** `chrome-profile-mirror` 是 Hermes 自己的 Chrome，cookies/登录态和用户真实 Chrome 完全隔离。如果看到 mirror Chrome，需要切方案（用 pasky/chrome-cdp-skill 或让用户重启 Chrome 加调试端口）。
 
 **缺哪个补哪个，不问用户**（章程硬规则）。
 

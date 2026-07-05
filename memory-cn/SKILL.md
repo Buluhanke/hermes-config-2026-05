@@ -1,7 +1,7 @@
 ---
 name: memory-cn
-description: Hermes中文记忆系统优化 — fact_store(FTS5 SQLite) + MEMORY.md 两层架构调优、Mem0/Mimir架构借鉴、中文分词优化、搜索命中率提升。适用于记忆系统诊断、搜索质量优化、记忆层架构升级。Ollama已禁止，所有方案基于本地可用的Hermes组件。
 version: 2.0.0
+description: Hermes 中文记忆系统 — 两层架构：fact_store(FTS5 SQLite) + Mnemosyne(SQLite向量)，skill 沉淀能力，memory 工具存偏好
 created: 2026-06-25
 updated: 2026-07-05
 platforms: [macos]
@@ -13,17 +13,17 @@ metadata:
 
 # Memory-CN — Hermes 中文记忆系统优化 (v2.0)
 
-## 架构现状（2026-07-05）
+## 架构现状（2026-07-06 v2.0）
 
-Hermes 记忆系统是 **两层异构架构**：
+Hermes 记忆系统是 **三层架构**：
 
 | 层 | 组件 | 用途 | 搜索方式 |
 |----|------|------|----------|
-| P0 | `MEMORY.md` (~2KB) | 核心事实/偏好 | 全文扫描 |
-| P1 | `fact_store.db` (SQLite FTS5) | 经验/教训/知识沉淀 | FTS5 全文搜索 |
-| P2 | `~/.hermes/memory/` 日志 | 历史记录 | 不搜索 |
+| P0 | `MEMORY.md` (~2KB) | 核心偏好/高频规则 | 全文扫描 |
+| P1 | `fact_store.db` (FTS5 SQLite) | 经验/教训/规则沉淀 | FTS5 全文搜索 |
+| P2 | **Mnemosyne** (向量+SQLite) | 语义记忆/偏好/跨会话 | sub-ms 向量查询 |
 
-**Ollama已禁止**（用户2026-07-04令），所有向量方案改用云端API。
+**2026-07-06 新增**：Mnemosyne 已安装为 `memory.provider`，char_limit 6600（原来 2200 的 3 倍）。
 
 ---
 
@@ -102,7 +102,32 @@ conn.commit()
 
 ---
 
-## 三、Mem0/Mimir 架构借鉴
+## 三、Mnemosyne 用法（2026-07-06 新增）
+
+### 已安装
+```bash
+pip install mnemosyne-memory  # ✅ 已装 v3.11.1
+hermes memory status          # 显示 mnemosyne (local)
+```
+
+### Python API
+```python
+from mnemosyne import remember, recall
+
+# 记住语义偏好
+remember("用户讨厌反问，偏好直接执行", importance=0.9)
+
+# 语义召回
+results = recall("用户行为偏好")
+```
+
+### Mnemosyne 优势
+- sub-millisecond 查询（比 FTS5 快）
+- 向量语义搜索（不只是关键词）
+- SQLite 本地存储，无需外部服务
+- Hermes 官方集成（`memory.provider: mnemosyne`）
+
+## 四、Mem0/Mimir 架构借鉴
 
 ### Mem0 架构（2026年最佳实践）
 
