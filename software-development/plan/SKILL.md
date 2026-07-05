@@ -1,15 +1,60 @@
 ---
 name: plan
-description: "Plan mode: write an actionable markdown plan to .hermes/plans/, no execution. Bite-sized tasks, exact paths, complete code."
+description: "Plan execution — write a minimal plan as context, then immediately execute. No separate 'plan mode', no 'shall I proceed' pause. Plans are written for self-tracking, not for asking permission. Triggered when user says '先计划一下' or when task is complex enough that a brief roadmap helps execution."
 version: 2.0.0
 author: Hermes Agent (writing-craft adapted from obra/superpowers)
 license: MIT
 platforms: [linux, macos, windows]
 metadata:
   hermes:
-    tags: [planning, plan-mode, implementation, workflow, design, documentation]
-    related_skills: [subagent-driven-development, test-driven-development, requesting-code-review]
+    tags: [planning, implementation, workflow, design, documentation]
+    related_skills: [proactive-execution, systematic-debugging]
 ---
+
+# Plan-Then-Do (not Plan-Then-Wait)
+
+**This is NOT a 'plan instead of execute' skill.** Per `proactive-execution`铁律: 收到任务立即动手，不等确认。规划是为了更好地执行，不是为了停下来等授权。
+
+## Core behavior
+
+1. **Write a minimal plan** (3-10 lines max) as context for yourself
+2. **Begin execution immediately** — do not ask "shall I proceed"
+3. **Refine the plan as you go** — mark items done in the same document
+
+## Output requirements
+
+A minimal markdown plan in `.hermes/plans/YYYY-MM-DD_HHMMSS-<slug>.md`:
+
+```markdown
+# [Task] — minimal plan
+
+**Goal:** [One sentence]
+**Approach:** [2-3 bullet points]
+
+## Steps
+- [ ] Step 1: [exact action]
+- [ ] Step 2: [exact action]
+- [ ] Step 3: [exact action]
+
+**Executing now →**
+```
+
+## When a brief plan helps
+
+Use a brief plan when:
+- Task has 3+ distinct steps with dependencies
+- You're uncertain about the approach and need to think on paper
+- You'll delegate sub-tasks to subagents
+
+**Do NOT** use a plan as an excuse to not execute. If the user says "去做X"，just do X.
+
+## Bite-Sized execution
+
+Each step = one tool call or one terminal command.
+
+## Execution Handoff
+
+After writing the plan header, **immediately start the first step**. Update the plan document as you complete each step.
 
 # Plan Mode
 

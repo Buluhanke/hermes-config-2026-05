@@ -535,6 +535,64 @@ ls -la ~/.清理小文件/
 - 降低误操作风险
 - 为后续脚本优化提供清晰结构
 
+## 22. 脚本重复识别与清理 SOP（2026-07-04 新增，基于实战经验）
+**场景**: `/Users/aimac/.hermes/scripts/` 目录下发现大量重复功能脚本（221个 → 202个优化）
+
+**详见**: `references/skill-audit-2026-07-05-log.md` — 本次大规模审计的执行记录（含未完成 P2 清单）。
+
+## 23. subdirectory skill 无法用 `skill_manage` 删除（2026-07-05 新增）
+**症状**: `skill_manage(action='delete', name='multi-ask-broadcast')` 报 `Skill not found`，但 skill 确实存在于 `~/.hermes/skills/browser-automation/multi-ask-broadcast/`。
+
+**根因**: `skill_manage` 只在顶层 skills 目录查找 name，**不递归子目录**。Hub 安装到 `category/skill-name/` 结构的 skill 无法直接删除。
+
+**修法**: 用 `terminal` 直接删：
+```bash
+rm -rf ~/.hermes/skills/<category>/<skill-name>
+# 示例
+rm -rf ~/.hermes/skills/browser-automation/multi-ask-broadcast
+rm -rf ~/.hermes/skills/meta/ponytail  # 顶层 meta 但子名
+```
+
+**避坑**: 先 `ls ~/.hermes/skills/<category>/` 确认路径存在再删。
+
+## 24. 大型 skill 压缩-归档模式（2026-07-05 新增）
+**触发**: skill SKILL.md > 300 行，其中 >50% 是 changelog / case appendix。
+
+**模式**（3 步）:
+1. **提取**: `tail -n +<core_end_line> SKILL.md > references/archive.md`
+2. **截断**: `head -<core_end_line> SKILL.md > /tmp/core.md && mv /tmp/core.md SKILL.md`
+3. **引用**: SKILL.md 末尾加 `详见: references/archive.md`
+
+**实测案例**:
+| Skill | 原大小 | 压缩后 | 归档 |
+|-------|--------|--------|------|
+| proactive-execution | 1604行 | 103行 | failure-cases-history.md |
+| verification-before-reporting | 380行 | 100行 | failure-cases-archive.md |
+| idle-learning-rounds | 389行 | 241行 | idle-learning-variant.md |
+
+**何时用压缩 vs 删除**: changelog/case appendix 有参考价值 → 压缩归档；skill 整个无价值 → 直接 `rm -rf`。
+
+## 25. 批量 skill 审计-归档流程（2026-07-05 新增）
+**场景**: 需要对整个 skill 集合（141个）做深度核查，识别冗余/可合并/可归档。
+
+**并行 3 路 delegation 策略**:
+```
+delegate_task (感知/记忆/执行组)    → 并行
+delegate_task (浏览器/内容/诊断类)  → 并行
+delegate_task (方法论/编程/安全类)  → 并行
+```
+
+**子代理输出**: 各自返回结构化评分表 + 联网新思路 + 落地建议。
+
+**主 agent 并行工作**: 
+- 同时跑 `execute_code` 做本地 stat（文件大小/行数/重复检测）
+- 不等子代理结果，先把明显问题（P0 删除）用 terminal 直接执行
+- 收到子代理结果后综合出最终报告
+
+**避坑**:
+- 子代理结果可能丢失（delegate_task 机制限制）→ 主 agent 本地 stat 永远独立运行
+- `skills_list` 显示 141 但实际 `~/.hermes/skills/` 只有 91 个 → 以本地文件系统为准
+
 ## 关联技能
 
 - `skill_manage` — 技能管理工具

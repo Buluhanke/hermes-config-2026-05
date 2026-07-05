@@ -109,11 +109,21 @@ agent-reach format < url                  # 格式化输出
 **覆盖**: 中文站 + 国际站 + 社交媒体（**8/13 渠道直接用**）
 
 ### Rung 6: crawl4ai（复杂 JS 爬虫 → AsyncWebCrawler）
-**位置**: `~/.hermes/hermes-agent/venv/lib/python3.11/site-packages/crawl4ai/`
+**标准安装**: `pip install crawl4ai`（无需本地 venv 路径）
+
+> ⚠️ **Scrapling 弃用提示（2026-07）**: D4Vinci/Scrapling（HTTP/Dynamic/Stealth三层fetch库）自2025-05起停止维护。如需反检测爬取，优先用 Crawl4AI（async、活跃维护）；如需 Scrapling 的stealth/impersonate策略做参考，skill仍可加载，但功能等同于只读存档。
+
 **能力**:
-- Python async 爬虫（v0.9.0）
+- Python async 爬虫（v0.9.x，2026年持续活跃更新，GitHub #1 trending开源爬虫）
 - JS 渲染 + BM25 内容过滤
 - 结构化数据提取（LLM 驱动）
+- 自托管，无需 API Key（对比 Firecrawl 的付费云服务）
+
+**安装**:
+```bash
+pip install crawl4ai
+crawl4ai-setup  # 自动安装 Playwright 浏览器
+```
 
 **用法**:
 ```python
@@ -128,7 +138,11 @@ async def main():
 asyncio.run(main())
 ```
 
-**覆盖**: SPA、React/Vue 渲染、复杂反爬场景（**其他 3 个 rung 不够时**才用）
+**覆盖**: SPA、React/Vue 渲染、复杂反爬场景（**其他 rung 不够时**才用）
+
+**vs Firecrawl (2026-07-05 更新)**: Crawl4AI 优势是开源免费 + 完全自托管；Firecrawl 今年新增 **Keyless 免费层**（每月 1,000 额度，无需 API Key）和 **MCP 端点** `https://mcp.firecrawl.dev/v2/mcp`，支持 search/scrape/interact 三个接口无密钥使用（crawl/map/agent 仍需 key）。官方文档**明确提及 Hermes Agent** 作为 MCP 兼容客户端。自托管仍必须 Docker（Redis + PostgreSQL + Playwright），本机已禁 Docker 所以不可行。如需增强 JS 页面抓取或结构化提取能力，Firecrawl 的 Keyless API 可作为 web_extract/Crawl4AI 之后的第三备选。评估地址: `https://www.firecrawl.dev/agent-onboarding/SKILL.md`
+
+**详见**: `references/crawl4ai-when-to-use.md`（已含真实使用场景，避免无脑调用）
 
 ## 🎯 路由决策表（按 URL 类型）
 

@@ -1,117 +1,248 @@
 ---
 name: memory-cn
-description: "OpenClaw + Ollama 中文记忆系统优化。诊断 FTS5 unicode61 中文分词 bug，优化搜索参数，自动维护记忆文件。命中率从 55% 提升到 100%。"
+description: Hermes中文记忆系统优化 — fact_store(FTS5 SQLite) + MEMORY.md 两层架构调优、Mem0/Mimir架构借鉴、中文分词优化、搜索命中率提升。适用于记忆系统诊断、搜索质量优化、记忆层架构升级。Ollama已禁止，所有方案基于本地可用的Hermes组件。
+version: 2.0.0
+created: 2026-06-25
+updated: 2026-07-05
+platforms: [macos]
 metadata:
-  openclaw:
-    requires:
-      bins: ["sqlite3", "python3"]
+  hermes:
+    tags: [memory, fact-store, fts5, sqlite, search, chinese]
+    related_skills: [context-optimization, proactive-execution]
 ---
 
-# 中文记忆优化 Skill (memory-cn)
+# Memory-CN — Hermes 中文记忆系统优化 (v2.0)
 
-当用户请求诊断或优化记忆系统时，按以下步骤执行：
+## 架构现状（2026-07-05）
 
-## 1. 诊断
+Hermes 记忆系统是 **两层异构架构**：
 
-运行诊断脚本检测问题：
+| 层 | 组件 | 用途 | 搜索方式 |
+|----|------|------|----------|
+| P0 | `MEMORY.md` (~2KB) | 核心事实/偏好 | 全文扫描 |
+| P1 | `fact_store.db` (SQLite FTS5) | 经验/教训/知识沉淀 | FTS5 全文搜索 |
+| P2 | `~/.hermes/memory/` 日志 | 历史记录 | 不搜索 |
 
-```bash
-bash SKILL_DIR/scripts/diagnose.sh
-```
+**Ollama已禁止**（用户2026-07-04令），所有向量方案改用云端API。
 
-报告包括：
-- FTS5 中文分词 bug 检测（unicode61 把连续中文粘成一个 token）
-- 记忆文件大小分布
-- tags 标签覆盖率
-- lessons 知识库健康度
+---
 
-## 2. 优化搜索配置
+## 一、fact_store 诊断与调优
 
-如果诊断发现问题，应用优化配置：
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "memorySearch": {
-        "chunking": { "tokens": 250, "overlap": 60 },
-        "query": {
-          "maxResults": 10,
-          "minScore": 0.15,
-          "hybrid": {
-            "enabled": true,
-            "vectorWeight": 0.75,
-            "textWeight": 0.25,
-            "candidateMultiplier": 8,
-            "mmr": { "enabled": true, "lambda": 0.7 },
-            "temporalDecay": { "enabled": true, "halfLifeDays": 90 }
-          }
-        }
-      }
-    }
-  }
-}
-```
-
-使用 `gateway config.patch` 应用。
-
-## 3. 优化 memoryFlush prompt
-
-让新日志自动加 tags + 中文分词：
-
-```json
-{
-  "agents": {
-    "defaults": {
-      "compaction": {
-        "memoryFlush": {
-          "prompt": "将对话内容整理为结构化日志，写入 memory/YYYY-MM-DD.md。\n\n格式要求：\n1. 文件第一行必须是 <!-- tags: 关键词1, 关键词2, ... --> 标签行\n2. 中文关键词之间加空格分隔\n3. 只保留有价值的信息\n4. 控制在 5KB 以内"
-        }
-      }
-    }
-  }
-}
-```
-
-## 4. 批量加 tags
-
-对 memory/projects/*.md 中缺少 tags 的文件，根据内容自动添加 `<!-- tags: ... -->` 行。
+### 诊断命令
 
 ```bash
-python3 SKILL_DIR/scripts/add-tags.py /path/to/memory/projects/
+# fact_store 基本统计
+sqlite3 ~/.hermes/memory/fact_store.db "SELECT COUNT(*) FROM facts;"
+sqlite3 ~/.hermes/memory/fact_store.db "SELECT COUNT(*), AVG(trust) FROM facts WHERE trust > 0.05;"
+
+# 低信任/过期条目
+sqlite3 ~/.hermes/memory/fact_store.db "SELECT id, topic, trust FROM facts WHERE trust <= 0.05;"
+
+# 无tags条目（搜索命中率杀手）
+sqlite3 ~/.hermes/memory/fact_store.db "SELECT id, LENGTH(tags) FROM facts WHERE tags IS NULL OR tags = '';"
+
+# fact_decay 脚本
+python3 ~/.hermes/scripts/fact_decay.py
 ```
 
-## 5. 压缩日志
+### 健康标准
 
-压缩 >8KB 的旧日志到 <5KB，原文备份到 archive/：
+| 指标 | 健康值 | 修复阈值 |
+|------|--------|----------|
+| 活跃条数 | > 50 | < 20 时需激活 |
+| 平均 trust | ≥ 0.4 | < 0.3 时需衰减 |
+| 无tags条数 | 0 | > 5 时需补打 |
+| 过期条数 | 0 | > 0 时需删除 |
+
+---
+
+## 二、FTS5 中文分词优化
+
+### unicode61 Bug（已知问题）
+
+`unicode61` 分词器把连续CJK字符当作一个token：
+- 搜索 "怀孕" 无法匹配 "老婆刚怀孕"（因为后者是单token）
+- 搜索 "内存" 可能漏掉 "内存泄漏"
+
+### 诊断
 
 ```bash
-python3 SKILL_DIR/scripts/compress-logs.py /path/to/memory/ --max-kb 5
+# 查看当前分词配置
+sqlite3 ~/.hermes/memory/fact_store.db "PRAGMA table_info(facts);"
+sqlite3 ~/.hermes/memory/fact_store.db "SELECT sql FROM sqlite_master WHERE type='table' AND name LIKE '%_fts%';"
 ```
 
-## 6. 重建索引
+### 缓解策略
+
+**策略1：中文关键词之间加空格**（现有数据）
+
+对历史条目补充空格分隔：
+```bash
+# 示例：用python批量给中文文本加空格（粗略分词）
+python3 -c "
+import re, sqlite3
+conn = sqlite3.connect('$HOME/.hermes/memory/fact_store.db')
+cur = conn.cursor()
+cur.execute('SELECT id, text FROM facts WHERE text NOT NULL')
+for row in cur.fetchall():
+    # 简单处理：在2-4个连续汉字间加空格
+    fixed = re.sub(r'([\u4e00-\u9fff]{2,4})', r' \1 ', row[1])
+    if fixed != row[1]:
+        cur.execute('UPDATE facts SET text=? WHERE id=?', (fixed.strip(), row[0]))
+conn.commit()
+"
+```
+
+**策略2：MMR搜索权重调整**
+
+在搜索查询中使用 `BM25` 排序 + 向量重排：
+- FTS5 BM25 对中文单token效果好
+- 混合搜索时 vectorWeight 0.75（Mem0推荐值）
+
+---
+
+## 三、Mem0/Mimir 架构借鉴
+
+### Mem0 架构（2026年最佳实践）
+
+```
+Tier 1: RAM / Context Window（瞬时记忆）
+  → Hermes当前会话的 memory tool 注入
+
+Tier 2: SQLite + FTS5 + Vector（持久记忆）
+  → Hermes fact_store.db（当前）
+  → 可升级：加向量列 + bge-reranker（Mimir路线）
+
+Tier 3: 日志/归档（冷存储）
+  → ~/.hermes/memory/ 日志文件
+```
+
+**Mem0核心原则（可借鉴）**：
+1. **单一事实来源**：每条fact只写一次，不重复
+2. **agent-generated facts等权**：Hermes的推断和用户的陈述同等存储
+3. **衰减模型**：trust随时间线性衰减，>90天进入低信任区
+
+### Mimir 架构（SQLite FTS5 + Vector混合）
+
+Mimir = SQLite FTS5 + dense vector search，MCP-native，**完全本地**。
+
+**对Hermes的借鉴**：在fact_store.db中加向量列：
+```sql
+-- 可选升级路径（当前Hermes未实现）
+CREATE VIRTUAL TABLE facts_fts USING fts5(text, content=facts, content_rowid=id);
+ALTER TABLE facts ADD COLUMN embedding BLOB;  -- 向量嵌入
+```
+
+**短期优先级**：先优化FTS5查询，不加向量层（向量需要额外依赖）
+
+---
+
+## 四、搜索质量提升（当前可落地）
+
+### 4.1 查询扩展（Query Expansion）
+
+搜索 "内存" 时同时搜 "RAM" "memory" "存储"：
+```sql
+SELECT * FROM facts WHERE facts_fts MATCH 'memory OR RAM OR 内存 OR 存储';
+```
+
+### 4.2 标签过滤优先
+
+带明确tags的条目优先级更高：
+```sql
+SELECT f.*, LENGTH(f.tags) as tag_len
+FROM facts f
+WHERE f.trust > 0.15
+ORDER BY tag_len DESC, f.trust DESC
+LIMIT 10;
+```
+
+### 4.3 时间衰减
+
+优先显示近期条目（Mem0 halfLifeDays=90天的简化版）：
+```sql
+-- 近30天条目boost
+SELECT *,
+  CASE WHEN created_at > strftime('%s','now','-30 days') THEN 1.2 ELSE 1.0 END as time_boost,
+  trust * (CASE WHEN created_at > strftime('%s','now','-30 days') THEN 1.2 ELSE 1.0 END) as weighted_trust
+FROM facts
+WHERE trust > 0.15
+ORDER BY weighted_trust DESC
+LIMIT 10;
+```
+
+---
+
+## 五、MEMORY.md 优化（< 2200字符）
+
+当前限制：2200字符，超限自动压缩。
+
+### 结构模板
+
+```markdown
+# MEMORY.md — 系统级记忆
+
+## 用户偏好（不变）
+- 决策风格：直接动手不反问
+- 执行偏好：本地优先，配置透明
+- 数字人定位：Mac mini数字主人
+
+## 核心规则（高频引用）
+- proactive-execution：收到立即做，失败换方法，3次才报
+- verification-before-reporting：汇报前必须有验证输出
+
+## 环境（需更新时改）
+- 模型：MiniMax-M2.7-highspeed（主）/ deepseek-chat（付费）
+- 浏览器：Chrome CDP 9222
+- gateway：PID 11325（2026-07-02）
+
+## 最新教训（最近30天）
+<!-- 每个条目不超过50字 -->
+- [日期] [类别] [一句话教训]
+```
+
+---
+
+## 六、自动维护 Cron
+
+```yaml
+# ~/.hermes/cron/memory-maintenance.yaml
+# 每周日凌晨2点执行
+schedule: "0 2 * * 0"
+script: ~/.hermes/scripts/memory_maintenance.sh
+deliver: local
+no_agent: true
+```
 
 ```bash
-openclaw memory index --force
+#!/bin/bash
+# memory_maintenance.sh
+echo "=== fact_store 健康检查 ==="
+python3 ~/.hermes/scripts/fact_decay.py
+
+echo "=== 低信任清理 ==="
+sqlite3 ~/.hermes/memory/fact_store.db "DELETE FROM facts WHERE trust <= 0.05;"
+
+echo "=== 无tags条目报告 ==="
+count=$(sqlite3 ~/.hermes/memory/fact_store.db "SELECT COUNT(*) FROM facts WHERE tags IS NULL OR tags = '';")
+echo "无tags条目: $count"
+if [ "$count" -gt 10 ]; then
+  echo "需要补打tags"
+fi
+
+echo "=== MEMORY.md 大小检查 ==="
+size=$(wc -c < ~/.hermes/memories/MEMORY.md)
+echo "MEMORY.md: $size bytes"
+if [ "$size" -gt 2200 ]; then
+  echo "需要压缩"
+fi
 ```
 
-## 7. 设置自动维护 cron
+---
 
-建议每周日凌晨自动执行压缩+清理+补标签+重建索引。
+## 七、相关skill
 
-## 关键技术点
-
-### FTS5 unicode61 Bug
-- `unicode61` 分词器把连续 CJK 字符当作一个 token
-- 搜索 "怀孕" 无法匹配 "老婆刚怀孕"（因为后者是一个 token）
-- Workaround：中文关键词之间加空格 → FTS5 正确分词
-
-### 0.6B 模型参数调优
-- vectorWeight 0.75：向量主导（FTS5 中文不可靠）
-- minScore 0.15：小模型分数普遍偏低
-- chunking 250 tokens：更小的 chunk 帮助弱模型匹配
-
-### 三层架构
-- P0 (MEMORY.md)：核心事实，<2KB
-- P1 (projects/ + lessons/)：按需搜索，带 tags
-- P2 (日志 + archive)：历史记录
+- `context-optimization`：token优化，MEMORY.md大小管理
+- `proactive-execution`：Failure案例写入fact_store的时机
+- `verification-before-reporting`：汇报前验证，影响fact可信度判断

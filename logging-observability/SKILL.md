@@ -2,7 +2,7 @@
 name: logging-observability
 model: standard
 description: Structured logging, distributed tracing, and metrics collection patterns for building observable systems. Use when implementing logging infrastructure, setting up distributed tracing with OpenTelemetry, designing metrics collection (RED/USE methods), configuring alerting and dashboards, or reviewing observability practices. Covers structured JSON logging, context propagation, trace sampling, Prometheus/Grafana stack, alert design, and PII/secret scrubbing.
-version: 1.0.0
+version: 1.1.0
 ---
 
 # Logging & Observability
@@ -130,6 +130,107 @@ async function processOrder(order: Order) {
 }
 ```
 
+### OTel+eBPF Zero-Code Instrumentation (OBI)
+
+> **2025 milestone:** OpenTelemetry eBPF Instrumentation (OBI), formerly Grafana Beyla, had its first alpha release in November 2025 (under OpenTelemetry governance). It enables zero-code, zero-restart auto-instrumentation at the Linux kernel level via eBPF probes.
+
+OBI is the recommended **baseline layer** for all services — especially compiled languages (Go, Rust, C/C++) where SDK-level auto-instrumentation has limited reach. It captures:
+
+- **RED metrics** (Rate, Errors, Duration) for HTTP/S, gRPC, databases, messaging
+- **Distributed traces** across all languages automatically
+- **Network flows** with TCP RTT statistics
+- **Log enrichment** with trace context (trace-log correlation)
+- **GenAI telemetry** for OpenAI, Anthropic Claude, Google AI Studio, AWS Bedrock, Qwen, MCP
+- **Messaging protocols**: NATS, AMQP 1.0, Kafka, MQTT
+
+**When to use OBI vs SDKs — use both:**
+
+| Layer | Tool | Best For |
+|-------|------|----------|
+| Baseline visibility | OBI (eBPF) | All services, especially Go/Rust/C++; zero-code, always-on |
+| Deep transaction insights | OTel SDKs | Business context, custom spans, library-level detail |
+| Custom logic | Manual instrumentation | Application-specific business events |
+
+**OBI is not a replacement for SDKs.** It instruments at the protocol/kernel level. SDKs add business-context spans, custom attributes, and library-level detail that eBPF cannot see. Use OBI for breadth + SDKs for depth — a hybrid model is the 2025 best practice.
+
+**Compatibility:** Linux kernel 5.8+ with BTF; supports amd64/arm64. Deploy as a sidecar, DaemonSet, or OpenTelemetry Collector receiver (`otel/ebpf-instrument` container image).
+
+**OBI Kubernetes deployment (DaemonSet):**
+
+```yaml
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: obi-agent
+spec:
+  selector:
+    matchLabels:
+      app: obi-agent
+  template:
+    metadata:
+      labels:
+        app: obi-agent
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+        - name: obi
+          image: otel/ebpf-instrument:latest
+          securityContext:
+            privileged: true   # required for eBPF probe attachment
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: "http://otel-collector:4317"
+            - name: OBI_SERVICE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.labels['app']
+```
+
+**OBI as OTel Collector receiver:**
+
+```yaml
+receivers:
+  otlp:
+    protocols:
+      grpc:
+      http:
+  obi:                          # OBI eBPF receiver
+    endpoint: "0.0.0.0:4317"    # receives from app-level SDKs
+    ebpf:
+      enabled: true
+      sampler_type: "always_on"
+      http_metrics: true
+      grpc_metrics: true
+      database_metrics: true
+
+exporters:
+  otlp/tempo:
+    endpoint: "tempo:4317"
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp, obi]
+      exporters: [otlp/tempo]
+    metrics:
+      receivers: [otlp, obi]
+      exporters: [prometheus]
+```
+
+### OpenTelemetry Network (eBPF Kernel Collector)
+
+The **opentelemetry-network** project (under OTel) collects kernel-level network telemetry via eBPF with negligible overhead. It powers network observability use cases:
+
+- TCP connection lifecycle (SYN, ESTABLISHED, FIN, RST)
+- TCP round-trip time (RTT) histograms per connection
+- Network flow visibility without decryption
+- Container and pod-level network attribution in Kubernetes
+
+Pair with OBI for complete network + application visibility.
+
 ### Context Propagation
 
 - Use W3C Trace Context (`traceparent` header) — default in OTel
@@ -182,8 +283,11 @@ For infrastructure components (CPU, memory, disk, network):
 | **Jaeger** | Tracing | Distributed trace visualisation |
 | **Loki** | Logs | Log aggregation (pairs with Grafana) |
 | **OpenTelemetry** | Collection | Vendor-neutral telemetry collection |
+| **OBI (eBPF)** | Zero-code auto-inst | Kernel-level RED metrics + traces, Go/Rust/C++ |
+| **OTel Network** | Kernel network | TCP RTT, connection lifecycle, flow visibility |
+| **Grafana Beyla** | Zero-code (OBI dist) | OBI downstream distribution, same capabilities |
 
-**Recommendation:** Start with OTel Collector → Prometheus + Grafana + Loki + Jaeger. Migrate to SaaS only when operational overhead justifies cost.
+**Recommendation:** OBI (DaemonSet/sidecar) for baseline + SDKs for depth. OTel Collector with OBI receiver as the unified pipeline. Migrate to SaaS only when operational overhead justifies cost.
 
 ---
 
@@ -235,11 +339,14 @@ Every service must have:
 - [ ] RED metrics exposed for every external endpoint
 - [ ] Health check endpoints (`/healthz` and `/readyz`)
 - [ ] Distributed tracing with OpenTelemetry
+- [ ] OBI (eBPF) auto-instrumentation for baseline kernel-level RED + traces (especially Go/Rust/C++ services)
+- [ ] OTel SDK instrumentation for business-context spans and custom attributes
 - [ ] Dashboards for RED metrics and resource utilisation
 - [ ] Alerts for error rate, latency, and saturation with runbook links
 - [ ] Log level configurable at runtime without redeployment
 - [ ] PII scrubbing verified and tested
 - [ ] Retention policies defined for logs, metrics, and traces
+- [ ] OBI trace-log correlation enabled for distributed trace debugging
 
 ## Anti-Patterns
 

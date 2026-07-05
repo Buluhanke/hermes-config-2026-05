@@ -164,6 +164,23 @@ gh api user     → 401 Requires authentication
 **教训**: 状态命令 ≠ 真实验证，必须实际调 `gh api user` 才有意义。
 **修法**: `GH_TOKEN` 环境变量注入 plist，或用户重新 `gh auth login`。
 
+### Provider认证失败模式（2026-07-05 新增）
+
+```
+Gateway日志: "HTTP 401: Missing Authentication header"
+Fallback: 切换到备用Provider
+用户反馈: "Provider authentication failed"
+```
+
+**教训**: Provider配置的API key可能未设置或过期，需要定期检查。
+**修法**: 
+1. 创建Provider健康检查脚本
+2. 定期测试所有Provider的API连接
+3. 准备自动切换机制
+4. 创建一键重启脚本应对Gateway重启限制
+
+**新增工具**: `references/provider-auth-troubleshooting.md` - 完整的Provider认证故障排查指南
+
 ### plist 字段常见坑
 
 | 字段 | 错误 | 正确 |
@@ -266,6 +283,9 @@ fact_semantic_search: OpenAI text-embedding-3-small API（已改）
 ## 关联
 
 - `hermes-see-act` — L1/L2/L3/L4 决策调用此 skill
+- `proactive-execution` — 包含Failure 66 "Gateway重启限制分析"案例
 - `references/launchd-plist-gotchas.md` — plist 字段陷阱完整版
 - `references/gh-keychain-launchd-gotcha.md` — gh token 失效完整修复链
 - `references/browser-4-layer-decision.md` — 4 层降级决策表 + 基准数据
+- `references/provider-auth-troubleshooting.md` — Provider认证故障排查指南（2026-07-05新增）
+- `references/gateway-restart-limitation-analysis.md` — Gateway重启限制分析（2026-07-05新增）

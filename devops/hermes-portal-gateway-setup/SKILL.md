@@ -67,6 +67,66 @@ Nous Portal 统一 300+ 前沿模型 + 5 种工具网关，只需一次 OAuth �
      terminal: false    # Modal 终端沙箱默认关
    ```
 
+## 备用方案：API Key 认证（用于 Fallback 链，无需 OAuth）
+
+如果不需要 OAuth + Tool Gateway（仅需 Nous Portal 作为 fallback 链的 provider），可以用 API key 认证。比 OAuth 轻量，不依赖浏览器重定向。
+
+### 步骤
+
+1. **在 Nous Portal 创建 API Key**
+   ```bash
+   # 浏览器打开
+   https://portal.nousresearch.com/orgs/<org-name>/api-keys
+   # → 点 "Create key" → 输入名称 → 点 "Create"
+   # → 页面显示 sk-nous-... 格式的 key → 点复制按钮
+   ```
+
+2. **写入 Hermes auth 池**
+   ```bash
+   hermes auth add nous --type api-key --api-key "sk-nous-<your-key>"
+   # → Added nous credential
+   ```
+
+3. **写入环境变量**（config.yaml 引用 `${NOUS_API_KEY}`，这个 env var 必须存在）
+   ```bash
+   echo 'export NOUS_API_KEY="sk-nous-DNDy3A6LnS5nNxwKBY3s5WpBYJDHwFBq"' >> ~/.hermes/.env
+   ```
+
+4. **添加 Fallback 条目**（`~/.hermes/config.yaml` 的 `fallback_providers[]`）
+   ```yaml
+   - api_key: ${NOUS_API_KEY}
+     base_url: https://inference-api.nousresearch.com/v1
+     label: Nous Portal (免费 Fallback)
+     model: stepfun/step-3.7-flash:free
+     provider: nous
+     request_timeout_seconds: 20
+   ```
+   **免费模型**：仅 `stepfun/step-3.7-flash:free`（Step 3.7 Flash）是零成本模型。Hermes-4 系列（70B/405B/4.3）全部付费。
+
+5. **验证连通性**
+   ```bash
+   curl -s -w "\n%{http_code}" https://inference-api.nousresearch.com/v1/chat/completions \
+     -H "Authorization: Bearer $NOUS_API_KEY" \
+     -H "Content-Type: application/json" \
+     -d '{"model":"stepfun/step-3.7-flash:free","messages":[{"role":"user","content":"hi"}],"max_tokens":10}'
+   # 期待: HTTP 200, 有 choices[0].message.content
+   ```
+
+6. **重启 gateway 生效**
+   ```bash
+   hermes gateway restart
+   ```
+
+### 与 OAuth 方案的区别
+
+| 维度 | OAuth (`hermes setup --portal`) | API Key (本方案) |
+|------|------|------|
+| 用途 | 主 provider + Tool Gateway | fallback 链 provider |
+| 依赖 | 浏览器重定向 | 纯 CLI |
+| 模型数 | 全部付费+免费 | 仅免费可用（否则烧钱） |
+| Tool Gateway | 附带 5 个网关 | 无网关 |
+| 推荐场景 | 主力推理 | 兜底降级 |
+
 ## 常见问题 & 排错
 
 | 问题 | 检查点 | 解决方案 |

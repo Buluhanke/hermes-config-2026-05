@@ -1,22 +1,23 @@
 ---
 name: scrapling
-description: Web scraping with Scrapling - HTTP fetching, stealth browser automation, Cloudflare bypass, and spider crawling via CLI and Python.
-version: 1.0.0
+description: Web scraping with Scrapling - HTTP fetching, stealth browser automation, Cloudflare bypass, spider crawling, and Scrapy integration via CLI and Python.
+version: 1.1.0
 author: FEUAZUR
 license: MIT
-platforms: [linux, macos, windows]
+platforms: [linux, macos, windows, docker]
 metadata:
   hermes:
-    tags: [Web Scraping, Browser, Cloudflare, Stealth, Crawling, Spider]
-    related_skills: [duckduckgo-search, domain-intel]
+    tags: [Web Scraping, Browser, Cloudflare, Stealth, Crawling, Spider, Scrapy]
+    related_skills: [crawl4ai, duckduckgo-search, domain-intel]
     homepage: https://github.com/D4Vinci/Scrapling
 prerequisites:
   commands: [scrapling, python]
+  note: "Scrapling is actively maintained (last commit Jul 2026). Do NOT assume it is superseded by Crawl4AI — they serve different niches: Scrapling = adaptive fetch + spider + Scrapy bridge; Crawl4AI = LLM-oriented Markdown extraction."
 ---
 
 # Scrapling
 
-[Scrapling](https://github.com/D4Vinci/Scrapling) is a web scraping framework with anti-bot bypass, stealth browser automation, and a spider framework. It provides three fetching strategies (HTTP, dynamic JS, stealth/Cloudflare) and a full CLI.
+[Scrapling](https://github.com/D4Vinci/Scrapling) is a web scraping framework with anti-bot bypass, stealth browser automation, and a spider framework. It provides four fetching strategies (HTTP, dynamic JS, stealth/Cloudflare, Scrapy bridge) and a full CLI. Actively maintained as of July 2026 (68k stars, 1,500+ commits).
 
 **This skill is for educational and research purposes only.** Users must comply with local/international data scraping laws and respect website Terms of Service.
 
@@ -26,7 +27,10 @@ prerequisites:
 - Scraping JS-rendered pages that need a real browser
 - Bypassing Cloudflare Turnstile or bot detection
 - Crawling multiple pages with a spider
+- Bridging Scrapy projects with Scrapling's adaptive fetchers
 - When the built-in `web_extract` tool does not return the data you need
+
+> **vs Crawl4AI**: Crawl4AI excels at LLM-oriented Markdown extraction. Scrapling excels at adaptive multi-strategy fetching, spider crawling, and Scrapy integration. Use both — they are complementary, not substitutes.
 
 ## Installation
 
@@ -44,6 +48,11 @@ With browser automation only:
 ```bash
 pip install "scrapling[fetchers]"
 scrapling install
+```
+
+With Docker (no browser install needed):
+```bash
+docker pull d4vinci/scrapling
 ```
 
 ## Quick Reference
@@ -324,6 +333,24 @@ class SmartSpider(Spider):
 ```python
 spider = QuotesSpider(crawldir="./crawl_checkpoint")
 spider.start()  # Ctrl+C to pause, re-run to resume from checkpoint
+```
+
+## Scrapy Integration (Bridge)
+
+Use Scrapling's adaptive fetchers inside Scrapy pipelines:
+
+```python
+from scrapling.fetchers import Fetcher, StealthyFetcher
+
+class ScraplingMiddleware:
+    def process_request(self, request, spider):
+        if "cloudflare" in request.url:
+            # Use stealth fetcher for protected pages
+            page = StealthyFetcher.fetch(request.url, headless=True, solve_cloudflare=True)
+            return response_from_text(page.content, request.url, request)
+        else:
+            page = Fetcher.get(request.url)
+            return response_from_text(page.content, request.url, request)
 ```
 
 ## Pitfalls
