@@ -10,9 +10,116 @@ description: Tune and debug Hermes Agent provider/fallback chains when CLI tasks
 Trigger when ANY of these signals appear:
 - CLI session stuck on `⏳ Working — N min — iteration K/80, waiting for stream response (180s, no chunks yet)`
 - Multi-context-compression stampede (`🗜️ Compacting context` repeated 5+ times in one session)
-- User says "10 秒切换不生效" / "provider 卡死" / "fallback 没切"
+- User says "10 秒切换不生效" / "provider 卡死" / "fallback 没切" / "为什么不自动切换到下一个"
 - User asks to edit `~/.hermes/config.yaml` providers/model/agent blocks
 - User asks about MoA (Mixture of Agents) configuration — format changed from `moa.models[]` to `moa.presets`
+
+## Diagnostic: "fallback 没切" / "为什么不自动切下一个"
+
+When the user reports the fallback chain didn't switch after a failure, there are TWO possible root causes — diagnose in this order:
+
+### Root cause A (most common): `fallback_chain` 与 `fallback_providers[]` 脱节
+
+These are **two independent configs** that MUST be kept in sync:
+
+| Config | Location | What it controls |
+|---|---|---|
+| `fallback_providers[]` | Top-level array (~line 13) | **Provider pool** — entries available for `/model` and fallback |
+| `fallback_chain` | Model-section string (~line 542) | **Auto-fallback route** — the actual sequence tried when primary fails |
+
+**Verification — the CORRECT command (always use this, not grep):**
+```bash
+python3 << 'PY'
+import re
+with open('/Users/aimac/.hermes/config.yaml') as f:
+    txt = f.read()
+chain = re.search(r'^fallback_chain: (.+)', txt, re.MULTILINE)
+entries = [e.strip() for e in chain.group(1).split(',')]
+# Extract provider labels from fallback_providers (multi-line YAML safe)
+providers = re.findall(r'^\s+-\s+api_key:.*?\n\s+provider:\s+(\S+)', txt, re.MULTILINE)
+print(f"chain={len(entries)} entries, pool={len(providers)} entries")
+for e in entries:
+    pf = e.split('/')[0]
+    print(f"  {'✅' if pf in providers else '❌ DEAD'} {e}")
+PY
+```
+
+**The bash `grep 'provider:'` approach gives 0 providers and falsely reports every chain entry as dead.** The Python above is the only reliable diagnostic. The bash command in the original text above this section is WRONG — do not use it.
+
+**The `stream_chunk_timeout_seconds: 25` fix — two places, two meanings:**
+- `model.stream_chunk_timeout_seconds: 25` — HTTP/stream timeout for model requests (add manually, not set by default)
+- `agent.stream_chunk_timeout_seconds: 25` — stream chunk gap timeout for agent loop
+- `terminal.stream_chunk_timeout_seconds: 15` — terminal tool timeout (leave as-is)
+
+When patching, insert into model block after the aliases section:
+```python
+old = '''    fb: custom:123.56.67.77:9100/MiniMax-M2.7-highspeed
+providers:'''  # ← "providers:" marks end of model block
+new = '''    fb: custom:123.56.67.77:9100/MiniMax-M2.7-highspeed
+  request_timeout_seconds: 8
+  stream_chunk_timeout_seconds: 25
+providers:'''
+```
+If inserted in the wrong place (not inside model block), the field is ignored silently.
+
+```bash
+# 1. Read the fallback_chain string
+echo "=== fallback_chain ==="
+grep 'fallback_chain:' ~/.hermes/config.yaml
+
+# 2. Extract all provider: labels from fallback_providers[]
+echo "=== fallback_providers[] providers ==="
+grep 'provider:' ~/.hermes/config.yaml | grep -v '^\s*#' | head -20
+
+# 3. Cross-reference — every entry in fallback_chain MUST have a matching
+#    provider: label in fallback_providers[]
+python3 <<'PY'
+chain = "REPLACE_WITH_ACTUAL_CHAIN".split(",")
+# Actually read from file:
+with open('/Users/aimac/.hermes/config.yaml') as f:
+    txt = f.read()
+import re
+chain_match = re.search(r'(?<=fallback_chain:)\s*(\S+)', txt)
+chain = chain_match.group(1).strip().split(",") if chain_match else []
+providers = re.findall(r'^\s+provider:\s+(\S+)', txt, re.MULTILINE)
+print(f"fallback_chain: {len(chain)} entries")
+print(f"fallback_providers[]: {len(providers)} provider labels")
+print()
+dead = []
+for c in chain:
+    if c not in providers:
+        dead.append(c)
+        print(f"❌ DEAD ENTRY: '{c}' — no match in fallback_providers[]")
+    else:
+        print(f"✅ {c}")
+print()
+missing = [p for p in providers if p not in chain]
+if missing:
+    print(f"⚠️  Missing from fallback_chain (in pool but not in chain):")
+    for m in missing:
+        print(f"   {m}")
+PY
+```
+
+**Expected**: every chain entry exists as a `provider:` label. **Dead entries** (`openai-codex` in today's session) silently break fallback. **Missing entries** reduce pool diversity.
+
+**Fix**: rewrite `fallback_chain` to match `fallback_providers[]`:
+
+```bash
+# Read current fallback_providers[] provider labels in order
+grep 'provider:' ~/.hermes/config.yaml | grep -v '^\s*#' | awk '{print $2}' | tr '\n' ',' | sed 's/,$//'
+# Then use that output to construct the new chain
+sed -i '' 's/^fallback_chain:.*$/fallback_chain: <paste-comma-separated-list>/' ~/.hermes/config.yaml
+```
+
+**Symmetry rule**: `fallback_chain` and `fallback_providers[]` must always be updated together. Updating one without the other = the bug.
+- When adding a provider to `fallback_providers[]` → also add to `fallback_chain`
+- When reordering `fallback_providers[]` → also reorder `fallback_chain`
+- When removing from `fallback_providers[]` → also remove from `fallback_chain`
+
+### Root cause B (existing): timeout/hang prevents switch
+
+See "Root cause: 3 distinct timeout layers" below. The provider might be slow (not dead), so the timeout layers never fire and fallback never activates.
 
 ## Provider readiness diagnostics — what's needed to add a provider to fallback chain
 
@@ -45,7 +152,132 @@ grep -A 60 'fallback_providers' ~/.hermes/config.yaml | head -60
 4. **If OAuth token expired** — Check `~/.hermes/auth.json` for `"invalid_grant"` errors → need relogin
 5. **Is it a non-standard provider?** — GitHub Copilot needs custom endpoint config; Ollama Cloud needs base_url + key; MoA is in `moa:` section, NOT fallback
 
-### Decision tree
+### Adding a new provider: Groq case study (2026-07-06)
+
+When adding a new provider (Groq Llama 3.3 70B at 328 t/s), follow this exact sequence:
+
+**Step 1 — Test connectivity first (curl, not hermes):**
+```python
+import subprocess, json
+key = "gsk_GH..."  # actual key from user
+r = subprocess.run(['curl','-s','--connect-timeout','15','-X','POST',
+    'https://api.groq.com/openai/v1/chat/completions',
+    '-H',f'Authorization: Bearer {key}',
+    '-H','Content-Type: application/json',
+    '-d','{"model":"llama-3.3-70b-versatile","messages":[{"role":"user","content":"Reply with OK"}],"max_tokens":5}'],
+    capture_output=True, text=True, timeout=20)
+data = json.loads(r.stdout)
+assert 'error' not in data, f"Error: {data['error']['message']}"
+print("✅ Works")
+```
+
+**Step 2 — Write key to .env (not config.yaml):**
+```bash
+hermes config set GROQ_API_KEY "gsk_GH..."
+```
+
+**Step 3 — Insert into fallback_providers** (fastest providers near the top):
+```
+  - api_key: ${GROQ_API_KEY}
+    base_url: https://api.groq.com/openai/v1
+    label: Groq Llama 3.3 70B (极速300+TPS,免费30RPM)
+    model: llama-3.3-70b-versatile
+    provider: groq
+    request_timeout_seconds: 15
+```
+
+**Step 4 — Update fallback_chain** (comma-separated `provider/model`, must match a fallback_providers entry):
+```
+fallback_chain: custom:123.56.67.77:9100/MiniMax-M2.7-highspeed,groq/llama-3.3-70b-versatile,gemini/gemini-2.5-flash,...
+```
+
+**Step 5 — Restart gateway:**
+```bash
+echo '#!/bin/bash
+launchctl kickstart -k gui/501/ai.hermes.gateway' > /tmp/restart_gateway.sh
+bash /tmp/restart_gateway.sh && sleep 3 && pgrep -af "hermes.*gateway" | grep -v grep
+```
+
+**Step 6 — Verify new PID and update api-key-registry skill:**
+```bash
+pgrep -af "hermes.*gateway" | grep -v grep  # should show live PIDs
+```
+Then update `~/.hermes/skills/devops/api-key-registry/SKILL.md` with the new key name and provider entry.
+
+### YAML extraction caveat (2026-07-06)
+
+**The bash/regex provider-label extraction `grep 'provider:' ~/.hermes/config.yaml` FAILS on multi-line YAML entries.** YAML fallback_providers entries span 6 lines each (api_key / base_url / label / model / provider / request_timeout). A simple grep catches every `provider:` including those inside nested blocks, giving false positives.
+
+**Correct extraction — use this Python:**
+```python
+import re
+with open('/Users/aimac/.hermes/config.yaml') as f:
+    txt = f.read()
+providers = re.findall(
+    r'^\s+-\s+api_key:.*?\n(?:.+\n)*?\s+provider:\s+(\S+)',
+    txt, re.MULTILINE
+)
+chain = re.search(r'^fallback_chain: (.+)', txt, re.MULTILINE)
+chain_entries = [e.strip() for e in chain.group(1).split(',')]
+for entry in chain_entries:
+    pf = entry.split('/')[0]
+    status = '✅' if pf in providers else '❌ DEAD'
+    print(f"{status} {entry}")
+```
+This is the diagnostic that actually works. The bash `grep 'provider:'` approach gives 0 providers and falsely reports every chain entry as dead.
+
+### Adding a new provider: Groq case study (2026-07-06)
+
+When adding a new provider (Groq Llama 3.3 70B at 328 t/s), follow this exact sequence:
+
+**Step 1 — Test connectivity first (curl, not hermes):**
+```python
+import subprocess, json
+key = "gsk_GH..."  # actual key from user
+r = subprocess.run(['curl','-s','--connect-timeout','15','-X','POST',
+    'https://api.groq.com/openai/v1/chat/completions',
+    '-H',f'Authorization: Bearer {key}',
+    '-H','Content-Type: application/json',
+    '-d','{"model":"llama-3.3-70b-versatile","messages":[{"role":"user","content":"Reply with OK"}],"max_tokens":5}'],
+    capture_output=True, text=True, timeout=20)
+data = json.loads(r.stdout)
+assert 'error' not in data, f"Error: {data['error']['message']}"
+print("✅ Works")
+```
+
+**Step 2 — Write key to .env (not config.yaml):**
+```bash
+hermes config set GROQ_API_KEY "gsk_GH..."
+```
+
+**Step 3 — Insert into fallback_providers** (position matters — fastest providers near the top):
+```
+  - api_key: ${GROQ_API_KEY}
+    base_url: https://api.groq.com/openai/v1
+    label: Groq Llama 3.3 70B (极速300+TPS,免费30RPM)
+    model: llama-3.3-70b-versatile
+    provider: groq
+    request_timeout_seconds: 15
+```
+
+**Step 4 — Update fallback_chain** (comma-separated `provider/model`, must match a fallback_providers entry):
+```
+fallback_chain: custom:123.56.67.77:9100/MiniMax-M2.7-highspeed,groq/llama-3.3-70b-versatile,gemini/gemini-2.5-flash,...
+```
+
+**Step 5 — Restart gateway:**
+```bash
+echo '#!/bin/bash\nlaunchctl kickstart -k gui/501/ai.hermes.gateway' > /tmp/restart_gateway.sh
+bash /tmp/restart_gateway.sh && sleep 3 && pgrep -af "hermes.*gateway" | grep -v grep
+```
+
+**Step 6 — Verify new PID and update api-key-registry skill:**
+```bash
+pgrep -af "hermes.*gateway" | grep -v grep  # should show live PIDs
+```
+Then update `~/.hermes/skills/devops/api-key-registry/SKILL.md` with the new key name and provider entry.
+
+### Key findings from 2026-07-05 session
 
 ```
 Supported provider?
@@ -121,12 +353,40 @@ The bug: **Layer 2 doesn't exist by default.** Once streaming starts sending the
 
 ### Fix 1: Add stream chunk timeout to model block
 
-```yaml
-model:
-  request_timeout_seconds: 8          # was 10
-  stream_chunk_timeout_seconds: 25    # NEW
-  fallback_chain: provider1,provider2,...
+**The naive approach (regex replacing "request_timeout_seconds: 20") silently FAILS** — it replaces the first occurrence anywhere in the file, not necessarily in the model block. The field then lives at file level and is ignored.
+
+**Correct insertion — Python only, anchor on model block boundaries:**
+```python
+import re
+with open('/Users/aimac/.hermes/config.yaml') as f:
+    txt = f.read()
+
+# Find the exact boundary: last alias line → providers: line
+# Insert between them so the fields land inside the model block
+old = '''    fb: custom:123.56.67.77:9100/MiniMax-M2.7-highspeed
+providers:'''
+
+new = '''    fb: custom:123.56.67.77:9100/MiniMax-M2.7-highspeed
+  request_timeout_seconds: 8
+  stream_chunk_timeout_seconds: 25
+providers:'''
+
+assert old in txt, "Anchor text not found — check model block boundary"
+txt = txt.replace(old, new, 1)
+with open('/Users/aimac/.hermes/config.yaml', 'w') as f:
+    f.write(txt)
+
+# Verify it landed in the right place
+with open('/Users/aimac/.hermes/config.yaml') as f:
+    lines = f.readlines()
+for i, line in enumerate(lines[:15], 1):
+    print(f"{i}: {line.rstrip()}")
 ```
+
+**What to check after patching:**
+- Lines 1–10 should show the model block (default / provider / aliases / request_timeout_seconds / stream_chunk_timeout_seconds)
+- `providers:` should be line 11 or later
+- If `stream_chunk_timeout_seconds` appears before `model:` or after `providers:` → wrong location, will be ignored
 
 ### Fix 2: Add stream chunk timeout + zero retries to agent block
 
@@ -149,19 +409,35 @@ To identify which mode: check user profile memory for either "付费模型在 fa
 
 **Step 1 — order by speed.** Common mistake: front-loading the chain with the highest-quality (slowest) models. Order by **observed p50 latency**.
 
-Correct mode-B ordering (paid excluded) — 2026-07-03 current config (8 providers):
+### Current chain snapshot (2026-07-06, 12 entries, Groq added)
 
-```yaml
-fallback_chain: cerebras,gemini-2.5-flash,glm-4-flash,custom:123.56.67.77:9100/v1,nv-qwen3.5-397b,nv-nemotron-120b,or-free-router,agnes-2.0-flash
+```
+1.  custom:123.56.67.77:9100/MiniMax-M2.7-highspeed  (代理首选)
+2.  groq/llama-3.3-70b-versatile                    (极速328t/s, Groq LPU)
+3.  gemini/gemini-2.5-flash                         (Google免费额度)
+4.  glm/glm-4-flash                                 (智谱免费)
+5.  ollama-cloud/gemma4:31b                         (Ollama云免费)
+6.  nous/stepfun/step-3.7-flash:free               (Nous Portal免费)
+7.  openrouter/qwen/qwen3-coder:free                (OR免费)
+8.  openrouter/google/gemma-4-31b-it                (OR免费)
+9.  openrouter/nvidia/nemotron-3-super-120b-a12b   (OR付费)
+10. openrouter/qwen/qwen3.5-397b-a17b              (OR付费)
+11. zai/glm-4-flash                                 (Z.AI备用路由)
+12. custom:apihub.agnes-ai.com/agnes-2.0-flash      (最终兜底)
 ```
 
-The corresponding `fallback_providers` list still holds all providers including paid ones — the fallback_chain just doesn't reference them. Paid models remain available for `/model` and explicit `hermes -m` invocations.
+**Speed benchmark reference (2026-07):**
+- Groq Llama 3.3 70B: 328 t/s (fastest benchmarked, LPU hardware)
+- Gemini 2.5 Flash: fast (Google infrastructure)
+- MiniMax M2.7: very fast (context caching advantage on warm conversations)
+- OR paid models: slow (rate-limited)
+- Agnes: slowest (final fallback)
 
-**CRITICAL: never re-add a paid model to fallback_chain without explicit user permission.** Paid models consuming fallback budget on every routine timeout errors = wasted money.
+Note: MiniMax proxy (#1) can be faster than Groq (#2) on warm conversations due to KV-cache. Current ordering (MiniMax → Groq → free models → paid models) is intentional, not a bug.
 
-### Mode-B 铁律 — 付费模型永远不在自动链里
+### Mode-B 铁律 — 付费模型永远不在自动链里 (2026-07-06 updated)
 
-触犯这条的场景 — MOA (Mixture-of-Agents) 配置：
+**Step 0 — check user's paid model policy.** Two modes supported:
 
 **旧格式**（v0.17 前）：
 
@@ -575,7 +851,16 @@ hermes -p "test" 2>&1 | tee /tmp/timeout-test.log
 
 - **Thinking 模型给太小的 `maxOutputTokens` 会"假失败"**（2026-07-04 新增）: 测 Gemini 2.5 Flash 时给 `maxOutputTokens: 4`，返回 HTTP 200 + `finishReason: MAX_TOKENS` + `parts: []`，极易误判为"API 挂了"。**根因**：Gemini 2.5 / OpenAI o1-o3 / Claude extended thinking / Qwen QwQ 默认开 thinking，会把 `maxOutputTokens` 全花在内部思考上，输出部分 0 token。**生产硬规则**：任何 thinking 模型连通性 smoke test 用 `maxOutputTokens: 512`（建议 1024），不要抠 token。完整 3 段探针协议见 `references/model-connectivity-2026-07-04.md`。
 
-- **`fallback_chain: <string>` 字段是"参考字段"，真的回退顺序由 `fallback_providers[]` 数组顺序决定**（2026-07-04 新增）: 用户 config 里 `fallback_chain: openrouter` 但 `fallback_providers[]` 里 provider 标签是 `gemini`/`cerebras`/`nv-qwen3.5-397b` 等没有 `openrouter` 这个标签 — `fallback_chain` 写啥**对回退行为无影响**。`fallback_providers[]` 数组从上到下就是实际回退顺序。这是非显然设计，**看到死 `fallback_chain` 字符串别急着改**，先 grep 8 条 `fallback_providers` 数组看实际链，写报告时直接说"按 `fallback_providers[]` 顺序看"。
+- **`fallback_chain` 和 `fallback_providers[]` 是两套独立配置，必须同步维护**（2026-07-05 修正）: 之前认为 `fallback_chain` 只是"参考字段"，真实回退由 `fallback_providers[]` 数组顺序决定。**这是错的**。2026-07-05 实测发现：`fallback_chain` 里有死链（如 `openai-codex` 在 pool 中无对应 `provider:` 标签）时，整个回退会静默卡住——`fallback_providers[]` 有 11 条但 `fallback_chain` 只有 8 条且含 1 条死链。修复：将 `fallback_chain` 重写为完整 11 条列表，逐一对齐。
+
+  **正确理解**: `fallback_chain` 控制自动回退路由，`fallback_providers[]` 是模型可用池。两者都重要，必须一致。`fallback_chain` 里有死链 = 回退静默中断。诊断命令：
+
+  ```bash
+  echo "=== fallback_chain ==="
+  grep 'fallback_chain:' ~/.hermes/config.yaml
+  echo "=== fallback_providers[] providers ==="
+  grep '^\s\+-\s\+provider:' ~/.hermes/config.yaml | awk '{print $2}'
+  ```
 
 - **当主模型持续 401/403 — 先检查 key_env，不是查 API key 本身** (2026-07-03 实战): 用户报主模型 deepseek-v4-flash 一直 auth error，实测 `.env` 的 `DEEPSEEK_API_KEY` curl 返回 HTTP 200（key 本身有效），但 gateway 日志显示的提交 key `****a4ae` 跟 `.env` 的 `****6fab` 不一致。根因：`config.yaml` 里 `model.key_env: OPENROUTER_API_KEY` 指向了 OpenRouter 的 key，而 gateway 把它发到了 `api.deepseek.com`——两家 key 格式不同，必 401。
   **诊断步骤**:
@@ -588,6 +873,7 @@ hermes -p "test" 2>&1 | tee /tmp/timeout-test.log
   
 - **`api_max_retries: 0` is safe** despite sounding aggressive — Hermes only retries within one provider, then falls back. Zero retries = straight to next provider.
 - **`stream_chunk_timeout_seconds: 25` not 10** — too aggressive triggers false positives on slow reasoning chunks (some models push 1 chunk, think 15s, push next). 25-30s is the safe band.
+- **`stream_chunk_timeout_seconds` 两处存在，含义不同**（2026-07-05）: `terminal:` 块下的 `stream_chunk_timeout_seconds: 15` 是**终端工具**的流式响应超时；`agent:`/`model:` 下的才是**网关级**卡顿切换超时。删除终端块的值会导致终端流式响应异常。修改前先 `sed -n 'X,Yp' 确认字段所在块。
 - **Don't lower `gateway_timeout` below 120** — some legitimately long context-analysis tasks need 2+ minutes. 300 (5min) is the floor.
 - **`fallback_chain: ""`** (empty) means only main provider used, no fallback at all. Always populate.
 - **Custom provider IPs (`custom:1.2.3.4:port`)** are common in China VPS setups. They often timeout, so they should be #1 in chain (fast switch) not the only entry.
@@ -620,16 +906,113 @@ grep -n '123.56.67.77\|sk-cp-\|MiniMax M3' ~/.hermes/config.yaml || echo "All cl
   **任何自定义代理（`custom_providers` 里的条目）删除都必须检查两处**。
 
 - **修改 fallback_chain 后重启之前，当前会话的 fallback 不受影响** — 配置只在 gateway 启动时读取。重启前加一条记录在 memory 或任务文件里，防止忘了。
-- **`hermes config set model.fallback_chain` 会覆盖整个链** — 不是追加。写的时候必须把 8 个 provider 全写上，漏一个就等于删了那个。
+- **`hermes config set model.fallback_chain` 会覆盖整个链** — 不是追加。写的时候必须把全部 provider 名写全，漏一个就等于删了那个。
+
+## Model aliases for quick switching
+
+After configuring a fallback chain, users often want quick shortcuts to switch between models without typing full `/model custom:xxx:MiniMax-M3` strings.
+
+### When to create aliases
+
+- User says "有什么快捷指令" or "怎么快速切换"
+- User switches between 2+ models frequently during a session
+- The model name or provider path is long/complex (custom providers with IP addresses)
+
+### Setup: `hermes config set model.aliases.X`
+
+```bash
+# Full form — pin exact model + provider
+hermes config set model.aliases.mini "custom:123.56.67.77:9100/MiniMax-M2.7-highspeed"
+hermes config set model.aliases.deep "deepseek/deepseek-v4-flash"
+
+# Then in chat:
+# /model mini   → switch to MiniMax M2.7-highspeed
+# /model deep   → switch to DeepSeek v4
+# /model fb     → switch to default (triggers fallback chain on failure)
+```
+
+The format is `provider/model` — for custom providers, use `custom:<name>/<model>`.
+
+Aliases work in CLI, Telegram, QQ, Discord, and all other messaging channels. They support `--global` to persist the current-model change to config.yaml.
+
+### Naming convention
+
+| Alias | Convention | Example |
+|---|---|---|
+| `mini` | Short provider name | MiniMax → `mini` |
+| `deep` | Short provider name | DeepSeek → `deep` |
+| `fb` | "fallback mode" | Reset to default → triggers fallback chain |
+| `fast` | Speed hint | Fast/cheap model |
+| `strong` | Quality hint | Best model available |
+
+`/model fb` is a convention meaning "set the primary model back to the default that triggers fallback chain on failure." It does NOT bypass the chain — it resets the primary so the chain can activate.
+
+### Verify aliases are configured
+
+```bash
+grep -A 5 'model.aliases\|aliases:' ~/.hermes/config.yaml
+```
+
+Output should show:
+```yaml
+model:
+  default: deepseek-v4-flash
+  provider: deepseek
+  aliases:
+    mini: custom:123.56.67.77:9100/MiniMax-M2.7-highspeed
+    deep: deepseek/deepseek-v4-flash
+    fb: deepseek/deepseek-v4-flash
+```
+
+### Pitfalls
+
+- **Aliases must match provider IDs in config, not display names** — `custom:123.56.67.77:9100/MiniMax-M2.7-highspeed` not `minimax/minimax-m2.7`
+- **Model name is case-sensitive** — `MiniMax-M2.7-highspeed` (CamelCase) not `minimax-m2.7-highspeed` (lowercase). Always verify against `/v1/models` output.
+- **Changing aliases requires no gateway restart** — aliases are read per-session, not at startup.
+- **If an alias doesn't work**, fall back to the full form: `/model custom:123.56.67.77:9100:MiniMax-M2.7-highspeed`
+
+## Fallback chain ordering strategy
+
+The order of fallback_providers[] directly affects latency and cost. A poorly ordered chain can burn 2+ minutes on a dead upstream before reaching a working free model.
+
+### Correct ordering principles
+
+1. **Fastest/free first** — Models that reply within 20s and cost nothing should be near the top
+2. **Slow/paid behind** — Powerful but slow/expensive models go after the fast free ones
+3. **Rate limit tolerant** — Free-tier models often hit rate limits, so redundancy among free models matters
+4. **Paid = last resort** — Unless user explicitly wants paid models in auto-fallback, keep them at the end or outside the chain entirely
+
+### Recommended ordering template (2026-07-05 validated)
+
+| Position | What to put | Rationale |
+|---|---|---|
+| #1 | User's preferred model (fast) | First try wins fastest |
+| #2–6 | Free tier / free-credit models | Gemini, GLM-4 Flash, OR free, Ollama Cloud free, Nous free |
+| #7–9 | Gateway models (OpenRouter/NVIDIA) | Paid through gateway but good quality |
+| #10–11 | Paid / backup / last resort | Z.AI backup, Agnes final fallback |
+
+### Pitfalls
+
+- **120s timeout at position #1 is a disaster** — If the first model has a 120s timeout and hangs, the user waits 2 minutes before the second entry gets tried. Always sort by `request_timeout_seconds` ascending.
+- **Free models scattered = wasted time** — Putting free models at positions #1 and then #9 means every failure hits 8 dead ends before reaching the next free one. Group free models together.
+- **`fallback_chain` 和 `fallback_providers[]` 必须同步** — 两个都是实际生效字段。`fallback_chain` 控制自动回退的路径顺序，`fallback_providers[]` 是可用模型池。修改池后必须同步更新链，否则死链会让回退静默中断。同步命令见上方诊断节的交叉比对方法。
+
+### Verifying real order
+
+```bash
+grep -E 'label:|model:|provider:' ~/.hermes/config.yaml | grep -A1 'label:'
+```
 
 ## Reference
 
 See `references/config-yaml-timeout-schema.md` for the full field reference.
+See `references/provider-env-mapping.md` for the provider → env var / auth mapping table, Nous Portal OAuth recovery, Ollama Cloud nuance, and provider readiness checklist.
 See `references/model-connectivity-2026-07-03.md` for the 2026-07-03 connectivity sweep (NVIDIA/Clash proxy findings + 5-row result table).
 See `references/model-connectivity-2026-07-04.md` for the 2026-07-04 sweep + 3-tier probe protocol (key-load → list → generate) + Gemini thinking-model `maxOutputTokens` trap.
 See `references/minimax-custom-provider-restoration.md` for restoring deleted custom providers like MiniMax-M3.
 See `references/moa-preset-format-2026-07.md` for the complete MoA preset migration guide (old `models[]`+`aggregator` → new `presets` format).
-See `references/provider-env-mapping.md` for the provider → env var / auth mapping table, Nous Portal OAuth recovery, Ollama Cloud nuance, and provider readiness checklist.
+See `references/fallback-chain-2026-07-05.md` for the 2026-07-05 chain audit results.
+See `../api-key-registry/SKILL.md` for the complete API key inventory (all keys, providers, env var names, and the 6-step new-provider checklist). Gateway restart: `bash /tmp/restart_gateway.sh` — contains `launchctl kickstart -k gui/501/ai.hermes.gateway`.
 
 ## Audit scripts overview
 

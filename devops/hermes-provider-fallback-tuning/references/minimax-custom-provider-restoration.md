@@ -33,9 +33,9 @@ hermes config set MINIMAX_M3_API_KEY "sk-your-key-here"
 `custom_providers:` 块在 config.yaml 中需要**命名条目**，每个条目有 `base_url` 和 `key_env`：
 
 ```bash
-sed -i '' '/^custom_providers:/a\
-  "123.56.67.77:9100":\
-    base_url: http://123.56.67.77:9100/v1\
+sed -i '' '/^custom_providers:/a\\
+  "123.56.67.77:9100":\\
+    base_url: http://123.56.67.77:9100/v1\\
     key_env: MINIMAX_M3_API_KEY
 ' ~/.hermes/config.yaml
 ```
@@ -58,12 +58,12 @@ custom_providers:
 
 在 Agnes Flash 条目前面插入：
 ```bash
-sed -i '' '/^  - api_key: ${AGNES_API_KEY}/i\
-  - api_key: ${MINIMAX_M3_API_KEY}\
-    base_url: http://123.56.67.77:9100/v1\
-    label: MiniMax M3 (123.56.67.77:9100 代理)\
-    model: MiniMax-M3\
-    provider: custom:123.56.67.77:9100\
+sed -i '' '/^  - api_key: ${AGNES_API_KEY}/i\\
+  - api_key: ${MINIMAX_M3_API_KEY}\\
+    base_url: http://123.56.67.77:9100/v1\\
+    label: MiniMax M3 (123.56.67.77:9100 代理)\\
+    model: MiniMax-M3\\
+    provider: custom:123.56.67.77:9100\\
     request_timeout_seconds: 20
 ' ~/.hermes/config.yaml
 ```
@@ -75,10 +75,10 @@ sed -i '' '/^  - api_key: ${AGNES_API_KEY}/i\
 ```bash
 # 测试 API key + 端点
 source ~/.hermes/.env 2>/dev/null || true
-KEY=$(awk -F= '/^MINIMAX_M3_API_KEY=/{print $2; exit}' ~/.hermes/.env | tr -d '\r\n"')
-curl -s -w "\nHTTP:%{http_code}" http://123.56.67.77:9100/v1/chat/completions \
-  -H "Authorization: Bearer $KEY" \
-  -H "Content-Type: application/json" \
+KEY=$(awk -F= '/^MINIMAX_M3_API_KEY=/{print $2; exit}' ~/.hermes/.env | tr -d '\\r\\n"')
+curl -s -w "\\nHTTP:%{http_code}" http://123.56.67.77:9100/v1/chat/completions \\
+  -H "Authorization: Bearer $KEY" \\
+  -H "Content-Type: application/json" \\
   -d '{"model":"MiniMax-M3","messages":[{"role":"user","content":"hi"}],"max_tokens":10}'
 # 期望: HTTP:200（或有余额提示，但非 401/403）
 ```
@@ -95,7 +95,7 @@ hermes gateway restart
 
 ```bash
 # 1. 找所有出现位置
-grep -n '123.56.67.77\|MiniMax M3' ~/.hermes/config.yaml
+grep -n '123.56.67.77\\|MiniMax M3' ~/.hermes/config.yaml
 
 # 2. 从 fallback_providers[] 删除整个条目
 # 找到条目的起始行号 L，看完整条目到几行
@@ -105,8 +105,43 @@ sed -i '' 'L,+5d' ~/.hermes/config.yaml
 sed -i '' '/^  "123.56.67.77:9100":/,/^    key_env:/d' ~/.hermes/config.yaml
 
 # 4. 确认干净
-grep -n '123.56.67.77\|MiniMax M3' ~/.hermes/config.yaml || echo "All clean"
+grep -n '123.56.67.77\\|MiniMax M3' ~/.hermes/config.yaml || echo "All clean"
 ```
+
+## 2026-07-05 补充: 模型切换与快捷别名
+
+### 模型从 M3 改为 M2.7-highspeed
+
+同一端点的模型可以切换。用户最初用 `MiniMax-M3`，后改为 `MiniMax-M2.7-highspeed`。
+两种模型都在 `/v1/models` 列表里。切换步骤：
+
+```bash
+# 1. 查可用模型
+curl -s http://123.56.67.77:9100/v1/models -H "Authorization: Bearer $KEY"
+
+# 2. 修改 config.yaml 的 model 字段（注意大小写）
+sed -i '' 's/model: MiniMax-M3/model: MiniMax-M2.7-highspeed/' ~/.hermes/config.yaml
+```
+
+### 常搭配快捷别名一起设置
+
+加完 fallback 条目后，用户通常会要快捷切换指令：
+
+```bash
+hermes config set model.aliases.mini "custom:123.56.67.77:9100/MiniMax-M2.7-highspeed"
+hermes config set model.aliases.deep "deepseek/deepseek-v4-flash"
+hermes config set model.aliases.fb "deepseek/deepseek-v4-flash"
+```
+
+然后在 chat 里 `/model mini` 秒切。
+
+### 阿里云代理余额不足的典型返回值
+
+```json
+{"error":{"message":"预扣费额度失败, 用户剩余额度: ＄0.200000, 需要预扣费额度: ＄0.300000","code":"insufficient_user_quota"}}
+```
+
+这个是 403，不是 401/500 —— key 有效，余额不够。告诉用户充钱或用免费模型（如该代理上的 `MiniMax-M2.5` 或 `MiniMax-M2.7-highspeed`）。
 
 ## 常见错误
 
@@ -120,5 +155,5 @@ grep -n '123.56.67.77\|MiniMax M3' ~/.hermes/config.yaml || echo "All clean"
 
 ## 关联参考
 
-- `SKILL.md` — Key findings from 2026-07-05 session (custom_providers 正确 YAML 格式)
+- `SKILL.md` — Model aliases section (快捷切换指令), Fallback chain ordering section (排序策略)
 - `provider-env-mapping.md` — 完整 provider 与 env var 映射表

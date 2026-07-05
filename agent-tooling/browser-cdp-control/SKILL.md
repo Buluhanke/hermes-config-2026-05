@@ -250,6 +250,45 @@ curl -s http://127.0.0.1:9222/json/version | python3 -c \
 
 **When NOT to use this approach**: When you need to install extensions (uBlock Origin, etc.) without disturbing the user's daily browsing. Use a separate profile for that.
 
+### 操作用户独立运行的 Chrome（2026-07-06 新增）
+
+**发现背景**：用户日常 Chrome（PID 722）已经在跑，开了 9222 调试端口。Hermes 的 `computer_use` 偶尔返回 0x0（display 虚拟化问题），但 CDP 9222 端口始终正常。
+
+**核心 technique**：不需要重启 Chrome 或复制 profile，直接用 `browser_cdp` + `target_id` 操作用户已有标签页。
+
+```python
+# 1. 发现用户 Chrome 的 tab
+import urllib.request, json
+with urllib.request.urlopen('http://127.0.0.1:9222/json/list') as f:
+    tabs = json.load(f)
+# 找企业微信文档 tab
+for t in tabs:
+    if 'doc.weixin.qq.com' in t.get('url', '') and t.get('type') == 'page':
+        tab_id = t['id']  # 完整 32-char ID
+        ws_url = t['webSocketDebuggerUrl']
+        break
+
+# 2. 用 browser_cdp 直连（target_id 模式，不需要 WS URL）
+browser_cdp(
+    method="DOM.getDocument",
+    params={"depth": 3},
+    target_id=tab_id  # ← 直接用 /json/list 返回的 id
+)
+```
+
+**关键限制**：
+- ❌ `browser_navigate` 不接受 `ws://` URL（报 "Blocked: URL targets a private or internal address"）
+- ✅ `browser_cdp` 用 `target_id` 不需要 WS URL，是正确路径
+- ✅ `computer_use` 返回 0x0 时，CDP 仍然正常 → 降级到 `browser_cdp`
+- ⚠️ **不要擅自 Page.reload**。用户说"已经登录了"但 CDP 显示登录页 → CDP session 缓存了旧 DOM，先问"你现在屏幕上是登录页还是文档内容"，不要 reload。reload 会丢失用户已在浏览器里完成的登录状态。
+
+**和"Foreground Chrome Profile"方法的区别**：
+| 场景 | 方法 |
+|------|------|
+| 用户 Chrome 已在跑 9222 | 直接 `browser_cdp` + `target_id`（本次 technique）|
+| 需要重启 Chrome 或没有 9222 | Foreground Chrome Profile recipe（复制 + 启动）|
+
+
 ### ⚠️ Chrome 149+ CDP 兼容：page-level WS vs browser-level attach (2026-06-21 新增)
 
 **症状**：用 browser-level WebSocket + `Target.attachToTarget` 拿到 sessionId 后，所有 CDP 命令报 `Session with given id not found.`
@@ -443,8 +482,9 @@ for p in ctx.pages:
 
 ## AI网站交互工作流（实战验证）
 
+**用户铁律：不要空话。** 直接做，不解释过程，不汇报系统状态，除非用户明确要求。动作→结果，两句话内。
+
 ### 正确流程（问题→发送→等待→提取）
-## 正确流程（问题→发送→等待→提取）
 
 AI聊天网站（ChatGPT/豆包/DeepSeek/智谱清言/Gemini）使用 WebSocket 流式输出+虚拟DOM渲染，**必须在同一页面完成发送+等待+提取，不能刷新或导航离开。**
 
@@ -880,6 +920,7 @@ C6 = "=IFERROR(VLOOKUP(@$B:$B,报价表!$B:$I,8,0),\"\")"  ← 永远是公式!
 ## 子文件 / Templates
 
 - `references/doc-weixin-smartsheet-cdp.md` — **doc.weixin.qq.com 智能表格** 完整 CDP 读写实战 (AlloyEditor 坑/Alt+↓ 不响应/143 物料白名单/单次vs批量语义侦测)
+- `references/doc-weixin-sheet-login-state.md` — **企业微信文档登录态判断**（2026-07-06 实测）：login_frame iframe 特征、未登录 vs 已登录 状态区分、chrome-profile-mirror 与用户主 Chrome 的 CDP 端口隔离
 - `templates/fill_sales_smart.py` — **企业微信销售单填表脚本模板** (已验证 2026-06-29, 单/多 row, 客户端白名单校验; 复用改 SMARTSHEET_URL + TARGET_SHEET)
 
 ## Quick Verify
@@ -887,33 +928,39 @@ C6 = "=IFERROR(VLOOKUP(@$B:$B,报价表!$B:$I,8,0),\"\")"  ← 永远是公式!
 curl -s http://127.0.0.1:9222/json/version | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"Chrome {d.get('Browser-Version','?')}\")"
 ```
 
-## Critical Limitation: AI Chat Replies Are Unreadable via CDP
+## Critical Limitation: AI Chat Replies — Shadow DOM Penetration Varies by Site
 
-**Root cause**: Modern AI chat sites (DeepSeek, 豆包, ChatGPT, ChatGLM) render messages inside **Web Components Shadow DOM**. Both `Runtime.evaluate` and `Accessibility.getFullAXTree` cannot penetrate Shadow DOM boundaries — the messages exist in a private, encapsulated tree that CDP cannot traverse.
+**实测 2026-07-06: Gemini 的 AI 回复可以用 AX tree 读取。**
 
-**What you CAN read**:
-- Page structure (sidebars, nav links, buttons, headings)
-- Input textboxes, form fields, radio buttons
-- Structured content (1688 product listings, news articles, tables)
-- AX tree returns 200-500+ nodes for navigation/structure
+Gemini 页面 `browser_snapshot` 成功读到了：
+```
+heading "You said Reply with just OK"
+paragraph "Reply with just OK"
+heading "Gemini said"
+paragraph "OK"
+```
 
-**What you CANNOT read**:
-- AI chat reply text content (Shadow DOM isolated)
-- Streaming message fragments mid-generation
-- Canvas/验证码/image内文字
+**不同 AI 站的 Shadow DOM 穿透能力不同：**
 
-**Workaround for AI sites**:
+| 站点 | AX Tree 读回复 | Runtime.evaluate 读 innerText | 备注 |
+|---|---|---|---|
+| **Gemini** | ✅ 可读 | ✅ 可读 | 本次实测成功 |
+| **ChatGPT** | ❌ 通常不可读 | ❌ Shadow DOM 隔离 | 主流 AI 站 |
+| **豆包** | ❌ 可能不可读 | ❌ Shadow DOM 隔离 | 待测 |
+| **DeepSeek** | ❌ 可能不可读 | ❌ Shadow DOM 隔离 | 待测 |
+
+**判断 SOP**：先跑 `browser_snapshot` 看AX tree里有没有回复内容（paragraph/StaticText里有没有AI回复文字），有就用，没有再试Runtime.evaluate。都不行才用 browser_vision 截图。
+
+**Workaround for sites where CDP can't read replies**:
 ```
 Instead of browser → read reply → process
 Do: browser → send message → call AI API directly
 
 DeepSeek  → direct DeepSeek API (free tier available)
-ChatGPT   → direct OpenAI API  
+ChatGPT   → direct OpenAI API
 Gemini    → direct Google API
 豆包      → direct ByteDance API (if available)
 ```
-
-This session confirmed: JS shadow DOM traversal found 0 message texts, AX tree showed 280 nodes but all StaticText were page chrome (sidebar links, nav), no AI reply content anywhere.
 
 ## Verified Working: hermes_cdp_bot.py
 
@@ -967,10 +1014,10 @@ for t in tabs:
         break
 ```
 
-## Connected AI Sites (pre-authenticated)
-- https://chatgpt.com/
-- https://www.doubao.com/chat
-- https://chat.deepseek.com/
-- https://gemini.google.com/app
-- https://chatglm.cn/main/alltoolsdetail
-- https://grok.com/z
+## Connected AI Sites (pre-authenticated, verified 2026-07-06)
+- https://chatgpt.com/           — 待验证
+- https://www.doubao.com/chat    — ✅ 登录（K H账号，有历史对话）
+- https://chat.deepseek.com/    — 待验证
+- https://gemini.google.com/app  — ✅ 登录（K H账号，Gemini实测发送+接收全流程OK）
+- https://chatglm.cn/            — 待验证
+- https://grok.com/z            — ❌ Cloudflare拦截，无法自动化
