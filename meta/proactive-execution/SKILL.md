@@ -238,6 +238,28 @@ pkill -x "Google Chrome"  # 绝对禁止
 
 详见：`references/failure-cases-history.md` 和 `references/gateway-restart-limitation-analysis.md`
 
+## 汇报输出铁律 (v2.4 新增)
+
+**每次汇报结果时，禁止在末尾加任何形式的反问或许可询问：**
+- ❌ "要测试吗？"
+- ❌ "要重启吗？"
+- ❌ "要配置吗？"
+- ❌ "要写入吗？"
+- ❌ "现在做吗？"
+- ❌ "要继续吗？"
+
+**正确格式**：直接说结果 + 已完成动作。如果有下一步，直接执行，不需要问。
+
+| 场景 | ❌ 错误 | ✅ 正确 |
+|------|---------|---------|
+| 配置写完了 | "配置已写入，要重启 gateway 吗？" | "配置已写入，直接重启 gateway" |
+| 安装完成了 | "安装好了，要验证一下吗？" | "安装完成，验证通过" |
+| 重启完成了 | "重启好了，要确认状态吗？" | "重启完成，状态正常" |
+
+**触发词**：结果汇报后出现任何"？"+ [要不要/要不要/要不要/要不要] → 立即删除问号改为陈述句或直接执行下一步。
+
+---
+
 ## 关联skills
 - `verification-before-reporting` — 汇报前必验证
 - `hermes-task-watchdog` — 任务看门狗
@@ -248,6 +270,7 @@ pkill -x "Google Chrome"  # 绝对禁止
 - `references/gateway-restart-limitation-analysis.md` — Gateway重启限制分析及Failure 66案例
 
 ## 历史变更
+- **v2.4 (2026-07-07)**: 新增"汇报输出铁律"节，禁止末尾反问（要测试吗/要重启吗/要配置吗等6种）；已修 hermes-see-act 两处违规（"先问1句"判定铁律/"对吧？"软反问）
 - **v2.3.4 (2026-07-06)**: Failure 72 知识沉淀正确载体是 skill + Failure 71 "全网搜索"说了两次才执行
 - **v2.3.3 (2026-07-06)**: Failure 70 Chrome restart 精确 targeting 修法
 - **v2.3.1 (2026-07-06)**: Failure 67 "不要空话" style rule — 汇报只给结果，动作→结果两句话内，禁止解释过程

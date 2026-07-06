@@ -2,6 +2,14 @@
 name: hermes-see-act
 description: 让 Hermes 像真人一样看到看懂操作电脑 (macOS + Chrome)。5 通道决策表 + 4 步 SOP + 不抢前台。操作电脑任务 (填表/点按钮/读屏) 必加载。注意 — 用户原话"按需读屏 + 鼠标键盘协作完成工作任务" 不等于 实时监控屏幕。
 when_to_use: 任何需要"操作桌面/浏览器完成任务"的指令。包含 macOS 原生 app (微信/QQ/钉钉/Finder)、Chrome、跨平台 GUI。实时监控屏幕是另一个 skill (screen_watch_daemon), 本 skill 不涉及。
+version: 1.2.0
+updated: 2026-07-07
+triggers:
+  - "看屏幕/读屏/操作电脑"
+  - "填表/点按钮/登录"
+  - "Chrome/浏览器自动化"
+  - "macOS 原生 app 操作"
+  - "element index/坐标点击"
 ---
 
 # Hermes 真人化操作电脑 — 5 通道 + 4 步 SOP
@@ -277,13 +285,13 @@ nohup ~/.rapid-mlx/bin/rapid-mlx serve mlx-community/UI-TARS-1.5-7B-4bit --port 
 - "实时监控/每 X 秒轮询/截屏变化通知/屏幕变了告诉我" → **`screen_watch_daemon`** (常驻 daemon)
 - "操作电脑/填表/打开 X/点击/登录/看屏幕里有什么" → **`hermes-see-act`** (按需 SOP)
 
-**判定铁律**: 用户说"看屏幕"时, **先问 1 句** "你希望定时监控还是只在操作时按需看?" — 别自己脑补。但按 v3.1 铁律, **别用反问**, 默认走"按需 SOP", 加 1 句主动说明"如果是要定时监控, 告诉我我换 daemon"。
+**判定铁律**: 用户说"看屏幕"时，按 v3.1 铁律**零反问**，默认走"按需 SOP"，直接执行不等待授权。如果需要常驻监控，用户会明确说"定时监控/每X秒轮询"，那时再切换到 screen_watch_daemon。
 
 **下次遇到 "看屏幕" 类指令时的标准动作**:
 1. **不立刻**触发 screen_watch_daemon 或重写任何常驻进程
 2. **不立刻** grep "监控/screencapture/launchd"
 3. **直接**进入 hermes-see-act 的 4 步 SOP 流程
-4. 跑完第一轮任务后, 在汇报里**主动**确认: "这是按需读屏, 不是常驻监控, 对吧?"
+4. 跑完第一轮任务后，在汇报里说明"已按需读屏方式处理，非常驻监控"
 
 ---
 
@@ -747,3 +755,11 @@ conn.close()
 **正解**: Dock 固定 app → `defaults read com.apple.dock persistent-apps` (金标准, 100% 拿到); 正在运行的 app → `mcp_cua_driver_get_accessibility_tree`; 启动过 → `lsappinfo list` (macOS 26+ 部分 deprecated)。
 
 **触发词**: "osascript UI element 失败 / -1728 / -1719 / Dock 拿不到" → 0 思考换 defaults/lsappinfo/AX tree, 别修 osascript。
+
+---
+
+## Changelog
+
+- **v1.2.0 (2026-07-07)**: 判定铁律改为"零反问直接执行"（删"先问1句"），末尾确认改陈述式说明（删"对吧？"软反问）；triggers 节加入 YAML frontmatter
+- **v1.1.0 (2026-07-01)**: Terminal.app 没有 AX 输入目标 SOP、Gateway 重启硬限制 + detached_restart.py 兜底方案
+- **v1.0 (2026-06-25)**: 初始版本

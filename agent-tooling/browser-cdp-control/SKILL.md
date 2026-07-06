@@ -819,6 +819,18 @@ Hermes 现在有 **3 层浏览器控制工具**，互补不冲突：
 **agent-browser 已安装**: `~/.hermes/skills/agent-browser-cli/SKILL.md`
 **集成详情**: `references/chrome-devtools-mcp-integration.md`
 
+## browser-use CLI（2026-07-07 新增）
+
+**先读 `references/browser-use-cli-interface.md`**：接口是 Python heredoc，不是 CLI 风格。
+
+### 与 browser-cdp-control 的关系
+
+- `browser-cdp-control`：直接 CDP WebSocket 调用（底层，最灵活）
+- `browser-use`：对 CDP 的 Python 包装（通过 browser-harness daemon）
+- `browser-use doctor` 是入口诊断命令
+- daemon 活跃时，所有 page 操作通过 `browser-use << 'PY'` 进行
+- homebrew 版本因 Python 3.14 asyncio 问题损坏，用 `uv tool install --python 3.11 browser-use` 修复
+
 ## Canvas-Rendered Enterprise Apps (smartsheet / spreadsheet / 表格类)
 
 Modern enterprise productivity apps (Tencent docs smartsheet, Feishu sheets, Lark Base, etc.) render grid content on `<canvas>` — **text is not in the DOM**. Standard `querySelectorAll('.cell, [data-row]')` returns 0 hits.

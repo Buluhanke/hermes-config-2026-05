@@ -292,3 +292,4 @@ fact_semantic_search: OpenAI text-embedding-3-small API（已改）
 - `references/browser-4-layer-decision.md` — 4 层降级决策表 + 基准数据
 - `references/provider-auth-troubleshooting.md` — Provider认证故障排查指南（2026-07-05新增）
 - `references/gateway-restart-limitation-analysis.md` — Gateway重启限制分析（2026-07-05新增）
+- `references/gateway-restart-verified-methods.md` — 已验证的 detached_restart.py 方法（2026-07-07新增）
