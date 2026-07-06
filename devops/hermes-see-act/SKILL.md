@@ -60,7 +60,8 @@ triggers:
 - **AX tree 上限**: max_depth=12, max_elements=80, 否则 Electron 大树炸
 
 ## 不在能力内 (转交其他工具)
-
+## 不在能力内 (转交其他工具)
+- **Chrome 无内置调试 UI**：Chrome 不像 Safari 有 Web Inspector，需加启动参数 + 重启。详见 `references/browser-debugging-macos.md`
 - **跨机器/SSH** → v2.7 停止方向, 别问
 - **远控 GUI 客户端** → v2.7 别装
 - **实时监控屏幕** → 用 `screen_watch_daemon` (昨天写的), 不在本 skill 范围

@@ -493,7 +493,27 @@ grep -B 1 -A 6 'model: deepseek-chat' ~/.hermes/config.yaml | head -8
 # → provider: deepseek
 ```
 
-MOA 的 `aggregator` 或任意 `reference_model` 包含付费模型，即使没有在 `fallback_chain` 里，也能通过 MOA 机制消耗付费额度 — **每轮迭代消耗多次**。检查方法：
+- **MOA preset 里的 provider key 必须是 `fallback_providers[]` 里真实存在的标签**（2026-07-08 新增）: `moa.presets.default.reference_models[].provider` 不是模型名，是 `fallback_providers[]` 数组里的 `provider:` 标签。如果写了一个不存在的标签（如 `nv-qwen3.5-397b` 而实际应该是 `openrouter`），MOA 初始化时会静默失败。诊断：
+  ```bash
+  # 检查 MOA preset 里的 provider 是否都在 fallback_providers[] 中
+  python3 -c "
+  import re, yaml
+  with open('/Users/aimac/.hermes/config.yaml') as f: txt = f.read()
+  # 提取所有 provider 标签
+  providers = re.findall(r'^\s+provider:\s+(\S+)', txt, re.MULTILINE)
+  # 提取 MOA preset 里的 provider
+  moa_block = re.search(r'moa:\s+presets:.*?(?=\n\w|\Z)', txt, re.DOTALL)
+  if moa_block:
+      moa_providers = re.findall(r'provider:\s+(\S+)', moa_block.group())
+      print(f'fallback_providers: {set(providers)}')
+      print(f'MOA preset providers: {set(moa_providers)}')
+      dead = [p for p in moa_providers if p not in providers]
+      print(f'DEAD in MOA: {dead}' if dead else 'All OK')
+  "
+  ```
+  **实测案例**: `nv-qwen3.5-397b` 是 MOA preset 里引用的 provider key，但 config.yaml 里没有对应的 `provider: nv-qwen3.5-397b` 条目。修复：改为 `openrouter`（该模型实际走 OpenRouter）。
+
+- **MOA 的 `aggregator` 或任意 `reference_model` 包含付费模型，即使没有在 `fallback_chain` 里，也能通过 MOA 机制消耗付费额度**（2026-07-06 updated）
 
 ```bash
 # 旧格式
