@@ -6,6 +6,12 @@ triggers:
   - "skills 优化"
   - "安装技能"
   - "cybersecurity pack"
+  - "Eagle Eye"
+  - "eagle-eye"
+  - "LanceDB"
+  - "lancedb"
+  - "semantic memory"
+  - "skill retrieval"
   - "drawio"
   - "skillclaw"
   - "817 个网络安全技能"
@@ -437,7 +443,52 @@ bash ~/.hermes/skills/hermes-skill-optimization/scripts/check-memory-budget.sh
 
 **关联**: pitfall 14 的 identifier 前缀速查表（`skills-sh/` / `github/` / `official/` / `clawhub/`），本 pitfall 是它的实操配套。
 
-## 20. 互补 vs 冗余判定（2026-07-03 cron 实战, 避免"装了等于没装"）
+## 26. Eagle Eye — 5层技能检索插件（2026-07-08 落地）
+
+**来源**: github.com/willingning-coder/eagle-eye，MIT协议
+**解决**: Hermes 100+ skill 全量注入 system prompt（Issue #2045）+ skill 描述被截断到60字符（Bug #13944）
+
+**原理**: L1硬触发→L2 FTS5 BM25→L3同义词词典→L4密集向量→L5 RRF融合
+
+**安装**:
+```bash
+git clone https://github.com/willingning-coder/eagle-eye.git /tmp/eagle-eye
+cd /tmp/eagle-eye && python scripts/generate_config.py
+cp generated/*.yaml src/
+# 编辑 src/skill_retriever.py 补全 _HARD_TRIGGERS
+cp src/skill_retriever.py ~/.hermes/plugins/eagle-eye/src/skill_retriever.py  # 同步到正确路径
+hermes plugins enable eagle-eye
+```
+
+**验证**: `hermes plugins list | grep eagle-eye` 显示 `enabled`
+**依赖**: jieba, sentence-transformers（可选，仅L4需要）
+**局限**: 自动生成的触发词是空模板，需根据实际使用手动扩充
+
+## 27. LanceDB Semantic Memory — 向量语义记忆插件（2026-07-08 落地）
+
+**来源**: github.com/lancedb/hermes-agent-memory，Apache 2.0，2026-06-15发布
+**解决**: FTS5关键词记忆无法找到语义相似但措辞不同的事实
+
+**核心工具**: `lancedb_recall` / `lancedb_remember` / `lancedb_read` / `lancedb_forget`
+**存储**: `~/.hermes/lancedb/memories.lance`
+**检索**: 向量ANN + BM25混合，RRF/linear/cross-encoder三种融合模式
+
+**安装**:
+```bash
+hermes plugins install lancedb/hermes-agent-memory
+uv pip install --python ~/.hermes/hermes-agent/venv/bin/python3 lancedb openai pyyaml
+hermes config set memory.provider lancedb
+```
+**验证**: `hermes memory status` 显示 `Provider: lancedb, available ✓`
+
+## 28. 插件同步机制 — /tmp 开发 vs ~/.hermes/plugins 生效（2026-07-08 坑）
+
+**问题**: 插件克隆到 /tmp 后编辑的是 /tmp 路径，但 Hermes 实际读取 `~/.hermes/plugins/`
+**症状**: 编辑完触发词但 Hermes 不生效
+**修法**: 编辑后必须 `cp /tmp/.../skill_retriever.py ~/.hermes/plugins/eagle-eye/src/`
+**预防**: 插件安装完成后立即 `ls ~/.hermes/plugins/<name>/` 确认实际读取路径
+
+## 互补 vs 冗余判定（2026-07-03 cron 实战, 避免"装了等于没装"）
 **问题**: 看到社区推荐 `obra/superpowers/verification-before-completion`，跟 `verification-before-reporting` 字面 80% 相似，装不装？
 
 **判定 SOP（4 问）**:

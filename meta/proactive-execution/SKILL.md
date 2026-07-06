@@ -1,9 +1,9 @@
 ---
 name: proactive-execution
 description: 主动执行 — 收到任务立即动手，不问"要不要"，不停在"等授权"，不空等。不以清单做完为结束信号 — 持续自主推进。拉到外部数据立即消化，不许"下次处理"。模糊指令默认按 ROI 最高的多解并行，不许反问分类。数字人 KPI = 用户感受到的价值，不是"我研究了 X"。任务状态追踪：创建任务文件→每步打勾→完成推 Telegram→看门狗监控。
-version: 2.2.0
+version: 2.5.0
 created: 2026-06-25
-updated: 2026-07-05
+updated: 2026-07-08
 type: behavior
 category: meta
 triggers:
@@ -20,6 +20,7 @@ triggers:
   - "装了一堆没用/24GB闲/P0砍掉"
   - "6点到現在没动过/怎么停了/心跳在跑但没干活"
   - "no execution / 没动手 / 只说不做 / 列清单不动"
+  - "认真细细排查/不要盲目删/仔细检查" 
 ---
 
 # Proactive Execution — 主动执行主准则 (v2.1)
@@ -268,8 +269,10 @@ pkill -x "Google Chrome"  # 绝对禁止
 
 ## 支持文件
 - `references/gateway-restart-limitation-analysis.md` — Gateway重启限制分析及Failure 66案例
+- `references/memory-audit-2026-07-08.md` — 记忆系统审计流程及记忆体全览（新增）
 
 ## 历史变更
+- **v2.5 (2026-07-08)**: Failure 73 "盲目删记忆" — 记忆审计必须先完整扫描所有文件+查DB真实结构+对比文件重叠，再动手；禁止在未读完全部记忆文件时就做删除/合并决策。审计流程：ls -la → sqlite3查列名/行数 → diff查重复 → grep查过时引用 → 确认后再操作。教训：memory-cn(hub skill)描述Mnemosyne实际已是LanceDB，skill内容不一定可信，必须先验证实际状态。
 - **v2.4 (2026-07-07)**: 新增"汇报输出铁律"节，禁止末尾反问（要测试吗/要重启吗/要配置吗等6种）；已修 hermes-see-act 两处违规（"先问1句"判定铁律/"对吧？"软反问）
 - **v2.3.4 (2026-07-06)**: Failure 72 知识沉淀正确载体是 skill + Failure 71 "全网搜索"说了两次才执行
 - **v2.3.3 (2026-07-06)**: Failure 70 Chrome restart 精确 targeting 修法
