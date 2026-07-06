@@ -124,5 +124,43 @@ sqlite3 ~/.hermes/kanban.db ".tables"
    ls -t ~/.hermes/config.yaml.bak* | tail -n +3 | xargs rm
    ```
 
+## 配套升级检查（定期执行）
+
+每次检查四个维度：
+
+### 1. Hermes Agent Git 状态
+```bash
+cd ~/.hermes/hermes-agent
+git fetch upstream --quiet
+echo "落后commit数: $(git log --oneline HEAD..upstream/main 2>/dev/null | wc -l | tr -d ' ')"
+git log --oneline HEAD..upstream/main 2>/dev/null | head -10  # 看最新10条
+```
+落后超过 50 个 commit 建议 review 后升级。
+
+### 2. Python SDK 版本（PyPI 实时查询）
+```python
+import json, urllib.request
+for pkg in ['openai', 'anthropic']:
+    url = f'https://pypi.org/pypi/{pkg}/json'
+    with urllib.request.urlopen(url, timeout=5) as r:
+        data = json.loads(r.read())
+        print(f'{pkg}: latest={data["info"]["version"]}')
+```
+对比 `pip list` 中的当前版本。
+
+### 3. Google Chrome 版本
+```bash
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version
+```
+查 Chrome stable channel: https://chromereleases.googleblog.com
+
+### 4. Chrome DevTools Protocol 兼容性
+CDP 版本跟随 Chrome。每次 Chrome 大版本升级后检查：
+```bash
+curl -s http://localhost:9222/json/version | python3 -m json.tool
+```
+确认 Chrome Helper 进程正常，否则重启 Chrome 调试端口。
+
 ## 相关参考文档
 - `references/audit-checklist-20260708.md` — 2026-07-08 手动审计发现的问题清单和清理命令
+- `references/upgrade-check-20260709.md` — 配套升级检查命令汇总（含 PyPI 查询脚本）
