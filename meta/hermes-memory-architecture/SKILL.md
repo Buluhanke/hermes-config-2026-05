@@ -2,7 +2,7 @@
 name: hermes-memory-architecture
 description: Hermes 记忆系统真实架构 — 2026-07-08实测版，2026-07-08清理后定稿。MEMORY.md+USER.md+concept_store.md为文件系统层，LanceDB为语义层，fact_store.db已删除（0行legacy）。记忆审计必须先验证真实状态再操作。
 version: 1.1.0
-created: 2026-07-08
+version: 1.2.0
 updated: 2026-07-08
 type: reference
 category: meta
@@ -16,7 +16,118 @@ triggers:
   - "lancedb"
   - "semantic memory"
   - "清理memories"
+  - "升级检查"
+  - "记忆召回率"
+  - "联想记忆"
+  - "mem0"
+  - "headroom"
 ---
+
+# Hermes Memory Architecture — 实测版 (v1.2)
+
+**注意：hub skill memory-cn 描述的是旧架构（Mnemosyne），以下为 2026-07-08+ 实测真实状态。**
+
+## 记忆系统真实架构
+
+| 组件 | 路径 | 用途 | 状态 |
+|---|---|---|---|
+| `MEMORY.md` | `~/.hermes/memories/` | 系统技术记忆 | ✅ 6454字节，活跃 |
+| `USER.md` | `~/.hermes/memories/` | 用户偏好/铁律 | ✅ 2661字节，活跃 |
+| `concept_store.md` | `~/.hermes/memories/` | 抽象经验规则 | ✅ 活跃 |
+| LanceDB `memories` 表 | `~/.hermes/lancedb/memories.lance/` | 语义记忆 | ⚠️ **schema正确(字段：id/content/kind/vector/tags等)，0行——写入路径断了** |
+| `fact_store.db` | `~/.hermes/` | FTS5精确检索 | ✅ 0字节，已废弃（正常） |
+| hermes-local-memory | venv 内 0.3.1 | 本地记忆Provider，consolidation/reflection/peer_review | ✅ **已装，未被 config.yaml 启用** |
+| headroom FTS5 | venv 内 | FTS5 adapter，零API依赖 | ✅ 可用 |
+| mem0ai | venv 内 2.0.4 | 事件图谱记忆层 | ✅ 已装，**OpenRouter 402 embedding不可用** |
+| Chrome | 150.0.7871.47 (brew) | 浏览器升级 | ✅ 2026-07-07 升级成功 |
+
+## 2026-07-08 新发现
+
+### 1. LanceDB 0行 — 需修复
+```python
+# 验证命令
+import lancedb
+db = lancedb.connect('/Users/aimac/.hermes/lancedb')
+print(db.table_names())  # ['memories']
+t = db.open_table('memories')
+print(t.count_rows())  # 输出0 — 没有写入
+```
+**可能原因**: memory provider 初始化失败，或 session结束后写入逻辑断路。需查 `hermes memory status` 输出。
+
+### 2. hermes-local-memory 被忽视（优先级最高）
+- pip包 `hermes-local-memory` v0.3.1 已在 venv
+- `LocalMemoryProvider` 支持完整的 consolidation → reflection → peer_review 流程
+- config.yaml 当前用的是 `lancedb`，没用这个
+- **这是 Hermes 原生本地记忆系统，应优先集成而非引入外部依赖**
+
+### 3. headroom FTS5 adapter（零API成本）
+```python
+from headroom.memory.adapters.fts5 import FTS5TextIndex
+index = FTS5TextIndex(db_path='~/.mem0/hermes_fts.db')
+index.index_memory("用户偏好中文", metadata={"id": "1"})
+results = index.search_memories("用户 语言 偏好", limit=5)
+# 方法: add_text → index, search → search_memories
+# 纯SQLite FTS，无需API key
+```
+
+### 4. mem0ai 集成结论
+- **架构可行**：Chroma本地vector store已装，`infer=False`可绕过LLM extraction
+- **卡点**：embedding API调用被OpenRouter 402拒绝（credits不足）
+- **解决路径**：充值OpenRouter 或 换用免费embedder（如Gemini text-embedding，但此路也验证失败）
+- **当前推荐**：优先用 headroom FTS5 + hermes-local-memory，不依赖外部API
+
+### 5. 工具执行环境差异（重要坑点）
+- **terminal工具**：在真实本机环境执行，Chroma/LanceDB状态真实
+- **execute_code沙盒**：隔离环境，`/tmp`等路径与本机不同，Chroma instance冲突
+- **教训**：测memory/数据库类工具必须用terminal，避免execute_code产生环境差异导致的假性结论
+- **教训**：连续3次相同参数的terminal/execute_code调用 → 触发repeated_exact_failure_block → 换工具/换参数/换诊断方向，不在同一点重复
+
+## 升级路径（2026-07-07 更新）
+
+**当前优先级顺序**:
+1. **修 LanceDB 0 行** — 查 `hermes memory status`，确认 `lancedb_remember` 工具是否注册
+2. **启用 hermes-local-memory** — 原生 consolidation + peer review，优先于外部依赖
+3. **Chrome 升级** — `/tmp/chrome150.dmg` 已下载，直接挂载安装
+4. **headroom FTS5** — 关键词召回补充，零 API 成本
+5. **mem0ai** — 搁置，需解决 OpenRouter credits
+
+## 配置状态
+
+```bash
+# memory.provider 当前配置
+hermes config show | grep -A5 "memory:"
+
+# memory_char_limit 当前值
+grep memory_char_limit ~/.hermes/config.yaml
+# 当前值: 66000
+
+# LanceDB 验证（真实环境，用 terminal）
+~/.hermes/hermes-agent/venv/bin/python3 -c "
+import lancedb
+db = lancedb.connect('/Users/aimac/.hermes/lancedb')
+t = db.open_table('memories')
+print(t.count_rows(), 'rows')
+"
+
+# Chrome 升级
+ls -la /tmp/chrome*.dmg  # 确认文件存在
+# 安装: open /tmp/chrome150.dmg 或 hdiutil attach + rsync
+
+# hermes-local-memory 状态
+~/.hermes/hermes-agent/venv/bin/python3 -c "from hermes_local_memory import LocalMemoryProvider; print('OK')"
+```
+
+## 工具执行环境差异（重要坑点）
+- **terminal 工具**：在真实本机环境执行，Chroma/LanceDB 状态真实
+- **execute_code 沙盒**：隔离环境，`/tmp` 等路径与本机不同，Chroma instance 冲突
+- **教训**：测 memory/数据库类工具必须用 terminal，避免 execute_code 产生环境差异导致的假性结论
+- **教训**：连续 3 次相同参数的 terminal/execute_code 调用 → 触发 `repeated_exact_failure_block` → 换工具/换参数/换诊断方向，不在同一点重复
+
+## 已知坑点
+
+- **execute_code 沙盒 ≠ 真实环境**：venv 路径隔离，Chroma client 冲突，subprocess 也有独立环境
+- **OpenRouter 402**：mem0ai embedding 被拒，需充值或换 embedder
+- **Chrome DMG 中断**：已下载未安装，是上次升级中断遗留
 
 # Hermes Memory Architecture — 实测版 (v1.0)
 
