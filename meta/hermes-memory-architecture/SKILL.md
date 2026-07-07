@@ -31,62 +31,17 @@ triggers:
 
 | 组件 | 路径 | 用途 | 状态 |
 |---|---|---|---|
-| `MEMORY.md` | `~/.hermes/memories/` | 系统技术记忆 | ✅ 6454字节，活跃 |
-| `USER.md` | `~/.hermes/memories/` | 用户偏好/铁律 | ✅ 2661字节，活跃 |
+| `MEMORY.md` | `~/.hermes/memories/` | 系统技术记忆 | ✅ 活跃 |
+| `USER.md` | `~/.hermes/memories/` | 用户偏好/铁律 | ✅ 活跃 |
 | `concept_store.md` | `~/.hermes/memories/` | 抽象经验规则 | ✅ 活跃 |
-| Chrome | 150.0.7871.47 | 浏览器，brew完整包安装 | ✅ 2026-07-07 升级成功 |
-| LanceDB | `~/.hermes/lancedb/memories.lance/` | 语义记忆，FastEmbed本地embedding | ✅ 2026-07-07 修复：改用FastEmbed(384维)替代OpenRouter embedding，环境变量隔离问题解决 |
-| hermes-local-memory | venv 内 0.3.1 | 本地记忆Provider，consolidation/reflection/peer_review | ✅ 已装，config.yaml 未启用（provider=lancedb） |
-| headroom FTS5 | venv 内 | FTS5 adapter，零API依赖 | ✅ 可用 |
-| mem0ai | venv 内 2.0.4 | 事件图谱记忆层 | ✅ 已装，mem0+FastEmbed+Chroma 验证成功，OpenRouter credits不足暂缓 |
+| **`memory_store.db`** | `~/.hermes/memory_store.db` | **fact_store 主库**，自 学脚本全写这里 | ✅ **71条facts，2026-07-08修复路径后恢复写入** |
+| `LanceDB` | `~/.hermes/lancedb/memories.lance/` | 语义记忆 | ✅ 活跃 |
+| Chrome | 150.0.7871.47 | 浏览器 | ✅ 2026-07-07 升级成功 |
 
-## 2026-07-08 新发现
-
-### 1. LanceDB 0行 — 需修复
-```python
-# 验证命令
-import lancedb
-db = lancedb.connect('/Users/aimac/.hermes/lancedb')
-print(db.table_names())  # ['memories']
-t = db.open_table('memories')
-print(t.count_rows())  # 输出0 — 没有写入
-```
-**可能原因**: memory provider 初始化失败，或 session结束后写入逻辑断路。需查 `hermes memory status` 输出。
-
-### 2. hermes-local-memory 被忽视（优先级最高）
-- pip包 `hermes-local-memory` v0.3.1 已在 venv
-- `LocalMemoryProvider` 支持完整的 consolidation → reflection → peer_review 流程
-- config.yaml 当前用的是 `lancedb`，没用这个
-- **这是 Hermes 原生本地记忆系统，应优先集成而非引入外部依赖**
-
-### 3. headroom FTS5 adapter（零API成本）
-```python
-from headroom.memory.adapters.fts5 import FTS5TextIndex
-index = FTS5TextIndex(db_path='~/.mem0/hermes_fts.db')
-index.index_memory("用户偏好中文", metadata={"id": "1"})
-results = index.search_memories("用户 语言 偏好", limit=5)
-# 方法: add_text → index, search → search_memories
-# 纯SQLite FTS，无需API key
-```
-
-### 4. mem0ai 集成结论
-- **架构可行**：Chroma本地vector store已装，`infer=False`可绕过LLM extraction
-- **卡点**：embedding API调用被OpenRouter 402拒绝（credits不足）
-- **解决路径**：充值OpenRouter 或 换用免费embedder（如Gemini text-embedding，但此路也验证失败）
-- **当前推荐**：优先用 headroom FTS5 + hermes-local-memory，不依赖外部API
-
-### 5. 工具执行环境差异（重要坑点）
-- **terminal工具**：在真实本机环境执行，Chroma/LanceDB状态真实
-- **execute_code沙盒**：隔离环境，`/tmp`等路径与本机不同，Chroma instance冲突
-- **教训**：测memory/数据库类工具必须用terminal，避免execute_code产生环境差异导致的假性结论
-- **教训**：连续3次相同参数的terminal/execute_code调用 → 触发repeated_exact_failure_block → 换工具/换参数/换诊断方向，不在同一点重复
-
-## 升级路径（2026-07-07 更新）
-
-**当前优先级顺序**:
-1. **修 LanceDB 0 行** — 推荐改 FastEmbed embedding（完全本地零API），或修复 OPENROUTER_API_KEY 环境变量加载
-2. **启用 hermes-local-memory** — 原生 consolidation + peer review，优先于外部依赖
-3. **mem0ai + FastEmbed + Chroma** — 已验证可行，用 `infer=False` 绕过 LLM extraction
+**⚠️ 路径铁律（2026-07-08 修正）**：
+- 正确：`~/.hermes/memory_store.db`
+- 错误：`~/.hermes/memory/fact_store.db`（不存在）、`~/.hermes/memories/fact_store.md`（是文件不是DB）
+- 教训：脚本路径必须先 `sqlite3 <path> "SELECT COUNT(*)"` 验证存在，grep 搜到路径≠文件存在
 
 ## 配置状态
 
@@ -126,13 +81,20 @@ ls -la /tmp/chrome*.dmg  # 确认文件存在
 - **OpenRouter 402**：mem0ai embedding 被拒，需充值或换 embedder
 - **Chrome DMG 中断**：已下载未安装，是上次升级中断遗留
 
-### 6. LanceDB 0行根因 — ✅ 已修复 2026-07-07
+### 6. fact_store 路径断路 — ✅ 已修复 2026-07-08
 
-**根因**：`plugins/lancedb.embedding` 配置使用 `OPENROUTER_API_KEY`，但这个 env var 在独立进程（gateway 子进程、execute_code 沙盒）中读不到 → `embed()` 静默失败 → LanceDB 0行。
+**断路现象**：knowledge_miner / batch_facts_from_log / fact_decay 三个脚本各自写不同路径。
 
-**修复方案**：在 `plugins/lancedb/src/embeddings.py` 中新增 `FastEmbedEmbedder` 类，配置 `provider: fastembed` 时走本地 embedding，零 API 依赖。
+**真实 DB**：`~/.hermes/memory_store.db`（71条facts）
+**历史错误路径**：
+- `~/.hermes/memory/fact_store.db` — 不存在
+- `~/.hermes/memories/fact_store.md` — 是 Markdown 文件不是 DB
 
-**FastEmbedEmbedder 实现**：
+**根因**：所有自学脚本的 DB_PATH 配置互相不一致，都没先验证文件是否存在。
+
+**修复**：统一改为 `~/.hermes/memory_store.db`，字段映射 `content`（不是 `text`/`topic`），timestamp 处理加 `_parse_timestamp()` 兼容字符串和 float。
+
+**教训**：grep 搜到路径 ≠ 文件存在。必须 `sqlite3 <path> "SELECT 1"` 验证。
 ```python
 class FastEmbedEmbedder:
     def __init__(self, model_name="BAAI/bge-small-en-v1.5", *, dimensions=384, max_batch=256):
@@ -278,11 +240,11 @@ hermes memory status
 **先验证再操作，禁止未读完文件就决策：**
 
 ```
-步骤1 ls -la ~/.hermes/memories/         → 列出所有文件+大小
-步骤2 sqlite3 fact_store.db ".schema"     → 查真实表结构（skill文档可能过时）
-步骤3 sqlite3 fact_store.db "SELECT COUNT(*) FROM facts" → 查实际行数
-步骤4 diff USER.md MEMORY.md              → 查两文件重复内容
-步骤5 grep -c "过时关键词" *.md            → 查过时引用(ChromaDB/GBrain/Mnemosyne)
+步骤1 ls -la ~/.hermes/memories/       → 列出所有文件+大小
+步骤2 sqlite3 ~/.hermes/memory_store.db ".schema"     → 查真实表结构（skill文档可能过时）
+步骤3 sqlite3 ~/.hermes/memory_store.db "SELECT COUNT(*) FROM facts" → 查实际行数（当前71条）
+步骤4 diff USER.md MEMORY.md            → 查两文件重复内容
+步骤5 grep -c "过时关键词" *.md          → 查过时引用(ChromaDB/GBrain/Mnemosyne)
 步骤6 确认后再操作：删除/合并/修改
 ```
 
@@ -295,17 +257,35 @@ hermes memory status
 | 检查项 | 命令 | 期望结果 |
 |---|---|---|
 | 所有文件大小 | `ls -la ~/.hermes/memories/` | 无0字节垃圾文件 |
-| fact_store行数 | `sqlite3 fact_store.db "SELECT COUNT(*) FROM facts" 2>/dev/null` | **0行=废弃，应删除**（不是"待启用"，已是legacy） |
-| **MOA provider别名** | `grep "nv-qwen3.5-397b" ~/.hermes/config.yaml` | 应无输出；有输出=引用了不存在的provider，应改为实际provider名 |
-| **SOUL.md硬编码PID** | `grep "pid [0-9]" ~/.hermes/SOUL.md` | 应无输出；有输出=gateway重启后立即失效，改为"任意pid的venv python" |
-| fact_store结构 | `sqlite3 fact_store.db ".schema" 2>/dev/null` | 字段: id/key/value/source/confidence/created_at/updated_at |
+| **fact_store路径** | `sqlite3 ~/.hermes/memory_store.db "SELECT COUNT(*) FROM facts"` | **71条=正常；0行=legacy废弃** |
+| fact_store schema | `sqlite3 ~/.hermes/memory_store.db ".schema"` | 字段: fact_id/content/category/tags/trust_score/retrieval_count/helpful_count/created_at/updated_at |
+| **废弃路径检查** | `ls ~/.hermes/memory/fact_store.db 2>/dev/null` | 不存在=正确；存在=历史上遗留的废弃路径 |
 | LanceDB行数 | `~/.hermes/hermes-agent/venv/bin/python3 -c "import lancedb; ..."` | 当前为0，新库 |
 | MEMORY/USER重复 | `grep -c "Ponytail\|数字主人\|先装再清" ~/.hermes/memories/MEMORY.md` | 应为0 |
 | 过时引用 | `grep "ChromaDB\|GBrain\|Mnemosyne" ~/.hermes/memories/*.md` | 应无或已修正 |
-| **废弃文件检查** | `find ~/.hermes -name "MEMORY.md" -o -name "USER.md" 2>/dev/null` | **所有结果必须在 `~/.hermes/memories/` 内**；根目录/`data/`/`memory/`里的同名文件已废弃，应删除 |
-| **memory/ 目录** | `ls -la ~/.hermes/memory/` | 此目录（`~/.hermes/memory/`）完全废弃，**不等于**活跃的 `memories/`；包含98KB fact_store.db（已无用）+ 27个旧references文档 + idle learning重复文件，应整体删除 |
-| **chroma_memory/ 目录** | `ls -la ~/.hermes/chroma_memory/` | ChromaDB残留（471KB），config无chroma provider引用，应删除 |
-| **根目录废弃skill文件** | `ls ~/.hermes/skill_*.md ~/.hermes/briefing_*.md ~/.hermes/*patrol*.md 2>/dev/null` | 应无输出；历史版本遗留的空壳skill应删除 |
+
+## fact_store DB Schema（2026-07-08 实测）
+
+```sql
+CREATE TABLE facts (
+    fact_id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    content         TEXT NOT NULL UNIQUE,   -- ← 注意是 content 不是 text/topic
+    category        TEXT DEFAULT 'general',
+    tags            TEXT DEFAULT '',         -- JSON 字符串
+    trust_score     REAL DEFAULT 0.5,
+    retrieval_count INTEGER DEFAULT 0,
+    helpful_count   INTEGER DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,  -- 字符串 "2026-06-03 16:46:17"
+    updated_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    hrr_vector      BLOB
+);
+```
+
+**写入时注意**：
+- `created_at`/`updated_at` 在 SQLite INSERT 不指定时自动填当前时间字符串
+- Python `time.time()` 写入是 float，查询时需 `_parse_timestamp()` 转换
+- 正确字段：`content`（不是 `text`/`topic`），`trust_score`（不是 `trust`/`original_trust`）
+- 自学脚本写入字段顺序：`content, category, tags, trust_score, created_at, updated_at`（6个）
 
 ## 精简合并规则
 

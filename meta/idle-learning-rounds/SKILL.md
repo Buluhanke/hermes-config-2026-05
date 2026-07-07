@@ -75,9 +75,10 @@ python3 ~/.hermes/scripts/fact_decay.py
 python3 ~/.hermes/scripts/fact_decay.py --score
 # 期望: 看到 N 条排序后的 trust 数据（如 30 条从高到低）
 
-# 2. 视觉缓存统计（entries/hits/misses/error_rate）
-python3 ~/.hermes/scripts/vision_cache.py stats
+# 2. 视觉缓存统计（warm_cache.py stats）
+python3 ~/.hermes/scripts/warm_cache.py stats
 # 期望: entries / max_entries / ttl_seconds / hit_rate / error_rate 都有数值
+# 注意: 实际脚本是 warm_cache.py（vision_cache.py 是旧名，已废弃）
 
 # 3. 快照列表（rollback 触发证据）
 python3 ~/.hermes/scripts/rollback_manager.py list
@@ -124,8 +125,7 @@ python3 ~/.hermes/scripts/rollback_manager.py list
 
 ```sql
 -- 在 fact_store 写一条 "idle_learning_skip: 2026-07-03 无变化跳过"
-INSERT INTO facts (topic, text, source, trust, created_at, updated_at, tags) VALUES
-('idle_learning_skip', '2026-07-03: 所有方向无变化，跳过本轮', 'idle-learning-rounds value gate', 0.75, <now>, <now>, '["automation","skip"]');
+sqlite3 ~/.hermes/memory_store.db "INSERT OR IGNORE INTO facts (content, category, tags, trust_score, created_at, updated_at) VALUES ('idle_learning_skip: 2026-07-03 无变化跳过', 'idle-learning', '[\"automation\",\"skip\"]', 0.75, strftime('%s','now'), strftime('%s','now'))"
 ```
 
 - **连续 3 次跳过** → 自动降频：每天 → 每 3 天 → 每周
@@ -133,8 +133,13 @@ INSERT INTO facts (topic, text, source, trust, created_at, updated_at, tags) VAL
 
 ### Gate C — abcd-auto-fix token 门（每天 6am）
 
-`abcd_auto_fix.py` 跑 `hermes -z ... chat`（调 LLM）前必须检查：
-1. 先看 `abcd_gap_parser.py --json` 是否有 pending gap
+`abcd_auto_fix.py` 修复 LLM 调用方式（2026-07-08）：
+- **旧方式**: `hermes "-z" prompt "chat"` — `hermes` CLI 不存在 `-z` 参数，subprocess 调用永远失败
+- **新方式**: 通过 API server (`localhost:8642`) 调 LLM，用 `urllib.request` 走 `POST /v1/chat/completions`，API key 从 `.env` 加载
+- `abcd_auto_fix.py --dry-run` 验证是否有 pending gap，无 gap 则 0 token 消耗
+
+**Gate 逻辑**：
+1. 先看 `abcd_auto_fix.py --dry-run` 是否有 pending gap
 2. **有 gap** → 才调 LLM agent 修
 3. **无 gap** → exit 0，0 个 API call
 4. **连续 7 天无 gap** → 自动建议删除此 cron
@@ -156,8 +161,8 @@ INSERT INTO facts (topic, text, source, trust, created_at, updated_at, tags) VAL
 - **「skills/idle_learning/scanner.py 不存在」**: 用户 prompt 里常引用 `skills.idle_learning.scanner.scan_papers()`，尝试此方法会导致 `ModuleNotFoundError: No module named 'skills.idle_learning'`。**实际只有 `scripts/idle_learning_orchestrator.py`**。**修法**: 用 `scripts/ai_radar_brief.py` 替代 B 方向，路径在 `~/.hermes/scripts/`，不是 `skills/idle_learning/`。**不要试图创建 skills/idle_learning/ 目录**。
 - **「action_diversity.py 报无记录是正常的」**: 用户不在家时没执行任务 → 7 天无数据。**不要因此报告失败**，明确说「预期内」。
 - **「cve_scan.py 全 0 CVE 不代表扫描失败」**: OSV.dev API 命中即算成功，全 0 是当前依赖健康度的正面信号。
-- **「vision_cache stats 报 0 entries 不要慌」**: 缓存文件首次创建是正常的，0 entries + max_entries=200 + error_rate=0% 已经是完整元数据输出。
-- **「batch_facts_from_log.py 0 新写 = 本轮发现丢失」**（**2026-06-30 关键发现**）：脚本**不是从 `idle_learning_log.md` 动态解析**，而是内置一个硬编码的 `FACTS_FROM_LOG` 常量列表（~28 条历史发现快照）。脚本一次性 bootstrap 完就进入稳态。本轮新发现（A 方向 ollama 状态、B 方向 OSU-NLP 重抓论文、C 方向 OSV 全 0、D 方向周末无人值守）**全部不在硬编码列表里 → 0 新写 = 数据丢失**。**修法**: 发现 `batch_facts_from_log.py` 报 0 新写 + 本轮明明有新发现时，**直接走 sqlite3 写 fact_store**，不要就此收手。Schema：`~/.hermes/memory/fact_store.db` 表 `facts(id, topic, text, source, trust, created_at, updated_at, tags TEXT JSON)`。最简 snippet 见下方 fallback。
+- **「vision_cache stats 报 0 entries 不要慌」**: 实际脚本是 `warm_cache.py`（vision_cache.py 是旧名，已废弃）。0 entries + max_entries=200 + error_rate=0% 已经是完整元数据输出，不代表缓存失效。
+- **「batch_facts_from_log.py 0 新写 = 本轮发现丢失」**(**2026-06-30 关键发现**): 脚本**不是从 `idle_learning_log.md` 动态解析**, 而是内置一个硬编码的 `FACTS_FROM_LOG` 常量列表(~28 条历史发现快照)。脚本一次性 bootstrap 完就进入稳态。本轮新发现(A 方向 ollama 状态、B 方向 OSU-NLP 重抓论文、C 方向 OSV 全 0、D 方向周末无人值守)**全部不在硬编码列表里** → 0 新写 = 数据丢失。**修法**: 发现 `batch_facts_from_log.py` 报 0 新写 + 本轮确实有新发现时, **直接走 sqlite3 写 fact_store**, 不要就此收手。正确 DB: `~/.hermes/memory_store.db`, 表 `facts(fact_id, content, category, tags, trust_score, retrieval_count, helpful_count, created_at, updated_at)`。INSERT: `INSERT OR IGNORE INTO facts (content, category, tags, trust_score, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)`. 注意字段是 `content` 不是 `text`/`topic`。
 - 「batch_facts_from_log.py 报 0 新写 ≠ 任务失败」: 脚本内置去重，28 跳过说明之前的发现已全部落地（**仅当本轮无新发现时适用**）。上面那条 pitfall 覆盖「本轮有新发现」的场景。
 
 - 「browser 健康度检查命令缺失导致 A 方向挂起」(2026-07-02 本轮确认): 弃本地 VLM 后 A 方向脚本换 `lsof -i :9222 + pgrep -f cua-driver + mcp_cua_driver_health_report`，**前置依赖**: Chrome 启 --remote-debugging-port=9222 + cua-driver 安装并授权。**修法**: cron 跑前用 `command -v lsof && pgrep cua-driver` 探活，缺则标"暂停因 X 未配"不重试。

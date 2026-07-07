@@ -128,6 +128,7 @@ browser_snapshot()  # 提取页面内容
 
 | 场景 | 工具 | 原因 |
 |------|------|------|
+| **平台专项**（Twitter/小红书/B站/Reddit/雪球等） | **先加载 `agent-reach` skill** | 多后端路由，零配置可用 |
 | 开放式搜索（"查一下 X 是什么"） | `web_search_plus` | auto 路由最省力 |
 | 已知 URL 提取内容 | `web_extract` | 直接拿 markdown |
 | AI 网站对话内容 | `browser_navigate` | 登录态保留 |
@@ -198,3 +199,16 @@ web_extract
 - `community-first-research` — 社区优先搜索，组合使用时走本 skill 的工具链
 - `browser-cdp-control` — 浏览器控制兜底，本 skill 走不通时调用
 - `hermes-see-act` — 看屏幕决策，搜索意图识别后走本 skill
+- **`agent-reach`（必须优先于本 skill）** — 15+ 平台专用路由层。当用户意图涉及以下平台时，**必须先加载 `agent-reach` skill**，由它判断当前可用后端并给出正确命令：Twitter/X、Reddit、小红书、B站（Bilibili）、V2EX、雪球（Xueqiu）、Facebook、Instagram、LinkedIn、小宇宙播客。`web-search-paths` 仅作为 `agent-reach` 的通用搜索兜底（Exa / Jina Reader）。
+
+**协作规则：**
+```
+用户问"搜一下 X 在 Twitter/Reddit/小红书上的讨论"
+  → 先 load agent-reach
+  → agent-reach doctor --json 确认平台后端状态
+  → 按 agent-reach 路由表走对应命令
+
+用户问"全网搜索 X"（无平台限定）
+  → 先走本 skill（web_search_plus）
+  → 如果命中 agent-reach 覆盖的平台，顺手再用 agent-reach 命令交叉验证
+```
