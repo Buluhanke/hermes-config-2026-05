@@ -34,12 +34,11 @@ triggers:
 | `MEMORY.md` | `~/.hermes/memories/` | 系统技术记忆 | ✅ 6454字节，活跃 |
 | `USER.md` | `~/.hermes/memories/` | 用户偏好/铁律 | ✅ 2661字节，活跃 |
 | `concept_store.md` | `~/.hermes/memories/` | 抽象经验规则 | ✅ 活跃 |
-| LanceDB `memories` 表 | `~/.hermes/lancedb/memories.lance/` | 语义记忆 | ⚠️ **schema正确(字段：id/content/kind/vector/tags等)，0行——写入路径断了** |
-| `fact_store.db` | `~/.hermes/` | FTS5精确检索 | ✅ 0字节，已废弃（正常） |
-| hermes-local-memory | venv 内 0.3.1 | 本地记忆Provider，consolidation/reflection/peer_review | ✅ **已装，未被 config.yaml 启用** |
+| Chrome | 150.0.7871.47 | 浏览器，brew完整包安装 | ✅ 2026-07-07 升级成功 |
+| LanceDB | `~/.hermes/lancedb/memories.lance/` | 语义记忆，FastEmbed本地embedding | ✅ 2026-07-07 修复：改用FastEmbed(384维)替代OpenRouter embedding，环境变量隔离问题解决 |
+| hermes-local-memory | venv 内 0.3.1 | 本地记忆Provider，consolidation/reflection/peer_review | ✅ 已装，config.yaml 未启用（provider=lancedb） |
 | headroom FTS5 | venv 内 | FTS5 adapter，零API依赖 | ✅ 可用 |
-| mem0ai | venv 内 2.0.4 | 事件图谱记忆层 | ✅ 已装，**OpenRouter 402 embedding不可用** |
-| Chrome | 150.0.7871.47 (brew) | 浏览器升级 | ✅ 2026-07-07 升级成功 |
+| mem0ai | venv 内 2.0.4 | 事件图谱记忆层 | ✅ 已装，mem0+FastEmbed+Chroma 验证成功，OpenRouter credits不足暂缓 |
 
 ## 2026-07-08 新发现
 
@@ -85,11 +84,9 @@ results = index.search_memories("用户 语言 偏好", limit=5)
 ## 升级路径（2026-07-07 更新）
 
 **当前优先级顺序**:
-1. **修 LanceDB 0 行** — 查 `hermes memory status`，确认 `lancedb_remember` 工具是否注册
+1. **修 LanceDB 0 行** — 推荐改 FastEmbed embedding（完全本地零API），或修复 OPENROUTER_API_KEY 环境变量加载
 2. **启用 hermes-local-memory** — 原生 consolidation + peer review，优先于外部依赖
-3. **Chrome 升级** — `/tmp/chrome150.dmg` 已下载，直接挂载安装
-4. **headroom FTS5** — 关键词召回补充，零 API 成本
-5. **mem0ai** — 搁置，需解决 OpenRouter credits
+3. **mem0ai + FastEmbed + Chroma** — 已验证可行，用 `infer=False` 绕过 LLM extraction
 
 ## 配置状态
 
@@ -128,6 +125,124 @@ ls -la /tmp/chrome*.dmg  # 确认文件存在
 - **execute_code 沙盒 ≠ 真实环境**：venv 路径隔离，Chroma client 冲突，subprocess 也有独立环境
 - **OpenRouter 402**：mem0ai embedding 被拒，需充值或换 embedder
 - **Chrome DMG 中断**：已下载未安装，是上次升级中断遗留
+
+### 6. LanceDB 0行根因 — ✅ 已修复 2026-07-07
+
+**根因**：`plugins/lancedb.embedding` 配置使用 `OPENROUTER_API_KEY`，但这个 env var 在独立进程（gateway 子进程、execute_code 沙盒）中读不到 → `embed()` 静默失败 → LanceDB 0行。
+
+**修复方案**：在 `plugins/lancedb/src/embeddings.py` 中新增 `FastEmbedEmbedder` 类，配置 `provider: fastembed` 时走本地 embedding，零 API 依赖。
+
+**FastEmbedEmbedder 实现**：
+```python
+class FastEmbedEmbedder:
+    def __init__(self, model_name="BAAI/bge-small-en-v1.5", *, dimensions=384, max_batch=256):
+        self.model_name = model_name
+        self._dimensions = dimensions
+        self.max_batch = max_batch
+        self._model = None
+        self._lock = threading.Lock()
+
+    @property
+    def model(self):
+        if self._model is None:
+            with self._lock:
+                if self._model is None:
+                    from fastembed import TextEmbedding
+                    self._model = TextEmbedding(model_name=self.model_name)
+        return self._model
+
+    def warm(self) -> int: return self._dimensions  # 纯本地，无网络
+    def embed_one(self, text: str) -> List[float]: return self.embed([text])[0]
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        if not texts: return []
+        out = []
+        for start in range(0, len(texts), self.max_batch):
+            batch = [t if t else " " for t in texts[start:start+self.max_batch]]
+            vecs = list(self.model.embed(batch))
+            out.extend([list(v) for v in vecs])
+        return out
+```
+
+**embedder_from_config 新增分支**：
+```python
+if cfg.get("provider") == "fastembed":
+    return FastEmbedEmbedder(
+        model_name=cfg.get("model", "BAAI/bge-small-en-v1.5"),
+        dimensions=cfg.get("dimensions", 384),
+        max_batch=cfg.get("max_batch", 256),
+    )
+```
+
+**config.yaml 配置**：
+```yaml
+plugins:
+  entries:
+    lancedb:
+      embedding:
+        provider: fastembed
+        model: BAAI/bge-small-en-v1.5
+        dimensions: 384
+        max_batch: 256
+```
+
+**schema 不匹配解决**：删除旧 LanceDB 表（1536维 OpenAI schema），gateway 重启后自动用 FastEmbed 384维 schema 重建。
+
+**验证**：
+```bash
+# gateway.error.log 当前会话（19:19后）无 lancedb 错误
+grep "lance\|embed" ~/.hermes/logs/gateway.error.log | grep "19:19\|19:2\|19:3"
+# 输出：NONE ✅
+
+# LanceDB 表已重建为 384 维
+# gateway PID 10650 在线
+```
+
+### 7. mem0 + FastEmbed + Chroma 完全验证成功 — 2026-07-07
+
+```python
+# 验证可行配置（infer=False 绕过 LLM extraction）
+config = MemoryConfig(
+    vector_store={"provider": "chroma", "config": {
+        "collection_name": "hermes_memories",
+        "path": os.path.expanduser("~/.hermes/mem0_chroma")
+    }},
+    llm={"provider": "openai", "config": {
+        "api_key": glm_key,
+        "openai_base_url": "https://open.bigmodel.cn/api/paas/v4"
+    }},
+    embedder={"provider": "fastembed", "config": {
+        "model": "BAAI/bge-small-en-v1.5",  # 384维，多语言
+        "embedding_dims": 384
+    }}
+)
+m = Memory(config)
+m.add("用户叫Y Y", user_id="test", infer=False)  # 成功写入
+# Chroma count: 1, embedding_dim: 384 ✅
+```
+
+**FastEmbed 可用模型**（venv 已装 0.8.0）：
+- `BAAI/bge-small-en-v1.5` — 384维，多语言推荐
+- `BAAI/bge-small-zh-v1.5` — 512维，中文优化
+- `sentence-transformers/all-MiniLM-L6-v2` — 384维，英文
+
+### 8. Chrome 升级正确方法 — 2026-07-07
+
+**错误方式**：`curl` 下载的 DMG 是 ChromeLite stub（版本 47），不是完整 Chrome。
+
+**正确方式**：
+```bash
+# Homebrew 缓存有完整包（260MB XZ 压缩）
+brew reinstall --cask google-chrome
+# 或强制重下
+rm -rf "/Applications/Google Chrome.app"
+brew install --cask google-chrome
+```
+
+### 9. 工具执行环境差异（重要坑点）
+- **terminal 工具**：在真实本机环境执行，Chroma/LanceDB 状态真实
+- **execute_code 沙盒**：隔离环境，`/tmp` 等路径与本机不同，Chroma instance 冲突
+- **教训**：测 memory/数据库类工具必须用 terminal，避免 execute_code 产生环境差异导致的假性结论
+- **教训**：连续 3 次相同参数的 terminal/execute_code 调用 → 触发 `repeated_exact_failure_block` → 换工具/换参数/换诊断方向，不在同一点重复
 
 # Hermes Memory Architecture — 实测版 (v1.0)
 
