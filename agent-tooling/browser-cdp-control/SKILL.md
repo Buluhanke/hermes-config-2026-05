@@ -353,7 +353,7 @@ def attach(t):
 
 **触发词**：`"Session not found" / CDP 命令全部失败 / Chrome 149+ attachToTarget 报错` → 0 思考切换 page-level WS 模式。
 
-### Critical: Chrome CDP Does NOT Support JSON-RPC 2.0
+### CDP Direct Access
 
 **This is the #1 pitfall.** Chrome's CDP WebSocket protocol is **not** JSON-RPC 2.0 compliant.
 
@@ -456,6 +456,31 @@ ws.close()
 ```
 
 ## Common Pitfalls
+
+### Common Pitfalls
+
+### TimeoutError / ConnectionError — QQBot WS / API calls (2026-07-08)
+高频 2000+/天，多为 QQBot WebSocket session timeout (code=4009) 和 API 网关抖动。
+修法: WebSocket closed → 检查 adapter 重连逻辑 + heartbeat；API call failed → tenacity retry + exponential backoff。
+```python
+from tenacity import retry, stop_after_attempt, wait_exponential
+@retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
+def call_api(): ...
+```
+
+### JSON parse error — API returns non-JSON (2026-07-08)
+API 超时返回空 body / partial body / HTML 错误页时抛出。
+修法:
+```python
+try: data = response.json()
+except JSONDecodeError:
+    if response.status_code == 200:
+        logger.warning(f"Non-JSON response: {response.text[:200]}")
+```
+
+### Import error / Permission denied — launchd cwd=/ (2026-07-08)
+launchd 启动 Python 脚本时 cwd=/（只读），所有相对路径失效。
+修法: 启动第一时间执行 `os.chdir(Path.home() / '.hermes')` 或所有路径用绝对路径。
 
 ### Tab Discovery
 - `browser_navigate` changes URL but may not switch to that tab — always check `curl http://127.0.0.1:9222/json/list` to find the right tab ID

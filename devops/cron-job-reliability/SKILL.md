@@ -1,0 +1,246 @@
+---
+name: cron-job-reliability
+description: "Design, implement, and maintain reliable cron jobs on Hermes. Covers: wrapper script patterns, no_agent=true migration, subprocess timeout control, external API graceful degradation, and debugging LLM cron agents that write reports instead of executing."
+triggers:
+  - cron job 不跑 / cron job 失败 / cron 没有执行
+  - LLM 偷懒 / 写报告不执行 / 只说不做
+  - wrapper 脚本 / cron 改成 script 模式
+  - subprocess 超时 / 命令卡住 / timeout
+  - 外部 API 限速 / arxiv rate limit / 降级策略
+  - cron job 改成直跑脚本
+  - no_agent=true script=
+pitfalls:
+  - name: LLM cron agent 偷懒写报告
+    description: |
+      当 cron job 只有 prompt 没有 script 时，Hermes 调度器会启动 LLM agent 执行 prompt。
+      LLM agent 遇到复杂任务会偷懒：只写分析报告，不真正执行脚本命令。
+      症状：cron output 里全是 Markdown 报告，没有实际的 python3/cd 命令执行记录。
+      诊断：看 cron output 的内容，有## 本轮做了什么这种报告格式 = LLM 在写报告。
+    fix: |
+      改用 no_agent=true + script=<wrapper.sh>。让脚本直跑，不走 LLM。
+      cronjob update 后立即手动跑一遍验证。
+  - name: subprocess 卡死阻塞整轮 orchestrator
+    description: |
+      一个 subprocess.run 卡住（如 cve_scan 查 493 个包 x API 调用），
+      导致整个 orchestrator 超时退出，其他方向扫描全跳过了。
+      症状：ABCD 方向只看到 A，其他 B/C/D 全 missing。
+    fix: |
+      用 threading + join(timeout) 给每步独立超时，超时就标记状态并继续。
+      不要让单个慢命令阻塞整轮。
+  - name: 外部 API 限速导致整轮超时
+    description: |
+      arXiv API Rate exceeded 后 urllib/curl 都会 retry 直到超时，
+      导致 B 论文方向卡住 30s+，影响整轮 orchestrator。
+    fix: |
+      缓存优先策略：1小时内用缓存，API 失败降级读过期缓存。
+      curl 加上 --max-time 单次超时控制。
+  - name: wrapper 脚本没有 shebang 或不可执行
+    description: |
+      新建 wrapper.sh 但忘记 chmod +x，或路径写错。
+      症状：cron 触发时 Permission denied 或 not found。
+    fix: |
+      创建后立即 chmod +x + 手动跑一遍验证。
+  - name: fact_store 路径不一致
+    description: |
+      多个脚本指向不同的 fact_store 路径：
+      - ~/.hermes/memory/fact_store.db（不存在）
+      - ~/.hermes/memories/fact_store.md（Markdown，非 DB）
+      - ~/.hermes/memory_store.db（正确）
+      症状：batch_facts_from_log 写入了，但 fact_decay 读不到。
+    fix: |
+      统一用 ~/.hermes/memory_store.db。Schema: fact_id, content, category, tags,
+      trust_score, retrieval_count, helpful_count, created_at, updated_at。
+      created_at/updated_at 存 float timestamp 或 ISO 字符串都要能解析。
+  - name: cron job 修复后没有立即验证
+    description: |
+      改了 cron job 配置（script/no_agent）但没有手动触发验证，
+      等到下次 schedule 时间才发现配置写错了。
+    fix: |
+      每次修改 cron job 后立即手动 run 一次，看 output 是否符合预期。
+      用 cronjob(action=list) 检查 script 字段和 no_agent 字段是否都正确。
+  - name: 空转输出（phantom output）
+    description: |
+      cron wrapper 报"✅ 处理 N 条 / 改动 X 个 domain / auto skill: Y generated"，
+      数字漂亮但没有任何文件实际落地。
+      诊断：self_model.json 报告"auto skill: 12"但 skills/auto-generated/ 不存在；
+      fact_store 报告"新写入 0 条"但 total count 没变。
+      根因：脚本内部逻辑有条件跳过（如"已存在"就跳过），但退出码仍为 0。
+    fix: |
+      每轮结束后检查实际落地物：ls ~/.hermes/skills/auto-generated/、fact_store 行数、
+      self_model.json 的 actual 文件内容。wrapper log 要包含落地物清单。
+      在 orchestrator 阶段加 assert：预期的写操作必须有对应的文件验证。
+  - name: fact_decay.py 只报不删（静默积累脏数据）
+    description: |
+      fact_decay.py 能正确识别 trust≤0.05 的过期 facts 并打印清单，
+      但默认只打印不删除（除非加 --delete flag）。
+      症状：fact_store 出现 age=20642d 这种不可能的数字（日期计算 bug 的脏数据），
+      trust=0.000 但 fact_decay 只报告"可删除"而不实际删除。
+      本次案例：id 97/98/99/109 四条 age=20642d，created_at 却是 2026-06-05。
+      fact_decay 识别出来了但从未删除，连续跑了多轮还在。
+    fix: |
+      确认 fact_decay.py 有 --delete 或 --prune flag，直接加进 wrapper 调用。
+      或在 orchestrator 阶段用 Python 直接 DELETE WHERE trust_score ≤ 0.05。
+      定期抽检：SELECT fact_id, created_at, substr(content,1,50) FROM facts ORDER BY fact_id DESC LIMIT 10。
+      健康的 fact 不应有 trust=0.000 或异常大的 age。
+  - name: wrapper 传参与 script argparse 不匹配（静默失败）
+    description: |
+      wrapper 脚本调用 `python3 script.py scan --min-count 3`，
+      但 script 的 argparse 不接受 subcommand（如 `scan`）或特定 flag（如 `--min-count`）。
+      Python argparse 发现未知参数会立即 exit(2)，wrapper 继续执行 self-reinforce 后续步骤，
+      最终 cron 任务报"ok"但实际上主脚本什么都没做。
+      症状：wrapper log 里没有主脚本的输出（因为它根本没跑），只有后续步骤的输出。
+      本次案例：auto_skill_scan_wrapper.sh 传 "scan --min-count 3"，
+      但 auto_skill_from_failure.py 只接受 --dry-run / --days，scan 子命令被忽略 → 静默退出。
+    fix: |
+      写完 wrapper 后立刻手动跑一遍：`bash wrapper.sh && echo "exit: $?"`。
+      检查主脚本是否真的执行了（看输出里有没有主脚本的标志字符串）。
+      用 `python3 script.py --help` 确认它接受什么参数，再对照 wrapper 传的参数。
+      最可靠的做法：wrapper 只传位置参数或无参数，主脚本用 argparse 调试模式（--help）验证。
+---
+
+# Cron Job Reliability
+
+## 核心原则
+
+1. **能直跑脚本就不走 LLM**：脚本执行是确定性的，LLM 执行是不确定的。
+2. **每步独立超时**：防止单步卡死导致整轮失败。
+3. **失败有证据**：wrapper 把 stdout 写入文件，有迹可循。
+
+## 标准 Wrapper 脚本模板
+
+```bash
+#!/bin/bash
+# <name>_wrapper.sh — <用途>
+set -e
+HERMES_HOME="$HOME/.hermes"
+OUT_DIR="$HERMES_HOME/cron/output/<name>"
+mkdir -p "$OUT_DIR"
+DATE=$(date +%Y-%m-%d_%H-%M-%S)
+LOG="$OUT_DIR/${DATE}.log"
+
+{
+    echo "=== <name> $DATE ==="
+    python3 "$HERMES_HOME/scripts/<target_script>.py" 2>&1
+    python3 -c "
+import sqlite3, pathlib
+db = pathlib.Path('$HERMES_HOME/memory_store.db')
+if db.exists():
+    conn = sqlite3.connect(db)
+    cur = conn.execute('SELECT COUNT(*) FROM facts')
+    print(f'fact_store: {cur.fetchone()[0]} 条')
+    conn.close()
+"
+} 2>&1 | tee "$LOG"
+echo "[wrapper 完成] → $LOG"
+```
+
+**关键要素**：set -e（任一命令失败立即退出）+ { } 2>&1 | tee（同时输出和写文件）+ 健康检查输出。
+
+## Cron Job 配置
+
+### 正确：no_agent=true + script
+```
+cronjob(update, job_id="<id>", script="<wrapper.sh>", no_agent=True)
+```
+
+### 错误：只有 prompt（LLM 会偷懒）
+```
+cronjob(update, job_id="<id>", prompt="执行 idle_learning 轮次...")
+# 缺少 script + no_agent → Hermes 启动 LLM agent
+# LLM agent 写报告，不真跑脚本
+```
+
+## ABCD 扫描：独立超时模式
+
+```python
+import threading, subprocess
+
+def run_with_timeout(fn, timeout=10):
+    results = {}
+    def target():
+        results['v'] = fn()
+    t = threading.Thread(target=target)
+    t.daemon = True
+    t.start()
+    t.join(timeout=timeout)
+    if t.is_alive():
+        raise TimeoutError(f"超时 {timeout}s")
+    return results.get('v')
+
+def run_abcd_scan():
+    results = {}
+    # A 视觉：ps aux，~1s
+    def a_visual():
+        r = subprocess.run("ps aux", shell=True, capture_output=True, text=True, timeout=8)
+        return {"ok": True, "summary": f"{len(lines)} 进程"}
+    # B 论文：缓存+降级，~5s
+    # C 安全：后台，~5s（不阻塞）
+    # D 执行层：~3s
+    # 每步独立超时，互不阻塞
+```
+
+## 外部 API 降级策略（以 arXiv 为例）
+
+```python
+CACHE = Path.home() / ".hermes" / "cache" / "arxiv_papers.json"
+CACHE_TTL = 3600  # 1小时
+
+def fetch_arxiv():
+    # 1. 缓存命中
+    if CACHE.exists():
+        age = time.time() - CACHE.stat().st_mtime
+        if age < CACHE_TTL:
+            return {"status": "cached", "papers": json.loads(CACHE.read_text())}
+    # 2. 实际请求（curl 有超时）
+    r = subprocess.run(
+        ["curl", "-s", "--max-time", "8", ARXIV_API_URL],
+        capture_output=True, text=True, timeout=10
+    )
+    if r.returncode == 0 and "entry" in r.stdout:
+        papers = parse_arxiv(r.stdout)
+        CACHE.write_text(json.dumps(papers))
+        return {"status": "ok", "papers": papers}
+    # 3. 降级：过期缓存
+    if CACHE.exists():
+        return {"status": "cached_stale", "papers": json.loads(CACHE.read_text())}
+    return {"status": "skip"}
+```
+
+## 2026-07-09 phantom output 审计参考
+详见：`references/phantom-output-audit-20260709.md`
+
+## 本系统已知 Wrapper（截至 2026-07-09）
+
+| Wrapper | 用途 | 验证 |
+|---------|------|------|
+| idle_learning_wrapper.sh | ABCD 四方向扫描 | ⚠️ 空转输出，fact_store 本轮无增长 |
+| abcd_auto_fix_wrapper.sh | ABCD 缺口修复 | 通过 |
+| daily_skill_intake_wrapper.sh | 每日 skill 采集 | 通过 |
+| knowledge_miner_wrapper.sh | 知识挖掘 | 通过 |
+| auto_skill_scan_wrapper.sh | 失败模式扫描 | ✅ 已修复：去掉 `scan --min-count` 参数，skill 文件正常落地 |
+| self_model_update_wrapper.sh | 自我模型更新 | ⚠️ phantom output（auto_skill_count 从内存计，非文件计） |
+| session_bootstrap_check.sh | 重启后会话恢复 | 通过 |
+| idle_killer.sh | 空闲进程清理 | 通过 |
+| idle_lsp_killer.sh | LSP 进程清理 | 通过 |
+| memory_watchdog_cron.sh | 内存守护 | 通过 |
+| agent_status_broadcast.sh | 状态广播 | 通过 |
+| drain_watchdog.sh | 队列守护 | 通过 |
+| task_watchdog.sh | 任务守护 | 通过 |
+
+> ⚠️ 标记的 wrapper 需要加落地验证。self_model.json 的 `auto_skill_count` 从内存计数，
+> 不等于实际落地文件数，需交叉验证 `~/.hermes/skills/auto-generated/` 是否存在。
+
+## 验证清单
+
+```bash
+# 1. wrapper 可执行
+chmod +x ~/.hermes/scripts/<wrapper>.sh
+bash ~/.hermes/scripts/<wrapper>.sh
+
+# 2. cron job 配置正确
+cronjob(action=list)  # 检查 script + no_agent 字段
+
+# 3. 手动触发验证
+cronjob(action=run, job_id="<id>")
+cat ~/.hermes/cron/output/<name>/<date>.log
+```
