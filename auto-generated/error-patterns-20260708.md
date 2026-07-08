@@ -1,5 +1,5 @@
 ---
-name: auto-1783484213-error-patterns
+name: auto-1783505838-error-patterns
 description: 自动从 ~/.hermes/logs/agent.log 抽取的错误模式 + 修法. 由 auto_skill_from_failure.py 生成.
 triggers:
   - "TimeoutError"
@@ -11,13 +11,13 @@ triggers:
 
 # 自动生成错误模式速查
 
-**生成时间**: 2026-07-08 12:16
+**生成时间**: 2026-07-08 18:17
 **扫描窗口**: 最近 24h
 **发现模式**: 6 种
 
-## 🟡 TimeoutError (出现 2014 次, 严重度 2)
+## 🟡 TimeoutError (出现 1918 次, 严重度 2)
 
-**文件**: agent.log, agent.log.1, ai_collector.log, errors.log, gateway.error.log
+**文件**: agent.log, ai_collector.log, errors.log, gateway.error.log, gateway.log
 
 **示例**:
 ```
@@ -63,28 +63,28 @@ WARNING agent.conversation_loop: API call failed (attempt 1/3) error_type=JSONDe
 2026-07-07 09:56:33,769 WARNING [20260706_224754_b222ae0e] agent.tool_executor: Tool terminal returned error (1.86s): {"output": "Traceback (most recent call last):\n  File \"<string>\", line 13, in <
 ```
 
-## 🟡 Permission denied (出现 5 次, 严重度 3)
+## 🟡 Permission denied (出现 4 次, 严重度 3)
 
-**文件**: agent.log.1, errors.log, gateway.error.log, self_check.log
+**文件**: errors.log, gateway.error.log, self_check.log
 
 **示例**:
 ```
 2026-07-06 15:56:29,656 WARNING [20260706_154035_be1c32] agent.tool_executor: Tool terminal returned error (0.96s): {"output": "Traceback (most recent call last):\n  File \"<string>\", line 2, in <mod
 ```
 ```
-2026-07-06 15:56:29,656 WARNING [20260706_154035_be1c32] agent.tool_executor: Tool terminal returned error (0.96s): {"output": "Traceback (most recent call last):\n  File \"<string>\", line 2, in <mod
+WARNING agent.tool_executor: Tool terminal returned error (0.96s): {"output": "Traceback (most recent call last):\n  File \"<string>\", line 2, in <module>\nPermissionError: [Errno 13] Permission deni
 ```
 
-## 🔴 CDP attach failed (出现 4 次, 严重度 4)
+## 🔴 CDP attach failed (出现 3 次, 严重度 4)
 
-**文件**: agent.log.1, errors.log, gateway.error.log
+**文件**: errors.log, gateway.error.log
 
 **示例**:
 ```
 2026-07-05 21:40:08,852 WARNING [20260705_212116_c3bff8] agent.tool_executor: Tool browser_cdp returned error (0.28s): {"error": "Target.attachToTarget failed: {'code': -32602, 'message': 'No target w
 ```
 ```
-2026-07-05 21:40:08,852 WARNING [20260705_212116_c3bff8] agent.tool_executor: Tool browser_cdp returned error (0.28s): {"error": "Target.attachToTarget failed: {'code': -32602, 'message': 'No target w
+WARNING agent.tool_executor: Tool browser_cdp returned error (0.05s): {"error": "Target.attachToTarget failed: {'code': -32602, 'message': 'No target with given id found'}", "method": "Runtime.evaluat
 ```
 
 
