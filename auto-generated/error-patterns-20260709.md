@@ -1,5 +1,5 @@
 ---
-name: auto-1783570761-error-patterns
+name: auto-1783592402-error-patterns
 description: 自动从 ~/.hermes/logs/agent.log 抽取的错误模式 + 修法. 由 auto_skill_from_failure.py 生成.
 triggers:
   - "TimeoutError"
@@ -11,11 +11,11 @@ triggers:
 
 # 自动生成错误模式速查
 
-**生成时间**: 2026-07-09 12:19
+**生成时间**: 2026-07-09 18:20
 **扫描窗口**: 最近 24h
 **发现模式**: 6 种
 
-## 🟡 TimeoutError (出现 2024 次, 严重度 2)
+## 🟡 TimeoutError (出现 2167 次, 严重度 2)
 
 **文件**: agent.log, ai_collector.log, errors.log, gateway.error.log, gateway.log
 
@@ -27,16 +27,16 @@ triggers:
 2026-07-06 18:16:22,904 WARNING gateway.platforms.qqbot.adapter: [QQBot:1903873816] WebSocket closed: code=4009 reason=Session timed out
 ```
 
-## 🟡 ConnectionError (出现 214 次, 严重度 3)
+## 🟡 ConnectionError (出现 272 次, 严重度 3)
 
-**文件**: gateway.error.log, self_check.log, stealth_err.log
+**文件**: agent.log, errors.log, gateway.error.log, self_check.log, stealth_err.log
 
 **示例**:
 ```
-WARNING agent.conversation_loop: API call failed (attempt 1/3) error_type=APIConnectionError thread=ThreadPoolExecutor-297_0:13053145088 provider=nv-qwen3.5-397b base_url=https://integrate.api.nvidia.
+2026-07-09 15:38:51,612 WARNING agent.model_metadata: Failed to fetch model metadata from OpenRouter: HTTPSConnectionPool(host='openrouter.ai', port=443): Max retries exceeded with url: /api/v1/models
 ```
 ```
-WARNING agent.conversation_loop: API call failed (attempt 1/3) error_type=APIConnectionError thread=ThreadPoolExecutor-297_0:13053145088 provider=nv-qwen3.5-397b base_url=https://integrate.api.nvidia.
+2026-07-09 16:31:01,010 WARNING [20260709_153855_a84129] agent.conversation_loop: API call failed (attempt 1/1) error_type=APIConnectionError thread=Thread-7 (run_agent):6403059712 provider=custom bas
 ```
 
 ## 🟢 JSON parse error (出现 13 次, 严重度 1)

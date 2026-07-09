@@ -23,6 +23,9 @@ triggers:
 pitfalls:
   - 查询结果为空不代表写入失败——Gateway 重启后新代码才生效，且是异步写入
   - DB文件存在但表为空是正常状态（Gateway 重启前旧代码未写入）
+  - npm/全局 node 包安装反复超时（网络原因）—— OmniRoute 等 npm 包安装时遇到 180s 超时是常态，换镜像或预编译 binary 解决
+  - npm 安装不完整（缺 node_modules）导致 omniroute 无法启动——症状是 `Error: Cannot find package 'commander'` 等 ESM import 错误，需重新完整安装
+  - npm 安装可通过 `npm config set registry https://registry.npmmirror.com` 换国内镜像加速
 ---
 
 # Hermes LLM 可观测性
