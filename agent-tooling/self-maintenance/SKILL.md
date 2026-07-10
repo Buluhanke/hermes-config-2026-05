@@ -67,6 +67,22 @@ Mac Mini 24GB 红线：内存使用 > 75% 必须卸载 LLaVA 等重量级进程�
 - `~/.hermes/scripts/memory_watchdog.py` — 内存守护
 - `~/.hermes/scripts/pending_tasks.py` — 任务持久化
 
-## Cron 任务
+## Cron 任务（全部生效中，2026-07-11 验证）
 
-建议每日 09:00 跑一次 daily_patrol.sh，输出到 `~/.hermes/logs/patrol/`。
+```cron
+# 每日学习计划（Hermes 主动进化）
+0 8  * * *  bash ~/.hermes/scripts/self_evolution_daily_learn.sh  >> ~/.hermes/logs/self_evolution.log 2>&1
+0 9  * * *  bash ~/.hermes/scripts/daily_patrol.sh              >> ~/.hermes/logs/patrol/patrol.log 2>&1
+0 10 * * *  bash ~/.hermes/scripts/deep_research.sh              >> ~/.hermes/logs/research.log 2>&1
+0 11 * * *  python3 ~/.hermes/scripts/idle_learning_orchestrator.py >> ~/.hermes/logs/idle_learning.log 2>&1
+0 12 * * *  python3 ~/.hermes/scripts/active_learner.py          >> ~/.hermes/logs/active_learner.log 2>&1
+0 20 * * *  bash ~/.hermes/scripts/daily_evening_summary.sh      >> ~/.hermes/logs/evening_summary.log 2>&1
+```
+
+验证命令：`crontab -l`
+
+**关键修复记录（2026-07-11）**：
+- `active_learner.py` — `hermes -z` CLI 在 cron 挂起 → 改用 urllib 直调 DuckDuckGo JSON API
+- `search_web` — subprocess ddgs 返回空 → 改用 `urllib.request` 直调 `api.duckduckgo.com`
+- `hermes_cdp_bot.py` — Python 3.14 asyncio.run 签名变更 → 改用 `loop.run_until_complete()`
+- fact_store.db 0字节从未写入 → memory 工具替代 LanceDB
