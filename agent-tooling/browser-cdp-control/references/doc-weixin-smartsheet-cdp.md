@@ -203,6 +203,14 @@ async () => {
 - `browser-cdp-control` (本 skill 父类) — Chrome 9222 端口、登录态继承、CDP 基础
 - `hermes-mac-os-agent` — 如果用户说 "直接看到屏幕操作" (本 skill 走 CDP 不需要视觉)
 
+## agent-browser 对 doc.weixin.qq.com 失效 (2026-07-10 新增)
+
+`agent-browser open https://doc.weixin.qq.com/sheet/...` 会触发 Cloudflare 挑战页，返回 405 或超时。**CDP 是唯一可用路径**，不要尝试 agent-browser 直接 open。
+
+## vision_analyze 截图链全部失效 (2026-07-10 新增)
+
+`screencapture` 生成了有效 PNG（1920x1080 确认）但 `vision_analyze` 反复返回"看不到图片"。此时立即改用 CDP `Runtime.evaluate` 读 DOM，不依赖任何截图。
+
 ## 已知失败模式（不要重复踩）
 
 1. 混用 `evaluate_script` 设 ref + `mcp_chrome_devtools_mcp_press_key` 移 cell → 100% 失败

@@ -1,5 +1,5 @@
 ---
-name: auto-1783657281-error-patterns
+name: auto-1783678908-error-patterns
 description: 自动从 ~/.hermes/logs/agent.log 抽取的错误模式 + 修法. 由 auto_skill_from_failure.py 生成.
 triggers:
   - "TimeoutError"
@@ -11,11 +11,11 @@ triggers:
 
 # 自动生成错误模式速查
 
-**生成时间**: 2026-07-10 12:21
+**生成时间**: 2026-07-10 18:21
 **扫描窗口**: 最近 24h
 **发现模式**: 6 种
 
-## 🟡 TimeoutError (出现 2246 次, 严重度 2)
+## 🟡 TimeoutError (出现 2299 次, 严重度 2)
 
 **文件**: agent.log, ai_collector.log, errors.log, gateway.error.log, gateway.log
 
@@ -27,7 +27,7 @@ triggers:
 2026-07-06 18:16:22,904 WARNING gateway.platforms.qqbot.adapter: [QQBot:1903873816] WebSocket closed: code=4009 reason=Session timed out
 ```
 
-## 🟡 ConnectionError (出现 273 次, 严重度 3)
+## 🟡 ConnectionError (出现 276 次, 严重度 3)
 
 **文件**: agent.log, errors.log, gateway.error.log, self_check.log
 

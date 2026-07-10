@@ -12,6 +12,7 @@ pitfalls:
   - 看到错误直接猜原因——应先读完整 traceback
   - 只看错误行不看不支持的方法——先确认字段存在
   - 重复同一个错误3次以上不沉淀——立即写fact_store
+---
 
 # 错误模式速查手册
 
@@ -83,6 +84,13 @@ pitfalls:
 修法（已落地）:
 - browser_tool.py: _resolve_cdp_endpoint() 加 JSONDecodeError 特判，200状态码非JSON打 warning 不抛异常
 - browser_cdp_tool.py: ws.recv() json.loads 两处加 try/except，忽略非JSON帧
+
+## OmniRoute 安装踩坑（2026-07-10, 严重度5）
+asar 打包不完整: DMG 里 app.asar 缺 ws-a972e7ffa40ff725 等 14 个包 → 重新下载 OmniRoute-x.x.x-arm64.dmg
+better-sqlite3 ABI mismatch (NODE_MODULE_VERSION 137 vs 147): dist/node_modules/ 版本太旧 → rm -rf dist/node_modules/better-sqlite3 让 Node 向上找 root 的兼容版本
+npm rebuild 假成功: binary 日期不变说明没真编译 → 直接删坏版本，不要依赖 rebuild
+Desktop app 进程在但不监听端口: WebView 渲染失败 → 走 CLI omniroute serve
+所有 API 500: storage.sqlite 空，从未完成 onboarding → omniroute setup --add-provider
 
 ## 修法通用流程
 

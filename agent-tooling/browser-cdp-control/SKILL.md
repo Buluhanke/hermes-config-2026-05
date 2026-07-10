@@ -791,10 +791,12 @@ python3 scripts/pending_tasks.py complete 3
 python3 scripts/pending_tasks.py status
 ```
 
-**判断流程（严格按顺序）：**
+**判断流程（严格按顺序）**：
 1. `browser_get_web_content` → 有内容？✅ 用
 2. CDP Runtime.evaluate + 方法A/B → 有内容？✅ 用
-3. 以上皆空或不完整 → `browser_vision` 截图 ✅
+3. `browser_vision` → 失败 1 次即降级，**不要重试**
+4. CDP Page.captureScreenshot + base64 解码 + Tesseract OCR
+5. 解析 OCR 输出（见 `references/doc-weixin-ocr-read.md`）
 
 **禁止**：不试方法1-2就直接截图。
 
@@ -855,6 +857,42 @@ Hermes 现在有 **3 层浏览器控制工具**，互补不冲突：
 - `browser-use doctor` 是入口诊断命令
 - daemon 活跃时，所有 page 操作通过 `browser-use << 'PY'` 进行
 - homebrew 版本因 Python 3.14 asyncio 问题损坏，用 `uv tool install --python 3.11 browser-use` 修复
+
+## 企业微信智能表格 (doc.weixin.qq.com/sheet) — 实战 2026-07-10
+
+**已知问题**：canvas 渲染，标准 DOM query 返回 0。公式栏 ID 确认：
+- `.bar-label` — 当前单元格地址（如 "A5"）
+- `#alloy-simple-text-editor` — 公式/内容栏（永远是公式字符串，不是渲染值）
+- `input.bar-label` — 同 .bar-label
+
+**Tab 切换（可靠方法）**：
+1. `browser_snapshot` 或 `Runtime.evaluate` 找到 tab 文字
+2. 用 `Runtime.evaluate` 查坐标：
+```javascript
+var el = Array.from(document.querySelectorAll('*')).find(function(e){return e.textContent.trim()==='报价表'});
+var r = el.getBoundingClientRect();
+// r.left, r.top, r.width, r.height
+```
+3. CDP `Input.dispatchMouseEvent` 点击（type: mousePressed + mouseReleased，x=r.left+r.width/2, y=r.top+r.height/2）
+4. 等待 3s 切换完成
+
+**为什么不用 element ref**：`browser_click @e13` 在企业微信表格里经常报 "Could not locate element" — tab 是动态渲染的，snapshot 的 ref 在导航后失效。
+
+**vision 工具独立性**：`browser_vision` 内部截图，不读 `screencapture` 命令的文件。直接调 `browser_vision question="..."` 分析即可，不需要先 screencapture。
+
+**读取表格内容**：canvas 渲染无法用 DOM，方法是：
+1. `Runtime.evaluate` 读公式栏（B 列物料名等）
+2. 配合单元格跳转（用 `input.bar-label` 写单元格地址触发跳转）
+3. 最终兜底：CDP screenshot → Tesseract OCR（见 `references/doc-weixin-ocr-read.md`）
+
+**读取 canvas 表格的完整降级链（2026-07-10 新增）**：
+1. `Runtime.evaluate` 读公式栏（快，准，但只能读到当前激活 cell）
+2. `browser_vision` → 失败 1 次即降级，不要重试
+3. `Page.captureScreenshot` + base64 解码 → 写 `/tmp/xxx.png`
+4. `tesseract /tmp/xxx.png stdout -l chi_sim+eng --psm 6` → 提取文字
+5. 解析 OCR 输出（见 `references/doc-weixin-ocr-read.md`）
+
+**⚠️ 铁律：vision 工具失败 1 次即降级**。本机实测 `vision_analyze` 对有效 PNG 反复返回"看不到图片"，`browser_vision` 也有独立截图路径但也返回"没有图片"。遇到这类工具失效 0 思考换方法，不要循环重试。
 
 ## Canvas-Rendered Enterprise Apps (smartsheet / spreadsheet / 表格类)
 
@@ -993,6 +1031,9 @@ C6 = "=IFERROR(VLOOKUP(@$B:$B,报价表!$B:$I,8,0),\"\")"  ← 永远是公式!
 curl -s http://127.0.0.1:9222/json/version | python3 -c "import sys,json; d=json.load(sys.stdin); print(f\"Chrome {d.get('Browser-Version','?')}\")"
 ```
 
+## 故障排查（必读）
+`references/cdp-troubleshooting-path.md` — **Gateway 挂了是所有"工具 X 不 work"的共同根因**，先查这里再查工具。
+
 ## Critical Limitation: AI Chat Replies — Shadow DOM Penetration Varies by Site
 
 **实测 2026-07-06: Gemini 的 AI 回复可以用 AX tree 读取。**
@@ -1027,7 +1068,19 @@ Gemini    → direct Google API
 豆包      → direct ByteDance API (if available)
 ```
 
-## Verified Working: hermes_cdp_bot.py
+### Verified Working: hermes_cdp_bot.py
+
+⚠️ **Python 3.14 asyncio.run incompatibility (fixed 2026-07-10)**: `asyncio.run()` changed signature in Python 3.14. Fixed by replacing with legacy loop API:
+```python
+if __name__ == "__main__":
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        loop.run_until_complete(main())
+    finally:
+        loop.close()
+```
+Also: hardcoded `DEEPSEEK_TAB` id — tab IDs change after Chrome restart. Always verify or use `hermes_tab_switch.py list` to get current IDs before running.
 
 The canonical working script is `scripts/hermes_cdp_bot.py`. It:
 - Connects via WebSocket to existing Chrome tab (no new browser launch)
@@ -1038,7 +1091,21 @@ The canonical working script is `scripts/hermes_cdp_bot.py`. It:
 - Reads AX tree for structure confirmation
 - Supports multiple AI sites via command-line: `python3 hermes_cdp_bot.py deepseek`
 
-### Screenshot Fallback (CDP screenshots return 0 bytes on this Mac)
+### vision_analyze / browser_vision / computer_use 截图链全部失效时的降级 (2026-07-10)
+
+当 screenshot 工具都失效时，不要反复重试：
+
+1. `browser_vision` — Hermes 内置，走独立截图路径（独立于 `vision_analyze`）
+2. `computer_use(action='capture', app='Google Chrome', mode='vision')` — cua-driver（跨应用，但可能返回 0x0）
+3. `agent-browser screenshot` — 若页面**不是** Cloudflare 保护站
+4. **最终降级**：CDP `Runtime.evaluate` 直接读 DOM（企业微信表格的公式栏、cell ref）
+
+**已确认失效场景**：
+- `vision_analyze` 对有效 PNG（1920x1080 `file` 确认）反复返回"看不到图片"
+- `agent-browser open doc.weixin.qq.com` → Cloudflare 405/超时
+- `computer_use(action='capture', app='Google Chrome')` → 0x0 screenshot
+
+**铁律**：`vision_analyze` 失败 1 次即降级，不要重试 2-3 次。
 
 `Page.captureScreenshot` returns empty on this macOS setup (GPU compositing issue). Use macOS native instead:
 
