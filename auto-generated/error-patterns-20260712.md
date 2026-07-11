@@ -1,21 +1,20 @@
 ---
-name: auto-1783794317-error-patterns
+name: auto-1783801525-error-patterns
 description: 自动从 ~/.hermes/logs/agent.log 抽取的错误模式 + 修法. 由 auto_skill_from_failure.py 生成.
 triggers:
   - "TimeoutError"
   - "ConnectionError"
-  - "JSON parse error"
   - "Import error"
+  - "JSON parse error"
   - "Permission denied"
-  - "CDP attach failed"
 
 # 自动生成错误模式速查
 
-**生成时间**: 2026-07-12 02:25
+**生成时间**: 2026-07-12 04:25
 **扫描窗口**: 最近 24h
-**发现模式**: 6 种
+**发现模式**: 5 种
 
-## 🟡 TimeoutError (出现 2542 次, 严重度 2)
+## 🟡 TimeoutError (出现 1700 次, 严重度 2)
 
 **文件**: agent.log, agent.log.1, ai_collector.log, errors.log, errors.log.1
 
@@ -27,9 +26,9 @@ triggers:
 2026-07-11 20:36:56,530 WARNING gateway.platforms.qqbot.adapter: [QQBot:1903873816] WebSocket closed: code=4009 reason=Session timed out
 ```
 
-## 🟡 ConnectionError (出现 276 次, 严重度 3)
+## 🟡 ConnectionError (出现 98 次, 严重度 3)
 
-**文件**: agent.log.1, errors.log.1, gateway.error.log, self_check.log
+**文件**: agent.log.1, errors.log.1, self_check.log
 
 **示例**:
 ```
@@ -39,21 +38,9 @@ triggers:
 2026-07-09 16:31:01,010 WARNING [20260709_153855_a84129] agent.conversation_loop: API call failed (attempt 1/1) error_type=APIConnectionError thread=Thread-7 (run_agent):6403059712 provider=custom bas
 ```
 
-## 🟢 JSON parse error (出现 13 次, 严重度 1)
+## 🟡 Import error (出现 6 次, 严重度 2)
 
-**文件**: gateway.error.log, self_check.log
-
-**示例**:
-```
-WARNING agent.conversation_loop: API call failed (attempt 1/3) error_type=JSONDecodeError thread=bg-review:13170929664 provider=nv-qwen3.5-397b base_url=https://integrate.api.nvidia.com/v1/ model=qwen
-```
-```
-WARNING agent.conversation_loop: API call failed (attempt 1/3) error_type=JSONDecodeError thread=ThreadPoolExecutor-279_0:13137276928 provider=nv-qwen3.5-397b base_url=https://integrate.api.nvidia.com
-```
-
-## 🟡 Import error (出现 9 次, 严重度 2)
-
-**文件**: agent.log.1, errors.log.1, gateway.error.log
+**文件**: agent.log.1, errors.log.1
 
 **示例**:
 ```
@@ -63,9 +50,21 @@ WARNING agent.conversation_loop: API call failed (attempt 1/3) error_type=JSONDe
 2026-07-07 09:56:33,769 WARNING [20260706_224754_b222ae0e] agent.tool_executor: Tool terminal returned error (1.86s): {"output": "Traceback (most recent call last):\n  File \"<string>\", line 13, in <
 ```
 
-## 🟡 Permission denied (出现 4 次, 严重度 3)
+## 🟢 JSON parse error (出现 4 次, 严重度 1)
 
-**文件**: errors.log.1, gateway.error.log, self_check.log
+**文件**: self_check.log
+
+**示例**:
+```
+WARNING agent.conversation_loop: API call failed (attempt 3/5) error_type=JSONDecodeError thread=ThreadPoolExecutor-1_0:6432468992 provider=nv-qwen3.5-397b base_url=https://integrate.api.nvidia.com/v1
+```
+```
+2026-06-28 13:14:29,961 WARNING [cron_ec6677e2b987_20260628_123052] agent.conversation_loop: API call failed (attempt 3/5) error_type=JSONDecodeError thread=ThreadPoolExecutor-1_0:6432468992 provider=
+```
+
+## 🟡 Permission denied (出现 3 次, 严重度 3)
+
+**文件**: errors.log.1, self_check.log
 
 **示例**:
 ```
@@ -73,18 +72,6 @@ WARNING agent.conversation_loop: API call failed (attempt 1/3) error_type=JSONDe
 ```
 ```
 WARNING agent.tool_executor: Tool terminal returned error (0.96s): {"output": "Traceback (most recent call last):\n  File \"<string>\", line 2, in <module>\nPermissionError: [Errno 13] Permission deni
-```
-
-## 🔴 CDP attach failed (出现 3 次, 严重度 4)
-
-**文件**: errors.log.1, gateway.error.log
-
-**示例**:
-```
-2026-07-05 21:40:08,852 WARNING [20260705_212116_c3bff8] agent.tool_executor: Tool browser_cdp returned error (0.28s): {"error": "Target.attachToTarget failed: {'code': -32602, 'message': 'No target w
-```
-```
-WARNING agent.tool_executor: Tool browser_cdp returned error (0.05s): {"error": "Target.attachToTarget failed: {'code': -32602, 'message': 'No target with given id found'}", "method": "Runtime.evaluat
 ```
 
 
