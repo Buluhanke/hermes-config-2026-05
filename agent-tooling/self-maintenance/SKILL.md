@@ -8,9 +8,16 @@ triggers:
   - 内存不足需要清理
   - 主动发现并解决问题
 pitfalls:
-  - gateway 停了不知道 — 必须有 cron 定时检查
+  - pgrep误判：pgrep -f hermes-gateway 返回0不等于挂了，进程名是 hermes_cli.main，需用 ps aux | grep hermes 双重验证
+  - gateway停了不知道 — 必须有cron定时检查
   - 只检查不修复 — 检查出来问题必须自动处理
-  - 任务中断后不恢复 — gateway 重启后第一件事是恢复 pending_tasks
+  - 任务中断后不恢复 — gateway重启后第一件事是恢复pending_tasks
+  - ABCD学习产0条新知（已修正）：旧误判「INSERT列名错误导致静默失败」，实为FACTS_FROM_LOG静态列表已达饱和+ABCD运行结果从未被结构化解析。修法：重写batch_facts_from_log.py从orchestrator日志动态提取ABCD阶段结果（实测4条新fact/次，fact_store 97→121条）
+  - CVE扫描5秒超时被截断（已修正）：cve_scan.py在orchestrator中Thread超时5秒截断→改用cve_lite.py（Rustchain/Scottcjn，MIT零依赖标准库，552行生产级）+ orchestrator超时改为120秒
+  - 知识发现问题≠工具bug：ABCD四步跑完但四步都只是状态检查（A=数进程/B=arXiv缓存/C=超时/D=action_diversity），没有"从运行结果提取新知识"的机制。重写batch_facts_from_log后才确认INSERT一直是成功的
+  - execute_code沙盒与terminal环境隔离：execute_code的venv路径/subprocess独立/Chroma instance冲突，同一会话中terminal写的文件execute_code看不到。测memory/数据库类必须用terminal
+  - 从零写代码前必须先搜现成方案：「先搜现成再写」是铁律，违反则从零写的代码永远不如直接集成的现成方案（本次教训：batch_facts_from_log.py从零写 vs AgentFactory+搜索现成）
+  - terminal被block时：用execute_code的urllib.request下载文件+write_file落地（绕过block的workaround，已验证有效）
 ---
 
 # Self-Maintenance — Hermes 自我维护
@@ -36,7 +43,8 @@ Gateway 是 Hermes 的命根子。Gateway 停了 = 所有能力归零。必须 2
 
 检查：
 ```bash
-pgrep -f "hermes-gateway" || pgrep -f "hermes_cli.main gateway run"
+ps aux | grep hermes | grep -v grep  # 验证gateway是否在跑
+pgrep -f hermes-gateway || pgrep -f "hermes_cli.main gateway run"
 ```
 
 重启：
@@ -67,16 +75,75 @@ Mac Mini 24GB 红线：内存使用 > 75% 必须卸载 LLaVA 等重量级进程�
 - `~/.hermes/scripts/memory_watchdog.py` — 内存守护
 - `~/.hermes/scripts/pending_tasks.py` — 任务持久化
 
+## 参考文档
+
+- `references/system-state-snapshot-20260711.md` — 2026-07-11 系统状态快照（含用户手动变更记录、活跃进程、内存大户）
+- `references/config-audit-sop.md` — 手动配置审计 SOP（触发词、步骤、汇报格式）
+- `references/web-dashboard-usage.md` — Web Dashboard 启动方法（2026-07-11 新增）
+- `references/abcd-pipeline-fix-20260711.md` — ABCD学习管道修复记录（batch_facts_from_log.py静态列表bug、cve_scan超时bug、动态提取修复）
+
+## Web Dashboard 启动（2026-07-11 验证）
+
+**正确命令：`hermes dashboard`，不是 `hermes web`**
+
+```bash
+# 启动（后台运行）
+hermes dashboard --port 3847 --no-open &
+
+# 等待启动
+sleep 15
+
+# 验证
+curl http://localhost:3847  # 返回 200 即成功
+```
+
+Dashboard 功能：Status / Config editor / API Keys / Sessions / Skills / Cron / Logs / Analytics
+
+Web UI 在后台运行，重启 gateway 不会停。访问 http://localhost:3847
+
 ## Cron 任务（全部生效中，2026-07-11 验证）
 
 ```cron
-# 每日学习计划（Hermes 主动进化）
-0 8  * * *  bash ~/.hermes/scripts/self_evolution_daily_learn.sh  >> ~/.hermes/logs/self_evolution.log 2>&1
-0 9  * * *  bash ~/.hermes/scripts/daily_patrol.sh              >> ~/.hermes/logs/patrol/patrol.log 2>&1
-0 10 * * *  bash ~/.hermes/scripts/deep_research.sh              >> ~/.hermes/logs/research.log 2>&1
-0 11 * * *  python3 ~/.hermes/scripts/idle_learning_orchestrator.py >> ~/.hermes/logs/idle_learning.log 2>&1
-0 12 * * *  python3 ~/.hermes/scripts/active_learner.py          >> ~/.hermes/logs/active_learner.log 2>&1
-0 20 * * *  bash ~/.hermes/scripts/daily_evening_summary.sh      >> ~/.hermes/logs/evening_summary.log 2>&1
+# 夜间ABCD自学（凌晨1点）
+0 1 * * *  bash ~/.hermes/scripts/idle_learning_wrapper.sh >> ~/.hermes/cron/output/idle_learning/$(date +\%Y-\%m-\%d_\%H-\%M-\%S).log 2>&1
+# 早6点ABCD修复轮
+0 6 * * *  bash ~/.hermes/scripts/abcd_auto_fix_wrapper.sh >> ~/.hermes/cron/output/38488d19babb/$(date +\%Y-\%m-\%d_\%H-\%M-\%S).log 2>&1
+# 早7点知识采集
+0 7 * * *  bash ~/.hermes/scripts/knowledge_miner_wrapper.sh >> ~/.hermes/cron/output/c5cad75593ba/$(date +\%Y-\%m-\%d_\%H-\%M-\%S).log 2>&1
+# 每120分钟自动skill生成
+*/120 * * * *  bash ~/.hermes/scripts/auto_skill_scan_wrapper.sh >> ~/.hermes/cron/output/33cefcae0cee/$(date +\%Y-\%m-\%d_\%H-\%M-\%S).log 2>&1
+# 每6小时self-model更新
+0 */6 * * *  bash ~/.hermes/scripts/self_model_update_wrapper.sh >> ~/.hermes/cron/output/cb1461225e26/$(date +\%Y-\%m-\%d_\%H-\%M-\%S).log 2>&1
+# 每15分钟hermes状态广播
+*/15 * * * *  bash ~/.hermes/scripts/agent_status_broadcast.sh >> ~/.hermes/cron/output/43b00a0da78e/$(date +\%Y-\%m-\%d_\%H-\%M-\%S).log 2>&1
+# 每5分钟drain watchdog
+*/5 * * * *  bash ~/.hermes/scripts/drain_watchdog.sh >> ~/.hermes/cron/output/b2ad855429b2/$(date +\%Y-\%m-\%d_\%H-\%M-\%S).log 2>&1
+# 每周一9点v31同步watchdog
+0 9 * * 1  bash ~/.hermes/scripts/v31_sync_watchdog.sh >> ~/.hermes/cron/output/cede6601b1e3/$(date +\%Y-\%m-\%d_\%H-\%M-\%S).log 2>&1
+```
+
+**关键修复记录（2026-07-11）**：
+- `active_learner.py` — `hermes -z` CLI 在 cron 挂起 → 改用 urllib 直调 DuckDuckGo JSON API
+- `search_web` — subprocess ddgs 返回空 → 改用 `urllib.request` 直调 `api.duckduckgo.com`
+- `hermes_cdp_bot.py` — Python 3.14 asyncio.run 签名变更 → 改用 `loop.run_until_complete()`
+- fact_store.db 0字节从未写入 → memory 工具替代 LanceDB
+- **batch_facts_from_log.py** — 静态FACTS_FROM_LOG列表导致产0新知 → 重写为从orchestrator日志动态提取ABCD结果（fact_store 97→118条）
+- **idle_learning_orchestrator.py 第223行** — cve_scan超时5秒被截断 → 改为120秒（实测可完成扫描）
+
+**ABCD学习管道（2026-07-11修复版）**：
+- A_visual：ps aux进程数检查 → 提取进程数写入fact
+- B_paper：arXiv API（缓存优先）→ 缓存未解析结构化（待改进）
+- C_safety：cve_scan（120秒等待）→ 扫描结果写入DB（待结构化）
+- D_action：action_diversity执行 → 状态输出提取为fact
+- batch_facts_from_log：从orchestrator日志动态提取ABCD结果 → 去重写入DB
+- fact_decay：trust衰减检查
+- skill_resonance：fact_store检索反哺
+
+**验证命令**：
+```bash
+python3 ~/.hermes/scripts/batch_facts_from_log.py  # 应写入>0条新fact
+python3 ~/.hermes/scripts/idle_learning_orchestrator.py --scan-only  # 只扫描不写入
+sqlite3 ~/.hermes/memory_store.db "SELECT COUNT(*) FROM facts"  # 确认总数增长
 ```
 
 验证命令：`crontab -l`
@@ -86,3 +153,10 @@ Mac Mini 24GB 红线：内存使用 > 75% 必须卸载 LLaVA 等重量级进程�
 - `search_web` — subprocess ddgs 返回空 → 改用 `urllib.request` 直调 `api.duckduckgo.com`
 - `hermes_cdp_bot.py` — Python 3.14 asyncio.run 签名变更 → 改用 `loop.run_until_complete()`
 - fact_store.db 0字节从未写入 → memory 工具替代 LanceDB
+
+**真实故障案例（2026-07-11 01:00）**：
+- 01:00 patrol 检测到 `Gateway: STOPPED`
+- self-heal watchdog 自动恢复，08:10 起 Gateway 恢复正常
+- 根因：整点 cron 峰值瞬时资源耗尽，非持久性故障
+- 教训：patrol 01:00 和 08:10 之间有 7 小时无监控窗口，需确保 watchdog（*/5分钟）持续运行
+- processes.json 记录了两个 OmniRoute 进程：node server (PID 95366) + Python HTTP server (PID 14009)

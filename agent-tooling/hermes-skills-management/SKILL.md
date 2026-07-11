@@ -63,7 +63,7 @@ hermes skills inspect <identifier>
 | 所有 hermes skills install 方式都超时 | GitHub 访问限制 | **绕过：直接下载 SKILL.md**（见下方） |
 
 ### 绕过 hermes skills install 超时
-
+### 绕过 hermes skills install 超时
 当 `hermes skills install`（所有方式）都超时时，跳过 CLI 直接下载：
 
 ```bash
@@ -73,11 +73,8 @@ curl -sL https://raw.githubusercontent.com/<owner>/<repo>/main/<path>/SKILL.md \
 ```
 
 **踩过的坑**：
-- MiniMax-AI/skills 实际路径是 `skills/minimax-docx`（不是顶层 `minimax-docx`）
-- bytedance/deer-flow 路径是 `skills/public/ppt-generation`
-- warpdotdev/common-skills 路径是 `.agents/skills/write-product-spec`（注意 .agents 前缀）
-- curl exit code 56 = libcurl 读超时，改用 `execute_code` + Python urllib
-- GitHub API rate limit 也会导致 `curl` 失败，换 User-Agent 或用 Python urllib
+- curl exit code 56 = libcurl 读超时，换 `curl -sL` 或 Python urllib
+- GitHub API rate limit 也导致 curl 失败，换 User-Agent 或用 Python urllib
 - `hermes skills install --source skills-sh` 报错 `unrecognized arguments`，skills-sh 格式不需要 `--source`
 
 **用 Python urllib 绕过（最稳）**：
@@ -93,15 +90,74 @@ with open(path, 'wb') as f:
     f.write(content)
 ```
 
+**execute_code 写不入 ~/.hermes**：execute_code 的 Python 沙盒是隔离进程，写入 ~/.hermes 会静默失败（无报错但文件不存在）。所有写入 ~/.hermes/skills/ 的操作必须用 `terminal(background=false)` + python3 -c "..." 或 python3 脚本。切记。
+
+**用 terminal 绕过（最终方案）**：
+```bash
+python3 -c "
+import urllib.request, os
+url = 'https://raw.githubusercontent.com/<owner>/<repo>/main/<path>/SKILL.md'
+path = f'/Users/aimac/.hermes/skills/<name>/SKILL.md'
+os.makedirs(os.path.dirname(path), exist_ok=True)
+req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+with urllib.request.urlopen(req, timeout=15) as r:
+    content = r.read()
+with open(path, 'wb') as f:
+    f.write(content)
+"
+```
+
 **新技能发现（2026-07-11）**：
-- `avoid-ai-writing`（conorbronsdon/avoid-ai-writing，⭐2.2K）：49个AI写作模式，比 humanizer-zh（⭐37K）更新更全面，支持多平台（Hermes/Claude Code/OpenClaw）。直接下载路径：`https://raw.githubusercontent.com/conorbronsdon/avoid-ai-writing/main/SKILL.md`
-- `OfficeCLI`（iOfficeAI/OfficeCLI，⭐14.3K）：Word/Excel/PPT 全能 CLI，无需 Office 安装。但它是**二进制 CLI 工具，没有 SKILL.md 格式**，需要 `brew install officecli` 或 `npm install -g @officecli/officecli`，不适合作为 Hermes skill 安装
+- `avoid-ai-writing`（conorbronsdon/avoid-ai-writing，⭐2.2K）：49个AI写作模式，活跃维护（v3.15，7天前更新）。已安装替代 humanizer-zh。
+- `OfficeCLI`（iOfficeAI/OfficeCLI，⭐14.3K）：Word/Excel/PPT 全能 CLI，无需 Office 安装。**它是二进制 CLI 工具，没有 SKILL.md**，安装方式：
+  ```bash
+  npm install -g @officecli/officecli  # 已装在 ~/.local/bin/officecli
+  officecli --version  # 验证 v1.0.90
+  ```
+  skill wrapper 已写好：`~/.hermes/skills/officecli/SKILL.md`（手动维护）
+- ⭐ 数字分身核心缺口：`3-statement-model`（财务）、`siyuan`（知识库）、`agentmail`（邮件）
+  - 都在 `official/finance/`、`official/productivity/`、`official/email/` 分类下
+  - CLI 安装超时，直接下载 SKILL.md（路径见上方绕过方法）
+
+## 研究优先原则（强制执行，2026-07-11 新增）
+
+**规则：任何工具/脚本/方案，在自己从零写之前，必须先全网搜索是否有已落地的生产级方案。**
+
+触发词：`怎么改善` / `有没有现成的` / `有没有更好的` / `不要自己写` / 任何寻求改进的时刻。
+
+搜索优先级：
+1. **GitHub stars 高**（>1K⭐）的生产级开源实现
+2. **arXiv 论文**（最新算法/框架）
+3. **Hermes Hub**（官方 skill + community skill）
+4. 最后才考虑自己写
+
+搜索关键词技巧：
+- `site:github.com <需求> python` — 找开源实现
+- `<需求> best practice 2026` — 找生产级方案
+- `<项目名> github stars` — 评估活跃度
+- `arxiv <主题>` — 找最新算法
+
+**踩过的坑（教训）**：
+- 自己写的 CVE 扫描（cve_scan.py）→ 替换为 cve_lite.py（Scottcjn/Rustchain，MIT，零依赖标准库，552行）
+- 自己写的 batch_facts_from_log.py → 重写为动态日志解析（但知识提取逻辑是自研，保留）
+- 自己写的 orchestrator → 参考 AgentFactory（zzatpku，ACL 2026）思路重做 skill crystallizer
+
+**搜索维度**：
+| 任务类型 | 搜索关键词 |
+|---------|-----------|
+| 安全/CVE扫描 | `cve-scan python osv github` / `cve-lite github` |
+| 自主学习/记忆 | `autonomous learning agent memory github 2026` |
+| 知识管理 | `mem0 letta zep github` |
+| 论文解析 | `arxiv api python parser best practice` |
+| agent 学习循环 | `agent self-evolve pipeline github stars` |
 
 安装后验证：`skills_list` 确认 name 出现，且 `~/.hermes/skills/<name>/SKILL.md` > 1KB。
 
 ## 打工人十大Skills安装记录
-
-参加 `references/top10-skills-install-log.md`
+linked_files:
+  references:
+    - "references/top10-skills-install-log.md"
+    - "references/optional-skills-priority.md"
 
 ---
 
@@ -116,8 +172,15 @@ hermes skills install official/creative/creative-ideation --force
 hermes skills install skills-sh/zinohome/cozyengine/ui-prompt-generator --force
 
 # ⚠️ CLI 超时时 → 直接下载 SKILL.md（见上方绕过方法）
-# MiniMax: https://raw.githubusercontent.com/MiniMax-AI/skills/main/skills/minimax-docx/SKILL.md
+# avoid-ai-writing: https://raw.githubusercontent.com/conorbronsdon/avoid-ai-writing/main/SKILL.md
+# minimax-docx: https://raw.githubusercontent.com/MiniMax-AI/skills/main/skills/minimax-docx/SKILL.md
+# minimax-pdf: https://raw.githubusercontent.com/MiniMax-AI/skills/main/skills/minimax-pdf/SKILL.md
+# minimax-xlsx: https://raw.githubusercontent.com/MiniMax-AI/skills/main/skills/minimax-xlsx/SKILL.md
 # ppt-generation: https://raw.githubusercontent.com/bytedance/deer-flow/main/skills/public/ppt-generation/SKILL.md
 # write-product-spec: https://raw.githubusercontent.com/warpdotdev/common-skills/main/.agents/skills/write-product-spec/SKILL.md
-# humanizer-zh: Python urllib（curl 读超时 exit 56）
+
+# ⭐ 数字分身核心能力（2026-07-11 新增）
+# 3-statement-model: 直接下载
+# siyuan: 直接下载
+# agentmail: 直接下载
 ```
