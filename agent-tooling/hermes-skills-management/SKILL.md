@@ -156,8 +156,9 @@ with open(path, 'wb') as f:
 ## 打工人十大Skills安装记录
 linked_files:
   references:
-    - "references/top10-skills-install-log.md"
     - "references/optional-skills-priority.md"
+    - "references/top10-skills-install-log.md"
+    - "references/skill-install-bypass-20260712.md"
 
 ---
 

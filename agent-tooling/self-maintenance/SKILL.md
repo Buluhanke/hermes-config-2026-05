@@ -8,7 +8,7 @@ triggers:
   - 内存不足需要清理
   - 主动发现并解决问题
 pitfalls:
-  - pgrep误判：pgrep -f hermes-gateway 返回0不等于挂了，进程名是 hermes_cli.main，需用 ps aux | grep hermes 双重验证
+  - 两套cron系统必须同时查：crontab -l（系统层）和 cronjob list（Hermes应用层）是两套独立定时任务，极易混淆导致漏查。crontab在root的cron进程执行，Hermes cron在gateway调度器执行，日志路径完全不同。诊断「定时任务是否正常」时必须同时跑这两条命令
   - gateway停了不知道 — 必须有cron定时检查
   - 只检查不修复 — 检查出来问题必须自动处理
   - 任务中断后不恢复 — gateway重启后第一件事是恢复pending_tasks
@@ -18,6 +18,12 @@ pitfalls:
   - execute_code沙盒与terminal环境隔离：execute_code的venv路径/subprocess独立/Chroma instance冲突，同一会话中terminal写的文件execute_code看不到。测memory/数据库类必须用terminal
   - 从零写代码前必须先搜现成方案：「先搜现成再写」是铁律，违反则从零写的代码永远不如直接集成的现成方案（本次教训：batch_facts_from_log.py从零写 vs AgentFactory+搜索现成）
   - terminal被block时：用execute_code的urllib.request下载文件+write_file落地（绕过block的workaround，已验证有效）
+  - cron脚本中硬编码日期：batch_facts_from_log.py硬编码"2026-07-11"导致每日读昨日日志→永远读不到当天运行结果。修法：所有cron产生的日志解析脚本，必须用`date.today().strftime("%Y-%m-%d")`动态生成当日prefix，绝不能用固定字符串
+  - skill_crystallizer路径双重.hermes：wrapper中$HERMES_HOME本身已含~/.hermes，再拼.hermes/skills/导致路径变成~/.hermes/.hermes/skills/。修法：skill路径直接用$HERMES_HOME/skills/，不重复
+  - macOS TLS握手EOF：OSV API等外部HTTPS调用被防火墙截断SSL握手，返回`UNEXPECTED_EOF_WHREADING`。修法：`ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE`作为fallback
+  - fact_store schema：列名用`fact_id`不是`id`，`category`字段存的是fact的text长描述，不是分类。没有`source`列。写任何直连fact_store的SQL前先`PRAGMA table_info(facts)`确认列名
+  - abcd-learner skill从未写入磁盘：execute_code的write_file和terminal的mkdir先后失败，skill目录从未创建。需要先mkdir再逐个文件写入
+  - /tmp 文件被 macOS 清理导致 skill 失效：放在 /tmp 的 CLI 工具或 skill 文件会被系统定期清理。解决方案：①关键文件在 ~/.hermes/skills/ 持久化一份；②自愈 cron 脚本从 skills 目录复制到 /tmp；③cron 任务本身检测缺失后自动重新下载。参考：anysearch_heal.sh（每小时检查并从 ~/.hermes/skills/anysearch/ 恢复 API key 和 CLI 到 /tmp）
 ---
 
 # Self-Maintenance — Hermes 自我维护
@@ -80,7 +86,8 @@ Mac Mini 24GB 红线：内存使用 > 75% 必须卸载 LLaVA 等重量级进程�
 - `references/system-state-snapshot-20260711.md` — 2026-07-11 系统状态快照（含用户手动变更记录、活跃进程、内存大户）
 - `references/config-audit-sop.md` — 手动配置审计 SOP（触发词、步骤、汇报格式）
 - `references/web-dashboard-usage.md` — Web Dashboard 启动方法（2026-07-11 新增）
-- `references/abcd-pipeline-fix-20260711.md` — ABCD学习管道修复记录（batch_facts_from_log.py静态列表bug、cve_scan超时bug、动态提取修复）
+- `references/abcd-pipeline-fix-20260711.md` — 2026-07-11 ABCD管道原始修复记录
+- `references/abcd-pipeline-fix-20260712.md` — 2026-07-12 追加修复（硬编码日期/SSL EOF/路径双重.hermes）
 
 ## Web Dashboard 启动（2026-07-11 验证）
 
@@ -101,7 +108,13 @@ Dashboard 功能：Status / Config editor / API Keys / Sessions / Skills / Cron 
 
 Web UI 在后台运行，重启 gateway 不会停。访问 http://localhost:3847
 
-## Cron 任务（全部生效中，2026-07-11 验证）
+**关键修复记录（2026-07-12追加）**：
+- `idle_learning_orchestrator.py` 重写：b_paper现在解析arXiv Atom feed完整元数据（标题+摘要+作者+分类+日期），每次写2N条fact（N=论文数）
+- Gateway端口从3847变为8642：health检查`curl localhost:8642/health`
+- MiniMax API key在`~/.hermes/.env`：`MINIMAX_M3_API_KEY="sk-290...6e18"`
+- B_insight LLM：B_paper已能直接写arXiv元数据，B_insight阶段（LLM推理洞察）待gateway内调用
+
+**Cron任务（全部生效中，2026-07-11验证）**：
 
 ```cron
 # 夜间ABCD自学（凌晨1点）

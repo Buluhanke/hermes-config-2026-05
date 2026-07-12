@@ -60,6 +60,8 @@ web_extract_plus urls=["url1","url2","url3"] provider=firecrawl
 - vision_analyze 不支持 file:// URL → 用 browser_vision 或 Tesseract
 - API key 脚本直调会失败 → 走 Hermes agent 层而不是直接 curl
 - **过早下「性价比最高」结论**：消费类产品第一轮搜索≠最终结论，必须再搜1-2轮验证「唯一解」是否成立（R68S案例：第二轮搜索发现R2S和R66S都是有效替代方案）
+- **搜索结果不完整时不能反问用户去验证**：搜到的价格数据缺斤少两，应该继续搜下一轮，而不是告诉用户"你自己去对比"。如果一轮搜索没覆盖到用户提到的具体配置，继续搜；确实搜不到才明确说"这个价位我没找到数据"。
+- **消费类产品必须分场景回答，不能只给单一答案**：消费类产品（笔电/手机/相机）价格区间很大，「最佳」结论依赖用户需求和预算，泛化结论有误导性。先按配置/性能/价格三维度对比，再给出场景化建议。
 
 ## 研究成果存档
 - [远程控制技能调研（remote-control-skills-research）](references/remote-control-skills-research.md) — 2026-07-11：vnc-computer-use、agent-rdp、QuickDesk 等方案的对比与选型

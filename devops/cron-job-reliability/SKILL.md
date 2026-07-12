@@ -69,6 +69,37 @@ pitfalls:
       每轮结束后检查实际落地物：ls ~/.hermes/skills/auto-generated/、fact_store 行数、
       self_model.json 的 actual 文件内容。wrapper log 要包含落地物清单。
       在 orchestrator 阶段加 assert：预期的写操作必须有对应的文件验证。
+  - name: 两套 cron 系统混淆（crontab vs Hermes cron）
+    description: |
+      Hermes 有两套独立的定时任务系统，极易混淆：
+      ① crontab 系统任务（`crontab -l`，系统cron进程(pid 290)执行）
+         路径：/usr/sbin/cron run as root
+         脚本：~/.hermes/scripts/ 下的 shell/python 脚本
+         日志：各自独立的 log 文件（如 logs/self_evolution.log）
+      ② Hermes cron 任务（`cronjob(action=list)`，Hermes 应用层调度）
+         路径：Hermes 内部 DB 管理
+         脚本：hermes cron 的 script= 字段指向 wrapper.sh
+         日志：~/.hermes/cron/output/<name>/ 下
+      症状：只查 Hermes cron 以为全覆盖，漏掉 crontab 里大量 1-6am 学习任务；
+      或以为两套任务是同一个，困惑为什么日志对不上。
+    fix: |
+      诊断时要同时查两套：
+        $ crontab -l                    # 系统层 crontab（1/2/3/4/5/6点任务）
+        $ cronjob(action=list)          # Hermes 应用层 cron
+        $ cat ~/.hermes/logs/*.log      # crontab 任务日志
+        $ ls ~/.hermes/cron/output/     # Hermes cron 任务日志
+      两套任务在内容上有重叠（如都有 idle_learning），但schedule不同。
+      crontab 的 idle_learning_orchestrator.py 是旧版（4点），Hermes cron 的 idle_learning_wrapper.sh 是新版（1点ABCD自学）。
+  - name: deep_research.sh Permission denied
+    description: |
+      crontab 里 deep_research.sh 报 Permission denied，
+      原因：文件创建时没有 +x 权限。
+      症状：logs/research.log 里出现 "/bin/sh: /path/to/script: Permission denied"
+      影响：2点的深度研究任务完全静默失败。
+    fix: |
+      创建脚本后立即 chmod +x。
+      也适用于其他 .sh/.py 脚本。
+      crontab 里 python3 脚本（如 active_learner.py）也需要 +x。
   - name: fact_decay.py 只报不删（静默积累脏数据）
     description: |
       fact_decay.py 能正确识别 trust≤0.05 的过期 facts 并打印清单，
