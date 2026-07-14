@@ -89,6 +89,11 @@ Mac Mini 24GB 红线：内存使用 > 75% 必须卸载 LLaVA 等重量级进程�
 - `references/abcd-pipeline-fix-20260711.md` — 2026-07-11 ABCD管道原始修复记录
 - `references/abcd-pipeline-fix-20260712.md` — 2026-07-12 追加修复（硬编码日期/SSL EOF/路径双重.hermes）
 
+- GitHub README 永远 401 Unauthorized → `git clone --depth=1` 到 /tmp 再 `cat README.md`，不要用 web_extract/git clone API/web_search
+- chrome:// 页面 CDP 全部被 block → 用 computer_use (CUA) 键盘操作，不能用 browser_navigate/browser_cdp Runtime.evaluate
+- hermes-browser-extension：已构建于 /tmp/hermes-browser-extension/dist (v0.1.11)，API Server 在 http://127.0.0.1:8642，key=hermes-webui-secret-key，增益中等（已有CDP+computer_use可覆盖大部分场景），详见 references/hermes-browser-extension-20260713.md
+- abcd-learner skill升华后body内容空洞：auto-crystallized skill只有标题+slogan，无可执行步骤。触发时需用LLM展开为具体操作步骤。修法参考：idle_learning_wrapper.sh 的 E2 反思消化机制
+
 ## Web Dashboard 启动（2026-07-11 验证）
 
 **正确命令：`hermes dashboard`，不是 `hermes web`**

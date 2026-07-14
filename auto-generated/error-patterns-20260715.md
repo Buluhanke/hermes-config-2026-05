@@ -1,5 +1,5 @@
 ---
-name: auto-1784039385-error-patterns
+name: auto-1784046593-error-patterns
 description: 自动从 ~/.hermes/logs/agent.log 抽取的错误模式 + 修法. 由 auto_skill_from_failure.py 生成.
 triggers:
   - "TimeoutError"
@@ -9,13 +9,13 @@ triggers:
 
 # 自动生成错误模式速查
 
-**生成时间**: 2026-07-14 22:29
+**生成时间**: 2026-07-15 00:29
 **扫描窗口**: 最近 24h
 **发现模式**: 4 种
 
-## 🟡 TimeoutError (出现 1686 次, 严重度 2)
+## 🟡 TimeoutError (出现 1708 次, 严重度 2)
 
-**文件**: active_learner.log, agent.log, ai_collector.log, errors.log, gateway.error.log
+**文件**: active_learner.log, agent.log, ai_collector.log, errors.log, errors.log.1
 
 **示例**:
 ```
