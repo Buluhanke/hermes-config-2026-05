@@ -12,8 +12,8 @@ from pathlib import Path
 HERMES = Path.home()
 DB = HERMES / ".hermes" / "memory_store.db"
 SKILL_DIR = HERMES / ".hermes" / "skills"
-RETRIEVAL_THRESHOLD = 3
-TRUST_THRESHOLD = 0.70
+RETRIEVAL_THRESHOLD = 1
+TRUST_THRESHOLD = 0.65
 
 
 def get_hot_facts():

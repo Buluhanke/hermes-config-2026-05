@@ -66,7 +66,9 @@ idle_learning_wrapper.sh 顺序执行：
 - **EOF残留导致shell脚本语法错误**：patch时用heredoc追加内容，`EOF`定界符会混进文件，需手动删掉。
 - **B_insight LLM输出格式飘移**：LLM不听话时返回 `1. **[主题]**` 或 `**加粗**` 格式，parser只认裸`[主题]`导致全跳。修复：①prompt明确要求「不要编号、不要加粗、不要markdown」，给示例格式；②`write_insights()`加`extract_insight()`清理正则去编号和加粗；③验证：`SELECT COUNT(*) FROM facts WHERE category='arxiv-insight'` 应≥3
 - **heredoc patch残留EOF**：patch工具的new_string用bash heredoc风格时，`EOF`定界符会混进文件导致语法错误。必须手动删掉残留的`EOF`行后再执行
+- **升华SQL列数错位静默失败**：E升华SQL只返回4列（如`SELECT fact_id, content, category, tags`），但`write_skill(fact)`解包需要6列（再加trust_score和retrieval_count）。错位后解包全乱，静默失败无报错。修复：E升华SQL必须返回6列，且顺序必须是 fact_id, content, category, tags, trust_score, retrieval_count。
 - **idle_learning_wrapper.sh执行顺序**：batch_facts必须在E2反思消化之后运行——否则batch_facts先运行已有知识被重复写入"0条新增"，E2没有新知识可消化
+- **ret=-999的fact被E2跳过**：新写入的fact retrieval_count=-999（sentinel），E2只查`ret=0`导致这些fact永远不升级。修：`WHERE (retrieval_count=0 OR retrieval_count=-999)`
 
 
 ## 参考文档

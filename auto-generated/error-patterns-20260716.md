@@ -1,5 +1,5 @@
 ---
-name: auto-1784125880-error-patterns
+name: auto-1784133088-error-patterns
 description: 自动从 ~/.hermes/logs/agent.log 抽取的错误模式 + 修法. 由 auto_skill_from_failure.py 生成.
 triggers:
   - "TimeoutError"
@@ -10,11 +10,11 @@ triggers:
 
 # 自动生成错误模式速查
 
-**生成时间**: 2026-07-15 22:31
+**生成时间**: 2026-07-16 00:31
 **扫描窗口**: 最近 24h
 **发现模式**: 5 种
 
-## 🟡 TimeoutError (出现 1981 次, 严重度 2)
+## 🟡 TimeoutError (出现 2001 次, 严重度 2)
 
 **文件**: active_learner.log, agent.log, ai_collector.log, bootstrap-installer.log, errors.log
 
@@ -26,7 +26,7 @@ triggers:
 [05:00:16] AI回答: search failed: <urlopen error _ssl.c:1112: The handshake operation timed out>...
 ```
 
-## 🟢 FileNotFoundError (出现 496 次, 严重度 1)
+## 🟢 FileNotFoundError (出现 564 次, 严重度 1)
 
 **文件**: mcp-stderr.log
 

@@ -24,6 +24,7 @@ pitfalls:
   - fact_store schema：列名用`fact_id`不是`id`，`category`字段存的是fact的text长描述，不是分类。没有`source`列。写任何直连fact_store的SQL前先`PRAGMA table_info(facts)`确认列名
   - abcd-learner skill从未写入磁盘：execute_code的write_file和terminal的mkdir先后失败，skill目录从未创建。需要先mkdir再逐个文件写入
   - /tmp 文件被 macOS 清理导致 skill 失效：放在 /tmp 的 CLI 工具或 skill 文件会被系统定期清理。解决方案：①关键文件在 ~/.hermes/skills/ 持久化一份；②自愈 cron 脚本从 skills 目录复制到 /tmp；③cron 任务本身检测缺失后自动重新下载。参考：anysearch_heal.sh（每小时检查并从 ~/.hermes/skills/anysearch/ 恢复 API key 和 CLI 到 /tmp）
+  - macOS .app 包复制失败（WeChat多开案例）：微信/QQ等大型.app内含损坏符号链接（指向不存在的Target），导致 `cp -R`、`rsync -a`、`ditto` 全部报错退出。正确解法：从 DMG 挂载点用 tar 管道复制：`sudo tar -cf - -C "/Volumes/微信 WeChat" WeChat.app | sudo tar -xf - -C /Applications`，然后 `sudo mv /Applications/WeChat.app /Applications/EarnMore.app`。原理：tar 默认跳过损坏符号链接而不报错。整个流程：hdiutil attach → tar管道复制 → hdiutil detach → PlistBuddy改BundleID → codesign签名 → nohup启动
 ---
 
 # Self-Maintenance — Hermes 自我维护
