@@ -1,92 +1,149 @@
-# Hermes Skills 快速索引（2026-07-13）
+# Hermes Skills 快速索引（2026-07-16 最终版）
 
-## 一、核心工作流（真实可执行，有操作步骤）
+> 所有 72 个技能均在 `~/.hermes/skills/<name>/SKILL.md`，depth=1，一眼可检索。
+
+## 一、核心工作流（高频使用）
 
 | Skill | 触发词 | 功能 |
 |--------|--------|------|
-| `abcd-learner` | 知识落地/升华/idle-learning E阶段 | fact→skill升华，fact_id列名，body=content |
-| `anysearch` | 垂直搜索/金融数据/学术/安全情报/批量并行 | 23个垂直领域+通用+URL提取，免费20QPS |
-| `avoid-ai-writing` | 去AI味/去除AI写作痕迹/AI-isms | 49模式检测+重写，detect/edit/iterate三种模式 |
-| `deep-research` | 深度调研/多源研究/战略研究 | 9阶段深度调研，≥3独立源三角验证 |
-| `dossier` | 尽职调查/实体研究/背景调查/人/公司 | 决策级实体研究报告，12个月活动时间线 |
-| `pulse` | 脉搏/近期趋势/社区讨论/Reddit/HN | 多源近期情报，30天窗口+跨平台模式分析 |
-| `officecli` | Word/Excel/PPT编辑/转换格式 | Office文档CLI读写，支持.docx/.xlsx/.pptx |
-| `minimax-pdf` | 生成PDF/专业排版 | 视觉质量+品牌Identity |
-| `minimax-docx` | 生成Word/专业文档 | 专业DOCX创建编辑 |
-| `minimax-xlsx` | 生成Excel/数据分析 | Excel读写分析 |
-| `ppt-generation` | 生成PPT/演示文稿 | 专业PPT生成 |
-| `write-product-spec` | 写产品规格/PRD/产品文档 | PRODUCT.md规范 |
-| `hermes-observability` | LLM可观测性/token消耗/延迟/错误率 | SQLite traces追踪 |
+| `abcd-learner` | 知识落地/升华/idle-learning E阶段 | fact→skill升华 |
+| `anysearch` | 垂直搜索/金融/学术/安全情报/批量 | 23个垂直领域+通用搜索 |
+| `agent-reach` | 调研/全网搜索/各平台内容 | 13平台内容获取 |
+| `deep-research` | 深度调研/战略研究 | 多引擎9阶段研究闭环 |
+| `product-research` | 产品调研/比价/推荐 | 价格验证+平替规则 |
+
+## 二、浏览器/桌面自动化
+
+| Skill | 触发词 | 功能 |
+|--------|--------|------|
+| `browser-cdp-control` | 浏览器CDP/DOM/截图/表单 | Chrome DevTools Protocol |
+| `browser-use` | 浏览器自动化/表单/数据提取 | browser-use CLI |
+| `computer-use` | 桌面控制/点击/输入/scroll | cua-driver后台操作 |
+| `agent-rdp` | 远程控制Windows/RDP | IronRDP远程控制 |
+
+## 三、文档生成
+
+| Skill | 触发词 | 功能 |
+|--------|--------|------|
+| `officecli` | Word/Excel/PPT编辑 | Office文档CLI |
+| `minimax-docx` | 生成Word文档 | 专业DOCX |
+| `minimax-xlsx` | 生成Excel/数据分析 | Excel读写 |
+| `minimax-pdf` | 生成PDF/专业排版 | 视觉质量+品牌 |
+| `ppt-generation` | 生成PPT演示文稿 | 专业PPT |
+
+## 四、Hermes系统
+
+| Skill | 触发词 | 功能 |
+|--------|--------|------|
+| `self-maintenance` | Gateway保活/内存守护/健康检查 | 自动巡逻+失败自愈 |
+| `hermes-observability` | LLM可观测性/token/延迟/错误率 | SQLite traces追踪 |
 | `hermes-skills-management` | 安装skill/技能管理/诊断 | Hermes Hub十大类技能 |
-| `litreview` | 文献综述/学术搜索 | PubMed/arXiv多源学术调研 |
-| `grants` | NIH grant/科研经费申请 | 临床研究grant分析 |
-| `self-improving-agent` | 自我改进/记忆优化/CLAUDE.md | MEMORY.md→CLAUDE.md升级 |
+| `hermes-agent` | Hermes配置/扩展/开发 | 51608字节完整手册 |
+| `hermes-agent-skill-authoring` | 写SKILL.md/技能创作 | 技能文件规范 |
+| `skill-creator` | 创建新skill/迭代优化 | 技能开发TDD方法 |
+| `skill-curation` | 审计skill库/恢复孤儿 | curator健康检查 |
+| `cron-job-reliability` | cron可靠性/定时任务诊断 | 任务健康检查 |
 
-## 二、行为准则框架（触发后加载为决策参考）
+## 五、代码质量/架构
 
-| Skill | 触发场景 |
+| Skill | 触发词 | 功能 |
+|--------|--------|------|
+| `systematic-debugging` | 调试/根因分析/bug | 4阶段调试法 |
+| `test-driven-development` | TDD/测试先行 | 红绿重构循环 |
+| `clean-code` | 整洁代码/重构 | 代码可读性 |
+| `refactoring-patterns` | 重构模式 | 遗留代码改造 |
+| `software-design-philosophy` | 软件设计哲学 | 架构决策原则 |
+| `clean-architecture` | 整洁架构 | 分层架构 |
+| `system-design` | 系统设计/架构 | 分布式系统 |
+| `working-with-legacy-code` | 遗留代码 | 遗留系统处理 |
+| `team-topologies` | 团队拓扑/组织架构 | 团队协作模式 |
+
+## 六、DevOps/基础设施
+
+| Skill | 触发词 | 功能 |
+|--------|--------|------|
+| `github-repo-management` | GitHub仓库管理/PR | gh CLI封装 |
+| `verification-before-completion` | 验证后才算完成 | 证据>声明 |
+| `dispatching-parallel-agents` | 并行任务分发 | 多独立任务并行 |
+| `using-git-worktrees` | git worktree隔离 | 隔离工作区 |
+| `prometheus-monitoring` | Prometheus监控 | 指标采集 |
+| `secrets-management` | 密钥管理/CI/CD | Vault/AWS Secrets |
+| `subagent-driven-development` | 子代理驱动开发 | 计划执行 |
+
+## 七、研究/调研
+
+| Skill | 触发词 | 功能 |
+|--------|--------|------|
+| `dossier` | 尽职调查/背景调查/人/公司 | 决策级实体报告 |
+| `pulse` | 近期趋势/社区讨论/Reddit/HN | 30天情报窗口 |
+| `litreview` | 文献综述/PubMed/arXiv | 学术论文调研 |
+| `grants` | NIH grant/科研经费 | 临床研究grant |
+| `scrapling` | 网页爬取/Cloudflare绕过 | 高级爬虫 |
+| `qmd` | 本地知识库搜索/RAG | 混合检索引擎 |
+| `defuddle` | 干净网页内容提取 | 去广告/导航 |
+
+## 八、写作/文案
+
+| Skill | 触发词 | 功能 |
+|--------|--------|------|
+| `avoid-ai-writing` | 去AI味/去除写作痕迹 | 49模式检测+重写 |
+| `write-product-spec` | PRD/产品规格文档 | PRODUCT.md规范 |
+| `writing-skills` | 写skill文档 | TDD写技能方法 |
+
+## 九、专业工具
+
+| Skill | 触发词 | 功能 |
+|--------|--------|------|
+| `minimax-docx` | Word文档 | OpenXML专业生成 |
+| `minimax-pdf` | PDF | 专业排版设计 |
+| `minimax-xlsx` | Excel | 数据分析+公式 |
+| `3-statement-model` | 财务模型(IS/BS/CF) | 三表联动 |
+| `dcf-model` | DCF估值模型 | 内在价值分析 |
+| `context-compression` | 上下文压缩 | 长会话优化 |
+| `memory-cn` | Hermes中文记忆系统 | fact_store+Mnemosyne |
+| `memray-memory-profiler` | Python内存分析 | Bloomberg Memray |
+
+## 十、Specialty Skills
+
+| Skill | 触发词 | 功能 |
+|--------|--------|------|
+| `dogfood` | QA测试/探索性测试 | web应用bug发现 |
+| `obsidian` | Obsidian笔记库 | 本地笔记API |
+| `siyuan` | 思源笔记API | 自托管知识库 |
+| `courier-notification-skills` | 跨渠道通知 | Email/SMS/Push/Slack |
+| `1password-cli-agents` | 1Password密钥管理 | agent安全密钥 |
+| `executable-plans` | 执行计划 | 计划执行工作流 |
+| `perception-decision-engine` | 4层感知决策漏斗 | VLM何时调/何时不调 |
+| `improve-codebase-architecture` | 架构深化 | 架构改进诊断 |
+| `open-source-skill-harvesting` | 开源skill采集 | GitHub→Hermes |
+| `mac-maintenance` | Mac维护 | brew/Trash清理 |
+| `anti-counter-question` | 反问技巧 | 避免回答陷阱 |
+
+## 十一、错误模式（auto-generated每日生成）
+
+| Skill | 说明 |
 |--------|------|
-| `star-4d-学习循环` | 遇到新问题/学习新知/失败复盘 → Search→Try→Adjust→Record |
-| `反思式增量prompt进化` | SOUL.md/AGENTS.md修改 → 单次≤1500token，内存<300MB |
-| `代码化-规则化` | 同一操作出现3次 → 硬编码函数，不走LLM推理 |
-| `坑点检索飞轮` | 修复前查~/.hermes/.pitfalls_checklist.txt，修复后写入 |
-| `失败驱动记忆进化` | 失败时 → 存"已验证+有后果"的坑，绑定场景+触发条件 |
-| `executive-mentor` | 战略决策/创始人困境/对抗性思维 |
+| `error-patterns` | 错误根因分析+修复方案 |
+| `auto-generated` | 每日错误模式存档，最新：error-patterns-20260716.md |
 
-## 三、领域知识（idle-learning自动生成，内容是知识陈述非操作步骤）
-
-| Skill | 核心内容 |
-|--------|------|
-| `ai代理-工作流知识化` | 工作流知识化=LLM自动化落地关键路径 |
-| `多模态推理-vlm垂直深化` | VLM→自动驾驶事故评测新热点 |
-| `模型优化-量化非等价` | LLM量化需统计表征，精度损失系统性偏差 |
-| `知识架构-工作流语义持久性` | 知识表示从检索→可执行流程 |
-| `评测垂直化-车载vlm` | 垂直领域基准=核心竞争力 |
-| `失败驱动记忆进化` | 只存已验证有后果的坑，绑定场景+触发条件 |
-
-## 四、错误模式（auto_skill_from_failure自动生成，触发即查）
-
-- `error-patterns-最新日期.md` — TimeoutError/ConnectionError/Import error/JSON parse/Permission denied/CDP attach failed
-- 触发词：任意报错名称
-
-## 五、触发检索优先级
-
-遇到任务时，先匹配本索引的**触发词**栏，直接 `skill_view(name)` 加载完整内容。
+## 十二、检索优先级
 
 ```
-优先级顺序：
-1. 报错？ → error-patterns（报错关键词）
+1. 报错？ → error-patterns
 2. 调研/研究？ → deep-research / dossier / pulse / anysearch
 3. 文档生成？ → officecli / minimax-docx / ppt-generation
-4. Hermes自身？ → hermes-skills / hermes-observability / abcd-learner
-5. 学习框架？ → star-4d / 反思式增量 / 代码化
-6. 写作去AI味？ → avoid-ai-writing
+4. 浏览器自动化？ → browser-use / browser-cdp-control
+5. Hermes自身？ → self-maintenance / hermes-observability / hermes-agent
+6. 代码/架构？ → systematic-debugging / clean-code / system-design
+7. 写作去AI味？ → avoid-ai-writing
+8. 桌面控制？ → computer-use
 ```
 
-## 六、已知内容空洞的skill（需补充步骤）
+## 十三、2026-07-16 整理记录
 
-以下skill只有标题+一句话描述，触发时需要用LLM展开：
-- `ai代理-工作流知识化` → 展开：工作流应持久化存储为.md/.yaml，LLM按步骤执行
-- `多模态推理-vlm垂直深化` → 展开：VLM评测用垂直基准（事故场景VQA），不用通用MMMU
-- `模型优化-量化非等价` → 展开：量化后需做统计偏差回归，不做等价假设
-- `知识架构-工作流语义持久性` → 展开：RAG→可执行工作流，知识用流程图表示
-- `评测垂直化-车载vlm` → 展开：建立事故场景评测集，数据来自真实事故报告
-
-## 七、crontab 1-7点自学任务（全部可手动触发）
-
-```bash
-# 1点
-bash ~/.hermes/scripts/daily_patrol.sh
-# 2点
-bash ~/.hermes/scripts/deep_research.sh 'AI 搜索最新进展 2026'
-# 3点
-bash ~/.hermes/scripts/self_evolution_daily_learn.sh
-# 4点
-/usr/bin/python3 ~/.hermes/scripts/idle_learning_orchestrator.py
-# 5点
-/usr/bin/python3 ~/.hermes/scripts/active_learner.py
-# 6点
-bash ~/.hermes/scripts/daily_evening_summary.sh
-# 01:00（Hermes cron）
-bash ~/.hermes/scripts/idle_learning_wrapper.sh
-```
+- 从.archive恢复26个有价值孤儿skill
+- 删除10个空壳category目录
+- 删除9个"小时工具错误聚集"重复存档
+- 删除fact_store里16条重复error_pattern
+- 最终：72个活跃skill，全部depth=1，全部有SKILL.md
+- .archive保留116个（已归档，含占位符/旧版本/未审查）

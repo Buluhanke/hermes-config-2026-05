@@ -69,6 +69,10 @@ idle_learning_wrapper.sh 顺序执行：
 - **升华SQL列数错位静默失败**：E升华SQL只返回4列（如`SELECT fact_id, content, category, tags`），但`write_skill(fact)`解包需要6列（再加trust_score和retrieval_count）。错位后解包全乱，静默失败无报错。修复：E升华SQL必须返回6列，且顺序必须是 fact_id, content, category, tags, trust_score, retrieval_count。
 - **idle_learning_wrapper.sh执行顺序**：batch_facts必须在E2反思消化之后运行——否则batch_facts先运行已有知识被重复写入"0条新增"，E2没有新知识可消化
 - **ret=-999的fact被E2跳过**：新写入的fact retrieval_count=-999（sentinel），E2只查`ret=0`导致这些fact永远不升级。修：`WHERE (retrieval_count=0 OR retrieval_count=-999)`
+- **curator归档导致技能消失**：用ABCD生成的skill会立即被curator归档（`created_by: agent` + `retrieval_count=0` → 自动进`.archive/`）。146个技能已因此消失。解法：①生成后立即`hermes curator pin <skill-name>`；②在frontmatter加`pinned: true`；③重要知识永久化：代码类→写进`~/.hermes/scripts/`、坑点→写进`error-patterns/references/`、配置→直接apply到config。详见`hermes-skill-archive-recovery` skill。
+- **"小时工具错误聚集-XX次"每日重复归档**：idle_learning每日生成一份几乎相同的内容，14天×14份全部归档。处理：只保留最新一份，其余删；合并内容到`error-patterns/references/daily-error-summary.md`
+- **.archive恢复后目录名是hash化的**：恢复时`mv`到skills/后，目录名仍是`.archive`里的hash名称而非skill真实名。修：恢复后立即重命名目录或用skill_manage重建
+- **skills review只查活跃列表=review失败**：skills_list返回31个但`.archive/`里有194个SKILL.md（137个独立技能）。错误汇报"全部复盘完"的原因：只查了`~/.hermes/skills/`顶层，没进`.archive/`扫。正确做法：①`find ~/.hermes/skills/.archive -name "SKILL.md" | wc -l`统计总数 ②与活跃列表对比找孤儿 ③子代理批量审查孤儿价值 ④从.archive恢复+提升到depth=1 ⑤删重复/占位符旧存档 ⑥更新_skill_index.md
 
 
 ## 参考文档

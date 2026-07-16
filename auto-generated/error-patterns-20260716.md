@@ -1,22 +1,23 @@
 ---
-name: auto-1784147504-error-patterns
+name: auto-1784212370-error-patterns
 description: 自动从 ~/.hermes/logs/agent.log 抽取的错误模式 + 修法. 由 auto_skill_from_failure.py 生成.
 triggers:
   - "TimeoutError"
   - "FileNotFoundError"
   - "ConnectionError"
+  - "Missing attribute"
   - "JSON parse error"
   - "Permission denied"
 
 # 自动生成错误模式速查
 
-**生成时间**: 2026-07-16 04:31
+**生成时间**: 2026-07-16 22:32
 **扫描窗口**: 最近 24h
-**发现模式**: 5 种
+**发现模式**: 6 种
 
-## 🟡 TimeoutError (出现 2038 次, 严重度 2)
+## 🟡 TimeoutError (出现 2175 次, 严重度 2)
 
-**文件**: active_learner.log, agent.log, ai_collector.log, bootstrap-installer.log, errors.log
+**文件**: active_learner.log, agent.log, agent.log.1, ai_collector.log, bootstrap-installer.log
 
 **示例**:
 ```
@@ -26,7 +27,7 @@ triggers:
 [05:00:16] AI回答: search failed: <urlopen error _ssl.c:1112: The handshake operation timed out>...
 ```
 
-## 🟢 FileNotFoundError (出现 564 次, 严重度 1)
+## 🟢 FileNotFoundError (出现 670 次, 严重度 1)
 
 **文件**: mcp-stderr.log
 
@@ -48,6 +49,18 @@ WARNING agent.conversation_loop: API call failed (attempt 1/3) error_type=APICon
 ```
 ```
 2026-06-28 10:43:04,848 WARNING [cron_ec6677e2b987_20260628_103005] agent.conversation_loop: API call failed (attempt 1/3) error_type=APIConnectionError thread=ThreadPoolExecutor-297_0:13053145088 pro
+```
+
+## 🟡 Missing attribute (出现 15 次, 严重度 2)
+
+**文件**: agent.log, errors.log, gateway.error.log, self_check.log
+
+**示例**:
+```
+2026-07-16 19:58:39,052 WARNING agent.memory_manager: Memory provider 'lancedb' initialize failed: module 'lancedb' has no attribute 'connect'
+```
+```
+2026-07-16 19:59:18,403 ERROR [20260712_225856_c76a5802] agent.memory_manager: Memory provider 'lancedb' handle_tool_call(lancedb_remember) failed: module 'lancedb' has no attribute 'connect'
 ```
 
 ## 🟢 JSON parse error (出现 4 次, 严重度 1)
