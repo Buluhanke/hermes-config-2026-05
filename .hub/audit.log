@@ -1,0 +1,17 @@
+2026-07-25T01:28:28Z INSTALL honcho official:builtin dangerous sha256:c08c7ea06b072a18
+2026-07-25T01:28:30Z INSTALL chroma official:builtin safe sha256:04488c920d3ccfcd
+2026-07-25T01:28:31Z INSTALL fastmcp official:builtin dangerous sha256:8c0465c60ae59947
+2026-07-25T01:28:39Z INSTALL dcf-model official:builtin safe sha256:834ec216f830e35a
+2026-07-25T01:29:03Z INSTALL deep-research clawhub:community safe sha256:2a226b464a8f201b
+2026-07-25T01:29:05Z INSTALL axolotl official:builtin dangerous sha256:08d6156e208d179a
+2026-07-25T01:29:06Z INSTALL subagent-driven-development official:builtin caution sha256:9cff560d47bf745d
+2026-07-25T01:30:04Z INSTALL 1password official:builtin safe sha256:c3934ee1f79071bb
+2026-07-25T01:30:15Z INSTALL memento-flashcards official:builtin safe sha256:ec72f6a0a0ac6d5d
+2026-07-25T01:30:17Z INSTALL docker-management official:builtin dangerous sha256:15a7f65f4fb81c7d
+2026-07-25T09:15:17Z INSTALL deep-learning clawhub:community safe sha256:617d0457dfb3c3fe
+2026-07-25T09:15:22Z INSTALL keras clawhub:community safe sha256:90edd3b707785da8
+2026-07-25T09:15:32Z INSTALL product-research clawhub:community safe sha256:7fa3e913ffb7cf52
+2026-07-25T09:15:39Z INSTALL ml-pipeline clawhub:community safe sha256:ca1b3882dc5f5709
+2026-07-25T09:15:49Z BLOCKED nvidia-cuda clawhub:community caution 3_findings
+2026-08-12T02:29:05Z INSTALL i-have-adhd skills.sh:community safe sha256:481c6e7d37f30d96
+2026-08-22T23:54:15Z INSTALL scrapling official:builtin safe sha256:d06bfeedf53d6285

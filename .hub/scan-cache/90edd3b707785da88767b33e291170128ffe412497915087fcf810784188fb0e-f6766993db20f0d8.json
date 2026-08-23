@@ -1,0 +1,13 @@
+{
+  "source": "keras",
+  "source_url": "keras",
+  "bundle_hash": "sha256:90edd3b707785da88767b33e291170128ffe412497915087fcf810784188fb0e",
+  "scanner_version": "skills-guard-v1",
+  "verdict": "safe",
+  "trust_level": "community",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-07-25T09:15:01.561834+00:00",
+  "summary": "keras: clean scan, no threats detected",
+  "fresh": true
+}

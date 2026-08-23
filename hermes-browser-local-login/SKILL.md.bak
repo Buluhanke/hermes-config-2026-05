@@ -1,0 +1,121 @@
+---
+name: hermes-browser-local-login
+description: 'Guide for using Hermes Agent with a locally logged-in browser (agent-browser or attached Chrome).'
+version: '1.0.0'
+author: 'Hermes Agent'
+license: 'MIT'
+platforms: [linux, macos, windows]
+metadata:
+  hermes:
+    tags: [browser, automation, local-login]
+---
+# Hermes Browser Local Login Skill
+
+This skill provides step‑by‑step instructions for using Hermes Agent’s browser tools with a locally logged‑in Chromium/Chrome instance (either launched by Hermes via `agent-browser` or attached to an existing debug‑enabled Chrome).
+
+## Quick Start
+
+1. Enable the browser toolset:  
+   ```bash
+   hermes tools enable browser
+   ```
+2. (Optional) Set the Chromium path if not auto-detected:  
+   ```bash
+   hermes config set browser.chromium_path '/path/to/chrome'
+   ```
+3. (Optional) Install the `agent-browser` CLI globally:  
+   ```bash
+   npm i -g @agent-browser/cli
+   ```
+4. Start Hermes (or `/reset` in an existing session).
+5. Attach to your already‑logged‑in Chrome (if you prefer not to let Hermes launch a fresh instance):
+   ```bash
+   /browser connect --port 9222
+   ```
+   *Start Chrome with:*
+   ```
+   /Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+     --remote-debugging-port=9222 \
+     --user-data-dir=$HOME/chrome-cdp-profile \
+     --profile-directory="Profile 3"
+   ```
+   Note: Chrome 136+ REJECT `--user-data-dir` on the default Chrome profile dir. Use `~/chrome-cdp-profile` (isolated copy of Profile 3) — see `chrome-cdp-control` skill for the mirror recipe. The launchd service name is `com.hermes.chrome-cdp`.
+6. Navigate, interact, and extract data using the browser tools:  
+   - `browser_navigate --url 'https://example.com'`  
+   - `browser_snapshot` → note the ref `@eX`  
+   - `browser_type --ref '@eX' --text 'hello'`  
+   - `browser_click --ref '@eY'`  
+   - `browser_vision --question 'What is the CAPTCHA?'`
+7. When finished, detach:  
+   ```bash
+   /browser disconnect
+   ```
+
+**Browser Usage Policy (Ironclad Rule):**  
+- ❌ NEVER use headless or cloud browsers (Browserbase, Camofox managed) for any task  
+- ✅ FOR login-required web operations: MUST use local Chrome via CDP (http://localhost:9222)  
+- ⚠️ IF cdp_url unreachable: PROMPT user to manually start local Chrome - NEVER auto-fallback to other backends  
+- ✅ ONLY for public static pages (no login required): permitted to use web_extract for direct HTTP fetching
+
+## Detailed Steps
+
+### A. Using Hermes‑launched Chromium (no pre‑login)
+
+- After enabling the browser toolset, simply call `browser_navigate` etc.  
+- Hermes will launch a headful Chromium instance via `agent-browser`.  
+- No cookies or login state persist between sessions.
+
+### B. Attaching to an existing logged‑in Chrome
+
+1. Launch Chrome with remote debugging enabled and a persistent user data dir:  
+   ```bash
+   # macOS example
+   /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
+       --remote-debugging-port=9222
+       --user-data-dir=\"$HOME/chrome-debug-profile\"
+   ```
+2. In Hermes, connect:  
+   ```bash
+   /browser connect --port 9222
+   ```
+3. Use the browser tools as described above.  
+4. To keep the session alive across Hermes restarts, keep the Chrome process running and reconnect each time.
+
+### C. Common Pitfalls
+
+- **Chromium not found** – Ensure `browser.chromium_path` points to the executable.  
+- **Connection refused** – Verify Chrome is launched with `--remote-debugging-port` and the port matches the `/browser connect` argument.  
+- **Page not fully loaded** – After `browser_navigate`, wait a moment (e.g., send a harmless `browser_press --key 'Tab'`) before taking a snapshot.  
+- **Viewport issues** – Use `browser_scroll` to reveal hidden elements before clicking/typing.  
+- **Multiple tabs** – Use `browser_press --key 'Control+t'` to open a new tab, then `browser_navigate` to load a URL in the new tab.
+
+## MCP Chrome DevTools MCP tools (not agent-browser)
+
+The working control path in this environment is `mcp__chrome_devtools_mcp__*` tools (CDP via the `chrome-devtools-mcp` server), NOT Hermes's built-in `browser_navigate`/`browser_snapshot` (which routes through `agent-browser` and can fail with npm ECONNREFUSED on locked-down networks).
+
+**`new_page` timeout is non-fatal.** `mcp__chrome_devtools_mcp__new_page` may return `Navigation timeout of 10000 ms exceeded` even on a successful navigation — the page loaded fine. Always follow with `take_snapshot` to read content; do NOT treat the timeout as a real failure.
+
+Verified this session: navigated to Gmail, timeout reported, but `take_snapshot` returned full inbox (23 unread, correct account `hanyijack@gmail.com`).
+
+**Launch command that works (standalone, isolated profile — no multi-account confusion):**
+```bash
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome \
+  --remote-debugging-port=9222 \
+  --user-data-dir=$HOME/chrome-cdp-profile
+```
+This launches a FRESH independent instance. It does NOT use the user's daily profile, so multi-Google-account ambiguity is irrelevant — only one profile exists in this instance. Use this when you need a clean slate or when the user's real Chrome has multiple accounts and you want to avoid the default-account ambiguity problem.
+
+**To use the user's real logged-in profile instead** (all their accounts, cookies, login state preserved), use the profile-mirror approach from `chrome-cdp-control` skill — mirror the live profile to an isolated dir and launch from the copy.
+
+## Troubleshooting
+
+| Problem | Fix |
+|---|---|
+| `new_page` returns timeout | Follow with `take_snapshot` — page usually loaded fine |
+| `ECONNREFUSED` on `browser_navigate` | Switch to `mcp__chrome_devtools_mcp__*` tools |
+| Multiple Google accounts in user's Chrome | Use standalone `--user-data-dir` instance (this session: zero ambiguity) |
+| CDP port 9222 not responding | Verify Chrome launched with `--remote-debugging-port=9222`; check `curl -s -m5 http://127.0.0.1:9222/json/version` |
+
+## Reference
+
+See `references/guide.md` for a concise checklist and troubleshooting table.

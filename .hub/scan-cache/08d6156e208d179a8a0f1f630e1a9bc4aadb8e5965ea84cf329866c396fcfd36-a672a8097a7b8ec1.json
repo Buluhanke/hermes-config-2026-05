@@ -1,0 +1,62 @@
+{
+  "source": "official",
+  "source_url": "official/mlops/training/axolotl",
+  "bundle_hash": "sha256:08d6156e208d179a8a0f1f630e1a9bc4aadb8e5965ea84cf329866c396fcfd36",
+  "scanner_version": "skills-guard-v1",
+  "verdict": "dangerous",
+  "trust_level": "builtin",
+  "findings": [
+    {
+      "pattern_id": "curl_pipe_shell",
+      "severity": "critical",
+      "category": "supply_chain",
+      "file": "references/other.md",
+      "line": 310,
+      "match": "curl -LsSf https://astral.sh/uv/install.sh | sh",
+      "description": "curl piped to shell (download-and-execute)"
+    },
+    {
+      "pattern_id": "unpinned_pip_install",
+      "severity": "medium",
+      "category": "supply_chain",
+      "file": "references/other.md",
+      "line": 110,
+      "match": "A: Try upgrading deepspeed w: pip install -U deepspeed",
+      "description": "pip install without version pinning"
+    },
+    {
+      "pattern_id": "unpinned_pip_install",
+      "severity": "medium",
+      "category": "supply_chain",
+      "file": "references/other.md",
+      "line": 323,
+      "match": "uv pip install packaging setuptools wheel",
+      "description": "pip install without version pinning"
+    },
+    {
+      "pattern_id": "unpinned_pip_install",
+      "severity": "medium",
+      "category": "supply_chain",
+      "file": "references/other.md",
+      "line": 325,
+      "match": "uv pip install awscli pydantic",
+      "description": "pip install without version pinning"
+    },
+    {
+      "pattern_id": "unpinned_pip_install",
+      "severity": "medium",
+      "category": "supply_chain",
+      "file": "references/other.md",
+      "line": 648,
+      "match": "Make sure you\u2019ve installed the correct version of vLLM by including it as an extra when installing axolotl, e.g. pip ...",
+      "description": "pip install without version pinning"
+    }
+  ],
+  "rules": [
+    "curl_pipe_shell",
+    "unpinned_pip_install"
+  ],
+  "scanned_at": "2026-07-25T01:29:05.288582+00:00",
+  "summary": "axolotl: dangerous \u2014 5 finding(s) in supply_chain",
+  "fresh": true
+}

@@ -1,0 +1,13 @@
+{
+  "source": "deep-research",
+  "source_url": "deep-research",
+  "bundle_hash": "sha256:2a226b464a8f201b7b02131dac78c0f22a1f34bfdd628e0ec8f801b0d0c896e0",
+  "scanner_version": "skills-guard-v1",
+  "verdict": "safe",
+  "trust_level": "community",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-07-25T01:29:03.359379+00:00",
+  "summary": "deep-research: clean scan, no threats detected",
+  "fresh": true
+}

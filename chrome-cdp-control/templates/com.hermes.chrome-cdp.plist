@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  On-demand default: RunAtLoad=false + KeepAlive=false.
+  Chrome does NOT auto-start at login and is NOT relaunched when it exits.
+  Start/stop it explicitly with scripts/cdp_lifecycle.sh {start|stop}.
+  DO NOT set KeepAlive=true unless the user explicitly wants a persistent
+  always-on daemon — with KeepAlive=true, launchd relaunches Chrome within
+  ThrottleInterval seconds every time it's killed, making it feel like Chrome
+  "keeps opening by itself" and impossible to close. See SKILL.md pitfall.
+-->
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.hermes.chrome-cdp</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/Applications/Google Chrome.app/Contents/MacOS/Google Chrome</string>
+        <string>--remote-debugging-port=9222</string>
+        <string>--remote-allow-origins=*</string>
+        <string>--user-data-dir</string>
+        <string>/Users/kk/.hermes/chrome-profile-mirror</string>
+        <string>--no-first-run</string>
+        <string>--no-default-browser-check</string>
+    </array>
+    <key>RunAtLoad</key>
+    <false/>
+    <key>KeepAlive</key>
+    <false/>
+    <key>StandardErrorPath</key>
+    <string>/Users/kk/.hermes/chrome_cdp.log</string>
+</dict>
+</plist>

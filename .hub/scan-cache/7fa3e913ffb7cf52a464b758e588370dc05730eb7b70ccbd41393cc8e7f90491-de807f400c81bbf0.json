@@ -1,0 +1,13 @@
+{
+  "source": "product-research",
+  "source_url": "product-research",
+  "bundle_hash": "sha256:7fa3e913ffb7cf52a464b758e588370dc05730eb7b70ccbd41393cc8e7f90491",
+  "scanner_version": "skills-guard-v1",
+  "verdict": "safe",
+  "trust_level": "community",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-07-25T09:15:32.306581+00:00",
+  "summary": "product-research: clean scan, no threats detected",
+  "fresh": true
+}

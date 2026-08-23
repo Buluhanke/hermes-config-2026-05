@@ -1,0 +1,25 @@
+{
+  "source": "ml-pipeline",
+  "source_url": "ml-pipeline",
+  "bundle_hash": "sha256:ca1b3882dc5f570900566248d592d20c82c3b85e5431c29f0afe9125fd818f6a",
+  "scanner_version": "skills-guard-v1",
+  "verdict": "safe",
+  "trust_level": "community",
+  "findings": [
+    {
+      "pattern_id": "allowed_tools_field",
+      "severity": "low",
+      "category": "privilege_escalation",
+      "file": "SKILL.md",
+      "line": 7,
+      "match": "allowed-tools: Read, Write, Edit, Bash, Glob, Grep",
+      "description": "skill declares allowed-tools (standard frontmatter; informational)"
+    }
+  ],
+  "rules": [
+    "allowed_tools_field"
+  ],
+  "scanned_at": "2026-07-25T09:15:39.904058+00:00",
+  "summary": "ml-pipeline: safe \u2014 1 finding(s) in privilege_escalation",
+  "fresh": true
+}

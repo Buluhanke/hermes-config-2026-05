@@ -1,0 +1,8 @@
+{
+  "taps": [
+    {
+      "repo": "ayghri/i-have-adhd",
+      "path": "skills/"
+    }
+  ]
+}

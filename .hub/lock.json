@@ -1,0 +1,933 @@
+{
+  "version": 1,
+  "installed": {
+    "yuanbao": {
+      "source": "official",
+      "identifier": "official/yuanbao",
+      "trust_level": "builtin",
+      "scan_verdict": "backfilled",
+      "content_hash": "sha256:881625ad1581ec37",
+      "install_path": "yuanbao",
+      "files": [
+        "SKILL.md"
+      ],
+      "metadata": {
+        "backfilled_from": "optional-skills"
+      },
+      "installed_at": "2026-07-24T07:52:56.526766+00:00",
+      "updated_at": "2026-07-24T07:52:56.526766+00:00"
+    },
+    "honcho": {
+      "source": "official",
+      "identifier": "official/autonomous-ai-agents/honcho",
+      "trust_level": "builtin",
+      "scan_verdict": "dangerous",
+      "content_hash": "sha256:c08c7ea06b072a18",
+      "install_path": "autonomous-ai-agents/honcho",
+      "files": [
+        "SKILL.md"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/autonomous-ai-agents/honcho",
+        "bundle_hash": "sha256:c08c7ea06b072a18a095a556baf5d5f622c01bd656cc7703f97ae6fdbf988a2d",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "dangerous",
+        "trust_level": "builtin",
+        "findings": [
+          {
+            "pattern_id": "hermes_config_mod",
+            "severity": "critical",
+            "category": "persistence",
+            "file": "SKILL.md",
+            "line": 392,
+            "match": "Run `hermes honcho setup`. Ensure `memory.provider: honcho` is in `~/.hermes/config.yaml`.",
+            "description": "references Hermes configuration files directly"
+          }
+        ],
+        "rules": [
+          "hermes_config_mod"
+        ],
+        "scanned_at": "2026-07-25T01:27:58.915856+00:00",
+        "summary": "honcho: dangerous — 1 finding(s) in persistence",
+        "fresh": false
+      },
+      "installed_at": "2026-07-25T01:28:28.636937+00:00",
+      "updated_at": "2026-07-25T01:28:28.637051+00:00"
+    },
+    "chroma": {
+      "source": "official",
+      "identifier": "official/mlops/chroma",
+      "trust_level": "builtin",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:04488c920d3ccfcd",
+      "install_path": "mlops/chroma",
+      "files": [
+        "SKILL.md",
+        "references/integration.md"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/mlops/chroma",
+        "bundle_hash": "sha256:04488c920d3ccfcdc2529bbd084bf44988efe8ba1bb652dedf2d6221dc5041be",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "builtin",
+        "findings": [
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 47,
+            "match": "pip install chromadb",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_npm_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 50,
+            "match": "npm install chromadb @chroma-core/default-embed",
+            "description": "npm install without version pinning"
+          }
+        ],
+        "rules": [
+          "unpinned_npm_install",
+          "unpinned_pip_install"
+        ],
+        "scanned_at": "2026-07-25T01:28:00.333507+00:00",
+        "summary": "chroma: safe — 2 finding(s) in supply_chain",
+        "fresh": false
+      },
+      "installed_at": "2026-07-25T01:28:30.022523+00:00",
+      "updated_at": "2026-07-25T01:28:30.022632+00:00"
+    },
+    "fastmcp": {
+      "source": "official",
+      "identifier": "official/mcp/fastmcp",
+      "trust_level": "builtin",
+      "scan_verdict": "dangerous",
+      "content_hash": "sha256:8c0465c60ae59947",
+      "install_path": "mcp/fastmcp",
+      "files": [
+        "SKILL.md",
+        "references/fastmcp-cli.md",
+        "scripts/scaffold_fastmcp.py",
+        "templates/database_server.py",
+        "templates/api_wrapper.py",
+        "templates/file_processor.py"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/mcp/fastmcp",
+        "bundle_hash": "sha256:8c0465c60ae599478bdca0aad624b26cfa546e23dd7d107f5006c0cb97db6b24",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "dangerous",
+        "trust_level": "builtin",
+        "findings": [
+          {
+            "pattern_id": "hardcoded_ip_port",
+            "severity": "medium",
+            "category": "network",
+            "file": "SKILL.md",
+            "line": 155,
+            "match": "fastmcp list http://127.0.0.1:8000/mcp --json",
+            "description": "hardcoded IP address with port"
+          },
+          {
+            "pattern_id": "hardcoded_ip_port",
+            "severity": "medium",
+            "category": "network",
+            "file": "SKILL.md",
+            "line": 156,
+            "match": "fastmcp call http://127.0.0.1:8000/mcp search_resources query=router --json",
+            "description": "hardcoded IP address with port"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 39,
+            "match": "pip install fastmcp",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 46,
+            "match": "pip install httpx",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 271,
+            "match": "pip install fastmcp",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "hermes_config_mod",
+            "severity": "critical",
+            "category": "persistence",
+            "file": "SKILL.md",
+            "line": 175,
+            "match": "- configure the server in `~/.hermes/config.yaml` using the `native-mcp` skill, or",
+            "description": "references Hermes configuration files directly"
+          },
+          {
+            "pattern_id": "hermes_config_mod",
+            "severity": "critical",
+            "category": "persistence",
+            "file": "SKILL.md",
+            "line": 296,
+            "match": "The server-building part may be correct while the Hermes config is not. Load the `native-mcp` skill and configure the...",
+            "description": "references Hermes configuration files directly"
+          },
+          {
+            "pattern_id": "hardcoded_ip_port",
+            "severity": "medium",
+            "category": "network",
+            "file": "references/fastmcp-cli.md",
+            "line": 49,
+            "match": "fastmcp list http://127.0.0.1:8000/mcp --json",
+            "description": "hardcoded IP address with port"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "references/fastmcp-cli.md",
+            "line": 8,
+            "match": "pip install fastmcp",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "references/fastmcp-cli.md",
+            "line": 12,
+            "match": "FastMCP documents `pip install fastmcp` and `fastmcp version` as the baseline installation and verification path.",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "python_getenv_secret",
+            "severity": "critical",
+            "category": "exfiltration",
+            "file": "templates/api_wrapper.py",
+            "line": 13,
+            "match": "API_TOKEN = os.getenv(\"API_TOKEN\")",
+            "description": "reads secret via os.getenv()"
+          }
+        ],
+        "rules": [
+          "hardcoded_ip_port",
+          "hermes_config_mod",
+          "python_getenv_secret",
+          "unpinned_pip_install"
+        ],
+        "scanned_at": "2026-07-25T01:28:31.436325+00:00",
+        "summary": "fastmcp: dangerous — 11 finding(s) in exfiltration, network, persistence, supply_chain",
+        "fresh": true
+      },
+      "installed_at": "2026-07-25T01:28:31.439104+00:00",
+      "updated_at": "2026-07-25T01:28:31.439106+00:00"
+    },
+    "dcf-model": {
+      "source": "official",
+      "identifier": "official/finance/dcf-model",
+      "trust_level": "builtin",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:834ec216f830e35a",
+      "install_path": "finance/dcf-model",
+      "files": [
+        "requirements.txt",
+        "TROUBLESHOOTING.md",
+        "SKILL.md",
+        "scripts/validate_dcf.py"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/finance/dcf-model",
+        "bundle_hash": "sha256:834ec216f830e35a0c79dfa57e3643d9335a2499dad40ce27ade4e88a2815986",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "builtin",
+        "findings": [
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "scripts/validate_dcf.py",
+            "line": 19,
+            "match": "raise ImportError(\"openpyxl not installed. Run: pip install openpyxl\")",
+            "description": "pip install without version pinning"
+          }
+        ],
+        "rules": [
+          "unpinned_pip_install"
+        ],
+        "scanned_at": "2026-07-25T01:28:39.294509+00:00",
+        "summary": "dcf-model: safe — 1 finding(s) in supply_chain",
+        "fresh": true
+      },
+      "installed_at": "2026-07-25T01:28:39.296751+00:00",
+      "updated_at": "2026-07-25T01:28:39.296754+00:00"
+    },
+    "deep-research": {
+      "source": "clawhub",
+      "identifier": "deep-research",
+      "trust_level": "community",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:2a226b464a8f201b",
+      "install_path": "deep-research",
+      "files": [
+        "references/html-guide.md",
+        "references/writing-guide.md",
+        "skill-card.md",
+        "SKILL.md",
+        "_meta.json"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "deep-research",
+        "source_url": "deep-research",
+        "bundle_hash": "sha256:2a226b464a8f201b7b02131dac78c0f22a1f34bfdd628e0ec8f801b0d0c896e0",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "community",
+        "findings": [],
+        "rules": [],
+        "scanned_at": "2026-07-25T01:29:03.359379+00:00",
+        "summary": "deep-research: clean scan, no threats detected",
+        "fresh": true
+      },
+      "installed_at": "2026-07-25T01:29:03.363391+00:00",
+      "updated_at": "2026-07-25T01:29:03.363395+00:00"
+    },
+    "axolotl": {
+      "source": "official",
+      "identifier": "official/mlops/training/axolotl",
+      "trust_level": "builtin",
+      "scan_verdict": "dangerous",
+      "content_hash": "sha256:08d6156e208d179a",
+      "install_path": "mlops/training/axolotl",
+      "files": [
+        "SKILL.md",
+        "references/api.md",
+        "references/index.md",
+        "references/other.md",
+        "references/dataset-formats.md"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/mlops/training/axolotl",
+        "bundle_hash": "sha256:08d6156e208d179a8a0f1f630e1a9bc4aadb8e5965ea84cf329866c396fcfd36",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "dangerous",
+        "trust_level": "builtin",
+        "findings": [
+          {
+            "pattern_id": "curl_pipe_shell",
+            "severity": "critical",
+            "category": "supply_chain",
+            "file": "references/other.md",
+            "line": 310,
+            "match": "curl -LsSf https://astral.sh/uv/install.sh | sh",
+            "description": "curl piped to shell (download-and-execute)"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "references/other.md",
+            "line": 110,
+            "match": "A: Try upgrading deepspeed w: pip install -U deepspeed",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "references/other.md",
+            "line": 323,
+            "match": "uv pip install packaging setuptools wheel",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "references/other.md",
+            "line": 325,
+            "match": "uv pip install awscli pydantic",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "references/other.md",
+            "line": 648,
+            "match": "Make sure you’ve installed the correct version of vLLM by including it as an extra when installing axolotl, e.g. pip ...",
+            "description": "pip install without version pinning"
+          }
+        ],
+        "rules": [
+          "curl_pipe_shell",
+          "unpinned_pip_install"
+        ],
+        "scanned_at": "2026-07-25T01:29:05.288582+00:00",
+        "summary": "axolotl: dangerous — 5 finding(s) in supply_chain",
+        "fresh": true
+      },
+      "installed_at": "2026-07-25T01:29:05.291640+00:00",
+      "updated_at": "2026-07-25T01:29:05.291644+00:00"
+    },
+    "subagent-driven-development": {
+      "source": "official",
+      "identifier": "official/software-development/subagent-driven-development",
+      "trust_level": "builtin",
+      "scan_verdict": "caution",
+      "content_hash": "sha256:9cff560d47bf745d",
+      "install_path": "software-development/subagent-driven-development",
+      "files": [
+        "SKILL.md",
+        "references/gates-taxonomy.md",
+        "references/context-budget-discipline.md"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/software-development/subagent-driven-development",
+        "bundle_hash": "sha256:9cff560d47bf745d2b467d9b9452edbf07aa9d8a8ef2a9916ab972221e8859f2",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "caution",
+        "trust_level": "builtin",
+        "findings": [
+          {
+            "pattern_id": "context_exfil",
+            "severity": "high",
+            "category": "exfiltration",
+            "file": "SKILL.md",
+            "line": 271,
+            "match": "Include TDD instructions in every implementer context.",
+            "description": "instructs agent to output/share conversation history"
+          }
+        ],
+        "rules": [
+          "context_exfil"
+        ],
+        "scanned_at": "2026-07-25T01:29:06.800081+00:00",
+        "summary": "subagent-driven-development: caution — 1 finding(s) in exfiltration",
+        "fresh": true
+      },
+      "installed_at": "2026-07-25T01:29:06.802123+00:00",
+      "updated_at": "2026-07-25T01:29:06.802126+00:00"
+    },
+    "1password": {
+      "source": "official",
+      "identifier": "official/security/1password",
+      "trust_level": "builtin",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:c3934ee1f79071bb",
+      "install_path": "security/1password",
+      "files": [
+        "SKILL.md",
+        "references/cli-examples.md",
+        "references/get-started.md"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/security/1password",
+        "bundle_hash": "sha256:c3934ee1f79071bbabddba0a8bd7277b1f38751cacd22388d349e5f810993f00",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "builtin",
+        "findings": [],
+        "rules": [],
+        "scanned_at": "2026-07-25T01:30:04.780598+00:00",
+        "summary": "1password: clean scan, no threats detected",
+        "fresh": true
+      },
+      "installed_at": "2026-07-25T01:30:04.782493+00:00",
+      "updated_at": "2026-07-25T01:30:04.782496+00:00"
+    },
+    "memento-flashcards": {
+      "source": "official",
+      "identifier": "official/productivity/memento-flashcards",
+      "trust_level": "builtin",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:ec72f6a0a0ac6d5d",
+      "install_path": "productivity/memento-flashcards",
+      "files": [
+        "SKILL.md",
+        "scripts/youtube_quiz.py",
+        "scripts/memento_cards.py"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/productivity/memento-flashcards",
+        "bundle_hash": "sha256:ec72f6a0a0ac6d5d39b968b7717ced6a736a02d048edfd3e4a1e9d23c06a1540",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "builtin",
+        "findings": [
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 211,
+            "match": "pip install youtube-transcript-api",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 302,
+            "match": "- **Optional dependency** — `youtube_quiz.py` needs `youtube-transcript-api`; if missing, tell the user to run `pip i...",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "scripts/youtube_quiz.py",
+            "line": 4,
+            "match": "Requires: pip install youtube-transcript-api",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "scripts/youtube_quiz.py",
+            "line": 35,
+            "match": "\"message\": \"Run: pip install youtube-transcript-api\",",
+            "description": "pip install without version pinning"
+          }
+        ],
+        "rules": [
+          "unpinned_pip_install"
+        ],
+        "scanned_at": "2026-07-25T01:30:15.756429+00:00",
+        "summary": "memento-flashcards: safe — 4 finding(s) in supply_chain",
+        "fresh": true
+      },
+      "installed_at": "2026-07-25T01:30:15.759138+00:00",
+      "updated_at": "2026-07-25T01:30:15.759143+00:00"
+    },
+    "docker-management": {
+      "source": "official",
+      "identifier": "official/devops/docker-management",
+      "trust_level": "builtin",
+      "scan_verdict": "dangerous",
+      "content_hash": "sha256:15a7f65f4fb81c7d",
+      "install_path": "devops/docker-management",
+      "files": [
+        "SKILL.md"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/devops/docker-management",
+        "bundle_hash": "sha256:15a7f65f4fb81c7d930c3d722df3a94263d8deae5ee23d929631d020a76e3db3",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "dangerous",
+        "trust_level": "builtin",
+        "findings": [
+          {
+            "pattern_id": "dns_exfil",
+            "severity": "critical",
+            "category": "exfiltration",
+            "file": "SKILL.md",
+            "line": 255,
+            "match": "| Permission denied on volume | UID/GID mismatch host vs container | Use `--user $(id -u):$(id -g)` or fix permissions |",
+            "description": "DNS lookup with variable interpolation (possible DNS exfiltration)"
+          },
+          {
+            "pattern_id": "backtick_subshell",
+            "severity": "medium",
+            "category": "execution",
+            "file": "SKILL.md",
+            "line": 255,
+            "match": "| Permission denied on volume | UID/GID mismatch host vs container | Use `--user $(id -u):$(id -g)` or fix permissions |",
+            "description": "backtick string with command substitution"
+          },
+          {
+            "pattern_id": "docker_pull",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 133,
+            "match": "docker pull node:20-alpine",
+            "description": "pulls a Docker image at runtime"
+          },
+          {
+            "pattern_id": "sudo_usage",
+            "severity": "high",
+            "category": "privilege_escalation",
+            "file": "SKILL.md",
+            "line": 32,
+            "match": "- User added to the `docker` group (or use `sudo`)",
+            "description": "uses sudo (privilege escalation)"
+          }
+        ],
+        "rules": [
+          "backtick_subshell",
+          "dns_exfil",
+          "docker_pull",
+          "sudo_usage"
+        ],
+        "scanned_at": "2026-07-25T01:30:17.127321+00:00",
+        "summary": "docker-management: dangerous — 4 finding(s) in execution, exfiltration, privilege_escalation, supply_chain",
+        "fresh": true
+      },
+      "installed_at": "2026-07-25T01:30:17.129475+00:00",
+      "updated_at": "2026-07-25T01:30:17.129477+00:00"
+    },
+    "deep-learning": {
+      "source": "clawhub",
+      "identifier": "deep-learning",
+      "trust_level": "community",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:617d0457dfb3c3fe",
+      "install_path": "deep-learning",
+      "files": [
+        "PUBLISH.md",
+        "README.md",
+        "references/expert_personas.md",
+        "references/luhmann_scan.md",
+        "skill-card.md",
+        "SKILL.md",
+        "templates/atomic_note_template.md",
+        "templates/index_note_template.md",
+        "templates/method_note_template.md",
+        "templates/structure_note_template.md",
+        "_meta.json"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "deep-learning",
+        "source_url": "deep-learning",
+        "bundle_hash": "sha256:617d0457dfb3c3fe0ca6cc42ed277aa305be602c22031de7295c316fde09b225",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "community",
+        "findings": [],
+        "rules": [],
+        "scanned_at": "2026-07-25T09:14:55.936225+00:00",
+        "summary": "deep-learning: clean scan, no threats detected",
+        "fresh": false
+      },
+      "installed_at": "2026-07-25T09:15:17.086803+00:00",
+      "updated_at": "2026-07-25T09:15:17.086820+00:00"
+    },
+    "keras": {
+      "source": "clawhub",
+      "identifier": "keras",
+      "trust_level": "community",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:90edd3b707785da8",
+      "install_path": "keras",
+      "files": [
+        "architectures.md",
+        "layers.md",
+        "memory-template.md",
+        "setup.md",
+        "skill-card.md",
+        "SKILL.md",
+        "training.md",
+        "_meta.json"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "keras",
+        "source_url": "keras",
+        "bundle_hash": "sha256:90edd3b707785da88767b33e291170128ffe412497915087fcf810784188fb0e",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "community",
+        "findings": [],
+        "rules": [],
+        "scanned_at": "2026-07-25T09:15:01.561834+00:00",
+        "summary": "keras: clean scan, no threats detected",
+        "fresh": false
+      },
+      "installed_at": "2026-07-25T09:15:22.720973+00:00",
+      "updated_at": "2026-07-25T09:15:22.720990+00:00"
+    },
+    "product-research": {
+      "source": "clawhub",
+      "identifier": "product-research",
+      "trust_level": "community",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:7fa3e913ffb7cf52",
+      "install_path": "product-research",
+      "files": [
+        "references/inspected-skills.md",
+        "skill-card.md",
+        "SKILL.md",
+        "_meta.json"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "product-research",
+        "source_url": "product-research",
+        "bundle_hash": "sha256:7fa3e913ffb7cf52a464b758e588370dc05730eb7b70ccbd41393cc8e7f90491",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "community",
+        "findings": [],
+        "rules": [],
+        "scanned_at": "2026-07-25T09:15:32.306581+00:00",
+        "summary": "product-research: clean scan, no threats detected",
+        "fresh": true
+      },
+      "installed_at": "2026-07-25T09:15:32.309157+00:00",
+      "updated_at": "2026-07-25T09:15:32.309161+00:00"
+    },
+    "ml-pipeline": {
+      "source": "clawhub",
+      "identifier": "ml-pipeline",
+      "trust_level": "community",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:ca1b3882dc5f5709",
+      "install_path": "ml-pipeline",
+      "files": [
+        "assets/README.md",
+        "references/README.md",
+        "scripts/data_validation.py",
+        "scripts/data_visualizer.py",
+        "scripts/feature_engineering_pipeline.py",
+        "scripts/feature_importance_analyzer.py",
+        "scripts/feature_store_integration.py",
+        "scripts/model_evaluation.py",
+        "scripts/pipeline_deployment.py",
+        "scripts/README.md",
+        "skill-card.md",
+        "SKILL.md",
+        "_meta.json"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "ml-pipeline",
+        "source_url": "ml-pipeline",
+        "bundle_hash": "sha256:ca1b3882dc5f570900566248d592d20c82c3b85e5431c29f0afe9125fd818f6a",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "community",
+        "findings": [
+          {
+            "pattern_id": "allowed_tools_field",
+            "severity": "low",
+            "category": "privilege_escalation",
+            "file": "SKILL.md",
+            "line": 7,
+            "match": "allowed-tools: Read, Write, Edit, Bash, Glob, Grep",
+            "description": "skill declares allowed-tools (standard frontmatter; informational)"
+          }
+        ],
+        "rules": [
+          "allowed_tools_field"
+        ],
+        "scanned_at": "2026-07-25T09:15:39.904058+00:00",
+        "summary": "ml-pipeline: safe — 1 finding(s) in privilege_escalation",
+        "fresh": true
+      },
+      "installed_at": "2026-07-25T09:15:39.906308+00:00",
+      "updated_at": "2026-07-25T09:15:39.906312+00:00"
+    },
+    "i-have-adhd": {
+      "source": "skills.sh",
+      "identifier": "skills-sh/ayghri/i-have-adhd/skills/i-have-adhd",
+      "trust_level": "community",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:481c6e7d37f30d96",
+      "install_path": "i-have-adhd",
+      "files": [
+        "SKILL.md"
+      ],
+      "metadata": {
+        "source_url": "https://github.com/ayghri/i-have-adhd/tree/2ed064090711586e0c97a2fbbf15465fe8f1808b/skills/i-have-adhd",
+        "source_revision": "2ed064090711586e0c97a2fbbf15465fe8f1808b",
+        "detail_url": "https://skills.sh/ayghri/i-have-adhd/skills/i-have-adhd",
+        "repo_url": "https://github.com/ayghri/i-have-adhd"
+      },
+      "scan_provenance": {
+        "source": "skills-sh/ayghri/i-have-adhd/skills/i-have-adhd",
+        "source_url": "https://github.com/ayghri/i-have-adhd/tree/2ed064090711586e0c97a2fbbf15465fe8f1808b/skills/i-have-adhd",
+        "bundle_hash": "sha256:481c6e7d37f30d966e10dc84b46aad96f98c1024e7f6394ac174fec1756eff86",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "community",
+        "findings": [
+          {
+            "pattern_id": "unpinned_npm_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 38,
+            "match": "Good: \"Run `npm install jsonwebtoken`, then edit `src/auth.ts:42`.\"",
+            "description": "npm install without version pinning"
+          }
+        ],
+        "rules": [
+          "unpinned_npm_install"
+        ],
+        "scanned_at": "2026-08-12T02:28:53.392698+00:00",
+        "summary": "i-have-adhd: safe — 1 finding(s) in supply_chain",
+        "fresh": false
+      },
+      "installed_at": "2026-08-12T02:29:05.639137+00:00",
+      "updated_at": "2026-08-12T02:29:05.639164+00:00"
+    },
+    "scrapling": {
+      "source": "official",
+      "identifier": "official/research/scrapling",
+      "trust_level": "builtin",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:d06bfeedf53d6285",
+      "install_path": "research/scrapling",
+      "files": [
+        "SKILL.md"
+      ],
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/research/scrapling",
+        "bundle_hash": "sha256:d06bfeedf53d62850b438f46a733c8bade1e9323a6b4dae13a56541a1324dcd8",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "builtin",
+        "findings": [
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 34,
+            "match": "pip install \"scrapling[all]\"",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 40,
+            "match": "pip install scrapling",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 45,
+            "match": "pip install \"scrapling[fetchers]\"",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "unpinned_pip_install",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 331,
+            "match": "- **Browser install required**: run `scrapling install` after pip install -- without it, `DynamicFetcher` and `Stealt...",
+            "description": "pip install without version pinning"
+          },
+          {
+            "pattern_id": "remote_fetch",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 77,
+            "match": "scrapling extract fetch 'https://example.com' output.md \\",
+            "description": "fetches remote resource at runtime"
+          },
+          {
+            "pattern_id": "remote_fetch",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 86,
+            "match": "scrapling extract stealthy-fetch 'https://protected-site.com' output.html \\",
+            "description": "fetches remote resource at runtime"
+          },
+          {
+            "pattern_id": "remote_fetch",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 154,
+            "match": "page = DynamicFetcher.fetch('https://example.com', headless=True)",
+            "description": "fetches remote resource at runtime"
+          },
+          {
+            "pattern_id": "remote_fetch",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 176,
+            "match": "page = session.fetch('https://example.com')",
+            "description": "fetches remote resource at runtime"
+          },
+          {
+            "pattern_id": "remote_fetch",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 192,
+            "match": "page = DynamicFetcher.fetch('https://example.com', page_action=scroll_and_click)",
+            "description": "fetches remote resource at runtime"
+          },
+          {
+            "pattern_id": "remote_fetch",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 219,
+            "match": "page1 = session.fetch('https://protected-site.com/page1')",
+            "description": "fetches remote resource at runtime"
+          },
+          {
+            "pattern_id": "remote_fetch",
+            "severity": "medium",
+            "category": "supply_chain",
+            "file": "SKILL.md",
+            "line": 220,
+            "match": "page2 = session.fetch('https://protected-site.com/page2')",
+            "description": "fetches remote resource at runtime"
+          }
+        ],
+        "rules": [
+          "remote_fetch",
+          "unpinned_pip_install"
+        ],
+        "scanned_at": "2026-08-22T23:54:04.830985+00:00",
+        "summary": "scrapling: safe — 11 finding(s) in supply_chain",
+        "fresh": false
+      },
+      "installed_at": "2026-08-22T23:54:15.482119+00:00",
+      "updated_at": "2026-08-22T23:54:15.482239+00:00"
+    }
+  }
+}

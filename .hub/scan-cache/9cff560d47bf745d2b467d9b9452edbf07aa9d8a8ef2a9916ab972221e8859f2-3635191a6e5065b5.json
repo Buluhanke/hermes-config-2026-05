@@ -1,0 +1,25 @@
+{
+  "source": "official",
+  "source_url": "official/software-development/subagent-driven-development",
+  "bundle_hash": "sha256:9cff560d47bf745d2b467d9b9452edbf07aa9d8a8ef2a9916ab972221e8859f2",
+  "scanner_version": "skills-guard-v1",
+  "verdict": "caution",
+  "trust_level": "builtin",
+  "findings": [
+    {
+      "pattern_id": "context_exfil",
+      "severity": "high",
+      "category": "exfiltration",
+      "file": "SKILL.md",
+      "line": 271,
+      "match": "Include TDD instructions in every implementer context.",
+      "description": "instructs agent to output/share conversation history"
+    }
+  ],
+  "rules": [
+    "context_exfil"
+  ],
+  "scanned_at": "2026-07-25T01:29:06.800081+00:00",
+  "summary": "subagent-driven-development: caution \u2014 1 finding(s) in exfiltration",
+  "fresh": true
+}

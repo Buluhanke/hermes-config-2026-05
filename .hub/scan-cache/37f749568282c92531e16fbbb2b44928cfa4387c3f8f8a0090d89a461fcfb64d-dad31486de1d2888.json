@@ -1,0 +1,43 @@
+{
+  "source": "nvidia-cuda",
+  "source_url": "nvidia-cuda",
+  "bundle_hash": "sha256:37f749568282c92531e16fbbb2b44928cfa4387c3f8f8a0090d89a461fcfb64d",
+  "scanner_version": "skills-guard-v1",
+  "verdict": "caution",
+  "trust_level": "community",
+  "findings": [
+    {
+      "pattern_id": "python_os_environ",
+      "severity": "high",
+      "category": "exfiltration",
+      "file": "scripts/nccl_smoke.py",
+      "line": 17,
+      "match": "value = os.environ.get(name)",
+      "description": "accesses os.environ (potential env dump)"
+    },
+    {
+      "pattern_id": "python_os_environ",
+      "severity": "high",
+      "category": "exfiltration",
+      "file": "scripts/cuda_env_probe.py",
+      "line": 84,
+      "match": "\"env\": {key: os.environ.get(key) for key in ENV_KEYS if os.environ.get(key) is not None},",
+      "description": "accesses os.environ (potential env dump)"
+    },
+    {
+      "pattern_id": "python_os_environ",
+      "severity": "high",
+      "category": "exfiltration",
+      "file": "scripts/ddp_fsdp_smoke.py",
+      "line": 33,
+      "match": "value = os.environ.get(name)",
+      "description": "accesses os.environ (potential env dump)"
+    }
+  ],
+  "rules": [
+    "python_os_environ"
+  ],
+  "scanned_at": "2026-07-25T09:15:49.269857+00:00",
+  "summary": "nvidia-cuda: caution \u2014 3 finding(s) in exfiltration",
+  "fresh": true
+}

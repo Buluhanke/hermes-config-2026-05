@@ -1,0 +1,13 @@
+{
+  "source": "deep-learning",
+  "source_url": "deep-learning",
+  "bundle_hash": "sha256:617d0457dfb3c3fe0ca6cc42ed277aa305be602c22031de7295c316fde09b225",
+  "scanner_version": "skills-guard-v1",
+  "verdict": "safe",
+  "trust_level": "community",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-07-25T09:14:55.936225+00:00",
+  "summary": "deep-learning: clean scan, no threats detected",
+  "fresh": true
+}

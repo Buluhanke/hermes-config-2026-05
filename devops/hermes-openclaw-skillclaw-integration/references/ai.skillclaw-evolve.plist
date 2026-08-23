@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>ai.skillclaw-evolve</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/sh</string>
+        <string>-c</string>
+        <string>exec env -i HOME=__HOME__ PATH=/Library/Frameworks/Python.framework/Versions/3.14/bin:/usr/local/bin:/usr/bin:/bin OPENAI_API_KEY=__GLM_API_KEY__ OPENAI_BASE_URL=https://open.bigmodel.cn/api/paas/v4 /Library/Frameworks/Python.framework/Versions/3.14/bin/skillclaw-evolve-server --engine workflow --use-skillclaw-config --local-root __HOME__/.skillclaw/shared --model glm-4-flash --llm-api-type openai-completions --interval 300 --port 8787</string>
+    </array>
+
+    <key>WorkingDirectory</key>
+    <string>__HOME__</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>__HOME__</string>
+        <key>PATH</key>
+        <string>/Library/Frameworks/Python.framework/Versions/3.14/bin:__HOME__/.local/bin:/usr/local/bin:/usr/bin:/bin</string>
+        <key>OPENAI_API_KEY</key>
+        <string>__GLM_API_KEY__</string>
+        <key>OPENAI_BASE_URL</key>
+        <string>https://open.bigmodel.cn/api/paas/v4</string>
+    </dict>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <true/>
+
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/.skillclaw/evolve.out.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.skillclaw/evolve.err.log</string>
+</dict>
+</plist>

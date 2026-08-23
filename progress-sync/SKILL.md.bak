@@ -1,0 +1,15 @@
+---
+name: progress-sync
+description: "进度同步协议 — 长周期任务每5步汇报+checkpoint"
+version: 1.0.0
+source: hermes-export engineering
+---
+
+# 10.2 进度同步协议
+
+> 长周期任务（>10步或>5分钟）如何每5步汇报进度 + checkpoint。
+
+## 协议
+- 每完成5步主动汇报
+- checkpoint 保存中间状态到文件
+- 用户可随时问「进度如何」触发进度摘要
