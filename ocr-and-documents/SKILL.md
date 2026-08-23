@@ -183,3 +183,10 @@ No extra dependencies needed — pymupdf covers split, merge, search, and text e
 - marker-pdf downloads ~2.5GB of models to `~/.cache/huggingface/` on first use
 - For Word docs: `pip install python-docx` (better than OCR — parses actual structure)
 - For PowerPoint: see the `powerpoint` skill (uses python-pptx)
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+PDF 解析 SOTA（VLM 路线，优于纯 marker/pymupdf）：
+- MinerU、olmOCR、Docling —— 复杂版面/公式/表格首选
+表格提取：gmft（轻量高性能）、camelot、pdfplumber
+保留 pymupdf+marker-pdf 作快速兜底；复杂文档切 MinerU/olmOCR。

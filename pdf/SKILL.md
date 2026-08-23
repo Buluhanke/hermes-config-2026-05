@@ -187,3 +187,8 @@ Read [forms.md](forms.md) first — it distinguishes fillable (AcroForm) PDFs fr
 ## Related skills
 
 `ocr-and-documents` (scanned-document text extraction), `nano-pdf` (NL text edits in place), `docx` (Word), `xlsx` (spreadsheets), `powerpoint` (decks).
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+PDF 解析 SOTA：MinerU、olmOCR、Docling（VLM 路线）优于传统 pymupdf 文本层。
+表格提取：gmft、camelot、pdfplumber。生成类保留本技能。

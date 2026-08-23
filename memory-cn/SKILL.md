@@ -296,3 +296,9 @@ fi
 - `context-optimization`：token优化，MEMORY.md大小管理
 - `proactive-execution`：Failure案例写入fact_store的时机
 - `verification-before-reporting`：汇报前验证，影响fact可信度判断
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+Agent 记忆 SOTA：Zep Graphiti（LongMemEval 63.8% vs Mem0 49%）、sqlite-graphrag（单 SQLite 本地图记忆）。
+知识图谱型记忆优于纯向量/FTS5，需要做关系推理时优先 Graphiti 类方案。
+参考：https://github.com/microsoft/acon （ACON 上下文压缩）

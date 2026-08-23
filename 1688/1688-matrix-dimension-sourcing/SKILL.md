@@ -68,3 +68,10 @@ category: 1688
 - `scripts/extract_ids.js` — 搜索主列表 offerId 提取（输出 `关键词\t{json}`，需 python 后处理）
 
 > 注：以上脚本已存在于用户技能 1688-search-cn-gb-region-skill 的 scripts/ 下。若本技能运行环境没有，从那里复制或重新生成（逻辑见上文坑2/坑8）。
+
+
+## 2026 更优方案参考（全网调研 2026-08）
+第三方 1688-cli（superjack2050, MIT）复用真实 Chrome 登录态、输出结构化 JSON，可作补充；
+但本机以 CDP 后台 Chrome + mtop skuMapOriginal 监听为主（零风控、零焦点抢），不替换。
+官方 API 仍须企业资质；MTop 签名难度 4/5，本机无住宅代理不通；付费爬虫(ShopAPIS/HioBuy)需花钱。
+开源逆向：QuoVadis86/ai-reverse（1688 MTOP SDK + MCP）。

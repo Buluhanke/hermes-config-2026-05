@@ -95,3 +95,9 @@ Detailed implementations in the `references/` directory:
 - Create alerts without runbooks
 - Store raw event data in Prometheus
 - Use counters for gauge-like values
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+VictoriaMetrics 是 Prometheus 的 drop-in 替代：资源占用更低、基数更高、长期存储更省。
+大规模/长期监控首选 VM；小规模仍可用 Prometheus。
+参考：https://victoriametrics.com/

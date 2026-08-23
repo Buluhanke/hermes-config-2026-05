@@ -299,3 +299,11 @@ Plus:
 **Version:** 1.1.0
 **Source spec:** [`megaprompts/09-litreview-megaprompt.md`](../../../../megaprompts/09-litreview-megaprompt.md)
 **Build pattern:** Path B (direct conversion). Sibling of `pulse` (research-pack shape). v1.1.0: free keyless APIs (PubMed + OpenAlex) became the default search lane; Consensus demoted to optional enhancement; plan-tier detection deleted per the 2026-06 newgen audit + ClawHub rule #3 (no paid-service dependencies).
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+文献综述 agent SOTA：
+- thoth — https://github.com/ahmedeid1/thoth （8 阶段 LangGraph + cite_check 逐条引用核验）
+- ResearchPilot — https://github.com/peng1z/ResearchPilot
+- LiRA — AAAI 多智能体可靠文献综述框架
+优先 thoth 做带引用核验的综述。

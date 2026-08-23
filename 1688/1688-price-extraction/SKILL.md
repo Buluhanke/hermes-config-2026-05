@@ -72,3 +72,10 @@ Use `browser_navigate` to open product page, then `browser_console` with JS:
 - Precision price script: `~/1688_price_extract.py` (browser_console wrapper)
 - Spec price via 1688-cli: `~/1688_spec_price.py` (CLI API, reference only)
 - Findchain main: `~/findchain.py`
+
+
+## 2026 更优方案参考（全网调研 2026-08）
+第三方 1688-cli（superjack2050, MIT）复用真实 Chrome 登录态、输出结构化 JSON，可作补充；
+但本机以 CDP 后台 Chrome + mtop skuMapOriginal 监听为主（零风控、零焦点抢），不替换。
+官方 API 仍须企业资质；MTop 签名难度 4/5，本机无住宅代理不通；付费爬虫(ShopAPIS/HioBuy)需花钱。
+开源逆向：QuoVadis86/ai-reverse（1688 MTOP SDK + MCP）。

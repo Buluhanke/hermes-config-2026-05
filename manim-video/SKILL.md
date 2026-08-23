@@ -273,3 +273,8 @@ Take a standard mathematical/technical visualization and transform it:
 2. Pick the most fundamental assumption
 3. Reverse it (right-to-left derivation, 3D embedding of a 2D concept, continuous morphing instead of steps, zero notation)
 4. Explore what the reversal reveals that the standard approach hides
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+通用文/图生视频：Wan2.2 / Wan2.7（Apache-2.0，ComfyUI 可用）质量媲美 Sora/Veo，优于老式方案。
+数学/算法动画仍用 Manim；通用视频生成切 Wan via ComfyUI。

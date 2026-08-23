@@ -373,3 +373,8 @@ Otherwise → not TDD
 ```
 
 No exceptions without your human partner's permission.
+
+
+## 2026 更优方案参考（全网调研 2026-08）
+强制 AI agent TDD 工具：tdd-ai、karajan-code、SAM(autonomous TDD for Claude Code)。
+可挂 pre-commit / CI 强制红绿循环。

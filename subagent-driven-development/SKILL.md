@@ -420,3 +420,8 @@ Done!
 
 **Alternative workflow:**
 - **superpowers:executing-plans** - Use for parallel session instead of same-session execution
+
+
+## 2026 更优方案参考（全网调研 2026-08）
+并行子代理编排：LangChain dynamic subagents、OpenHands delegation、AOrchestra(arXiv:2602.03786)。
+本 Hermes delegate_task 已等价，可叠加上述框架思路。

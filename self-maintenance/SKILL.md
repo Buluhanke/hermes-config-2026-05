@@ -140,3 +140,8 @@ done
 
 ### 2026-07-23 追加：MacBook Air K 全面修复记录
 - `references/health-check-20260720.md` — 大体检 SOP（9 步标准流程 + 报告模板 + 已知踩坑）
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+Hermes v0.12.0 官方 Curator 已支持后台自主 skill 维护，可接管周期性巡检。
+备份恢复用 git 版本化方案：Dicklesworthstone/agent_settings_backup_script。

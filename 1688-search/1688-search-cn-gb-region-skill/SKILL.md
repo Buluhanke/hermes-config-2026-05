@@ -4,7 +4,11 @@ description: 1688 站内搜索正确姿势（GBK关键词编码 + province URL�
 category: ecommerce
 ---
 
-> **🔰 下次开干先读 `操作手册.md`**（同目录）——照抄步骤即可，含 9333 实例复活、双词搜索、矩阵验证、价格提取全流程。本文件是原理+坑位，手册是执行清单。
+> **🔰 下次开干先读 `操作手册.md`**（同目录）——照抄步骤即可。本文件是原理+坑位，手册是执行清单。
+>
+> ⚠️ **两道铁律（2026-08-21 用户当场纠正后固化）**：
+> 1. **alibaba.com ≠ 1688.com**：alibaba.com 是跨境国际站，1688.com 是国内批发站。任何 1688 找品任务**绝不去 alibaba.com**，也不要在 alibaba.com 窗口做验证/过验证码。用户原话：「你开始乱来了，你现在打开的是 alibaba.com 不是 1688.com」。
+> 2. **信任路径 = AppleScript 驱动默认登录 Chrome**（之前 8×8×9 / 9×9×10 跑通的就是它）。Playwright/9333 实例是**脆弱备选**，不是优先项——它易死、重生要清锁、快速批量必触发验证码。用户在被我带歪后明确选回 AppleScript（选项1）。
 
 # 1688 站内搜索（江浙沪/规格核对）正确姿势
 
@@ -186,7 +190,23 @@ end tell
   → **修正认知**：温州瀚拓 3 家是超高立柱盒专用（高350cm+），**不做常规矮盒**；只有盒骏做全尺寸常规纸盒。9×9×10 实际在售仅盒骏 1 家。
 - 教训：① 矩阵式卖家**只在「彩盒定制」池**，尺寸词搜不到（坑31）；② `9cm（高）` 是全角左括号 `（`（坑30 已修）；③ 搜结果 JSON 不能直接当 ID 喂详情页（坑32）；④ 矩阵卖家 SKU 轴范围不同（盒骏高3-22cm常规，瀚拓高350cm+立柱），命中 ID ≠ 该尺寸有货，须用 `price_mtop_capture.py` 验证具体尺寸组合真存在。
 
-33. **环节⑦价格/SKU提取已升级为 Playwright 拦截内联 skuMapOriginal（2026-08-21 实测生效）**：原 `price_clean3.js` 用 DOM 点击尺寸 chip 读价，依赖渲染、易踩 size-bar 失效。`alibaba_1688_scraper` MCP 硬绑 127.0.0.1:9222 且与默认 Chrome 僵尸 9222 冲突，弃用。**最终方案**：起独立 Chrome 实例（`--remote-debugging-port=9333 --user-data-dir=~/.chrome_1688_scraper`，rsync 默认 profile 后**需手动扫码登录一次**因 Keychain 加密 Cookie 跨 profile 失效），Playwright `connect_over_cdp('http://127.0.0.1:9333')` 接管，读 `page.content()` 正则抠 `skuMapOriginal`（1688 PC 端 SSR 直出，**非** MTOP 包——2026 年 `queryofferskuselectormodel` 已弃用，SKU 改内联 HTML），每个 SKU 含 `specAttrs`(如 `8x8（长宽）;9cm（高）`)+`discountPrice`(真实成交价)+`canBookCount`(实时库存)。脚本 `scripts/price_mtop_capture.py`（用法 `python3 price_mtop_capture.py <offer_id> [8*8*9]`，TARGET 按数字序列匹配长宽高）。实测：677701816838 的 8×8×9=¥0.19/库存78万、9×9×10=¥0.23/库存54万。**注意**：登录态 Cookie 落在 `~/.chrome_1688_scraper`，保持该实例常驻/复用即可；若实例关了需重登。完整调研见 `references/upgrade_2026_research.md`。
+33. **环节⑦价格/SKU提取：Playwright 抠内联 skuMapOriginal 可行，但路径脆弱（2026-08-21 实测+复盘）**：`price_mtop_capture.py` 用 Playwright `connect_over_cdp('http://127.0.0.1:9333')` 接管独立实例、抠 `skuMapOriginal` 能拿到全 SKU 真实价+库存（677701816838 的 8×8×9=¥0.19/78万、9×9×10=¥0.23/54万）。**但本会话复盘证明这路脆弱**：① 9333 实例易死（进程退了 CDP 连不上）；② 重生要先 `rm -f` 残留 `SingletonLock/Cookie/Socket` 否则 Chrome 看锁即退；③ **快速批量开详情页（每页~1.5s）直接触发 1688 Captcha 墙**，整实例进验证码后全 False。④ 独立实例跨 profile 复制默认 Chrome 的 Cookie 因 Keychain 加密**失效**，须手动扫码登录一次。结论：**优先用 AppleScript 驱动默认登录 Chrome + price_clean3.js**；Playwright/9333 仅作脆弱备选，且批量时必须降速（每页 6-8s + Captcha 检测）。`alibaba_1688_scraper` MCP 硬绑 127.0.0.1:9222，与默认 Chrome 僵尸 9222 冲突，弃用。
+
+34. **混淆 alibaba.com / 1688.com 是致命方向错误（2026-08-21 用户当场纠正）**：alibaba.com 是跨境国际站，1688.com 是国内批发站，**两套完全不同的站点/账号/商品**。任何 1688 找品任务绝不打开 alibaba.com，也不要让用户去 alibaba.com 窗口过验证码。本会话曾误把 1688 验证码墙的诊断指向 alibaba.com 窗口，用户原话：「你开始乱来了，你现在打开的是 alibaba.com 不是 1688.com」。修正：遇到"过验证码"需求，明确指定是**默认 Chrome 里的 1688.com 标签页**，不是任何 alibaba.com 窗口。
+
+35. **批量详情页必须降速，否则整实例进 Captcha 墙（本会话验证 False 的根因）**：用真实浏览器逐个开详情页核对规格时，**每页间隔必须 6-8s**（AppleScript 驱动 + `delay 8` 是已验证安全值）。本会话用 Playwright 每页 ~1.5s 跑 168 个详情页，直接把 1688 风控触发，整个实例（含已验证的盒骏页）全返回 `Captcha Interception`，导致 0 命中不可信。修复：降速 + 每页检测 `Captcha` 关键字、命中即停手等恢复/真人过验证。降速优先于速度。
+
+36. **信任、且只信任「跑通过的历史路径」，新方案先小批验证再全量（本会话翻车根因）**：本会话从"已固化"的 Playwright/9333 路径出发，未先确认实例存活就直接批量跑，结果连的是已死实例、又误判 MCP 可用、再带歪到 alibaba.com。教训：开新一批任务时，**先跑最小冒烟**（实例在不在 / 登录态在不在 / 一个已知商品能否抠到 SKU），确认通道真通再批量。已知盒骏 `677701816838` 是可靠的冒烟探针。
+
+37. **轴名修饰连写是第四类尺寸写法：`(竖)25长*13侧*32高`（2026-08-23 实战，用户手动补链才暴露）**：除连写 `L*W*H`、矩阵式 `长宽×高` 外，部分卖家把轴名**内嵌在连写数字之间**——`25长*13侧*32高` / `(竖)25长*13侧*32高` / `25长*13宽*32高`，轴名可为 `长|侧|宽|高|厚|竖|横|深`。原 `verify_carton_matrix.js` 只认标准连写和矩阵，漏掉这类→误判没货。
+    - **修法（已落地 verify_carton_matrix.js）**：新增 `AXIS` 正则，允许数字与 `*` 之间插入可选轴名：`([0-9.]+)[ ]*(?:AXIS)?[ ]*[*×xX][ ]*([0-9.]+)[ ]*(?:AXIS)?[ ]*[*×xX][ ]*([0-9.]+)[ ]*(?:AXIS)?[ ]*(cm|CM)?`，匹配后归一化进 `sizes` 集合，再判 `sizes.has(L*W*H)`。修后用户给的 `1158678687`（义乌森烨包装）正确 `connectedHit=True`。
+    - **调用**：仍走 `verify_carton_matrix.js`（它已同时覆盖连写/矩阵/轴名连写三类）。`verify_carton.js` 仍不覆盖轴名连写，矩阵任务一律用 matrix 版。
+
+38. **默认 Chrome 无窗口 → AppleScript 报 `-1719 不能获得 window 1`（2026-08-23 实战）**：若默认 Chrome 当前 0 窗口（如被误关/进程残留），`execute javascript (active tab of front window)` 直接抛 -1719，容易被误判成"JS 开关关了"（坑15）。**修法**：驱动前先 `tell application "Google Chrome" to if (count of windows) is 0 then make new window`，建窗后 JS 通道即恢复（实测返回 `2`）。本会话曾因窗口丢失折腾半小时，实为建窗即可。
+
+39. **1688 登录态会静默丢失 → 详情页跳 `taobao.com`（2026-08-23 实战，隐蔽坑）**：默认 Chrome 的 1688 登录态可能会话过期/被清，此时开 `detail.1688.com/offer/<id>.html` 会被重定向到 `https://www.taobao.com`（title 变"淘宝网 - 淘！我喜欢"），`skuMapOriginal`/规格全读不到，verifier 全 False。**识别信号**：`document.title` 含"淘宝网"或页面无 `skuMapOriginal` 且无规格文本。此时搜到的 0 命中不可信——**必须用户回默认 Chrome 重新登录 1688**（账号安全，助手不能代扫）。本会话 25×13×32 搜 84 个 0 命中，部分根因即登录态丢失；用户手动给的 `1158678687` 确在售，证明搜索词覆盖不到轴名连写卖家（见坑37）+ 登录态丢失双重叠加。
+
+40. **轴名连写 / 矩阵式卖家靠"尺寸词+彩盒定制"仍搜不到，须补"纸袋/牛皮纸"宽词（2026-08-23 实战）**：25×13×32 牛皮纸袋用 `25*13*32cm纸袋` + `牛皮纸袋`(+江浙沪)双词搜得 84 个，全 0 命中；用户手动找到 `1158678687`（写法 `(竖)25长*13侧*32高`，常规全尺寸纸袋厂）。说明这类**轴名连写写法的常规纸袋/牛皮纸卖家不在尺寸词+彩盒定制池**，需再补 `纸袋`/`牛皮纸`/`牛皮纸袋` 宽词合并搜。教训：牛皮纸袋/手提袋类目，搜索词 = `DIMcm纸袋` + `牛皮纸袋` + `纸袋` + `牛皮纸` 多词合并，比单纯尺寸词覆盖全得多。
 
 **任务：17.5*17.5*8.5cm 纸箱，江浙沪，≥5 个**
 - 搜索 URL：`https://s.1688.com/selloffer/offer_search.htm?keywords=17.5*17.5*8.5cm%D6%BD%CF%E4&spm=a26352.13672862.searchbox.0&province=%E6%B1%9F%E8%8B%8F,%E6%B5%99%E6%B1%9F,%E4%B8%8A%E6%B5%B7&beginPage=2`
@@ -196,7 +216,15 @@ end tell
   3. `765857194469` 杭州（浙江）✓ `17.5*17.5*8.5CM`
   4. `634987797003` 慈溪（浙江）✓ `17.5x17.5x8.5cm`
   5. `708938768516` 慈溪（浙江）✓ `17.5*17.5*8.5CM`
-- 教训：首屏 0 命中先翻页，别下"没货"结论（坑 7）
+- 教训：①首屏 0 命中先翻页，别下"没货"结论（坑 7）；②牛皮纸袋类目搜索词要 `DIMcm纸袋`+`牛皮纸袋`+`纸袋`+`牛皮纸` 多词合并（坑40），单尺寸词覆盖不全。
+
+**任务：25×13×32cm 牛皮纸袋（长*侧*高），江浙沪（2026-08-23 实战，含重大通道翻车）**
+- 搜索词四组合并去重：`25*13*32cm纸袋`(GBK) + `牛皮纸袋`(GBK) + `纸袋` + `牛皮纸`，端点 `offer_search.htm` + `province=江浙沪`，翻页 1-3。
+- 提取 84 个候选 offerId，用 `verify_carton_matrix.js`（已修轴名连写，坑37）逐页验（AppleScript 驱动默认 Chrome，`delay 8` 降速，坑35），**全 0 命中**。
+- **根因双重叠加**：① 轴名连写卖家（如用户手动补的 `1158678687` 写法 `(竖)25长*13侧*32高`）不在尺寸词+牛皮纸袋池，需补更宽词（坑40，待下轮补搜）；② 默认 Chrome 的 1688 登录态**静默丢失**（详情页跳 taobao.com，坑39），verifier 读不到规格全 False。
+- **用户手动命中确证**：`1158678687` 义乌市森烨包装（浙江义乌），规格 `(竖)25长*13侧*32高`（另有横版 30×10×25 等多规格），常规全尺寸牛皮纸袋厂。修好轴名连写正则后该链接 `connectedHit=True`。
+- **待办（下次开干前）**：① 确认默认 Chrome 重新登录 1688（坑39）；② 补搜 `纸袋`/`牛皮纸` 宽词；③ 用修好的 `verify_carton_matrix.js` 重验 84 个 + 新词结果。
+- **本任务通道教训（最重）**：本会话前半段误开 9333/9222 无头实例 + Playwright 触发风控 + 误指 alibaba.com，被用户叫停后回归 AppleScript 默认 Chrome 才走通（铁律见坑1/2/33/34/35）。**1688 找品只有 AppleScript 驱动默认登录 Chrome 这一条可信路径**，其余一律脆弱备选。
 
 **任务：16*16*16cm 纸箱，江浙沪**
 搜索 URL：同构，`keywords=16*16*16cm%D6%BD%CF%E4`，翻 3 页得 89 个唯一 offerId（江浙沪 province 服务端筛选生效）
@@ -263,7 +291,10 @@ end tell
 
 ## 找品主驱动（参数化，替所有 `*_2020.scpt` 写死副本）
 - `scripts/run_search.scpt` — 改文件头 4 个常量（`DIM`/`CARTON`/`PROV`/`PAGES`）即可复用任意任务：构造 GBK 编码搜索 URL → 真 Chrome 翻页+滚动懒加载 → 抓 offerId 落 `/tmp/1688_run_result.txt`。复用 `extract_ids.js`。（路径已相对化，坑24 分发铁律）
-- **`scripts/drive_playwright.js` —【推荐】Playwright 版主驱动**（2026-08-21 收编 + 能力升级）：`chromium.connectOverCDP('http://127.0.0.1:9222')` 驱动真实登录态 Chrome + 首页暖场 + 组合提取 + 复用 verify_carton.js/price_clean3.js 实时复核。四大升级：
+- `scripts/cdp1688.py` — **【推荐·当前唯一主驱动】** 2026-08-23 v2 升级。Python 裸 WebSocket CDP 驱动（零 Playwright 依赖，Chrome 151 兼容）。搜索（GBK+province 翻页+滚动懒加载抽 offerId）+ 详情页监听 `queryofferskuselectormodel` 的 `skuMapOriginal` 结构化 JSON 核验（覆盖连写/轴名连写/矩阵/组合四类尺寸写法）+ cookie 注入登录态 + 后台隐藏不抢焦点。参数：`--dims/--cat/--pages/--gap/--maxverify/--out/--cdp`。见坑41/42/43。
+- `scripts/start_cdp_1688.sh` — 一键起后台隐藏 CDP Chrome（`open -n -g -j`）+ cookie 注入登录态 + 9222 自检。不落盘明文 cookie。
+- `scripts/probe_sku.py` — 诊断脚本：验证某详情页能否抓到 `skuMapOriginal`（开发/排错用，勿日常跑）。
+- `scripts/drive_playwright.js` — **【已失效·弃用】** Chrome 151 移除 `Browser.setDownloadBehavior`，`connectOverCDP` 崩溃。保留作反面教材，新任务一律用 `cdp1688.py`。
   1. **双记号精确搜索**：同时搜 `DIM` 与 `DIM.replace('*','x')`，合并去重，逼近真立方体（坑29：1688 搜 `*` 是模糊匹配，含某维度 16cm 全排进池；`x` 才是精确立方体）。
   2. **CDP 健康自检**：开头先探 9222，挂了**不擅自拉起**（遵守"手动拉起"约束），打印精确启动命令让你执行。
   3. **持久化已验商品库**：验证过的商品写入 `<skill>/store/verified.json`（按 DIM 分桶），下次同 DIM 任务**自动跳过已验 ID**只补新出现，并按单价升序汇总全部历史命中。
@@ -273,3 +304,49 @@ end tell
 - 拿到 ID 后：规格核对用 `check_spec.js`（注入 `window.TARGET`），品类过滤（排礼盒）用 `verify_carton.js`，价格提取用 `price_clean2.js`。三件套均参数化，勿内联。**矩阵式尺寸（长宽×高写法，坑30）一律用 `verify_carton_matrix.js` 替代 `verify_carton.js`**——它同时覆盖连写与矩阵两种写法，不会有漏检。
 - 搜索阶段若目标可能是矩阵式彩盒（常见全尺寸定制），**搜索词必须加「彩盒定制」**（坑31）：`KW=8*8*9cm纸盒,彩盒定制` 两词合并。`drive_playwright.js` 的 `KW` 环境变量逗号分隔多词即生效。
 - 旧 `*_2020.scpt` 为 20*20*10cm 任务实战副本，**已弃用**，新任务一律用 `run_search.scpt` 或 `drive_playwright.js`。
+
+## 41. Playwright 在 Chrome 151 已失效（2026-08-23 复盘，重大通道变更——务必读）**
+`drive_playwright.js` 依赖 `chromium.connectOverCDP('http://127.0.0.1:9222')`，但 **Chrome 151 移除了 `Browser.setDownloadBehavior`**，Playwright 在 connectOverCDP 时会无条件调用它 → 直接抛 `Protocol error: ...not supported` 崩溃。Playwright 1.60 虽加了 `noDefaults` 选项，但本环境仍不稳定。
+- **结论：弃用 `drive_playwright.js` 作为主驱动**。改用 **`scripts/cdp1688.py`**（Python 裸 WebSocket CDP，零 Playwright 依赖，Chrome 151 完全兼容），这是当前**唯一推荐主驱动**。
+- `cdp1688.py` 用法（参数化，替代所有 JS/AppleScript 驱动）：
+  ```bash
+  python3 scripts/cdp1688.py \
+    --dims "25*13*32" "12*13*32" \
+    --cat "牛皮纸手提袋" "牛皮纸袋" "纸袋" "手提袋" "牛皮纸" \
+    --pages 3 --gap 2 --maxverify 120 \
+    --out store/result.json
+  ```
+  - `--dims`：目标尺寸，可多个。归一化比对（去 .0 / 空白 / 统一 * 记号）。
+  - `--cat`：搜索词（多词合并去重，覆盖轴名连写/矩阵式卖家，见坑40）。
+  - `--pages`：每词翻页数；`--gap`：每详情页间隔秒（降速防验证码，坑35）；`--maxverify`：核验上限。
+  - 输出 JSON：`{candidates, hits:{dim:[{id,dim,title,price,stock,spec,source}]}, captcha_flag}`。
+- 前置：Chrome 以 `chrome-cdp-profile` + `--remote-allow-origins=*` 后台隐藏启动（见坑42 三件套）。9222 在线即可。
+
+## 42. 不抢鼠标/键盘/网页窗口 = 三条铁规（2026-08-23 用户明确肯定「这次才不抢」）
+用户原话认可本次「不抢鼠标和窗口」，根因是这三处改动，任何 1688 找品驱动必须照做：
+1. **拉起 Chrome 加 `-n -g -j`**：`open -n -g -j -a "Google Chrome" --args --remote-debugging-port=9222 --remote-allow-origins='*' --user-data-dir=$HOME/chrome-cdp-profile about:blank`。`-n`=独立实例（不抢默认 Chrome）、`-g`=后台（不弹前）、`-j`=隐藏（不抢焦点）。焦点始终留给用户。
+2. **详情页走后台 tab + `Runtime.evaluate`，零 UI 交互**：`cdp1688.py` 用 CDP `Page.navigate` + `Runtime.evaluate` 读 SKU，全程不点、不滚可视区、不切前台窗口。用户屏幕完全不受影响。
+3. **登录态用 cookie 注入，免显窗登录**：默认 Chrome 的 AppleScript JS 被关（坑15）、后台 CDP Chrome 未登录。读默认 Chrome 的 1688/taobao cookie（`browser_cookie3`）→ CDP `Network.setCookie` 逐条注入后台实例（共 ~80 个），免扫码、免显窗。注入命令落入 `<skill>/scripts/` 下的一次性脚本，**不落盘明文 cookie**（值一律 [REDACTED]）。
+   - 一键起后台 Chrome + 注入登录态：`scripts/start_cdp_1688.sh`（含 -n -g -j 拉起 + cookie 注入 + 自检 9222）。
+
+## 43. SKU 来自 mtop 接口 `skuMapOriginal` 结构化 JSON，非 DOM 解析（2026-08-23 v2 核心升级——更快更准更稳）
+`cdp1688.py` 核验阶段**不解析页面文本、不点 chip**，而是监听 1688 内部 `mtop.1688.wosc.queryofferskuselectormodel` 接口的响应，解析其 `skuMapOriginal` 数组：
+- 每个元素结构：`{specAttrs:"（竖）25长*13侧*32高", discountPrice:"1.23", canBookCount:96476, ...}`，**尺寸/价格/库存三者全结构化**。
+- 规格匹配直接读 `specAttrs` 字段，用 `extract_sizes_from_spec()` 归一化后比对目标尺寸，**覆盖四类写法**：① 连写 `25*13*32` ② 轴名连写 `(竖)25长*13侧*32高`（坑37）③ 矩阵 `8x8（长宽）;9cm（高）`（坑30）④ 组合串 `8x8（长宽）;9cm（高）`。
+- 价格/库存从 `skuMapOriginal` 目标尺寸那条直读，**零点击、零 DOM 解析、零风控痕迹**（比 `price_clean3.js` 点 chip 更安全）。
+- 兜底：接口未抓到（懒加载/风控）时回退 `verify_carton_matrix.js` + `price_clean3.js`（DOM 版），保证不漏。
+- 实测：`1158678687` 从 `skuMapOriginal` 读出 `（竖）25长*13侧*32高 | ¥1.23 | 库存96476`，比 v1 的 DOM 正则更准。
+- **全网对比结论**（2026-08-23 调研）：① 1688 官方开放平台 API 需企业主体+中国境内公司，个人不通；② MTop 接口逆向需中国住宅代理+24h token 刷新，本机无代理不通；③ 第三方付费爬虫（Apify）需花钱。三条「更优」路在本环境均被硬墙挡死，**维持「真浏览器后台 + SKU JSON 监听」为当前最优解**。
+
+## 44. 写 CDP 驱动脚本时 `_id` 计数器必须用 int 不要用 list（2026-08-23 反复踩的 footgun）
+裸 WebSocket CDP 驱动（`cdp1688.py` / `inject_cookies.py`）都用 `global _id; _id+=1` 给每条命令编号。**`_id` 必须初始化成 `0`（int），绝不能写成 `[0]`（list）**。写成 `[0]` 后 `_id += 1` 执行为 `list += int`，抛 `TypeError: 'int' object is not iterable`，且 traceback 行号会指向 `cmd()` 内部而非初始化行，极难一眼看出。本会话因此白跑 4 次。
+- 正确：`_id = 0`
+- 错误：`_id = [0]`（看起来像"可变计数器"的直觉写法，但 `+=` 语义完全不同的）
+- 同样适用于任何自写 CDP/ws 客户端：命令序号用普通 int。
+
+
+## 2026 更优方案参考（全网调研 2026-08）
+第三方 1688-cli（superjack2050, MIT）复用真实 Chrome 登录态、输出结构化 JSON，可作补充；
+但本机以 CDP 后台 Chrome + mtop skuMapOriginal 监听为主（零风控、零焦点抢），不替换。
+官方 API 仍须企业资质；MTop 签名难度 4/5，本机无住宅代理不通；付费爬虫(ShopAPIS/HioBuy)需花钱。
+开源逆向：QuoVadis86/ai-reverse（1688 MTOP SDK + MCP）。

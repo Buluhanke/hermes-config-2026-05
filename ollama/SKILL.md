@@ -634,3 +634,7 @@ echo "=== 验证完成，所有检查通过 ==="
 | deepseek-r1:7b | 7B | 推理/数学 | 8GB |
 
 > Mac M 系列芯片推荐优先使用 llama3.2:3b 或 qwen2.5:7b，推理速度可接受且内存压力较小。
+
+## 2026 更优方案（Apple Silicon，全网调研 2026-08 迭代）
+Apple Silicon 上 MLX 原生比 Ollama 更快（M5 Max 约 85 tok/s）。日常简单用 Ollama 足够；
+追求速度切 MLX（mlx-lm）；服务端多卡用 vLLM。

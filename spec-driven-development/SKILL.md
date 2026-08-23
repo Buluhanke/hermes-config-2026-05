@@ -148,3 +148,8 @@ triggers:
 - [ ] 规格已和调用方对齐
 - [ ] 测试用例对应规格的每个场景
 - [ ] 实现和规格一致
+
+
+## 2026 更优方案参考（全网调研 2026-08）
+TDD 强制工具：tdd-ai、karajan-code(22 角色 + TDD + SonarQube)、SAM(自主 TDD)。
+Claude Code 高级模式：CLAUDE.md + Hooks + 并行子代理，与本技能一致可叠加。

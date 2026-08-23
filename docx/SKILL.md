@@ -140,3 +140,8 @@ The script writes `comments.xml`, `commentsExtended.xml`, `commentsIds.xml`, `co
 ## Related skills
 
 `pdf` (PDF work), `xlsx` (spreadsheets), `powerpoint` (decks), `ocr-and-documents` (scanned input extraction).
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+统一 Office 生成：documind SDK（PPTX/DOCX/XLSX/MD 一体化，Apache-2.0）—— https://pypi.org/project/documind/
+可替代分散的多个 minimax-docx/pdf/xlsx 库，单一依赖更省心。

@@ -578,3 +578,11 @@ for desc in descriptions:
 - **Paper (AudioGen)**: https://arxiv.org/abs/2209.15352
 - **HuggingFace**: https://huggingface.co/facebook/musicgen-small
 - **Demo**: https://huggingface.co/spaces/facebook/MusicGen
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+原 Audiocraft(MusicGen) 已偏旧。开源音乐生成 SOTA 替代，本地可跑、质量接近 Suno：
+- ACE-Step 1.5 — https://github.com/fspecii/ace-step-ui （本地无限、Suno 级，首选）
+- YuE — https://github.com/multimodal-art-projection/YuE/ （开源整曲生成）
+- SongGeneration / LeVo2 — https://github.com/tencent-ailab/SongGeneration （腾讯高质量整曲）
+保留 Audiocraft 作轻量兜底，新任务优先 ACE-Step / YuE。

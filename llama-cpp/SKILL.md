@@ -265,3 +265,8 @@ Source URLs:
 - **Example tree API**: https://huggingface.co/api/models/unsloth/Qwen3.6-35B-A3B-GGUF/tree/main?recursive=true
 - **Example llama.cpp search**: https://huggingface.co/models?num_parameters=min:0,max:24B&apps=llama.cpp&sort=trending
 - **License**: MIT
+
+
+## 2026 更优方案（Apple Silicon，全网调研 2026-08 迭代）
+MLX 原生推理在 M 系列最快（M5 Max Llama70B Q4 约 85 tok/s），Ollama 仅慢 4% 但更简单。
+Apple Silicon 本地推理优先 MLX（mlx-lm）；大批量/多 GPU 用 vLLM；llama.cpp 仍作跨平台兜底。

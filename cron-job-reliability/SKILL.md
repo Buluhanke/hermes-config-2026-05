@@ -296,3 +296,8 @@ cronjob(action=list)  # 检查 script + no_agent 字段
 hermes cron run <job-id>
 cat ~/.hermes/cron/output/<name>/<date>.log   # 确认输出内容符合预期，不只是 "succeeded"
 ```
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+silentwatch-mcp — https://github.com/temurkhan13/silentwatch-mcp
+捕获 cron 的"exit-0 但空输出"静默失败、重试风暴、action-budget 泄漏，比单纯监控退出码更可靠。

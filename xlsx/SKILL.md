@@ -117,3 +117,8 @@ For full investment-banking conventions (balance checks, sensitivity tables, nam
 ## Related skills
 
 `docx` (Word documents), `pdf` (PDF work), `powerpoint` (decks), optional `excel-author` (finance-grade modeling standards).
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+统一 Office 生成：documind SDK（PPTX/DOCX/XLSX/MD 一体化，Apache-2.0）—— https://pypi.org/project/documind/
+可替代分散的多个 minimax-xlsx 等库。

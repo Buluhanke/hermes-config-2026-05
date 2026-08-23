@@ -241,3 +241,8 @@ pdftoppm -jpeg -r 150 -f N -l N output.pdf slide-fixed
 - `npm install -g pptxgenjs` - creating from scratch
 - LibreOffice (`soffice`) - PDF conversion (auto-configured for sandboxed environments via `scripts/office/soffice.py`)
 - Poppler (`pdftoppm`) - PDF to images
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+统一 Office 生成：documind SDK（PPTX/DOCX/XLSX/MD 一体化，Apache-2.0）—— https://pypi.org/project/documind/
+可替代分散的多个生成库。

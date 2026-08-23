@@ -279,3 +279,8 @@ python3 ~/.hermes/skills/browser-read-funnel/scripts/read_page.py https://exampl
   3. 若整页渲染：`scrapling extract get/fetch <url> -H "$(cat cookie.txt|sed 's/^/Cookie: /')" out.md`（scrapling 支持 -H 透传）。
 - **安全铁律**：Cookie 仅在运行时内存读取，不落盘/不进 memory/不回显到对话以外；用完即弃。`curl_xhr.py` 头注释已固化此条。
 - **验证状态**：`--cookie`/`-H` 通道 2026-08-23 本地回声服务器确认 Cookie 真发出（收到 `test_session=...; login_token=***`）。真实登录页尚未实跑，等你给 URL + Cookie 文件即可验收。
+
+
+## 2026 更优方案参考（全网调研 2026-08）
+真实 Chrome 非无头自动化 SOTA：Quay(CDP+AX树)、Eyebrowse(MCP)、pi-browser-harness。
+与本技能「前台真实 Chrome AX 树」思路一致，保留 defuddle/trafilatura 提取。

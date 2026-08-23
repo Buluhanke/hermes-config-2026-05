@@ -215,3 +215,9 @@ hermes skills install skills-sh/zinohome/cozyengine/ui-prompt-generator --force
 # siyuan: 直接下载
 # agentmail: 直接下载
 ```
+
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+Hermes v0.12.0 官方已内置 Curator（aux model 后台自动巡检/整理 skill 库、淘汰失效技能），可替代部分手工固化。
+备份：Dicklesworthstone/agent_settings_backup_script（git 版本化、按大小轮转、易恢复）。
+参考：https://github.com/NousResearch/hermes-agent （Curator PR #17277）

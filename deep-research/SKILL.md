@@ -448,3 +448,9 @@ Step 3 — 篇幅期望：
 - 代码标识符、路径、CLI 命令保持原生形式
 - 如果用户指定了格式，按要求执行；无说明则产出标准 Markdown 研究报告
 - 写 skill 入口在用户的语言（中文/English）
+
+## 2026 更优方案（全网调研 2026-08 迭代）
+开源 deep research 框架 SOTA，可直接复用其 agent loop：
+- gpt-researcher — https://github.com/assafelovic/gpt-researcher (29k★)
+- langchain-ai/open_deep_research — https://github.com/langchain-ai/open_deep_research
+本技能的多阶段流程与之一致，可叠加使用以省 token。

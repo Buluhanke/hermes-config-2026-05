@@ -63,3 +63,10 @@ browser_cdp Runtime.evaluate → 下方JS脚本
 - Google/百度搜索会被 CDP Chrome 检测触发 CAPTCHA，1688 搜索本身不会
 - 1688 详情页可以直接打开，登录态完全保留
 - 1688 搜索列表页直接 DOM query 拿不到商品数据（iframe 隔离）
+
+
+## 2026 更优方案参考（全网调研 2026-08）
+第三方 1688-cli（superjack2050, MIT）复用真实 Chrome 登录态、输出结构化 JSON，可作补充；
+但本机以 CDP 后台 Chrome + mtop skuMapOriginal 监听为主（零风控、零焦点抢），不替换。
+官方 API 仍须企业资质；MTop 签名难度 4/5，本机无住宅代理不通；付费爬虫(ShopAPIS/HioBuy)需花钱。
+开源逆向：QuoVadis86/ai-reverse（1688 MTOP SDK + MCP）。
