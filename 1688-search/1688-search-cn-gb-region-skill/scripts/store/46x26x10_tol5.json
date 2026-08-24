@@ -1,0 +1,104 @@
+{
+  "dims": [
+    "46*26*10"
+  ],
+  "cat": [
+    "46*26*10cm纸箱",
+    "纸箱",
+    "瓦楞纸箱",
+    "快递纸箱",
+    "加高飞机盒",
+    "飞机盒"
+  ],
+  "prov": "全国",
+  "candidates": 1481,
+  "hits": {
+    "46*26*10": [
+      {
+        "id": "1011825158436",
+        "dim": "46*26*10",
+        "title": "è·¨å¢ æé¦çº¸æ½ç»³åèåé¾éª",
+        "price": "¥34.00",
+        "stock": 999,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/1011825158436.html",
+        "spec": "杜邦纸-米色&gt;S：20*14.5*9",
+        "source": "skujson",
+        "exact": false
+      },
+      {
+        "id": "862538991190",
+        "dim": "46*26*10",
+        "title": "ç´æ­è·¨å¢çæ¬¾å¥³å£«æè¡¨å¥³é²",
+        "price": null,
+        "stock": null,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/862538991190.html",
+        "spec": "\"><colgroup></colgroup><tbody class=\"ant",
+        "source": "page",
+        "exact": false
+      },
+      {
+        "id": "1078899056789",
+        "dim": "46*26*10",
+        "title": "æºä¹å å¤§é³éçµå­é¹éLEDæ°",
+        "price": null,
+        "stock": null,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/1078899056789.html",
+        "spec": "bx-ua=234!kFJeKDaneeP4kRAFlj%2FBFcLItRRz",
+        "source": "page",
+        "exact": false
+      },
+      {
+        "id": "897888724450",
+        "dim": "46*26*10",
+        "title": "èåæ°ä¹ç¯ç®¡èèèPTFEåæ°",
+        "price": "¥5.00",
+        "stock": 896520,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/897888724450.html",
+        "spec": "原材料小样（聚四氟乙烯）4*4*2cm约70克",
+        "source": "skujson",
+        "exact": false
+      },
+      {
+        "id": "618629367824",
+        "dim": "46*26*10",
+        "title": "çæ¬¾é£æºçç¹ç¡¬åè£çç½è²",
+        "price": "¥0.29",
+        "stock": 334978,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/618629367824.html",
+        "spec": "15*10*6CM;三层标准E楞厚1.5MM",
+        "source": "skujson",
+        "exact": false
+      },
+      {
+        "id": "726399692446",
+        "dim": "46*26*10",
+        "title": "ç°è´§é£æºçç¹ç¡¬å¿«éæåç",
+        "price": "¥1.26",
+        "stock": 991864,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/726399692446.html",
+        "spec": "37*29*6cm(S8);三层特硬K+",
+        "source": "skujson",
+        "exact": false
+      },
+      {
+        "id": "706007048737",
+        "dim": "46*26*10",
+        "title": "é£æºçç°è´§æ¹åç¹ç¡¬æè£å",
+        "price": "¥1.26",
+        "stock": 992319,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/706007048737.html",
+        "spec": "原色-三层特硬;30*21*7CM",
+        "source": "skujson",
+        "exact": false
+      }
+    ]
+  },
+  "captcha_flag": "detail_captcha"
+}

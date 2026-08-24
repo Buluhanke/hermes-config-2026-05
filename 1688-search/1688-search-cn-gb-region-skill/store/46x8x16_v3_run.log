@@ -1,0 +1,100 @@
+[search] 46cm纸箱 p1 +13 total 13
+[search] 46cm纸箱 p2 +14 total 16
+[search] 46cm纸箱 p3 +14 total 16
+[search] 长条纸箱 p1 +12 total 28
+[search] 长条纸箱 p2 +15 total 35
+[search] 长条纸箱 p3 +13 total 38
+[search] 扁纸箱 p1 +13 total 46
+[search] 扁纸箱 p2 +13 total 48
+[search] 扁纸箱 p3 +13 total 48
+[search] 画框纸箱 p1 +0 total 48
+[search] 画框纸箱 p2 +0 total 48
+[search] 画框纸箱 p3 +0 total 48
+[search] 海报纸箱 p1 +0 total 48
+[search] 海报纸箱 p2 +0 total 48
+[search] 海报纸箱 p3 +0 total 48
+[search] 46*16*8cm纸箱 p1 +0 total 48
+[search] 46*16*8cm纸箱 p2 +0 total 48
+[search] 46*16*8cm纸箱 p3 +0 total 48
+[extract] unique candidates: 48
+[   ] 1158678687 sku rows=188 未匹配目标尺寸
+[   ] 718122662116 sku rows=1 未匹配目标尺寸
+[   ] 843501081191 carton=False, 仍做尺寸匹配 (sku rows=1)
+[   ] 843501081191 sku rows=1 未匹配目标尺寸
+[   ] 765857194469 SKU接口未抓到, DOM也未命中
+[   ] 601907419528 SKU接口未抓到, DOM也未命中
+[   ] 568759510126 SKU接口未抓到, DOM也未命中
+[   ] 843824618668 carton=False, 仍做尺寸匹配 (sku rows=100)
+[   ] 843824618668 sku rows=100 未匹配目标尺寸
+[   ] 787580028283 SKU接口未抓到, DOM也未命中
+[   ] 891814539990 carton=False, 仍做尺寸匹配 (sku rows=124)
+[   ] 891814539990 sku rows=124 未匹配目标尺寸
+[   ] 536230187541 SKU接口未抓到, DOM也未命中
+[   ] 836575208868 carton=False, 仍做尺寸匹配 (sku rows=101)
+[   ] 836575208868 sku rows=101 未匹配目标尺寸
+[   ] 866520775912 carton=False, 仍做尺寸匹配 (sku rows=97)
+[   ] 866520775912 sku rows=97 未匹配目标尺寸
+[   ] 947250419583 carton=False, 仍做尺寸匹配 (sku rows=70)
+[   ] 947250419583 sku rows=70 未匹配目标尺寸
+[   ] 899668064171 sku rows=71 未匹配目标尺寸
+[   ] 1064601244350 carton=False, 仍做尺寸匹配 (sku rows=92)
+[   ] 1064601244350 sku rows=92 未匹配目标尺寸
+[   ] 852668016974 carton=False, 仍做尺寸匹配 (sku rows=81)
+[   ] 852668016974 sku rows=81 未匹配目标尺寸
+[   ] 829491095876 carton=False, 仍做尺寸匹配 (sku rows=33)
+[   ] 829491095876 sku rows=33 未匹配目标尺寸
+[   ] 646665884611 carton=False, 仍做尺寸匹配 (sku rows=25)
+[   ] 646665884611 sku rows=25 未匹配目标尺寸
+[   ] 1055781806965 carton=False, 仍做尺寸匹配 (sku rows=29)
+[   ] 1055781806965 sku rows=29 未匹配目标尺寸
+[   ] 524652350795 carton=False, 仍做尺寸匹配 (sku rows=43)
+[   ] 524652350795 sku rows=43 未匹配目标尺寸
+[   ] 565947934944 carton=False, 仍做尺寸匹配 (sku rows=5)
+[   ] 565947934944 sku rows=5 未匹配目标尺寸
+[   ] 671431238575 carton=False, 仍做尺寸匹配 (sku rows=29)
+[   ] 671431238575 sku rows=29 未匹配目标尺寸
+[   ] 1070999897446 carton=False, 仍做尺寸匹配 (sku rows=3)
+[   ] 1070999897446 sku rows=3 未匹配目标尺寸
+[   ] 920667768497 SKU接口未抓到, DOM也未命中
+[   ] 909759108645 carton=False, 仍做尺寸匹配 (sku rows=234)
+[   ] 909759108645 sku rows=234 未匹配目标尺寸
+[   ] 995637174514 carton=False, 仍做尺寸匹配 (sku rows=17)
+[   ] 995637174514 sku rows=17 未匹配目标尺寸
+[   ] 647898795844 carton=False, 仍做尺寸匹配 (sku rows=128)
+[   ] 647898795844 sku rows=128 未匹配目标尺寸
+[   ] 975881658439 carton=False, 仍做尺寸匹配 (sku rows=52)
+[   ] 975881658439 sku rows=52 未匹配目标尺寸
+[   ] 719193423318 sku rows=8 未匹配目标尺寸
+[   ] 648597304718 sku rows=29 未匹配目标尺寸
+[   ] 624800694211 SKU接口未抓到, DOM也未命中
+[   ] 1040802150603 carton=False, 仍做尺寸匹配 (sku rows=31)
+[   ] 1040802150603 sku rows=31 未匹配目标尺寸
+[   ] 588458309101 sku rows=31 未匹配目标尺寸
+[   ] 676980292820 sku rows=28 未匹配目标尺寸
+[   ] 598493022796 SKU接口未抓到, DOM也未命中
+[   ] 903622760563 carton=False, 仍做尺寸匹配 (sku rows=139)
+[   ] 903622760563 sku rows=139 未匹配目标尺寸
+[   ] 669239793034 carton=False, 仍做尺寸匹配 (sku rows=26)
+[   ] 669239793034 sku rows=26 未匹配目标尺寸
+[   ] 1048829167165 carton=False, 仍做尺寸匹配 (sku rows=31)
+[   ] 1048829167165 sku rows=31 未匹配目标尺寸
+[   ] 613873287626 sku rows=26 未匹配目标尺寸
+[   ] 707570042615 carton=False, 仍做尺寸匹配 (sku rows=68)
+[   ] 707570042615 sku rows=68 未匹配目标尺寸
+[   ] 634522031289 carton=False, 仍做尺寸匹配 (sku rows=95)
+[   ] 634522031289 sku rows=95 未匹配目标尺寸
+[   ] 634987797003 carton=False, 仍做尺寸匹配 (sku rows=132)
+[   ] 634987797003 sku rows=132 未匹配目标尺寸
+[   ] 838427711226 carton=False, 仍做尺寸匹配 (sku rows=75)
+[   ] 838427711226 sku rows=75 未匹配目标尺寸
+[   ] 624515089803 SKU接口未抓到, DOM也未命中
+[   ] 934887385226 carton=False, 仍做尺寸匹配 (sku rows=76)
+[   ] 934887385226 sku rows=76 未匹配目标尺寸
+[   ] 992405126689 carton=False, 仍做尺寸匹配 (sku rows=140)
+[   ] 992405126689 sku rows=140 未匹配目标尺寸
+[   ] 868525706854 sku rows=10 未匹配目标尺寸
+[   ] 708938768516 carton=False, 仍做尺寸匹配 (sku rows=51)
+[   ] 708938768516 sku rows=51 未匹配目标尺寸
+[   ] 681732061711 carton=False, 仍做尺寸匹配 (sku rows=57)
+[   ] 681732061711 sku rows=57 未匹配目标尺寸
+[done] candidates=49 46*8*16=0 46*16*8=0 -> store/46x8x16_v3_长扁箱_江浙沪.json

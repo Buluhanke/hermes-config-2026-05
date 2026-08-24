@@ -291,8 +291,10 @@ end tell
 
 ## 找品主驱动（参数化，替所有 `*_2020.scpt` 写死副本）
 - `scripts/run_search.scpt` — 改文件头 4 个常量（`DIM`/`CARTON`/`PROV`/`PAGES`）即可复用任意任务：构造 GBK 编码搜索 URL → 真 Chrome 翻页+滚动懒加载 → 抓 offerId 落 `/tmp/1688_run_result.txt`。复用 `extract_ids.js`。（路径已相对化，坑24 分发铁律）
-- `scripts/cdp1688.py` — **【推荐·当前唯一主驱动】** 2026-08-23 v2 升级。Python 裸 WebSocket CDP 驱动（零 Playwright 依赖，Chrome 151 兼容）。搜索（GBK+province 翻页+滚动懒加载抽 offerId）+ 详情页监听 `queryofferskuselectormodel` 的 `skuMapOriginal` 结构化 JSON 核验（覆盖连写/轴名连写/矩阵/组合四类尺寸写法）+ cookie 注入登录态 + 后台隐藏不抢焦点。参数：`--dims/--cat/--pages/--gap/--maxverify/--out/--cdp`。见坑41/42/43。
+- `scripts/cdp1688.py` — **【推荐·当前唯一主驱动】**。Python 裸 WebSocket CDP 驱动（零 Playwright，Chrome 151 兼容）。搜索（GBK+province 翻页+滚动懒加载抽 offerId）+ 详情页 **整页 `outerHTML` 识别**（不只查 skuMapOriginal，见坑45/49）+ SKU 结构化 JSON 核验（覆盖 **五类** 写法：连写 / 轴名连写 / 矩阵 / 半角组合串 `8x8（长宽）;9cm（高）` / **全角组合串 `宽【26cm】高【10cm】;特硬;长【46cm】`**，见坑45/49）+ **顺序无关全排列匹配**（`target_perms`，坑46）+ cookie 注入登录态 + 后台隐藏不抢焦点。参数：`--dims/--cat/--pages/--gap/--maxverify/--out/--cdp/--prov`（传 `''` 关地域，坑50）。见坑41-52。
 - `scripts/start_cdp_1688.sh` — 一键起后台隐藏 CDP Chrome（`open -n -g -j`）+ cookie 注入登录态 + 9222 自检。不落盘明文 cookie。
+- `scripts/find_near.py` — **【近邻定制兜底，2026-08-24 新增】** 精确尺寸 0 命中时使用：搜定制/画框/平邮类词，抓每个卖家 SKU 里**含目标某轴的 near-size 清单**，输出「谁有相近尺寸→谁可定制切该尺寸」。改 `DIM`/`NEAR`/`cat` 复用。见坑48。
+- `scripts/reverify_pool.py` — **【比价重验，2026-08-24 新增】** 搜页被验证码拦截（坑51）或不依赖搜页时：拿已知 offerId 池（`/tmp/pool_ids.txt` 每行一个，可从历史 results / 同款推荐 / 用户发来的链接收集），逐个开详情页用**整页组合串识别**（坑49）挖目标尺寸，按价升序输出 `store/<dim>_reverify.json`。抠价走 `skuMapOriginal` 精确匹配（坑52）。用法：`python3 reverify_pool.py > /tmp/reverify.log 2>&1`。
 - `scripts/probe_sku.py` — 诊断脚本：验证某详情页能否抓到 `skuMapOriginal`（开发/排错用，勿日常跑）。
 - `scripts/drive_playwright.js` — **【已失效·弃用】** Chrome 151 移除 `Browser.setDownloadBehavior`，`connectOverCDP` 崩溃。保留作反面教材，新任务一律用 `cdp1688.py`。
   1. **双记号精确搜索**：同时搜 `DIM` 与 `DIM.replace('*','x')`，合并去重，逼近真立方体（坑29：1688 搜 `*` 是模糊匹配，含某维度 16cm 全排进池；`x` 才是精确立方体）。
@@ -319,6 +321,7 @@ end tell
   - `--dims`：目标尺寸，可多个。归一化比对（去 .0 / 空白 / 统一 * 记号）。
   - `--cat`：搜索词（多词合并去重，覆盖轴名连写/矩阵式卖家，见坑40）。
   - `--pages`：每词翻页数；`--gap`：每详情页间隔秒（降速防验证码，坑35）；`--maxverify`：核验上限。
+  - `--mobile`：搜页走 `m.1688.com/offer_search.html` 移动端（PC 搜页被验证码拦截时绕行，坑53），单页候选量翻 10 倍+无码。
   - 输出 JSON：`{candidates, hits:{dim:[{id,dim,title,price,stock,spec,source}]}, captcha_flag}`。
 - 前置：Chrome 以 `chrome-cdp-profile` + `--remote-allow-origins=*` 后台隐藏启动（见坑42 三件套）。9222 在线即可。
 
@@ -332,11 +335,45 @@ end tell
 ## 43. SKU 来自 mtop 接口 `skuMapOriginal` 结构化 JSON，非 DOM 解析（2026-08-23 v2 核心升级——更快更准更稳）
 `cdp1688.py` 核验阶段**不解析页面文本、不点 chip**，而是监听 1688 内部 `mtop.1688.wosc.queryofferskuselectormodel` 接口的响应，解析其 `skuMapOriginal` 数组：
 - 每个元素结构：`{specAttrs:"（竖）25长*13侧*32高", discountPrice:"1.23", canBookCount:96476, ...}`，**尺寸/价格/库存三者全结构化**。
-- 规格匹配直接读 `specAttrs` 字段，用 `extract_sizes_from_spec()` 归一化后比对目标尺寸，**覆盖四类写法**：① 连写 `25*13*32` ② 轴名连写 `(竖)25长*13侧*32高`（坑37）③ 矩阵 `8x8（长宽）;9cm（高）`（坑30）④ 组合串 `8x8（长宽）;9cm（高）`。
+- 规格匹配直接读 `specAttrs` 字段，用 `extract_sizes_from_spec()` 归一化后比对目标尺寸，**覆盖五类写法**：① 连写 `25*13*32` ② 轴名连写 `(竖)25长*13侧*32高`（坑37）③ 矩阵 `8x8（长宽）;9cm（高）`（坑30）④ 半角组合串 `8x8（长宽）;9cm（高）` ⑤ **全角组合串 `宽【26cm】高【10cm】;特硬;长【46cm】`**（坑49）。同时核验阶段对**整页 `outerHTML` 逐段**过 `extract_sizes_from_spec`（不只 specAttrs，见坑45/49）。
 - 价格/库存从 `skuMapOriginal` 目标尺寸那条直读，**零点击、零 DOM 解析、零风控痕迹**（比 `price_clean3.js` 点 chip 更安全）。
 - 兜底：接口未抓到（懒加载/风控）时回退 `verify_carton_matrix.js` + `price_clean3.js`（DOM 版），保证不漏。
 - 实测：`1158678687` 从 `skuMapOriginal` 读出 `（竖）25长*13侧*32高 | ¥1.23 | 库存96476`，比 v1 的 DOM 正则更准。
+
+## 49. 整页识别组合串写法——用户当场纠正的致命漏检（2026-08-24 实战，最大翻车）
+用户发来 `752445610436` 说「这家就有」，但我之前全池核验报 0 命中。打开一看：这家 SKU 是 **`宽【26cm】高【10cm】;特硬;长【46cm】`** 这种**全角【】轴名组合串**写法，且它不叫「纸箱」叫「长方形加高飞机盒」——我的 `extract_sizes_from_spec` 只认半角 `8x8（长宽）;9cm（高）` 那一种组合串，**全角【】写法一个都不认 → 漏检**；搜「纸箱」也排不进它（品类词错）。
+- **修法（已落地 `cdp1688.py` + `reverify_pool.py`）**：
+  1. `extract_sizes_from_spec` 新增**全角【】轴名组合**分支：抓 `([长宽高侧厚竖横深])【(\d+)】` 与半角 `长46cm` 两种，凑齐 长+宽+高 即归一化入 `connected` 集合（顺序无关）。
+  2. **核验阶段从「只查 `skuMapOriginal` 的 specAttrs」扩成「整页 `outerHTML` 逐段抽尺寸」**（见坑45 的 `get_sku` 优先 outerHTML，再加主循环对整页 `re.split(r"[;；\n|丨]")` 逐段过 `extract_sizes_from_spec`）。这样页面正文/规格区写的组合串（即便不在 specAttrs 里）也能命中。
+  3. 中途验证：用 `752445610436` 回归，整页识别挖出 18 个 `46*26*10` 命中段，确认修复生效。
+- **铁律**：1688 尺寸写法 5 类全覆盖 = ①连写 `25*13*32` ②轴名连写 `(竖)25长*13侧*32高` ③矩阵 `8x8（长宽）;9cm（高）` ④半角组合串 `8x8（长宽）;9cm（高）` ⑤**全角组合串 `宽【26cm】高【10cm】;特硬;长【46cm】`**。凡是「用户说某家明明有、我的脚本说没有」→ 第一反应是**写法没覆盖**，优先补正则而非怀疑用户。
+- **品类词别锁死**：飞机盒/加高飞机盒/彩盒 类目常不写「纸箱」，搜词要含「飞机盒/加高飞机盒」等多词（见坑40/48），否则整类漏掉。
+
+## 50. 绝不自作主张加地域限制（2026-08-24 用户当场骂「什么乱七八糟的」）
+用户只说「找 46x26x10cm 纸箱」，我从历史 skill 惯性里**擅自加了江浙沪 province 筛选**，还甩了一墙分析表格。用户明确厌恶：① 我私自加限制条件 ② 堆砌分析不先给结论。
+- **修法**：`cdp1688.py` 加 `--prov` 参数（默认江浙沪 `PROV`，传 `''` 即关地域）。**新任务除非用户明说地域，否则不加 province**，全国搜。
+- **输出铁律（用户风格偏好，最高优先）**：先给结论/链接/价格，再补必要说明；不要先铺原理、坑位、分析墙。用户原话「什么乱七八糟的」= 被无效信息淹没。一条消息 = 结论 + 可执行下一步，不超过必要。
+
+## 51. 搜页被验证码拦截时改用「详情页直开 + ID 池重验」绕过（2026-08-24 实战）
+1688 对 `s.1688.com/selloffer/offer_search.htm` 搜页端点的风控**比详情页严得多**：批量搜几轮就返回「验证码拦截」（title=验证码拦截，candidates=0），但同浏览器**直接开 `detail.1688.com/offer/<id>.html` 畅通无阻**。
+- **识别信号**：搜页返回 0 候选且 title 含「验证码拦截」→ 不是没货，是风控。此时再怎么重搜都撞墙。
+- **绕法（已落地 `scripts/reverify_pool.py`）**：不依赖搜页，改用已知 offerId 池（`/tmp/pool_ids.txt` 每行一个）逐个开详情页 + 整页识别重验。ID 来源：① 历史 results JSON ② 已知命中家的「同款推荐/店铺其他商品」offerId（详情页 `outerHTML` 里 grep `detail.1688.com/offer/(\d+)`）③ 用户手头发来的链接。
+- **搜页被拦的第一反应不是等**：先试 `cdp1688.py --mobile` 切移动端搜页 `m.1688.com`（坑53，立即可用、候选量翻 10 倍、无验证码）；移动端也被拦才退避/等消退；都不行才走详情页直开 + ID 池重验。干等 10–30 分钟是最后手段，不是首选。
+- **结果文件有时写不出**：`cdp1688.py` 在风控掐断/异常时可能没跑到末尾 `with open(...)` 写盘 → `store/<out>` 缺失但日志有 `[done]`。以日志 `[done] ... dim=N` 的 N 为准，不要以为文件丢了就是 0 命中。
+
+## 52. 比价重验脚本抠价必须用 `skuMapOriginal` 精确匹配（2026-08-24 实战 bug）
+初版 `reverify_pool.py` 用「整页逐段正则模糊抠价」→ `752445610436` 的 46×26×10 被读成 ¥4.60（实际 ¥3.81），因为抓到了相邻段的错价位。
+- **修法**：抠价优先从 `parse_sku_json(outerHTML)` 的 `skuMapOriginal` 数组里，按**归一化精确 spec**（`extract_sizes_from_spec` → `connected` 含目标排列）匹配那条，直读其 `discountPrice`/`canBookCount`；只有 skuMapOriginal 完全没有该尺寸时才回退整页文本兜底（价/库存记 None）。
+- **铁律**：价格/库存的权威来源永远是 `skuMapOriginal` 那条精确 SKU，不要从页面正文/表格用模糊正则估。
 - **全网对比结论**（2026-08-23 调研）：① 1688 官方开放平台 API 需企业主体+中国境内公司，个人不通；② MTop 接口逆向需中国住宅代理+24h token 刷新，本机无代理不通；③ 第三方付费爬虫（Apify）需花钱。三条「更优」路在本环境均被硬墙挡死，**维持「真浏览器后台 + SKU JSON 监听」为当前最优解**。
+
+## 53. 搜页验证码 → 移动端搜页 `m.1688.com` 绕行（2026-08-24 实战，比「等消退」更优的解法）
+PC 搜页 `s.1688.com/selloffer` 被验证码拦截时，**不要干等 10–30 分钟**——改走移动端搜页 `m.1688.com/offer_search.html`（风控模型不同，同一浏览器实例、同一会话照样通）。
+- **实测**：PC 搜页被拦时返回 candidates=8（甚至 0），切 `m.1688.com/offer_search.html?keywords=<GBK>&page=N` 单页拉到 **139–145 候选、无验证码**；一次全国搜索（多词 + 翻页 4）直接拿到 **760+ 候选**（同日 PC 搜页同期只能拿 8 个）。
+- **用法**：`cdp1688.py` 已加 `--mobile` 开关，`build_search_url` 自动改用 m.1688.com 端点。全国搜索照常：`python3 cdp1688.py --dims "46*26*10" --cat "加高飞机盒" "宽26高10飞机盒" ... --prov "" --mobile --out store/xxx.json`。
+- **注意**：m.1688.com 的 title 有时跳「阿里1688首页」但 `outerHTML` 里仍能 grep 到 `detail.1688.com/offer/(\d+)`，offerId 照常抓（提取正则已是新旧结构组合，坑25，移动端 `detail.m.1688.com/page/index.html?offerId=` 也覆盖）。
+- **退避已内置**：搜索循环 `search_page_captcha()` 检测验证码 → 指数退避（15/30/45/60s，上限4）等恢复，不在被拦时硬撞；重试仍拦则跳过该词（这是第二道防线，移动端是首选防线）。
+- **优先级**：搜页被拦 → ① 先试 `--mobile` 绕行（立即可用，不丢候选）② 不行再退避/等消退（坑51）③ 再不行才走详情页直开 + ID 池重验（坑51）。
 
 ## 44. 写 CDP 驱动脚本时 `_id` 计数器必须用 int 不要用 list（2026-08-23 反复踩的 footgun）
 裸 WebSocket CDP 驱动（`cdp1688.py` / `inject_cookies.py`）都用 `global _id; _id+=1` 给每条命令编号。**`_id` 必须初始化成 `0`（int），绝不能写成 `[0]`（list）**。写成 `[0]` 后 `_id += 1` 执行为 `list += int`，抛 `TypeError: 'int' object is not iterable`，且 traceback 行号会指向 `cmd()` 内部而非初始化行，极难一眼看出。本会话因此白跑 4 次。
@@ -344,6 +381,26 @@ end tell
 - 错误：`_id = [0]`（看起来像"可变计数器"的直觉写法，但 `+=` 语义完全不同的）
 - 同样适用于任何自写 CDP/ws 客户端：命令序号用普通 int。
 
+## 45. SKU 服务端直出 HTML，`get_sku` 必须 `outerHTML` 优先（2026-08-24 实战翻车+修法）
+原 `get_sku` 只监听 mtop `queryofferskuselectormodel` 网络响应，**但 1688 实际把 SKU 服务端直出在页面 HTML**（`<script>` 内联 `skuMapOriginal` 数组，非异步接口）。原逻辑先空轮询网络 26s 才回退抓 HTML → 每个详情页白等 26s、且部分页面该 mtop 根本不触发 → `sku rows=0` 误判无货。
+- **修法（已落地 `cdp1688.py`）**：`get_sku` 第 1 步先 `evaluate("document.documentElement.outerHTML")` 找 `skuMapOriginal`，命中即返回；只有 HTML 没有时才兜底监听网络。实测每个详情页从 ~29s 降到 ~3s，且不再漏抓。
+- **识别信号**：详情页 `outerHTML` 里能 grep 到 `skuMapOriginal`，但 `get_sku` 轮询完仍返回 None → 就是这坑。
+
+## 46. 尺寸顺序无关匹配是用户硬需求（2026-08-24 明确要求）
+用户原话：「数值准确数字的顺序没有关系，46x10x26 或 26x10x46 或 10x26x46 都行」。原 `cdp1688.py` 只比固定 `L*W*H` 顺序 → 只命中 46*26*10 写法，漏掉所有乱序写法。
+- **修法（已落地）**：新增 `target_perms(dim)` 生成目标尺寸全部排列（`itertools.permutations`），匹配改为 `any(p in connected for p in perms) or (target_lw in lw and H in heights)`。正则抽取仍用 `extract_sizes_from_spec`（覆盖连写/轴名连写/矩阵/组合四类写法）。
+- **调用铁律**：凡用户说「顺序无所谓/哪个方向都行」，搜+核验一律走 `target_perms` 全排列，不要锁死单一顺序。
+
+## 47. 同一 CDP Chrome 禁止并行两个验证循环（2026-08-24 实战翻车）
+本机会话曾同时跑两个 `cdp1688.py`（一个用户早先的 `46*8*16`，一个我的 `46*26*10`），**都连同一个 9222 CDP Chrome**。结果：我的 `纸箱` 搜索返回 `+0 total 0`、风控风险飙升，全程 0 命中；用户的那个却正常。根因：两个验证循环共享一个浏览器 → 请求频率翻倍 → 1688 把搜索结果清空（返回空列表）+ 详情页触发验证码。
+- **修法**：同一 CDP Chrome **同一时刻只跑一个** `cdp1688.py` 验证循环。开新任务前先 `ps aux | grep cdp1688` 确认无残留实例，有就等它 `done` 或 `kill` 掉再开。
+- **识别信号**：搜「纸箱」这种大词竟返回 `+0 total 0`、或详情页 `sku rows=0` 大面积出现 → 不是工具坏，是并行冲突/风控，先查是否有第二个实例在跑。
+
+## 48. 精确尺寸无现货 → 近邻定制兜底法（2026-08-24 实战，46×26×10cm 任务）
+46×26×10cm 江浙沪核验 ~290 个候选（纸箱/瓦楞/画框/平邮/字画箱/定制 多词覆盖、翻页去重、顺序无关匹配）→ **精确命中 0 家**。结论：该尺寸是非标 flat mailer，厂家全是固定刀模（26 常作一轴但宽度顶到 36/40/50、高度 4-10cm），没有现成刀模。
+- **正确收尾（不要报「没货」就停）**：跑 `scripts/find_near.py` —— 搜「46*26*10cm纸箱 / 画框纸箱 定制 / 平邮箱 定制 / 46*26 纸箱 / 字画箱 定制」等词，抓每个卖家 SKU 里**含目标某轴（46/26/10）的 near-size 清单**，输出「谁有相近尺寸 → 谁可定制切该尺寸」。
+- **实战产出**：16 家 carry 近邻尺寸（如 `601907419528` 有 46×30×22、`542555308881` 有 50×40×10 / 60×40×10、`680682547475` 有 40×30×10），都是「定制」厂 → 推给用户的结论应是「无现货、可定制 + 最近现货尺寸 + 推荐定制厂」，而非单纯「查无」。
+- `find_near.py` 已收编为支持脚本，复用改 `DIM`/`NEAR`/`cat` 即可。
 
 ## 2026 更优方案参考（全网调研 2026-08）
 第三方 1688-cli（superjack2050, MIT）复用真实 Chrome 登录态、输出结构化 JSON，可作补充；

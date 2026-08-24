@@ -1,0 +1,68 @@
+[search] 46*8*16cm纸箱 p1 +13 total 13
+[search] 46*8*16cm纸箱 p2 +0 total 13
+[search] 46*8*16cm纸箱 p3 +45 total 52
+[search] 46*16*8cm纸箱 p1 +44 total 78
+[search] 46*16*8cm纸箱 p2 +45 total 84
+[search] 46*16*8cm纸箱 p3 +45 total 85
+[extract] unique candidates: 85
+[   ] 1158678687 sku rows=188 未匹配目标尺寸
+[   ] 765857194469 SKU接口未抓到, DOM也未命中
+[   ] 568759510126 SKU接口未抓到, DOM也未命中
+[   ] 542555308881 SKU接口未抓到, DOM也未命中
+[   ] 634522031289 carton=False gift=False (sku rows=95)
+[   ] 995523095186 SKU接口未抓到, DOM也未命中
+[   ] 1040924556014 SKU接口未抓到, DOM也未命中
+[   ] 608670773062 SKU接口未抓到, DOM也未命中
+[   ] 578935907628 sku rows=15 未匹配目标尺寸
+[   ] 800030632454 carton=False gift=False (sku rows=57)
+[   ] 866520775912 carton=False gift=False (sku rows=97)
+[   ] 536230767180 SKU接口未抓到, DOM也未命中
+[   ] 899668064171 sku rows=71 未匹配目标尺寸
+[   ] 568846851403 SKU接口未抓到, DOM也未命中
+[   ] 572031426862 carton=False gift=False (sku rows=1)
+[   ] 639106800735 SKU接口未抓到, DOM也未命中
+[   ] 900300120529 sku rows=63 未匹配目标尺寸
+[   ] 836575208868 carton=False gift=False (sku rows=101)
+[   ] 825652528984 SKU接口未抓到, DOM也未命中
+[   ] 892731138796 SKU接口未抓到, DOM也未命中
+[   ] 751990874462 carton=False gift=False (sku rows=74)
+[   ] 634987797003 carton=False gift=False (sku rows=132)
+[   ] 680682547475 SKU接口未抓到, DOM也未命中
+[   ] 961739636712 carton=False gift=False (sku rows=95)
+[   ] 613000988430 carton=False gift=False (sku rows=144)
+[   ] 619007769480 sku rows=51 未匹配目标尺寸
+[   ] 624800694211 SKU接口未抓到, DOM也未命中
+[   ] 934887385226 carton=False gift=False (sku rows=76)
+[   ] 900646408918 sku rows=26 未匹配目标尺寸
+[   ] 765753236510 SKU接口未抓到, DOM也未命中
+[   ] 852639425335 carton=False gift=False (sku rows=127)
+[   ] 632030166557 carton=False gift=False (sku rows=61)
+[   ] 647608648390 carton=False gift=False (sku rows=127)
+[   ] 601907419528 SKU接口未抓到, DOM也未命中
+[   ] 805394145943 carton=False gift=False (sku rows=78)
+[   ] 1049820739601 carton=False gift=False (sku rows=64)
+[   ] 677701816838 SKU接口未抓到, DOM也未命中
+[   ] 564506516477 carton=False gift=False (sku rows=99)
+[   ] 1051993548307 carton=False gift=False (sku rows=108)
+[   ] 647742053364 carton=False gift=False (sku rows=123)
+[   ] 980066833844 carton=False gift=False (sku rows=30)
+[   ] 681629493501 carton=False gift=False (sku rows=43)
+[   ] 646569608041 carton=False gift=False (sku rows=80)
+[   ] 852668016974 carton=False gift=False (sku rows=81)
+[   ] 838427711226 carton=False gift=False (sku rows=75)
+[   ] 681732061711 carton=False gift=False (sku rows=57)
+[   ] 990672438411 carton=False gift=False (sku rows=73)
+[   ] 536230907056 SKU接口未抓到, DOM也未命中
+[   ] 947250419583 carton=False gift=False (sku rows=70)
+[   ] 642488458376 carton=False gift=False (sku rows=57)
+[   ] 823715990977 carton=False gift=False (sku rows=63)
+[   ] 831536668059 sku rows=77 未匹配目标尺寸
+[   ] 619372671884 carton=False gift=False (sku rows=52)
+[   ] 931660756726 SKU接口未抓到, DOM也未命中
+[   ] 931207697156 SKU接口未抓到, DOM也未命中
+[   ] 895092601729 carton=False gift=False (sku rows=78)
+[   ] 1072421487140 carton=False gift=False (sku rows=18)
+[   ] 843824618668 carton=False gift=False (sku rows=100)
+[   ] 900599642051 carton=False gift=False (sku rows=71)
+[   ] 1039454787897 carton=False gift=False (sku rows=100)
+[done] candidates=86 46*8*16=0 46*16*8=0 -> store/46x8x16_纸箱_江浙沪.json

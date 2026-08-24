@@ -23,10 +23,38 @@ Mac mini M4 (macOS 26.5) 上通过 scrcpy 投屏控制 Android，支持 USB 有�
 
 | 设备 | 型号 | IP | USB调试端口 | scrcpy命令 | 备注 |
 |------|------|-----|------------|-----------|------|
-| 小米 MI 8 | dipper | 192.168.0.44 | 5555 | `phone` | Android 10, MIUI 12, FIRERPA lamda✅ |
-| 小米平板 MRX-W29 | HWMRX | 192.168.8.248 | 5555 | `pad` | Android, USB无线调试 |
+| 小米 MI 8 | dipper | 192.168.8.204 | 5555 | `~/scrcpy-phone` 选1 | Android 10, MIUI 12, FIRERPA lamda✅ |
+| 华为平板 MRX-W29 | HWMRX | 192.168.8.248 | 5555 | `~/scrcpy-phone` 选2 | Android 12 |
 
 > Mac mini M4 有线网段 192.168.8.x，无线网段 192.168.0.x。注意不要混用网段。
+
+### 统一入口脚本 ~/scrcpy-phone
+
+两台设备共用一个交互脚本，支持选设备：
+
+```bash
+#!/bin/bash
+echo "请选择要控制的设备："
+echo "  1) 小米 MI8         (192.168.8.204:5555)"
+echo "  2) 华为平板 MRX-W29 (192.168.8.248:5555)"
+printf "输入 1 或 2: "
+read choice
+
+case "$choice" in
+  1)
+    exec scrcpy -m 1024 -b 15M --max-fps=30 --always-on-top -s 192.168.8.204:5555 --window-title "MI8" "$@"
+    ;;
+  2)
+    exec scrcpy -s 192.168.8.248:5555 --always-on-top --window-title "MRX-W29" "$@"
+    ;;
+  *)
+    echo "无效输入"
+    exit 1
+    ;;
+esac
+```
+
+> 注意：MI8 需要先用 USB 连一次执行 `adb -s <id> tcpip 5555` 开启无线调试；MRX-W29 同理。日常使用无需重开。
 
 ---
 
@@ -209,7 +237,8 @@ device.screenshot()               # 截图
 
 ## 坑点汇总
 
-### 1. USB 调试授权弹窗未点
+### 1. ~/scrcpy-phone 选1报 "Could not find ADB device 192.168.8.204:5555"
+MI8 无线调试未开启。需要 USB 连一次执行 `adb -s <设备ID> tcpip 5555` 后才能无线连接。
 首次连接 USB 时手机会弹出「允许 USB 调试」，必须点「允许」才能继续，否则 `adb devices` 显示 `unauthorized`。
 
 **排查顺序：**
