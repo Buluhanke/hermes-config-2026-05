@@ -2976,14 +2976,14 @@
     "created_by": null,
     "last_patched_at": null,
     "last_reused_patch_generation": 0,
-    "last_used_at": "2026-08-23T01:00:55.827330+00:00",
-    "last_viewed_at": "2026-08-23T01:00:55.824405+00:00",
+    "last_used_at": "2026-08-24T01:23:40.133413+00:00",
+    "last_viewed_at": "2026-08-24T01:23:40.122990+00:00",
     "patch_count": 0,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 1,
-    "view_count": 1
+    "use_count": 2,
+    "view_count": 2
   },
   "hermes-subprocess-pitfalls": {
     "archived_at": null,
@@ -3954,14 +3954,14 @@
     "created_by": null,
     "last_patched_at": "2026-07-18T07:20:23.332844+00:00",
     "last_reused_patch_generation": 0,
-    "last_used_at": "2026-08-10T13:59:41.546704+00:00",
-    "last_viewed_at": "2026-08-10T13:59:41.542960+00:00",
+    "last_used_at": "2026-08-24T01:23:40.125784+00:00",
+    "last_viewed_at": "2026-08-24T01:23:40.117469+00:00",
     "patch_count": 2,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 4,
-    "view_count": 4
+    "use_count": 5,
+    "view_count": 5
   },
   "skill-library-iteration": {
     "archived_at": null,
