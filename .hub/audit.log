@@ -15,3 +15,9 @@
 2026-07-25T09:15:49Z BLOCKED nvidia-cuda clawhub:community caution 3_findings
 2026-08-12T02:29:05Z INSTALL i-have-adhd skills.sh:community safe sha256:481c6e7d37f30d96
 2026-08-22T23:54:15Z INSTALL scrapling official:builtin safe sha256:d06bfeedf53d6285
+2026-08-25T01:33:57Z INSTALL fastmcp official:builtin dangerous sha256:3f8f835e0779dfff
+2026-08-25T01:33:57Z INSTALL axolotl official:builtin dangerous sha256:9f2644cbceef2e97
+2026-08-25T01:33:57Z INSTALL 1password official:builtin safe sha256:a74425a57937c8d4
+2026-08-25T01:33:57Z INSTALL memento-flashcards official:builtin safe sha256:ce78b6936b341d0e
+2026-08-25T01:33:57Z INSTALL docker-management official:builtin dangerous sha256:2929e0dd20148d74
+2026-08-25T01:36:57Z INSTALL yuanbao official:builtin safe sha256:2d62b4c6c606c36e

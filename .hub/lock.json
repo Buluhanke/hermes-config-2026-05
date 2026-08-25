@@ -5,17 +5,28 @@
       "source": "official",
       "identifier": "official/yuanbao",
       "trust_level": "builtin",
-      "scan_verdict": "backfilled",
-      "content_hash": "sha256:881625ad1581ec37",
+      "scan_verdict": "safe",
+      "content_hash": "sha256:2d62b4c6c606c36e",
       "install_path": "yuanbao",
       "files": [
         "SKILL.md"
       ],
-      "metadata": {
-        "backfilled_from": "optional-skills"
+      "metadata": {},
+      "scan_provenance": {
+        "source": "official",
+        "source_url": "official/yuanbao",
+        "bundle_hash": "sha256:2d62b4c6c606c36ee37ddd2d69b5fb9d3f2eb18eb85d02acb351f58b4d300311",
+        "scanner_version": "skills-guard-v1",
+        "verdict": "safe",
+        "trust_level": "builtin",
+        "findings": [],
+        "rules": [],
+        "scanned_at": "2026-08-25T01:36:57.979950+00:00",
+        "summary": "yuanbao: clean scan, no threats detected",
+        "fresh": true
       },
-      "installed_at": "2026-07-24T07:52:56.526766+00:00",
-      "updated_at": "2026-07-24T07:52:56.526766+00:00"
+      "installed_at": "2026-08-25T01:36:57.983426+00:00",
+      "updated_at": "2026-08-25T01:36:57.983430+00:00"
     },
     "honcho": {
       "source": "official",
@@ -111,7 +122,7 @@
       "identifier": "official/mcp/fastmcp",
       "trust_level": "builtin",
       "scan_verdict": "dangerous",
-      "content_hash": "sha256:8c0465c60ae59947",
+      "content_hash": "sha256:3f8f835e0779dfff",
       "install_path": "mcp/fastmcp",
       "files": [
         "SKILL.md",
@@ -125,7 +136,7 @@
       "scan_provenance": {
         "source": "official",
         "source_url": "official/mcp/fastmcp",
-        "bundle_hash": "sha256:8c0465c60ae599478bdca0aad624b26cfa546e23dd7d107f5006c0cb97db6b24",
+        "bundle_hash": "sha256:3f8f835e0779dffff54577f4503fbdc03fee7bc68c2b3a2b96e04c64278cdec4",
         "scanner_version": "skills-guard-v1",
         "verdict": "dangerous",
         "trust_level": "builtin",
@@ -236,12 +247,12 @@
           "python_getenv_secret",
           "unpinned_pip_install"
         ],
-        "scanned_at": "2026-07-25T01:28:31.436325+00:00",
+        "scanned_at": "2026-08-25T01:33:57.081284+00:00",
         "summary": "fastmcp: dangerous — 11 finding(s) in exfiltration, network, persistence, supply_chain",
         "fresh": true
       },
-      "installed_at": "2026-07-25T01:28:31.439104+00:00",
-      "updated_at": "2026-07-25T01:28:31.439106+00:00"
+      "installed_at": "2026-08-25T01:33:57.087144+00:00",
+      "updated_at": "2026-08-25T01:33:57.087147+00:00"
     },
     "dcf-model": {
       "source": "official",
@@ -321,7 +332,7 @@
       "identifier": "official/mlops/training/axolotl",
       "trust_level": "builtin",
       "scan_verdict": "dangerous",
-      "content_hash": "sha256:08d6156e208d179a",
+      "content_hash": "sha256:9f2644cbceef2e97",
       "install_path": "mlops/training/axolotl",
       "files": [
         "SKILL.md",
@@ -334,7 +345,7 @@
       "scan_provenance": {
         "source": "official",
         "source_url": "official/mlops/training/axolotl",
-        "bundle_hash": "sha256:08d6156e208d179a8a0f1f630e1a9bc4aadb8e5965ea84cf329866c396fcfd36",
+        "bundle_hash": "sha256:9f2644cbceef2e978f2e2a28a9f2b5cf4c36e714a70e9a507a45fcca39e2f455",
         "scanner_version": "skills-guard-v1",
         "verdict": "dangerous",
         "trust_level": "builtin",
@@ -389,12 +400,12 @@
           "curl_pipe_shell",
           "unpinned_pip_install"
         ],
-        "scanned_at": "2026-07-25T01:29:05.288582+00:00",
+        "scanned_at": "2026-08-25T01:33:57.471752+00:00",
         "summary": "axolotl: dangerous — 5 finding(s) in supply_chain",
         "fresh": true
       },
-      "installed_at": "2026-07-25T01:29:05.291640+00:00",
-      "updated_at": "2026-07-25T01:29:05.291644+00:00"
+      "installed_at": "2026-08-25T01:33:57.475648+00:00",
+      "updated_at": "2026-08-25T01:33:57.475653+00:00"
     },
     "subagent-driven-development": {
       "source": "official",
@@ -442,7 +453,7 @@
       "identifier": "official/security/1password",
       "trust_level": "builtin",
       "scan_verdict": "safe",
-      "content_hash": "sha256:c3934ee1f79071bb",
+      "content_hash": "sha256:a74425a57937c8d4",
       "install_path": "security/1password",
       "files": [
         "SKILL.md",
@@ -453,25 +464,25 @@
       "scan_provenance": {
         "source": "official",
         "source_url": "official/security/1password",
-        "bundle_hash": "sha256:c3934ee1f79071bbabddba0a8bd7277b1f38751cacd22388d349e5f810993f00",
+        "bundle_hash": "sha256:a74425a57937c8d429b4bf9eb7aa9daa660f9de798bd6806c525f68410ef85fc",
         "scanner_version": "skills-guard-v1",
         "verdict": "safe",
         "trust_level": "builtin",
         "findings": [],
         "rules": [],
-        "scanned_at": "2026-07-25T01:30:04.780598+00:00",
+        "scanned_at": "2026-08-25T01:33:57.550082+00:00",
         "summary": "1password: clean scan, no threats detected",
         "fresh": true
       },
-      "installed_at": "2026-07-25T01:30:04.782493+00:00",
-      "updated_at": "2026-07-25T01:30:04.782496+00:00"
+      "installed_at": "2026-08-25T01:33:57.551796+00:00",
+      "updated_at": "2026-08-25T01:33:57.551799+00:00"
     },
     "memento-flashcards": {
       "source": "official",
       "identifier": "official/productivity/memento-flashcards",
       "trust_level": "builtin",
       "scan_verdict": "safe",
-      "content_hash": "sha256:ec72f6a0a0ac6d5d",
+      "content_hash": "sha256:ce78b6936b341d0e",
       "install_path": "productivity/memento-flashcards",
       "files": [
         "SKILL.md",
@@ -482,7 +493,7 @@
       "scan_provenance": {
         "source": "official",
         "source_url": "official/productivity/memento-flashcards",
-        "bundle_hash": "sha256:ec72f6a0a0ac6d5d39b968b7717ced6a736a02d048edfd3e4a1e9d23c06a1540",
+        "bundle_hash": "sha256:ce78b6936b341d0ee7bdb4ec6a11c03e8b76c2bccd42dec583d38ecae8904118",
         "scanner_version": "skills-guard-v1",
         "verdict": "safe",
         "trust_level": "builtin",
@@ -492,7 +503,7 @@
             "severity": "medium",
             "category": "supply_chain",
             "file": "SKILL.md",
-            "line": 211,
+            "line": 207,
             "match": "pip install youtube-transcript-api",
             "description": "pip install without version pinning"
           },
@@ -501,7 +512,7 @@
             "severity": "medium",
             "category": "supply_chain",
             "file": "SKILL.md",
-            "line": 302,
+            "line": 298,
             "match": "- **Optional dependency** — `youtube_quiz.py` needs `youtube-transcript-api`; if missing, tell the user to run `pip i...",
             "description": "pip install without version pinning"
           },
@@ -527,19 +538,19 @@
         "rules": [
           "unpinned_pip_install"
         ],
-        "scanned_at": "2026-07-25T01:30:15.756429+00:00",
+        "scanned_at": "2026-08-25T01:33:57.640537+00:00",
         "summary": "memento-flashcards: safe — 4 finding(s) in supply_chain",
         "fresh": true
       },
-      "installed_at": "2026-07-25T01:30:15.759138+00:00",
-      "updated_at": "2026-07-25T01:30:15.759143+00:00"
+      "installed_at": "2026-08-25T01:33:57.642973+00:00",
+      "updated_at": "2026-08-25T01:33:57.642976+00:00"
     },
     "docker-management": {
       "source": "official",
       "identifier": "official/devops/docker-management",
       "trust_level": "builtin",
       "scan_verdict": "dangerous",
-      "content_hash": "sha256:15a7f65f4fb81c7d",
+      "content_hash": "sha256:2929e0dd20148d74",
       "install_path": "devops/docker-management",
       "files": [
         "SKILL.md"
@@ -548,7 +559,7 @@
       "scan_provenance": {
         "source": "official",
         "source_url": "official/devops/docker-management",
-        "bundle_hash": "sha256:15a7f65f4fb81c7d930c3d722df3a94263d8deae5ee23d929631d020a76e3db3",
+        "bundle_hash": "sha256:2929e0dd20148d74851b6cd78aa8eef74a91482c3204dc1fbb382b8d64312dc5",
         "scanner_version": "skills-guard-v1",
         "verdict": "dangerous",
         "trust_level": "builtin",
@@ -558,7 +569,7 @@
             "severity": "critical",
             "category": "exfiltration",
             "file": "SKILL.md",
-            "line": 255,
+            "line": 256,
             "match": "| Permission denied on volume | UID/GID mismatch host vs container | Use `--user $(id -u):$(id -g)` or fix permissions |",
             "description": "DNS lookup with variable interpolation (possible DNS exfiltration)"
           },
@@ -567,7 +578,7 @@
             "severity": "medium",
             "category": "execution",
             "file": "SKILL.md",
-            "line": 255,
+            "line": 256,
             "match": "| Permission denied on volume | UID/GID mismatch host vs container | Use `--user $(id -u):$(id -g)` or fix permissions |",
             "description": "backtick string with command substitution"
           },
@@ -596,12 +607,12 @@
           "docker_pull",
           "sudo_usage"
         ],
-        "scanned_at": "2026-07-25T01:30:17.127321+00:00",
+        "scanned_at": "2026-08-25T01:33:57.720506+00:00",
         "summary": "docker-management: dangerous — 4 finding(s) in execution, exfiltration, privilege_escalation, supply_chain",
         "fresh": true
       },
-      "installed_at": "2026-07-25T01:30:17.129475+00:00",
-      "updated_at": "2026-07-25T01:30:17.129477+00:00"
+      "installed_at": "2026-08-25T01:33:57.722670+00:00",
+      "updated_at": "2026-08-25T01:33:57.722674+00:00"
     },
     "deep-learning": {
       "source": "clawhub",

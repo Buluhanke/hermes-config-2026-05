@@ -217,6 +217,23 @@ hermes skills install skills-sh/zinohome/cozyengine/ui-prompt-generator --force
 ```
 
 
+## 技能升级 SOP（2026-08-25 实战定稿）
+
+```bash
+hermes skills check          # 列出所有 hub 技能的更新状态
+hermes skills update         # 批量更新（用户改过的 bundled skill 自动跳过保护）
+hermes skills update <name> --force   # 强更本地改动版（先 cp 备份到 /tmp）
+hermes skills diff <name>    # 只对 bundled skill 有效；hub 装的用 inspect
+hermes skills audit          # 全库安全重扫（dangerous+community 会 BLOCK）
+hermes skills repair-official <name>  # 修溯源（如 "path missing" 警告）
+```
+
+**踩坑**：
+- bundled skill 被 list-modified 标记后 update 会静默跳过——想吃到官方更新必须先备份再 --force。
+- 根目录散落文件（`skills/SKILL.md`、`skills/xxx.md`）不会被索引加载，必须归位成 `<name>/SKILL.md` 目录结构。
+- 审计扫出的 `[SKILL_PRUNED]` 可能是误报：先 grep 看是技能正文还是代码示例里的字符串。
+- 分类伞包（apple/research/devops 等嵌套目录）是正常结构，depth>1 的 SKILL.md 能正常加载，不要乱扁平化。
+
 ## 2026 更优方案（全网调研 2026-08 迭代）
 Hermes v0.12.0 官方已内置 Curator（aux model 后台自动巡检/整理 skill 库、淘汰失效技能），可替代部分手工固化。
 备份：Dicklesworthstone/agent_settings_backup_script（git 版本化、按大小轮转、易恢复）。
