@@ -1,6 +1,6 @@
 ---
 name: bitwarden-cli
-description: "Bitwarden CLI password manager — install, login, unlock, query."
+description: "Bitwarden密码管理 bw CLI unlock同步读写密码项。Use when 用Bitwarden存取凭据"
 triggers:
   - bitwarden
   - 密码管理

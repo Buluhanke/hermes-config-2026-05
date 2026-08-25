@@ -1,6 +1,6 @@
 ---
 name: memento-flashcards
-description: "Spaced-repetition flashcards: create, review, quiz, export."
+description: "闪卡间隔重复 制卡复习记忆。Use when 建记忆卡片辅助背诵复习"
 version: 1.0.0
 author: Memento AI
 license: MIT

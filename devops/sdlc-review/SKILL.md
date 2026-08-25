@@ -1,6 +1,6 @@
 ---
 name: sdlc-review
-description: Review Kanban handoffs and route verified outcomes.
+description: "SDLC kanban交接审查 verified outcome路由。Use when kanban流转和交付物审查"
 version: 1.1.0
 author: Jakub Wolniewicz (@frizikk) + Hermes Agent
 license: MIT

@@ -1,6 +1,6 @@
 ---
 name: camofox
-description: "Camofox本地抗检测浏览器服务器——Firefox指纹伪造+持久化Cookie+独立身份Profile"
+description: "CamoFox抗检测浏览器 Firefox指纹伪造持久Cookie独立身份。Use when 反爬网站需要指纹伪装浏览器"
 ---
 
 # Camofox Browser

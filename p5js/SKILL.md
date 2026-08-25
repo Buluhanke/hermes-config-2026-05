@@ -1,6 +1,6 @@
 ---
 name: p5js
-description: 'p5.js sketches: gen art, shaders, interactive, 3D.'
+description: "p5.js创意编程 生成艺术shader交互3D。Use when 写p5 sketch可视化创意demo"
 version: 1.0.0
 platforms:
 - linux

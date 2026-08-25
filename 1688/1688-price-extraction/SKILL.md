@@ -1,6 +1,6 @@
 ---
 name: 1688-price-extraction
-description: 1688精准价格提取 — 用CDP+browser_console拿登录态页面真实价格，与curl/API方案对比。
+description: "1688真实价格 登录态页面价格 CDP browser_console 阶梯价到手价。Use when 要1688商品真实成交价而非展示标价"
 trigger: 1688 价格 对比 找品 规格价格
 ---
 

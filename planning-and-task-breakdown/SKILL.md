@@ -1,6 +1,6 @@
 ---
 name: planning-and-task-breakdown
-description: 系统化任务规划与分解 — 从目标到可执行步骤的完整链路。避免"想清楚再干"变成无限拖延。
+description: "任务分解 目标到可执行步骤防拖延。Use when 大任务要切成有序小步"
 triggers:
   - "接到一个模糊的需求，不知道从哪里开始"
   - "任务规模不明确，无法估算工时"

@@ -1,6 +1,6 @@
 ---
 name: macos-network-sharing
-description: "macOS SMB/Bonjour 网络发现故障：Finder 找不到 Mac、smbd 不自启、端口 445 占用。"
+description: "macOS SMB共享 smbd自启445端口排查。Use when Mac之间SMB文件共享不通"
 triggers:
   - "Finder 网络/侧边栏找不到 Mac"
   - "局域网发现不了"

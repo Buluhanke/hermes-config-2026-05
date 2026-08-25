@@ -1,6 +1,6 @@
 ---
 name: competitor-news-monitor
-description: "Watch named companies for material news; cited digests."
+description: "竞品新闻监控 指定公司重大新闻 引用摘要。Use when 追踪竞品公司的重要动态"
 version: 0.1.0
 author: Ben Barclay (benbarclay), Hermes Agent
 license: MIT

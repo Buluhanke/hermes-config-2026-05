@@ -1,6 +1,6 @@
 ---
 name: meeting-action-items
-description: "Turn meeting notes into cited decisions, owners, tickets."
+description: "会议纪要转行动项 决议负责人工单带引用。Use when 从会议记录提取决定和待办"
 version: 0.1.0
 author: Ben Barclay (benbarclay), Hermes Agent
 license: MIT

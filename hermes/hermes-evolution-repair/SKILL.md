@@ -1,6 +1,6 @@
 ---
 name: hermes-evolution-repair
-description: Hermes进化循环断点自查：free_bytes漏$、内存守卫阈值、cron config-drift pin。
+description: "进化循环断点自查 free_bytes漏$内存守卫drift。Use when 夜间自学习进化循环静默失败"
 triggers:
   - 进化循环断了
   - night-learning 报错

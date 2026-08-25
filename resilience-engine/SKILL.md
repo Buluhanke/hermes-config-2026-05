@@ -1,6 +1,6 @@
 ---
 name: resilience-engine
-description: 生存引擎 — 自动恢复能力，处理卡死、白屏、验证码、登录失效等异常，让任务不卡死。
+description: "生存引擎 卡死白屏验证码登录失效自愈。Use when 自动化任务中途异常要自动恢复"
 triggers:
   - "任务执行超过30秒无响应"
   - "页面白屏或加载失败"

@@ -1,6 +1,6 @@
 ---
 name: obsidian
-description: Read, search, create, and edit notes in the Obsidian vault.
+description: "Obsidian vault 笔记读写搜索。Use when 操作用户的Obsidian笔记库"
 version: 1.0.0
 author: Teknium (teknium1), Hermes Agent
 license: MIT

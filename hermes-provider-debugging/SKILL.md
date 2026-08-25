@@ -1,6 +1,6 @@
 ---
 name: hermes-provider-debugging
-description: Hermes 模型 provider 配置诊断 — custom_providers YAML结构、provider可用性、API余额、模型目录缓存问题
+description: "provider配置诊断 custom_providers YAML连通性。Use when 自定义provider不工作时"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

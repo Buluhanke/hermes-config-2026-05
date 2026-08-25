@@ -1,6 +1,6 @@
 ---
 name: axolotl
-description: "Axolotl: YAML LLM fine-tuning (LoRA, DPO, GRPO)."
+description: "Axolotl YAML微调 LoRA DPO GRPO训练配置。Use when 微调大模型写axolotl训练配置"
 version: 1.0.0
 author: Orchestra Research
 license: MIT

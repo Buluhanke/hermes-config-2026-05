@@ -1,8 +1,6 @@
 ---
 name: context-compression
-description: When agent sessions generate millions of tokens of conversation history,
-  compression becomes mandatory. The naive approach is aggressive compression to minimize
-  tokens per request.
+description: "上下文压缩 百万token会话管理防溢出。Use when 对话过长要压缩上下文保完整"
 risk: unknown
 source: community
 triggers:

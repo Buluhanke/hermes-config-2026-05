@@ -1,6 +1,6 @@
 ---
 name: product-price-monitor
-description: "Watch product, flight, or listing prices; alert on target."
+description: "价格监控 商品机票listing阈值告警。Use when 盯某商品降价到目标提醒"
 version: 0.1.0
 author: Ben Barclay (benbarclay), Hermes Agent
 license: MIT

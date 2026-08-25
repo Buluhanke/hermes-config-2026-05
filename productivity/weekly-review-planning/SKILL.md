@@ -1,6 +1,6 @@
 ---
 name: weekly-review-planning
-description: "Weekly reset: commitments, stalled work, next-week plan."
+description: "周回顾 承诺盘点停滞项下周计划。Use when 每周复盘和下周规划"
 version: 0.1.0
 author: Ben Barclay (benbarclay), Hermes Agent
 license: MIT

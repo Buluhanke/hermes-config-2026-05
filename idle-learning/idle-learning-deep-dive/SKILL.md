@@ -1,7 +1,7 @@
 ---
 name: idle-learning-deep-dive
 version: 0.1
-description: 主动多源学习：ABCD B阶段并行社区浏览，不等key不靠边，主动出门获取实时知识。
+description: "自学深化 state.db VACUUM MEMORY压缩 skill审计SOP。Use when 自学深化记忆瘦身技能审计"
 triggers:
   - 深度学习
   - 多源搜索

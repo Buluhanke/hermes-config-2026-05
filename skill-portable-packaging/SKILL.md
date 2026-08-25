@@ -1,6 +1,6 @@
 ---
 name: skill-portable-packaging
-description: Flatten a Hermes skill into one portable .md for transfer.
+description: "技能打包 压平单文件md可移植转移。Use when 把skill打包分享或迁移"
 category: skill-authoring
 ---
 

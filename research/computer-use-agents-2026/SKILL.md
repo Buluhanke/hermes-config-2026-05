@@ -1,6 +1,6 @@
 ---
 name: computer-use-agents-2026
-description: "Code-first beats pixels for computer-use agents in 2026."
+description: "桌面agent研究结论 code-first胜过像素操作。Use when 设计桌面自动化方案做选型"
 triggers:
   - computer use agent
   - 截图 vs 代码

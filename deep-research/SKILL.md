@@ -1,14 +1,6 @@
 ---
 name: deep-research
-description: 'Seven-stage deep research pipeline for substantive research questions.
-
-  Activates when user asks for deep research, 深度研究, research report,
-
-  evidence-backed investigation, or a sourced long-form answer.
-
-  Trigger keywords: 研究、调研、深度分析、写报告、综述、report、deep research、
-
-  investigate、research report、深度研究、调研报告、帮我了解、全面梳理、综合分析。'
+description: "深度研究 七阶段流水线 实质性研究出报告。Use when 系统性深度调研一个课题交付报告"
 triggers:
 - Use when deep research
 trigger_type: general

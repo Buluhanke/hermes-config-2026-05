@@ -1,6 +1,6 @@
 ---
 name: document-to-action-items
-description: "Extract cited obligations, deadlines, tasks from documents."
+description: "文档提取义务条款截止日期行动项带引用。Use when 从合同纪要提取待办责任和期限"
 version: 0.1.0
 author: Ben Barclay (benbarclay), Hermes Agent
 license: MIT

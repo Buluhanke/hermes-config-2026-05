@@ -1,6 +1,6 @@
 ---
 name: design-md
-description: Author/validate/export Google's DESIGN.md token spec files.
+description: "DESIGN.md设计token规范 编写校验导出Google格式。Use when 写设计系统design tokens文件"
 version: 1.1.0
 author: Hermes Agent
 license: MIT

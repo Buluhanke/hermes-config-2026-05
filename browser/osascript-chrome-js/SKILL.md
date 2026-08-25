@@ -1,6 +1,6 @@
 ---
 name: osascript-chrome-js
-description: Drive logged-in Chrome via AppleScript JS when CDP fails.
+description: "AppleScript JS驱动已登录Chrome CDP备选。Use when CDP连不上但要操作真实Chrome"
 version: 1.0.0
 triggers:
 - drive logged-in Chrome / operate GitHub settings / fill web form no CDP

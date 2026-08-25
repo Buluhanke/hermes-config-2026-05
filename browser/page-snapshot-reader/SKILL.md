@@ -1,6 +1,6 @@
 ---
 name: page-snapshot-reader
-description: "page reading via Hermes browser_navigate + browser_snapshot"
+description: "browser_navigate+snapshot分层读页免截图。Use when 用Hermes内置浏览器读页面内容"
 triggers:
   - "读取这个页面"
   - "读取这个链接"

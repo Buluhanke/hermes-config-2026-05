@@ -1,6 +1,6 @@
 ---
 name: perception-decision-engine
-description: Hermes 4 层感知决策框架 — L0 Task Memory (缓存) → L1 AX Tree → L2 Local Detector (OpenCV+OCR+Layout) → L3 Cloud VLM (UI-TARS, 默认禁用)。解决「什么时候该调视觉」这个 Hermes 最大的性能杠杆, 严格遵守 90/9/0.9/0.1 漏斗假设。
+description: "感知决策四层 L0缓存L1AX树L2视觉选型。Use when GUI自动化感知层方案选择"
 trigger: agent 找不到目标元素、需要做视觉决策、想知道「现在该不该调 VLM」时。
 ---
 

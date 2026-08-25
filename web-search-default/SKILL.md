@@ -1,7 +1,7 @@
 ---
 name: web-search-default
 version: 1.1.0
-description: 联网搜索固化路径 — 任何搜索任务立即执行，优先 web_search + firecrawl/serper
+description: "联网搜索固化 web_search优先firecrawl serper。Use when 任何搜索任务立即执行的默认动作"
 triggers:
   - 联网搜索
   - 搜索一下

@@ -1,6 +1,6 @@
 ---
 name: progress-sync
-description: 进度同步协议 — 长周期任务每5步汇报+checkpoint
+description: "进度同步 长周期任务每5步汇报checkpoint。Use when 跑长任务保持进度可见"
 version: 1.0.0
 source: hermes-export engineering
 triggers:

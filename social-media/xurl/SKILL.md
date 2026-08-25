@@ -1,6 +1,6 @@
 ---
 name: xurl
-description: "X/Twitter via xurl CLI: raw post search, posting, DM, media."
+description: "X推特 xurl CLI 帖子搜索发帖DM媒体。Use when 读取发布X Twitter内容"
 version: 1.1.3
 author: xdevplatform + openclaw + Hermes Agent
 license: MIT

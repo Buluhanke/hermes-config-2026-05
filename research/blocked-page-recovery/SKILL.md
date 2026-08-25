@@ -1,6 +1,6 @@
 ---
 name: blocked-page-recovery
-description: "Recover blocked/paywalled/WAF'd pages via fallbacks."
+description: "拦截页恢复 paywall WAF Cloudflare fallback链。Use when 网页抓取被403验证码paywall挡住"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

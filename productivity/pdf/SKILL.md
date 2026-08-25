@@ -1,6 +1,6 @@
 ---
 name: pdf
-description: Create, read, merge, fill, and secure PDF files.
+description: "PDF处理 创建读取合并填表加密拆分。Use when 任何PDF操作需求"
 version: 1.0.0
 author: Nous Research
 license: MIT

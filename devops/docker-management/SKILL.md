@@ -1,6 +1,6 @@
 ---
 name: docker-management
-description: Manage Docker containers, images, volumes, and Compose.
+description: "Docker容器镜像卷Compose管理 常用命令排障。Use when 操作docker compose容器镜像卷"
 version: 1.0.0
 author: sprmn24
 license: MIT

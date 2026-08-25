@@ -1,6 +1,6 @@
 ---
 name: honcho
-description: Configure and troubleshoot Honcho memory for Hermes.
+description: "Honcho记忆后端 配置排障plnx集成。Use when Hermes接Honcho记忆出问题"
 version: 2.0.0
 author: Hermes Agent
 license: MIT

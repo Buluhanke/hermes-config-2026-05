@@ -1,6 +1,6 @@
 ---
 name: ocr-fallback
-description: OCR兜底能力 — DOM/AX树失效时的最后防线
+description: "OCR兜底 DOM AX树失效时最后防线读屏。Use when 页面自动化完全读不到文本"
 version: 1.0.0
 source: hermes-export engineering
 triggers:

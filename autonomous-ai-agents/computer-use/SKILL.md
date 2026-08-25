@@ -1,6 +1,6 @@
 ---
 name: computer-use
-description: "Drive the desktop in the background without stealing focus."
+description: "后台桌面控制 macOS不抢焦点 截图鼠标键盘SOM元素点击。Use when 要操作GUI应用而用户正在用电脑"
 version: 2.0.0
 author: Francesco Bonacci (f-trycua), Hermes Agent
 license: MIT

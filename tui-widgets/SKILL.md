@@ -1,6 +1,6 @@
 ---
 name: tui-widgets
-description: Author live widget apps for the Hermes TUI dock.
+description: "TUI组件 dock实时widget应用开发。Use when 给Hermes TUI写面板小组件"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

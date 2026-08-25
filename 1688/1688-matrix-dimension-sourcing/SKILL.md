@@ -1,6 +1,6 @@
 ---
 name: 1688-matrix-dimension-sourcing
-description: 1688 搜精确尺寸商品时矩阵式尺寸漏检与全角括号 bug 的修法。
+description: "1688搜精确尺寸商品 矩阵尺寸漏检 全角括号bug 尺寸容差匹配。Use when 按如46*26*10cm精确尺寸在1688找纸箱包装类商品"
 category: 1688
 ---
 

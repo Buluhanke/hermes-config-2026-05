@@ -1,6 +1,6 @@
 ---
 name: gateway-restart-technique
-description: Gateway 重启的正确姿势——terminal工具被拦、computer_use绕过去、MCP彻底移除、验证三步走。
+description: "gateway重启 正确姿势 进程树守卫 kill -HUP重载。Use when hermes gateway卡死要重启"
 triggers:
   - 修改config.yaml后需要重启gateway
   - launchctl kill/kickstart被Blocked

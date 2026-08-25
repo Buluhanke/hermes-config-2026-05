@@ -1,6 +1,6 @@
 ---
 name: debugging-and-error-recovery
-description: 4-phase root cause debugging — understand errors before attempting fixes. Prevents shooting in the dark.
+description: "根因调试 四阶段先懂错误再修 防瞎猜循环。Use when 修bug排查报错的方法论指导"
 triggers:
   - "收到了错误信息但不知道根因"
   - "同一个bug反复出现"

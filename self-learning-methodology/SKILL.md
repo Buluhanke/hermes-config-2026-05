@@ -1,7 +1,6 @@
 ---
 name: self-learning-methodology
-description: Hermes Agent 自我学习的方法论总纲——学习渠道（从哪里获取知识）、四层记忆架构（在哪固化）、学习闭环（怎么固化）、避坑。这是"自我学习"主题的权威总纲。当被问"你如何学习/自我进化/学习路径是什么"，或完成复杂任务、被用户纠正、发现可复用流程时，以此
-  skill 为主回答。注意：若存在 abcd-learner / idle_learning 等同主题 skill，它们只是本总纲中"被动/自动升华"这一执行环节的具体实现，不得喧宾夺主、不得用它替换本总纲的渠道与架构表述。
+description: "自学方法论 渠道四层记忆学习闭环总纲。Use when 设计agent自学体系架构"
 triggers:
 - Use when self learning methodology
 trigger_type: general

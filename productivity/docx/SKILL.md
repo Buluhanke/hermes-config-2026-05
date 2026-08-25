@@ -1,6 +1,6 @@
 ---
 name: docx
-description: Create, read, edit, template, and review Word .docx files.
+description: "Word文档 .docx 创建读取编辑模板审阅。Use when 任何Word文档处理需求"
 version: 1.1.0
 author: Nous Research
 license: MIT

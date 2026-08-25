@@ -1,6 +1,6 @@
 ---
 name: hermes-agent
-description: "Use, configure, theme, extend, and orchestrate Hermes Agent."
+description: "Hermes本体总入口 CLI gateway插件技能主题路由表。Use when 用户问Hermes功能配置排障——先载此技能再答"
 version: 3.2.0
 author: Hermes Agent + Teknium
 license: MIT

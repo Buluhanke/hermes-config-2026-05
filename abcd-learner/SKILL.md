@@ -1,10 +1,7 @@
 ---
 name: abcd-learner
 version: 0.3
-description: |
-  AgentFactory paradigm (ACL2026): fact检索≥1次时，将其升华为可执行的skill文件。
-  重要schema：列名是fact_id（不是id），category字段=fact分类名（不是text），content字段=fact长描述文本，tags字段存逗号字符串（如"star4d,learning"）不是JSON数组。
-  body=content，不是category！文档和代码都写反过，2026-07-13已修正。
+description: "AgentFactory范式 fact检索升华skill 自动结晶学习闭环。Use when 把重复检索的fact固化为可执行skill"
 triggers:
   - "知识落地"
   - "学到的知识变成skill"

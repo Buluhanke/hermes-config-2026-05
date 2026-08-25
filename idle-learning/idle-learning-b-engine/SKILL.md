@@ -1,6 +1,6 @@
 ---
 name: idle-learning-b-engine
-description: "B阶段执行层：web_search为骨干并行多源浏览→fact_store写入，不依赖特定key。"
+description: "B阶段并行多源浏览 web_search骨干不等key。Use when 自主学习的浏览采集阶段执行"
 triggers:
   - 开始自学
   - 出门学习

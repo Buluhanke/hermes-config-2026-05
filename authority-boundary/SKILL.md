@@ -1,6 +1,6 @@
 ---
 name: authority-boundary
-description: 权责边界 — 什么操作必须用户授权，什么可自主执行
+description: "权责边界 哪些操作必须用户授权哪些可自主。Use when 拿不准某操作该不该先问用户"
 version: 1.0.0
 source: hermes-export engineering
 triggers:

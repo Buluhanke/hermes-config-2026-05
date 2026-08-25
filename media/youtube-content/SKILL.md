@@ -1,6 +1,6 @@
 ---
 name: youtube-content
-description: "YouTube transcripts to summaries, threads, blogs."
+description: "YouTube字幕转 摘要threads博客内容消化。Use when 消化YouTube视频成文字"
 version: 1.0.0
 author: Teknium (teknium1), Hermes Agent
 license: MIT

@@ -1,7 +1,6 @@
 ---
 name: handoff
-description: Compact the current conversation into a handoff document for another
-  agent to pick up.
+description: "会话交接 当前对话压缩成handoff文档。Use when 会话太长要交接给下一个会话"
 argument-hint: What will the next session be used for?
 disable-model-invocation: true
 triggers:

@@ -1,6 +1,6 @@
 ---
 name: hermes-subprocess-pitfalls
-description: "hermes_tools only loads in execute_code sandbox."
+description: "hermes_tools仅execute_code沙盒可用的坑。Use when 子进程里调不到hermes工具"
 triggers:
   - "write a script for a skill"
   - "hermes_tools not found"

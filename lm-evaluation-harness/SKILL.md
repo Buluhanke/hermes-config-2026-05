@@ -1,6 +1,6 @@
 ---
 name: evaluating-llms-harness
-description: 'lm-eval-harness: benchmark LLMs (MMLU, GSM8K, etc.).'
+description: "lm-eval-harness MMLU GSM8K跑LLM基准。Use when 评测大模型benchmark分数"
 version: 1.0.0
 author: Orchestra Research
 license: MIT

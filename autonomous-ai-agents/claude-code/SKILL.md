@@ -1,6 +1,6 @@
 ---
 name: claude-code
-description: "Delegate coding to Claude Code CLI (features, PRs)."
+description: "委派编码给Claude Code CLI 开feature发PR。Use when 把编码子任务交给Claude Code执行"
 version: 2.2.1
 author: Hermes Agent + Teknium
 license: MIT

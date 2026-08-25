@@ -1,6 +1,6 @@
 ---
 name: error-patterns
-description: 常见错误模式的根因分析 + 修复方案。来源：auto_skill_from_failure.py 从 agent.log 每日抽取，6类核心模式。
+description: "常见报错根因修复对照表 agent实战沉淀。Use when 遇到已知错误模式速查解法"
 triggers:
   - TimeoutError
   - ConnectionError

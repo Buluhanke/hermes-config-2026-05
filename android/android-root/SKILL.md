@@ -1,6 +1,6 @@
 ---
 name: android-root
-description: Android root — Magisk boot.img 修补工作流，bootloader解锁设备。
+description: "Android root Magisk boot.img修补 解锁bootloader。Use when 给安卓设备root或解BL锁"
 tags: [android, root, magisk, boot-img]
 triggers:
   - root手机

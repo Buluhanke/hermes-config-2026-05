@@ -1,5 +1,5 @@
 ---
-description: Memray memory profiler for Python
+description: "Memray Python内存剖析火焰图泄漏。Use when 查Python内存泄漏分配热点"
 name: memray-memory-profiler
 trigger_type: general
 triggers:

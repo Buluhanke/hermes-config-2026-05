@@ -1,6 +1,6 @@
 ---
 name: evidence-loop
-description: "不凭感觉闭环：答事实/数据/环境/配置前必走工具实测，不编不猜。"
+description: "零编造闭环 答数据环境配置前必走工具实测。Use when 回答事实性问题前的强制自检"
 version: "1.0.0"
 triggers:
   - "回答问题/获取答案"

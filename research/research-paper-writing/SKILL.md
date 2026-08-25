@@ -1,7 +1,7 @@
 ---
 name: research-paper-writing
 title: Research Paper Writing Pipeline
-description: "Write ML papers for NeurIPS/ICML/ICLR: design→submit."
+description: "ML论文写作 NeurIPS ICML ICLR投稿全流程。Use when 写投稿机器学习论文"
 version: 1.1.0
 author: Orchestra Research
 license: MIT

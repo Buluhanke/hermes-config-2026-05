@@ -1,6 +1,6 @@
 ---
 name: 1688-sourcing
-description: "1688找品：真Chrome登录态 + computer_use操作 + 详情页逐个抠规格阶梯价。"
+description: "1688找品选品 真Chrome登录态 computer_use 详情页抠规格阶梯价 找货源。Use when 用户要1688找货/比价/选品"
 triggers:
   - 1688找品
   - 1688搜索

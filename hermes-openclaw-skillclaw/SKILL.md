@@ -1,6 +1,6 @@
 ---
 name: hermes-openclaw-skillclaw
-description: Repair and wire the Hermes, OpenClaw, SkillClaw macOS stack.
+description: "SkillClaw崩溃修复 OpenClaw MCP桥接线。Use when SkillClaw崩了或桥接断了"
 ---
 
 # Hermes + OpenClaw + SkillClaw Integration & Repair

@@ -1,6 +1,6 @@
 ---
 name: deepseek-harness
-description: Install and configure DeepSeek Harness (dsh) CLI and Web UI.
+description: "DeepSeek Harness dsh CLI安装配置Web UI。Use when 安装配置dsh命令行"
 trigger: install DeepSeek Harness / configure dsh model / dsh web / wire OpenRouter into dsh / DeepSeek Harness Socket / everything is a plugin harness
 ---
 

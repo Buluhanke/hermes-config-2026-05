@@ -1,6 +1,6 @@
 ---
 name: humanizer
-description: 'Humanize text: strip AI-isms and add real voice.'
+description: "去AI味 文本改写真人语气自然表达。Use when 文本太像AI写的要求改自然"
 version: 2.5.1
 author: Siqi Chen (@blader, https://github.com/blader/humanizer), ported by Hermes
   Agent

@@ -1,6 +1,6 @@
 ---
 name: cron-job-reliability
-description: "Design, implement, and maintain reliable cron jobs on Hermes. Covers: wrapper script patterns, no_agent=true migration, subprocess timeout control, external API graceful degradation, and debugging LLM cron agents that write reports instead of executing."
+description: "cron可靠化 排障 last_status=error wrapper实跑验证。Use when 定时任务没跑静默失败或新建可靠job"
 triggers:
   - cron job 不跑 / cron job 失败 / cron 没有执行
   - LLM 偷懒 / 写报告不执行 / 只说不做

@@ -1,6 +1,6 @@
 ---
 name: arxiv
-description: "Search arXiv papers by keyword, author, category, or ID."
+description: "arXiv论文检索 关键词作者分类号 摘要PDF链接。Use when 搜学术论文cs分类preprint"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

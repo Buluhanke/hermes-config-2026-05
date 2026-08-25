@@ -1,6 +1,6 @@
 ---
 name: github-pr-workflow
-description: "GitHub PR lifecycle: branch, commit, open, CI, merge."
+description: "PR生命周期 分支提交开PR CI合并。Use when 完整走GitHub PR开发流程"
 version: 1.1.0
 author: Hermes Agent
 license: MIT

@@ -1,18 +1,6 @@
 ---
 name: hermes-observability
-description: >
-  LLM 可观测性 skill — 写入/查询本地 SQLite traces（token消耗、延迟、错误率、Provider分布、估算成本）。
-  数据全留本地不过任何外部服务。
-  
-  使用方式：
-  - 数据自动写入：conversation_loop.py 已在成功/错误路径埋点
-  - 查询统计：python3 ~/.hermes/skills/hermes-observability/query.py --stats --days 30
-  - 查询每日趋势：--daily
-  - 按 Provider 看分布：--providers
-  - 查错误记录：--errors
-  - 查某日详情：--date YYYY-MM-DD
-  
-  DB路径：~/.hermes/llm_traces.db
+description: "LLM可观测 SQLite traces token延迟错误率成本。Use when 分析token消耗调用延迟错误率"
 triggers:
   - token/消耗/用量/token消耗/成本统计
   - LLM可观测性/observability/tracing
@@ -88,3 +76,6 @@ python3 ~/.hermes/skills/hermes-observability/query.py --date 2026-07-08
 ```bash
 sqlite3 ~/.hermes/llm_traces.db "SELECT COUNT(*) FROM llm_traces;"
 ```
+
+## 使用方式
+使用方式：

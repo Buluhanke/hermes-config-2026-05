@@ -1,6 +1,6 @@
 ---
 name: plan
-description: Write a markdown plan to .hermes/plans/; no execution.
+description: "实现计划 写markdown到.hermes/plans只规划不动手。Use when 任务要先出实施计划再审"
 version: 2.0.0
 author: Hermes Agent (writing-craft adapted from obra/superpowers)
 license: MIT

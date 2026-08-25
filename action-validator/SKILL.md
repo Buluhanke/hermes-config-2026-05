@@ -1,6 +1,6 @@
 ---
 name: action-validator
-description: 动作验证层 — 每次操作后验证是否真正生效，防止假执行。包含DOM变化检测、截图diff、AX树diff、URL变化检测。
+description: "动作验证层 操作后验真生效 DOM变化截图diff AX树diff URL变化。Use when 自动化操作后确认真的生效防假执行"
 triggers:
   - "点击操作后验证是否成功"
   - "填写表单后验证值是否写入"

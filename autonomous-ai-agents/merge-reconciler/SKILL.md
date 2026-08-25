@@ -1,6 +1,6 @@
 ---
 name: merge-reconciler
-description: "Neutral third-party resolution of agent merge conflicts."
+description: "合并冲突仲裁 agent冲突中立第三方解决。Use when 多agent改同分支起冲突"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

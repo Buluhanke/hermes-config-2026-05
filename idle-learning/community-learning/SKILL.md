@@ -1,8 +1,7 @@
 ---
 name: community-learning
 version: 0.1
-description: "从社区获取真实知识转化fact_store+skill。
-"
+description: "社区真实知识转fact_store+skill HN Reddit V2EX。Use when 从技术社区挖实践经验入库"
 trigger_type: idle_learning
 tags: [idle-learning, community, clawhub, skill-acquisition]
 created: 2026-07-25

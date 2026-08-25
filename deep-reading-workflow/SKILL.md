@@ -1,7 +1,7 @@
 ---
 name: deep-reading-workflow
 version: 0.1
-description: "深度阅读工作流：消化书/论文/长文并构建知识网络。融合 Mortimer Adler（结构）+ Feynman（解释）+ Luhmann（网络）+ Pragmatist（工具化）+ Critics（辩论）。Trigger: 深度阅读/消化论文/知识网络/卢曼笔记法"
+description: "深度阅读 书论文长文消化 Adler结构Feynman输出知识网络。Use when 深度啃一本书一篇论文并内化"
 triggers:
   - "深度阅读"
   - "消化论文"

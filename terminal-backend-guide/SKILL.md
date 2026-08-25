@@ -1,6 +1,6 @@
 ---
 name: terminal-backend-guide
-description: Terminal backend docker vs local 的行为边界与工具安装。
+description: "terminal后端 docker与local行为边界装包差异。Use when terminal装不上包行为异常"
 triggers:
   - terminal.backend
   - colima

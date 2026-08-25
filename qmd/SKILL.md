@@ -1,8 +1,6 @@
 ---
 name: qmd
-description: Search personal knowledge bases, notes, docs, and meeting transcripts
-  locally using qmd — a hybrid retrieval engine with BM25, vector search, and LLM
-  reranking. Supports CLI and MCP integration.
+description: "知识库检索 个人笔记文档会议搜索。Use when 在本地知识库搜答案"
 version: 1.0.0
 author: Hermes Agent + Teknium
 license: MIT

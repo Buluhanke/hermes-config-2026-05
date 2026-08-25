@@ -1,6 +1,6 @@
 ---
 name: yuanbao
-description: "Yuanbao (元宝) groups: @mention users, query info/members."
+description: "腾讯元宝群 @成员查信息查成员bot操作。Use when 操作腾讯元宝群组"
 version: 1.0.0
 author: Teknium (teknium1), Hermes Agent
 license: MIT

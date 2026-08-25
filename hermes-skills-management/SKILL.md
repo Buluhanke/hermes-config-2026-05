@@ -1,6 +1,6 @@
 ---
 name: hermes-skills-management
-description: Hermes Hub 技能安装与管理 — 搜索、安装、诊断十大类常用技能的标准流程
+description: "技能库管理 Hub安装升级check update audit诊断。Use when 装/升/修/审任何技能时"
 version: "1.0"
 metadata:
   hermes:

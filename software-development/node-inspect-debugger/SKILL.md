@@ -1,6 +1,6 @@
 ---
 name: node-inspect-debugger
-description: "Debug Node.js via --inspect + Chrome DevTools Protocol CLI."
+description: "Node调试 --inspect加CDP断点。Use when 远程断点调试Node进程"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

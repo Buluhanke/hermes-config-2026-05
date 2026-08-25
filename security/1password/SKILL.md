@@ -1,6 +1,6 @@
 ---
 name: 1password
-description: Set up op CLI, sign in, and read or inject secrets.
+description: "1Password密码管理 op CLI 登录读取注入secret引用。Use when 存取密码/API key或在命令注入凭据"
 version: 1.0.0
 author: arceus77-7, enhanced by Hermes Agent
 license: MIT

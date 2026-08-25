@@ -1,6 +1,6 @@
 ---
 name: zero-shot-web-read
-description: 不靠截图读懂网页的分层方法（L0-L2 优先，截图仅兜底）。
+description: "零截图读网页 分层法L0-L2截图兜底。Use when 无头浏览器读登录态页被墙的替代"
 triggers:
   - "读取网页内容"
   - "extract page content"

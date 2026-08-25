@@ -1,6 +1,6 @@
 ---
 name: local-image-ocr
-description: pytesseract OCR for local image files.
+description: "本地图片OCR pytesseract提取文字。Use when 从截图图片提取文字"
 version: 1.0.0
 triggers:
 - Use when vision_analyze fails on local file path with 404

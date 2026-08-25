@@ -1,6 +1,6 @@
 ---
 name: petdex
-description: Install and select animated petdex mascots for Hermes.
+description: "桌宠petdex 安装选择scale诊断。Use when 换装Hermes桌宠吉祥物"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

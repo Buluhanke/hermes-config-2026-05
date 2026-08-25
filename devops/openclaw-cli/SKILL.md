@@ -1,6 +1,6 @@
 ---
 name: openclaw-cli
-description: OpenClaw CLI install, TTY onboard, model config on macOS.
+description: "OpenClaw CLI 安装TTY onboard模型配置。Use when openclaw命令行装不上配不对"
 ---
 
 # OpenClaw CLI (macOS)

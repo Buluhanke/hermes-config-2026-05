@@ -1,6 +1,6 @@
 ---
 name: cua-browser-control
-description: "cua_browser binding 工作流：isolated_new 与 existing_profile。"
+description: "cua_browser绑定 isolated_new与existing_profile姿势。Use when computer_use驱动浏览器页面的正确绑定流程"
 version: "1.0"
 platforms: [macos]
 metadata:

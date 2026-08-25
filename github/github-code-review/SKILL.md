@@ -1,6 +1,6 @@
 ---
 name: github-code-review
-description: "Review PRs: diffs, inline comments via gh or REST."
+description: "PR代码审查 diff行内评论 gh或REST。Use when 审查GitHub PR给意见"
 version: 1.1.0
 author: Hermes Agent
 license: MIT

@@ -1,8 +1,6 @@
 ---
 name: 3-statement-model
-description: Build fully-integrated 3-statement models (IS, BS, CF) in Excel with
-  working capital schedules, D&A roll-forwards, debt schedule, and the plugs that
-  make cash and retained earnings tie. Pairs with excel-author.
+description: "三表财务模型 Excel 利润表资产负债表现金流IS BS CF联动。Use when 建三表联动财务模型或财务预测"
 version: 1.0.0
 author: Anthropic (adapted by Nous Research)
 license: Apache-2.0

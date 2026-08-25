@@ -1,6 +1,6 @@
 ---
 name: 1688-cdp-product-fetch
-description: CDP直连用户Chrome逐个打开1688商品详情页抓规格/价格/供应商。
+description: "1688商品详情抓取 规格价格阶梯价 SKU 供应商 CDP直连登录态Chrome。Use when 要打开1688商品页提取规格/价格/卖家信息"
 triggers:
   - "1688商品详情"
   - "打开1688商品页"

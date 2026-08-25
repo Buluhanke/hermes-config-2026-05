@@ -1,6 +1,6 @@
 ---
 name: chroma
-description: Embedding database for RAG and semantic search.
+description: "Chroma向量库 RAG embedding语义存储检索。Use when 建向量索引语义搜索RAG知识库"
 version: 1.0.0
 author: Orchestra Research
 license: MIT

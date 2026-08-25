@@ -1,11 +1,6 @@
 ---
 name: web-content-access
-description: |
-  Access web content through the right tool for the situation. Used when
-  the user wants content from a URL or web page and naive approaches
-  (browser_navigate, computer_use screenshot) have failed or are wrong for
-  the task. Triggers: URL is blocked/misclassified, browser automation
-  session is stuck, user says "read this page" or "get content from URL".
+description: "网页内容访问 按情境选对工具决策树。Use when 不确定用哪种方式读网页"
 version: 2.0.0
 triggers:
   - "读取这个网页"

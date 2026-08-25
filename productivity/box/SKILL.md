@@ -1,6 +1,6 @@
 ---
 name: box
-description: Box manages cloud files, sharing, search, and metadata.
+description: "Box云存储 REST 文件分享搜索元数据。Use when 操作Box网盘文件"
 version: 1.0.0
 author: Chris Kim (iskysun96), Hermes Agent
 license: MIT

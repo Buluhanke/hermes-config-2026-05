@@ -1,6 +1,6 @@
 ---
 name: macos-file-sharing
-description: Fix Finder Network not showing Mac (SMB/Bonjour discovery).
+description: "Finder网络找不到Mac SMB Bonjour发现修复。Use when 局域网其他设备看不到这台Mac"
 triggers:
   - "Mac 在网络中看不见"
   - "Finder 访达网络找不到电脑"

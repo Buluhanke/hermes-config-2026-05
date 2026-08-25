@@ -1,6 +1,6 @@
 ---
 name: memory-housekeeping
-description: 记忆系统三层定期维护 — fact_store清理减肥、HRR向量重建、MEMORY.md压缩。每月执行。
+description: "记忆维护 fact_store减肥HRR重建MEMORY压缩月度。Use when 记忆系统膨胀要定期瘦身"
 triggers:
   - "记忆满了"
   - "fact_store清理"

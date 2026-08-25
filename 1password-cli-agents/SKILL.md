@@ -1,7 +1,5 @@
 ---
-description: This skill allows agents to securely access and manage secrets using
-  the 1Password CLI (`op`) and a Service Account. It provides commands for reading,
-  writing, and managing items within a dedicated va
+description: "op CLI给agent安全访问1Password 签入读密钥注入env。Use when AI代理需要安全读取凭据而非明文"
 name: 1password-cli-agents
 trigger_type: general
 triggers:

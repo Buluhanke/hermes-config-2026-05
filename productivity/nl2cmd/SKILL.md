@@ -1,9 +1,7 @@
 ---
 name: nl2cmd
 version: 0.1
-description: |
-  Natural Language → Shell Command. 用自然语言描述需求，AI生成适合当前macOS/Linux系统的shell命令，
-  支持命令执行确认和命令解释。
+description: "自然语言转shell命令 macOS命令生成。Use when 不确定某操作对应什么命令行"
 triggers:
   - "自然语言转shell命令"
   - "生成命令行"

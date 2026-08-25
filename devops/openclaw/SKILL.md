@@ -1,6 +1,6 @@
 ---
 name: openclaw
-description: Install/run/configure OpenClaw or bridge it with Hermes.
+description: "OpenClaw 安装运行配置与Hermes桥接。Use when 装配OpenClaw或打通与Hermes"
 ---
 
 # OpenClaw (local agent CLI)

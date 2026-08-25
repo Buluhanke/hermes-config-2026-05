@@ -1,6 +1,6 @@
 ---
 name: powerpoint
-description: Create, read, edit .pptx decks, slides, notes, templates.
+description: "PPT .pptx 创建读取编辑幻灯片备注模板。Use when 处理PowerPoint文件"
 license: Proprietary. LICENSE.txt has complete terms
 platforms:
 - linux

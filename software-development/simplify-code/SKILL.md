@@ -1,6 +1,6 @@
 ---
 name: simplify-code
-description: "Parallel 4-agent cleanup of recent code changes."
+description: "代码简化 并行4agent清理最近改动。Use when 一波改动之后的精简重构"
 version: 1.1.0
 author: Hermes Agent (inspired by Claude Code /simplify)
 license: MIT

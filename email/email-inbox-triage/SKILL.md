@@ -1,6 +1,6 @@
 ---
 name: email-inbox-triage
-description: "Triage an inbox: prioritize threads, draft replies safely."
+description: "收件箱分诊 线程优先级安全草拟回复。Use when 清理邮箱批量处理邮件线程"
 version: 0.1.0
 author: Ben Barclay (benbarclay), Hermes Agent
 license: MIT

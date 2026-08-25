@@ -1,7 +1,6 @@
 ---
 name: hermes-desktop-restart
-description: Restart the Hermes macOS desktop app when it won't chat / went blank
-  (usually after a self-update failed to auto-relaunch).
+description: "桌面app假死重启法 白屏无响应修复。Use when Hermes桌面聊天没反应"
 version: 1.0.0
 platforms:
 - macos

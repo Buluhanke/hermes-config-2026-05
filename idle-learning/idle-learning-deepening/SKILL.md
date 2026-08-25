@@ -1,7 +1,7 @@
 ---
 name: idle-learning-deepening
 version: 0.1
-description: "ABCD流水线网络依赖阶段(B_insight/C_safety)的静默失败诊断与激活路径。"
+description: "ABCD流水线网络依赖阶段静默失败诊断。Use when B_insight C_safety悄悄挂了没产出"
 triggers:
   - "深度学习"
   - "为什么没有新知识"

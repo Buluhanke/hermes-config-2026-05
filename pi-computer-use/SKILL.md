@@ -1,13 +1,6 @@
 ---
 name: pi-computer-use
-description: 'Hermes alternative backend for the `computer_use` tool — pi-computer-use
-  Swift daemon
-
-  provides AX-ref-first semantic desktop control. Activate via HERMES_COMPUTER_USE_BACKEND=pi.
-
-  Requires one-time TCC authorization in System Settings.
-
-  '
+description: "pi-computer-use备用backend接入。Use when cua-driver不可用时的替代"
 version: 1.0.1
 platforms:
 - macos

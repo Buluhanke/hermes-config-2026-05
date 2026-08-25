@@ -1,6 +1,6 @@
 ---
 name: sketch
-description: "Throwaway HTML mockups: 2-3 design variants to compare."
+description: "UI草图 一次性HTML mockup多变体对比。Use when 快速出多个UI方案做比较"
 version: 1.0.1
 author: Hermes Agent (adapted from gsd-build/get-shit-done)
 license: MIT

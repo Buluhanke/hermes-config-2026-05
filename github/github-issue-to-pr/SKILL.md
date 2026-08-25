@@ -1,6 +1,6 @@
 ---
 name: github-issue-to-pr
-description: "Carry a GitHub issue to a verified PR with honest CI state."
+description: "issue到verified PR全流程 CI状态诚实汇报。Use when 从issue开发到PR合并一条龙"
 version: 0.1.0
 author: Ben Barclay (benbarclay), Hermes Agent
 license: MIT

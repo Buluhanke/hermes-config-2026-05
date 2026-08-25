@@ -1,7 +1,6 @@
 ---
 name: hermes-browser-local-login
-description: Guide for using Hermes Agent with a locally logged-in browser (agent-browser
-  or attached Chrome).
+description: "复用本地已登录浏览器登录态 cookie方案。Use when 目标站要登录态而沙盒没有凭据"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

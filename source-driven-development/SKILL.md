@@ -1,6 +1,6 @@
 ---
 name: source-driven-development
-description: 源码优先开发 — 先读源码理解现有逻辑，再进行修改。从代码库本身获取真相。
+description: "源码优先 先读源码再改从代码库取真相。Use when 改第三方或陌生代码库之前"
 triggers:
   - "需要修改不熟悉的代码"
   - "接手遗留代码"

@@ -1,10 +1,6 @@
 ---
 name: hermes-provider-routing
-description: Configure and verify Hermes multi-provider routing via custom_providers
-  + fallback_providers. Triggers on "configure smart routing", "add a provider", "set
-  up fallback chain", "wire up multiple API keys", "接多个模型供应商", "配置模型路由/兜底". Covers
-  the config format VERIFIED against the current Hermes build and the real-API verification
-  ritual.
+description: "多provider路由 配置验证curl实测failover。Use when 配置多模型路由或验证切换"
 triggers:
 - Use when hermes provider routing
 trigger_type: general

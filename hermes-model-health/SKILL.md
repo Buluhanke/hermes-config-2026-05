@@ -1,6 +1,6 @@
 ---
 name: hermes-model-health
-description: "Hermes 模型可用性监控、故障诊断与fallback链维护。当模型'消失'或'不肯用'时，按此skill排查。"
+description: "模型可用性监控 故障诊断fallback链维护。Use when 模型消失不肯用报错的排查路径"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

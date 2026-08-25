@@ -1,6 +1,6 @@
 ---
 name: session-librarian
-description: "Organize sessions by prompt: find, rename, archive, prune."
+description: "会话整理 按prompt查找重命名归档修剪。Use when 会话历史乱要整理归档"
 version: 1.0.0
 author: Hermes Agent + Teknium
 license: MIT

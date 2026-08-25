@@ -1,6 +1,6 @@
 ---
 name: 1688-search-cn-gb-region-skill
-description: 1688 站内搜索正确姿势（GBK关键词编码 + province URL筛选 + 解析内联HTML提取主列表offerId + 真实登录Chrome跑JS核对规格）。解决搜词乱码、筛选失效、提取到浮窗乱品、主列表不渲染、规格拆写、精确尺寸在翻页后六大坑。
+description: "1688站内搜索 GBK编码 省份筛选 内联HTML解析 验证码退避。Use when 1688关键词搜供应商列表被拦或结果为空时"
 category: ecommerce
 ---
 

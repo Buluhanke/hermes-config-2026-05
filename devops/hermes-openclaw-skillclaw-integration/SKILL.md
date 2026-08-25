@@ -1,6 +1,6 @@
 ---
 name: hermes-openclaw-skillclaw-integration
-description: Fix SkillClaw crash, wire OpenClaw MCP bridge, evolve loop.
+description: "Hermes OpenClaw SkillClaw三件套修复接线进化。Use when mac本地AI一体机栈整体出问题"
 version: 1.0.0
 author: hermes-agent
 license: MIT

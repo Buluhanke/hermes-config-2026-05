@@ -3,8 +3,7 @@ name: Keras
 slug: keras
 version: 1.0.0
 homepage: https://clawic.com/skills/keras
-description: Build, train, and debug deep learning models with Keras patterns, layer
-  recipes, and training diagnostics.
+description: "Keras深度学习 建模训练debug层配方pipeline。Use when 用Keras TensorFlow写训练代码"
 metadata:
   clawdbot:
     emoji: 🧠

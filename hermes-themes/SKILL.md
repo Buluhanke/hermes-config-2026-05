@@ -1,6 +1,6 @@
 ---
 name: hermes-themes
-description: Author a Hermes color theme that skins every surface.
+description: "配色主题 skin.yaml全surface换肤。Use when 用户要换Hermes配色皮肤"
 version: 1.0.0
 platforms:
 - linux

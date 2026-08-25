@@ -1,6 +1,6 @@
 ---
 name: maps
-description: "Geocode, POIs, routes, timezones via OpenStreetMap/OSRM."
+description: "地图 地理编码POI路线时区OSM OSRM。Use when 地址转坐标算路线查时区"
 version: 1.2.0
 author: Mibayy
 license: MIT

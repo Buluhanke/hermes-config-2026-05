@@ -1,6 +1,6 @@
 ---
 name: pretext
-description: Build creative browser demos with DOM-free text layout.
+description: "pretext DOM-free文本布局浏览器demo。Use when 做纯文本创意页面原型"
 version: 1.0.0
 author: Hermes Agent
 license: MIT

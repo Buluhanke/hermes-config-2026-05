@@ -1,6 +1,6 @@
 ---
 name: hermes-model-switching
-description: Hermes `/model` 命令故障诊断 — provider 不识别、key 过期、位置放错、API 连通性
+description: "/model切换故障 provider不识别key过期API不通。Use when 切换模型失败要诊断"
 version: 1.0.0
 triggers:
   - /model 报错 Unknown provider

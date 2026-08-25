@@ -1,6 +1,6 @@
 ---
 name: humanization-engine
-description: 行为拟人化引擎 — 模拟人类的操作节奏、鼠标轨迹、停顿模式，突破反机器人检测。
+description: "行为拟人 鼠标轨迹停顿节奏过反机器人检测。Use when 自动化被风控识别为机器人"
 triggers:
   - "在1688、微信、QQ等平台操作"
   - "需要绕过反爬/反机器人检测"

@@ -1,6 +1,6 @@
 ---
 name: self-maintenance
-description: Hermes 自我监控 + 自我修复 + 主动巡逻。Gateway 保活、内存守护、每日健康检查、失败自愈。
+description: "自我维护 gateway保活内存守护健康检查巡逻。Use when Hermes日常自监控自修复"
 triggers:
   - gateway 重启后恢复任务
   - 服务挂了需要自动修复

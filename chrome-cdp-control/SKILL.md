@@ -1,6 +1,6 @@
 ---
 name: chrome-cdp-control
-description: Set up and operate a LOCAL Chrome instance driven by Hermes via the Chrome DevTools Protocol (CDP) on macOS — preserving the user's real login state so Hermes can operate their logged-in web accounts (ChatGPT, DeepSeek, Gemini, 豆包, GitHub, etc.). Covers profile mirroring, launch flags for Chrome 148+, wiring config.yaml through the `hermes config` command (and its list-string pitfall), the chrome-devtools-mcp server, launchd persistence, and CDP verification.
+description: "Chrome CDP控制 本地Chrome DOM提取表单提交截图。Use when 需要DevTools协议级精细控制浏览器"
 triggers:
   - "configure local Chrome / browser CDP control in Hermes"
   - "drive my logged-in ChatGPT/DeepSeek/Gemini/豆包 from Hermes"

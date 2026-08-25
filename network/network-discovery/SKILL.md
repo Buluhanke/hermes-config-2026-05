@@ -1,6 +1,6 @@
 ---
 name: network-discovery
-description: 局域网设备发现：arp缓存/ping扫描/python socket端口扫描/dns-sd Bonjour/mDNS。
+description: "局域网发现 arp ping端口扫dns-sd mDNS。Use when 摸局域网设备IP开放端口"
 triggers:
   - network discovery
   - lan scan

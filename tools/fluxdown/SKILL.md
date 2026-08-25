@@ -1,6 +1,6 @@
 ---
 name: fluxdown
-description: Install/wire FluxDown into agent MCP workflows.
+description: "FluxDown下载器 MCP接入 HTTP FTP任务队列RSS。Use when 配置使用FluxDown下载管理"
 ---
 
 # FluxDown

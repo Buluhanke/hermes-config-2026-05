@@ -1,6 +1,6 @@
 ---
 name: mac-maintenance
-description: 'Mac upkeep: brew update/upgrade, pull clean repos, empty Trash.'
+description: "Mac例行维护 brew升级清repo倒垃圾。Use when 维护Mac开发环境清理空间"
 triggers:
 - Use when mac maintenance
 trigger_type: general

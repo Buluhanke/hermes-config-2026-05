@@ -1,10 +1,6 @@
 ---
 name: ml-pipeline
-description: 'Complete machine learning pipeline for trading: feature engineering,
-  AutoML, deep learning, and financial RL. Use for automated parameter sweeps, feature
-  creation, model training, and anti-leakage validation.
-
-  '
+description: "ML交易流水线 特征工程回测部署全链。Use when 搭机器学习交易管线"
 version: 2.0.0
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 metadata:

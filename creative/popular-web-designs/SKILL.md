@@ -1,6 +1,6 @@
 ---
 name: popular-web-designs
-description: 54 real design systems (Stripe, Linear, Vercel) as HTML/CSS.
+description: "顶级设计系统54套 Stripe Linear Vercel HTML。Use when 参考一线产品设计系统实现"
 version: 1.0.0
 author: Hermes Agent + Teknium (design systems sourced from VoltAgent/awesome-design-md)
 license: MIT

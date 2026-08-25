@@ -1,7 +1,6 @@
 ---
 name: siyuan
-description: SiYuan Note API for searching, reading, creating, and managing blocks
-  and documents in a self-hosted knowledge base via curl.
+description: "思源笔记 API搜索读写管理块。Use when 操作思源笔记本内容"
 version: 1.0.0
 author: FEUAZUR
 license: MIT

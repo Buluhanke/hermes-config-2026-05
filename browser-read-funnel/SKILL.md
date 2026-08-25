@@ -1,12 +1,6 @@
 ---
 name: browser-read-funnel
-description: |
-  统一网页内容读取漏斗 + 浏览器主动操作层。
-  零截图优先：L0 web_extract → L1 DOM文本/AX树 → L2 抓XHR原始JSON/直接curl重放 → 截图OCR仅作兜底。
-  browser-use CLI（操作/点击/填表）+ Firecrawl + Scrapling + Crawl4AI + 截图OCR。
-  解决 Shadow DOM、Canvas、WebGL、懒加载、反爬等所有内容读取盲区。
-  用法：python3 scripts/read_page.py <url> [options]
-  详见 ZERO_SHOT_READ_MAP.md（四层方案 + 全网迭代结论 + 本机实测坑）。
+description: "网页读取漏斗 L0extract到L1 DOM到L2截图 免截图读懂网页。Use when 读任何网页内容的统一入口决策"
 triggers:
   - "读取网页内容"
   - "extract page content"

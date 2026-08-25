@@ -1,7 +1,7 @@
 ---
 name: web-search-enhanced
 version: "1.0.0"
-description: "搜索结果增强 — freshness过滤 + 来源评级 + 自适应重试 + 搜索历史存档。三层独立拦截，不相互侵入。"
+description: "搜索增强 新鲜度过滤来源评级自适应重试。Use when 搜索要求高质量要滤掉旧闻"
 triggers:
   - 联网搜索
   - 搜索一下

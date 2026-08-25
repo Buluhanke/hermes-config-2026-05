@@ -1,6 +1,6 @@
 ---
 name: context-engineering
-description: 上下文工程 — 管理对话上下文、工具上下文、任务上下文的完整性。避免上下文漂移和信息丢失。
+description: "上下文工程 对话工具任务上下文完整性防漂移。Use when 长任务的上下文管理设计"
 triggers:
   - "任务跨越多个会话，但上下文不连续"
   - "发现之前的假设没有被正确传递"

@@ -1,8 +1,7 @@
 ---
 name: memory-cn
 version: 2.0.0
-description: Hermes 中文记忆系统 — 两层架构：fact_store(FTS5 SQLite) + Mnemosyne(SQLite向量)，skill
-  沉淀能力，memory 工具存偏好
+description: "中文记忆双层 fact_store FTS5 Mnemosyne。Use when 中文记忆存取检索优化"
 created: 2026-06-25
 updated: 2026-07-05
 platforms:

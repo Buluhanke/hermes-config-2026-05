@@ -1,6 +1,6 @@
 ---
 name: android-lamda
-description: FIRERPA lamda正确安装与故障排除。
+description: "FIRERPA lamda安装排障 Android远程控制接口。Use when lamda装不上连不上报错的排查"
 tags: [android, lamda, firerpa, remote-control]
 triggers:
   - lamda

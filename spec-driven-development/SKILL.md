@@ -1,6 +1,6 @@
 ---
 name: spec-driven-development
-description: 规格驱动开发 — 先写规格，后写代码。规格是合同，不是注释。
+description: "规格先行 规格即合同先写规格后写码。Use when 正经feature开发要规格约束"
 triggers:
   - "开始一个新功能或模块的开发"
   - "需要明确代码的实现边界"

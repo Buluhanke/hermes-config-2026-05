@@ -1,6 +1,6 @@
 ---
 name: hermes-config-tricks
-description: Hermes config.yaml 修改技巧、坑点和常见陷阱 — 绕过 CLI 工具的已知问题。
+description: "config.yaml修改技巧坑点 绕CLI已知问题。Use when 改hermes配置遇怪问题"
 version: 1.0.0
 triggers:
 - Use when hermes config tricks
