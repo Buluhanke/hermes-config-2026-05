@@ -1,0 +1,40 @@
+{
+  "dims": [
+    "14*20"
+  ],
+  "cat": [
+    "14*20cm 白边*12丝塑料自封袋"
+  ],
+  "prov": "%D5%E3%BD%AD",
+  "city": "义乌",
+  "candidates": 15,
+  "hits": {
+    "14*20": [
+      {
+        "id": "695753722193",
+        "dim": "14*20",
+        "title": "å¤åç åèæ°æ³¡è¢èªç²ä¿¡å°åè",
+        "price": "¥0.11",
+        "stock": 9147495,
+        "url": "https://detail.1688.com/offer/695753722193.html",
+        "spec": "亮光复合14*20+4整箱446个",
+        "city_yiwu": true,
+        "white_edge": false,
+        "thick_12si": false
+      },
+      {
+        "id": "640042461025",
+        "dim": "14*20",
+        "title": "å åå¤åç åèæ³¡æ²«è¢èªé»è¢ ",
+        "price": "¥0.16",
+        "stock": 994171,
+        "url": "https://detail.1688.com/offer/640042461025.html",
+        "spec": "白色;14*20+4CM(750个/箱)",
+        "city_yiwu": false,
+        "white_edge": false,
+        "thick_12si": false
+      }
+    ]
+  },
+  "captcha_flag": false
+}

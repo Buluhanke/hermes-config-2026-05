@@ -56,6 +56,15 @@ category: ecommerce
 
 ## 正确流程（照做，不要自作主张改端点）
 
+### Step 0（必做，2026-08-25 新增）：前置探针，登录态死了别硬跑
+**登录态静默丢失会让搜页返回 0 候选、验证脚本把茶叶/铝箔袋误收成"自封袋"，表象就是"搜出来全是其他品"**。全量跑之前先 FAIL-FAST：
+```bash
+python3 scripts/preflight_1688.py --cdp http://127.0.0.1:9222
+```
+- `[VERDICT] PASS` → 直接开跑主驱动。
+- `[VERDICT] FAIL` → 先 `bash start_cdp_1688.sh` 重注；仍 FAIL 就让用户回**默认 Chrome** 登录 1688 再跑。诊断与绕行见 `references/login_wall_diag.md`。
+- 登录态不稳时，主驱动改用 `--reverify IDFILE` 只验已知ID池（不依赖搜页）。
+
 ### Step 1：构造搜索 URL（用户给过就直接用，否则按此构造）
 ```
 https://s.1688.com/selloffer/offer_search.htm?keywords=<GBK编码关键词>&spm=a26352.13672862.searchbox.0&province=<GBK编码省份>&beginPage=1
@@ -248,6 +257,21 @@ end tell
 - 视觉通道（vision_analyze）本机可能 404（venv 污染 PIL）；本 skill 全程依赖 DOM 文字通道，不依赖视觉
 - 用户确认的已知正确商品可先列入清单，再补亲验
 - 脚本路径：`scripts/extract_offers.scpt`、`scripts/check_spec.js`（参数化 TARGET）、`scripts/check_batch.scpt`、`scripts/check_batch_optimized.scpt`（降速8s+单批≤3+命中≥5即停）
+
+**任务：14*20cm 白边*12丝 塑料自封袋，义乌市（浙江金华），2026-08-25 实战（回归验证通过）**
+- 标准命令（先 `bash start_cdp_1688.sh` 起后台隐藏 Chrome + 注入登录态，勿用 timeout——mac 无此命令）：
+  ```bash
+  cd scripts && python3 cdp1688_bag.py --dims "14*20" \
+    --cat "14*20cm白边12丝塑料自封袋" "14*20自封袋白边" "白边自封袋" "塑料自封袋" \
+    --city 义乌 --prov "%D5%E3%BD%AD" --thick 12 --pages 4 --gap 2.5 --maxverify 220 \
+    --out store/bag_14x20_yiwu.json
+  ```
+- 结果：157 候选 → 义乌(金华) 18 家含 14*20 自封袋；其中**白边(含红边)+12丝 精确双中 3 家**：
+  1. `685142110437` ¥6.50 `14*20 *红边12丝*透明`（红边=白边）
+  2. `775671146977` ¥7.20 `7号14*20【12丝（白边）】`
+  3. `941296464253` ¥7.06 `7号14*20（100只）*白边*12丝`
+- 教训/固化：① CDP 通道标题**不要** ascii_unescape（那是 AppleScript 通道修法，CDP 已正常 utf-8，错用会乱码）；② 白边信号扩 `白边|红边|加宽边`（用户口径"有红边就有白边"）；③ **厚度必须按「同一条含尺寸spec」判定**，不能跨 spec 并集（否则 10丝白边款+12丝款 被误判成白边12丝）；④ 礼盒过滤只看 SKU spec 不看标题（自封袋标题常含"包装"被误杀）；⑤ 登录墙连续2次自动 `reauth_cookies` 重注；⑥ PC 搜页被验证码自动切 m.1688.com；⑦ 搜页即落盘 candidates.txt + 每验1个 save_state（可观测/可续跑）；⑧ 内置 `--reverify IDFILE` 模式跳过已验。
+- **「搜出来全是其他品」根因（2026-08-25 重大复盘）**：后台 CDP 实例（`chrome-cdp-profile`）的 1688 登录态**持续静默丢失**——搜页返回 0 候选（被踢去 `login.taobao.com` 中转），只能靠详情页直开拿到少量已知ID，验证脚本把"茶叶自封袋/铝箔自封袋/牛皮纸自封袋"这些广义自封袋（标题含"自封袋"且满足尺寸）全收了，看似命中实则不是"塑料白边自封袋"。**修复**：A) 品类硬卡 `BAG_PLASTIC`(塑料/PE/opp) + `BAG_EXCLUDE`(茶叶/铝箔/食品/牛皮纸)，非塑料自封袋一律跳过；B) 搜索阶段加登录墙检测+自动重注。但**根本约束**（坑39）：`chrome-cdp-profile` 独立 Profile 跟默认 Chrome 不共享登录态，1688 对其风控极严，重注后也撑不过几十个详情页就再掉。**真·稳定解法 = 用户在默认 Chrome 保持 1688 已登录**（助手不能代扫），或改用 `--reverify` 模式只验用户/历史已给的已知ID池（不依赖搜页）。任务前先探 `detail.1688.com/offer/<已知id>` 是否跳登录墙，跳了就先让用户回默认 Chrome 登录 1688。
 - 改尺寸只动 `check_batch*.scpt` 顶部 `property TARGET`
 - **多方案优化时**：先备份本 skill（`cp -R` 到 `backup-<时间戳>/`），再逐个试新方案，最后给对比表。不要一上来就把方案列表抛回给用户选（用户明确说过会"不知所措"）。完整对比记录见 `references/approach_comparison_20260819.md`，工作流见 `multi-approach-evaluation` skill。
 
@@ -291,8 +315,10 @@ end tell
 
 ## 找品主驱动（参数化，替所有 `*_2020.scpt` 写死副本）
 - `scripts/run_search.scpt` — 改文件头 4 个常量（`DIM`/`CARTON`/`PROV`/`PAGES`）即可复用任意任务：构造 GBK 编码搜索 URL → 真 Chrome 翻页+滚动懒加载 → 抓 offerId 落 `/tmp/1688_run_result.txt`。复用 `extract_ids.js`。（路径已相对化，坑24 分发铁律）
-- `scripts/cdp1688.py` — **【推荐·当前唯一主驱动】**。Python 裸 WebSocket CDP 驱动（零 Playwright，Chrome 151 兼容）。搜索（GBK+province 翻页+滚动懒加载抽 offerId）+ 详情页 **整页 `outerHTML` 识别**（不只查 skuMapOriginal，见坑45/49）+ SKU 结构化 JSON 核验（覆盖 **五类** 写法：连写 / 轴名连写 / 矩阵 / 半角组合串 `8x8（长宽）;9cm（高）` / **全角组合串 `宽【26cm】高【10cm】;特硬;长【46cm】`**，见坑45/49）+ **顺序无关全排列匹配**（`target_perms`，坑46）+ cookie 注入登录态 + 后台隐藏不抢焦点。参数：`--dims/--cat/--pages/--gap/--maxverify/--out/--cdp/--prov`（传 `''` 关地域，坑50）。见坑41-52。
+- `scripts/cdp1688_bag.py` — **【自封袋专用·推荐主驱动】**。Python 裸 WebSocket CDP（零 Playwright，Chrome 151 兼容）。搜索（GBK+province 翻页+滚动懒加载抽 offerId，PC 被验证码自动降级 m.1688.com）+ 详情页整页 outerHTML 抠 skuMapOriginal + 2D 尺寸顺序无关匹配 + 白边(含红边/加宽边)信号 + 厚度按「同条spec」精确判定（不跨spec误并）+ 地域硬卡(浙江金华=义乌) + 登录墙自动重注 + 每验1个实时写盘。**2026-08-25 故障全修**：① 删错误 ascii_unescape（CDP 通道标题不乱码）② 白边信号扩词 ③ 厚度同条spec判定(修假阳性) ④ 登录墙连续2次自动 reauth_cookies ⑤ 搜页即落盘 candidates.txt + 实时 save ⑥ PC被拦自动切移动端 ⑦ 内置 --reverify 模式(读候选ID跳过已验) ⑧ 不用 timeout(mac无此命令)。回归验证 18 个 ID 全对，白边12丝双中 3 家稳定。
 - `scripts/start_cdp_1688.sh` — 一键起后台隐藏 CDP Chrome（`open -n -g -j`）+ cookie 注入登录态 + 9222 自检。不落盘明文 cookie。
+- `scripts/preflight_1688.py` — **【前置探针·必跑】** 全量任务前 FAIL-FAST 判通道健康：探 9222 在线 → 已知 detail 页登录态 → 搜页候选数。任一 FAIL 立刻停（先重注/让用户回默认 Chrome 登 1688），避免登录态掉了硬跑 15 分钟最后"搜出全是其他品"。`references/login_wall_diag.md` 是其诊断依据。
+- `references/login_wall_diag.md` — 登录墙诊断：搜出其他品/0命中的根因（CDP 实例登录态静默丢失）、识别信号、品类硬卡+自动重注修复、根本约束（独立 Profile 不共享登录态）、`--reverify` 绕行。
 - `scripts/find_near.py` — **【近邻定制兜底，2026-08-24 新增】** 精确尺寸 0 命中时使用：搜定制/画框/平邮类词，抓每个卖家 SKU 里**含目标某轴的 near-size 清单**，输出「谁有相近尺寸→谁可定制切该尺寸」。改 `DIM`/`NEAR`/`cat` 复用。见坑48。
 - `scripts/reverify_pool.py` — **【比价重验，2026-08-24 新增】** 搜页被验证码拦截（坑51）或不依赖搜页时：拿已知 offerId 池（`/tmp/pool_ids.txt` 每行一个，可从历史 results / 同款推荐 / 用户发来的链接收集），逐个开详情页用**整页组合串识别**（坑49）挖目标尺寸，按价升序输出 `store/<dim>_reverify.json`。抠价走 `skuMapOriginal` 精确匹配（坑52）。用法：`python3 reverify_pool.py > /tmp/reverify.log 2>&1`。
 - `scripts/probe_sku.py` — 诊断脚本：验证某详情页能否抓到 `skuMapOriginal`（开发/排错用，勿日常跑）。
