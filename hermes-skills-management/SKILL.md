@@ -217,6 +217,34 @@ hermes skills install skills-sh/zinohome/cozyengine/ui-prompt-generator --force
 ```
 
 
+## 描述触发力工程（2026-08-25 定稿，解决"有技能但不调用"）
+
+机制：每轮只注入 name+description，**正文不参与触发匹配**；索引里描述截断到前 57 字符。
+所以：中文触发词必须放描述最前面占满前 57 字符，格式 `"<领域关键词串>。<Use when 英文兜底>"`。
+
+```bash
+# 找出无触发子句的技能
+python3 - <<'EOF'
+import os,re,yaml
+for root,dirs,files in os.walk('/Users/aimac/.hermes/skills'):
+    dirs[:]=[d for d in dirs if d not in{'.hub','.curator_backups'}]
+    if 'SKILL.md' not in files: continue
+    p=os.path.join(root,'SKILL.md'); c=open(p).read()
+    m=re.match(r'^---\n(.*?)\n---\n',c,re.DOTALL); fm=yaml.safe_load(m.group(1)) if m else {}
+    if not re.search(r'(Use when|触发|when the user)',str(fm.get('description',''))):
+        print(os.path.relpath(p,'/Users/aimac/.hermes/skills'))
+EOF
+```
+
+批量改写脚本模板：/tmp/patch-descs.py（2026-08-25 已跑过一轮 188 个）。
+**改 bundled 技能后必跑**：`hermes skills reset <name>`（否则被标记 user-modified 永久跳过官方更新；批量：`hermes skills list-modified` 取名单循环 reset）。
+改完全库验证：所有 SKILL.md 的 frontmatter 必须 yaml.safe_load 通过且含 name+description。
+多行旧 description 吞行时留孤儿行会破坏 YAML —— 改后必须全库 yaml 校验。
+
+## 免记忆调用层
+- `~/.hermes/skills/skill-router/SKILL.md`：领域→技能名路由表，MUST USE 铁律（说"做不到"前先查表/skills_list/hermes skills search）。
+- 高频组合走 bundle：`~/.hermes/skill-bundles/*.yaml`（deep-debug / ship-pr / scrape-web / fix-hermes），`/<bundle>` 一键载全套。
+
 ## 技能升级 SOP（2026-08-25 实战定稿）
 
 ```bash
