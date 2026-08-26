@@ -146,6 +146,27 @@ pitfalls:
       放在所有 flag 最后（或任何位置），单独写 `--no-agent`，不要赋值。
       正确：`hermes cron create "0 8 * * *" --name morning-briefing --script morning_briefing.sh --no-agent`
       错误：`--no-agent=true` / `--no_agent=true` / `--no-agent true`
+  - name: 网络依赖型 cron 无网时每周 error 噪声
+    description: |
+      cron 脚本依赖外部网络（如 git pull 公网仓库、调用外网 API），当宿主网络不可达
+      （直连被墙、代理需认证无凭据、VPN 断开）时整个脚本非零退出，cron last_status=error，
+      每周/每天产生一条用户看不到的失败噪声，且实际没做任何事。
+      本次案例：public-apis sync 每周一跑 `git pull origin master`，github.com 直连 SSL 中断、
+      路由器 OpenClash 代理(192.168.8.1:7890)返回 407 需认证无凭据 → 持续 error。
+    fix: |
+      网络依赖型 cron 改成"连通性探测 + 优雅跳过"模式，无网时 exit 0（静默跳过，不产生 error）：
+      ```bash
+      # 1) 快速连通性探测（5s 超时），不可达就优雅跳过
+      if ! curl -sS -m 5 -o /dev/null https://<目标host> 2>/dev/null; then
+        echo "$(date '+%F %T') SKIP: <目标host> unreachable — skip sync"
+        exit 0
+      fi
+      # 2) 可达才执行，失败仍 exit 0（避免 cron last_status=error）
+      git pull origin master 2>&1 || { echo "WARN: pull failed despite reachable"; exit 0; }
+      ```
+      要点：探针用 curl 短超时（不要用 macOS 缺的 timeout 命令）；无网分支必须 exit 0 而非非零；
+      即便可达时主命令失败也 exit 0，把"真错误"和"环境阻塞"区分开，避免无意义的 cron error。
+      这是设计原则，不是环境故障——任何依赖外网的 cron 都应内置探针。
 ---
 
 # Cron Job Reliability

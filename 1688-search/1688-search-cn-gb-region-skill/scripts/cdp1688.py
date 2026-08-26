@@ -13,7 +13,15 @@ Usage:
     --pages 3 --gap 3 --maxverify 120
 """
 import sys, os, json, time, argparse, urllib.parse, re, base64, threading
+import random
 import websocket
+
+
+def human_gap(base_gap):
+    """高斯随机延迟替代固定 sleep：均值=base_gap，σ=base_gap*0.35，下限 1.5s。
+    模拟真人浏览节奏的不规则间隔，降低被风控模式识别的概率。"""
+    g = random.gauss(base_gap, max(base_gap * 0.35, 0.8))
+    return max(g, 1.5)
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
@@ -34,6 +42,33 @@ EXTRACT = r"""
   const re3=/offerId["']?\s*[:=]\s*["']?([0-9]+)/g;
   while((m=re3.exec(h))!==null) ids.add(m[1]);
   return JSON.stringify({ids:[...ids].filter(id=>id.length>=9&&id.length<=14)});
+})();
+"""
+
+# 滑块定位 JS：返回滑块按钮中心坐标 + 轨道可拖距离
+JS_FIND_SLIDER = r"""
+(()=>{
+  // 阿里系滑块常见选择器（nc-1 无痕验证 / punish 页）
+  const btnSels = ['#nc_1_n1z','#nc_1__scale_text .nc-lang-cnt','.nc_iconfont.btn_slide',
+                   '.btn_slide','[data-role="slider"]','.slidetounlock',
+                   '.J_MIDDLEWARE_FRAME_WIDGET [class*="btn"]'];
+  let btn=null;
+  for(const s of btnSels){const e=document.querySelector(s); if(e){btn=e;break;}}
+  if(!btn){
+    // 兜底：找文本含"拖动/滑动"的可点小元素
+    for(const e of document.querySelectorAll('span,div,i')){
+      const t=(e.textContent||'').trim();
+      if((t.includes('拖动')||t.includes('滑动')) && e.offsetWidth>20 && e.offsetWidth<80
+         && e.offsetHeight>15 && e.offsetHeight<60){btn=e;break;}
+    }
+  }
+  if(!btn) return JSON.stringify({ok:false});
+  const b=btn.getBoundingClientRect();
+  // 轨道：父容器宽度 - 按钮宽度 = 可拖距离
+  let track=btn.parentElement;
+  let dist=Math.max((track?track.getBoundingClientRect().width:300)-b.width,100);
+  return JSON.stringify({ok:true,x:Math.round(b.x+b.width/2),y:Math.round(b.y+b.height/2),
+                         dist:Math.round(dist)});
 })();
 """
 
@@ -267,6 +302,62 @@ class CDP:
         except Exception:
             pass
 
+    # ---------- 滑块验证码：CDP Input.dispatchMouseEvent 拟人拖动 ----------
+    def mouse(self, session, etype, x, y, buttons="", click_count=0):
+        p = {"type": etype, "x": x, "y": y, "button": "left",
+             "buttons": buttons, "clickCount": click_count}
+        return self.cmd("Input.dispatchMouseEvent", p, session)
+
+    def human_slide(self, session, max_tries=2):
+        """检测滑块并拟人拖动。变速缓动 + 随机抖动 + 终点回弹。
+        返回 True=通过（页面不再含验证码），False=尝试失败。"""
+        for attempt in range(1, max_tries + 1):
+            h = self.evaluate(session, "document.documentElement.outerHTML", await_promise=False) or ""
+            if "验证码" not in h and "captcha" not in (self.evaluate(
+                    session, "location.href", await_promise=False) or "").lower():
+                return True  # 已通过/无滑块
+            geo = self.evaluate(session, JS_FIND_SLIDER, await_promise=True) or {}
+            if not geo or not geo.get("ok"):
+                print(f"[SLIDE] 未定位到滑块元素 (attempt {attempt})")
+                time.sleep(8); continue
+            sx, sy, dist = geo["x"], geo["y"], geo["dist"]
+            print(f"[SLIDE] attempt {attempt}: start=({sx},{sy}) dist={dist}px")
+            # 按下
+            self.mouse(session, "mousePressed", sx, sy, buttons="1", click_count=1)
+            time.sleep(random.uniform(0.08, 0.18))
+            # 变速轨迹：快-慢-回弹，模拟真人手部加速/犹豫
+            moved = 0.0
+            steps = random.randint(28, 42)
+            for i in range(steps):
+                t = (i + 1) / steps
+                # ease-out：前段快后段慢，再叠加微抖动
+                base = dist * (1 - (1 - t) ** 2.2)
+                jitter = random.uniform(-1.5, 1.5) if t < 0.85 else random.uniform(-0.4, 0.4)
+                nx = sx + base + jitter - moved
+                ny = sy + random.uniform(-2.0, 2.0)
+                self.mouse(session, "mouseMoved", nx, ny, buttons="1")
+                moved = sx + base + jitter
+                # 不规则间隔：多数步快、偶尔停顿（真人犹豫）
+                time.sleep(random.uniform(0.008, 0.03) if random.random() > 0.15
+                           else random.uniform(0.06, 0.16))
+            # 终点前 overshoot 一点再拉回（回弹）
+            self.mouse(session, "mouseMoved", sx + dist + random.uniform(3, 7),
+                       sy + random.uniform(-1, 1), buttons="1")
+            time.sleep(random.uniform(0.12, 0.25))
+            self.mouse(session, "mouseMoved", sx + dist, sy, buttons="1")
+            time.sleep(random.uniform(0.1, 0.2))
+            # 松开
+            self.mouse(session, "mouseReleased", sx + dist, sy, buttons="")
+            time.sleep(3.5)  # 等风控校验返回
+            h = self.evaluate(session, "document.documentElement.outerHTML", await_promise=False) or ""
+            if "验证码" not in h:
+                print(f"[SLIDE] 通过 ✓")
+                return True
+            print(f"[SLIDE] attempt {attempt} 失败, 等 10s 再试" if attempt < max_tries
+                  else f"[SLIDE] {max_tries} 次均失败, 放弃(转退避)")
+            time.sleep(10)
+        return False
+
 
 def build_search_url(kw, begin_page, prov=PROV):
     base = ("https://s.1688.com/selloffer/offer_search.htm?keywords="
@@ -331,9 +422,13 @@ def main():
             # 退避期检测：若当前就是验证码页，先等恢复
             waited = 0
             while search_page_captcha() and waited < 600:
-                print(f"[CAPTCHA] 搜页被拦, 退避 {backoff*15}s (已等{waited}s)")
+                print(f"[CAPTCHA] 搜页被拦, 尝试拟人滑块解锁")
+                if c.human_slide(ws):
+                    break
+                print(f"[CAPTCHA] 滑块未通过, 退避 {backoff*15}s (已等{waited}s)")
                 time.sleep(backoff * 15); waited += backoff * 15
                 backoff = min(backoff + 1, 4)
+                c.navigate(ws, build_search_url(args.cat[0], 1)); time.sleep(7)
             url = build_search_url(kw, pg)
             c.navigate(ws, url)
             time.sleep(7)
@@ -380,12 +475,13 @@ def main():
             # 详情页验证码/登录态检测
             page_html0 = c.evaluate(vs, "document.documentElement.outerHTML", await_promise=False) or ""
             if "验证码" in page_html0:
-                print(f"[CAPTCHA] {oid} 详情页被拦, 退避")
-                time.sleep(30); c.navigate(vs, url); time.sleep(4)
-                page_html0 = c.evaluate(vs, "document.documentElement.outerHTML", await_promise=False) or ""
-                if "验证码" in page_html0:
-                    print(f"[CAPTCHA] {oid} 仍被拦, 跳过")
-                    captcha_flag = "detail_captcha"; time.sleep(args.gap); continue
+                print(f"[CAPTCHA] {oid} 详情页被拦, 尝试拟人滑块解锁")
+                if not c.human_slide(vs):
+                    time.sleep(30); c.navigate(vs, url); time.sleep(4)
+                    page_html0 = c.evaluate(vs, "document.documentElement.outerHTML", await_promise=False) or ""
+                    if "验证码" in page_html0:
+                        print(f"[CAPTCHA] {oid} 仍被拦, 跳过")
+                        captcha_flag = "detail_captcha"; time.sleep(human_gap(args.gap)); continue
             # 登录态丢失检测（单个登录墙商品不应终止整个核验）
             ttl = ascii_unescape(c.evaluate(vs, "document.title", await_promise=False) or "")
             href = c.evaluate(vs, "location.href", await_promise=False) or ""
@@ -395,7 +491,7 @@ def main():
                 if login_lost_streak >= 5:
                     print(f"[LOGIN-LOST] 连续5个登录墙, 判定会话失效停止")
                     captcha_flag = "login_lost"; break
-                time.sleep(args.gap); continue
+                time.sleep(human_gap(args.gap)); continue
             login_lost_streak = 0
 
             body = c.get_sku(vs, oid, timeout=26)
@@ -418,7 +514,7 @@ def main():
                                 full_hit = True; break
                     if full_hit: break
                 if full_hit:
-                    time.sleep(args.gap); continue
+                    time.sleep(human_gap(args.gap)); continue
                 # 兜底 DOM
                 dom_hit = False
                 for dim in args.dims:
@@ -437,7 +533,7 @@ def main():
                         dom_hit = True; break
                 if not dom_hit:
                     print(f"[   ] {oid} SKU接口未抓到, DOM也未命中")
-                time.sleep(args.gap); continue
+                time.sleep(human_gap(args.gap)); continue
 
             sku_rows = parse_sku_json(body)
             # 品类词：用页面 title + SKU specAttrs + 整页文本
@@ -448,10 +544,10 @@ def main():
             gift = bool(GIFT_SIG.search(page_title))
             if gift:
                 print(f"[   ] {oid} gift=True skipped (sku rows={len(sku_rows)})")
-                time.sleep(args.gap); continue
+                time.sleep(human_gap(args.gap)); continue
             if not carton:
                 print(f"[   ] {oid} carton=False(非纸包装类目), 跳过")
-                time.sleep(args.gap); continue
+                time.sleep(human_gap(args.gap)); continue
 
             matched = False
             for dim in args.dims:
@@ -492,7 +588,7 @@ def main():
                 print(f"[   ] {oid} sku rows={len(sku_rows)} 未匹配目标尺寸")
         except Exception as ex:
             print(f"[ERR] {oid} {repr(ex)[:80]}")
-        time.sleep(args.gap)
+        time.sleep(human_gap(args.gap))
         # 增量写盘：每查完一个候选就落盘，防中途被杀丢结果
         if (idx + 1) % 5 == 0 or any(hits[d] for d in args.dims):
             save_state()
