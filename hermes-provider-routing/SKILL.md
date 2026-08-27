@@ -93,3 +93,14 @@ fallback_providers:
 ## References
 - `references/verify-keys.md` — Python `http.client` verification ritual, HTTP status
   interpretation guide, and current key validity table for all providers on this Mac mini.
+- `references/per-model-toolcall-test.md` — How to benchmark Hermes models' tool-calling
+  via `hermes chat -m` with a forced-tool task, **and the CRITICAL `--provider nous` pin**
+  (free Nous models fall through to OpenRouter under `auto` and 402). Loop recipe + the
+  6 free Nous Portal model ids (snapshot 2026-08-27, verify live).
+
+## Free Nous Portal models — provider pin pitfall (2026-08-27)
+When comparing models, do NOT let `hermes chat -m <free-model>` run under `auto` provider.
+Free-tier Nous models (hy3:free, longcat-2.0, solar-pro-4, step-3.7-flash,
+laguna-s-2.1/xs-2.1) resolve to **OpenRouter** and return
+`HTTP 402: billing or credits exhausted` even though they are free on Nous.
+Always pass `--provider nous` explicitly. See `references/per-model-toolcall-test.md`.
