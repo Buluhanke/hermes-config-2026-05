@@ -75,3 +75,11 @@ pitfalls:
 - 周期用 `execute_code` / terminal 跑测试，确认 red 再写实现。
 - 多个独立 seam 可并行 delegate，但每个 delegate 内部仍走垂直切片。
 - 周期结束不要把多片测试合并成一批再实现——严格一对一。
+
+## 实战验证结论（2026-08-27 实跑）
+`parse_dimensions(text)` 两切片真实跑通：
+1. 切片1：中文括号串 `宽【26cm】高【10cm】长【46cm】` → 红(NotImplemented) → 绿(regex 括号模式)。
+2. 切片2：轴名连写 `宽26高10长46cm` → 红(只匹配末位) → 最小实现扩展轴名连写模式。
+- 中途抓到真实 bug：轴名连写模式原用 `cm?` 强制 `c` 必现，漏匹配中间轴（宽26/高10 后跟下一个汉字而非 cm）；改为 `(?:cm)?` 全可选后双测通过。
+- 系统 python3 的 pytest 被全局 `phoenix` 插件污染 import 崩溃 → 用 `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` 跑通。
+- seam 形状限定为公共函数 + 期望值来自手算示例（独立真相源），未测实现细节，扛重构。

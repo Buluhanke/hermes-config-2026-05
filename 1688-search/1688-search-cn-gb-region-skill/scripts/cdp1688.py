@@ -154,6 +154,23 @@ def extract_sizes_from_spec(spec):
         lw.add(norm(L+"*"+W)); heights.add(H)
     return connected, lw, heights
 
+
+# 跨段组合串兜底：整段/整页扫描轴名尺寸（如 "宽【26cm】高【10cm】;特硬;长【46cm】"
+# 被 ; 切碎后逐段调用 extract_sizes_from_spec 凑不齐三轴 → 在此整页一次性拼出三轴）。
+# 只三轴（长/宽/高）齐了才返回 {长*宽*高} 归一化集合，缺轴则空（避免误匹配）。
+def parse_dims_cross_segment(text):
+    axis_val = {}
+    # 全角括号：宽【26cm】
+    for m in re.finditer(r"([长宽高侧厚竖横深])\s*【\s*([0-9][0-9.]*)\s*(?:cm|CM)?\s*】", text):
+        axis_val[m.group(1)] = norm(m.group(2))
+    # 轴名连写/半角（含 compatibility）：宽26cm / 长46（后面紧跟非数字）
+    for m in re.finditer(r"([长宽高侧厚竖横深])\s*[:：]?\s*([0-9][0-9.]*)\s*(?:cm|CM)?(?![0-9])", text):
+        if m.group(1) not in axis_val:
+            axis_val[m.group(1)] = norm(m.group(2))
+    if "长" in axis_val and "宽" in axis_val and "高" in axis_val:
+        return {norm(axis_val["长"] + "*" + axis_val["宽"] + "*" + axis_val["高"])}
+    return set()
+
 CARTON_SIG = re.compile(r"纸箱|瓦楞|快递箱|邮政箱|飞机盒|牛皮纸盒|牛皮纸袋|牛皮纸|搬家箱|收纳箱|包装盒|纸盒|手提袋|纸袋|购物袋|包装袋")
 GIFT_SIG = re.compile(r"礼盒|礼品盒|礼品包装|开窗|烫金|巧克力|糖果|食品|蛋糕|首饰|珠宝|化妆品|护肤品|伴手礼")
 
@@ -512,7 +529,15 @@ def main():
                                 hits[dim].append(rec)
                                 print(f"[HIT(page) {dim}] {oid} | {seg[:40]}")
                                 full_hit = True; break
-                    if full_hit: break
+                    # 跨段组合串兜底：整页一次性拼三轴（覆盖被 ; 切碎的轴名串）
+                    if not full_hit:
+                        cross = parse_dims_cross_segment(page_html)
+                        if any(p in cross for p in perms):
+                            rec = {"id": oid, "dim": dim, "title": "", "price": None,
+                                   "stock": None, "moq": None, "url": url, "spec": "cross-segment", "source": "page-cross"}
+                            hits[dim].append(rec)
+                            print(f"[HIT(page-cross) {dim}] {oid}")
+                            full_hit = True
                 if full_hit:
                     time.sleep(human_gap(args.gap)); continue
                 # 兜底 DOM
@@ -583,6 +608,17 @@ def main():
                             matched = True
                             break
                 if matched:
+                    break
+                # 跨段组合串兜底：整页一次性拼三轴
+                cross = parse_dims_cross_segment(page_html)
+                if tol_hit(cross):
+                    rec = {"id": oid, "dim": dim, "title": page_title[:36],
+                           "price": None, "stock": None, "moq": None, "url": url,
+                           "spec": "cross-segment", "source": "page-cross",
+                           "exact": any(p in cross for p in perms)}
+                    hits[dim].append(rec)
+                    print(f"[HIT(page-cross) {dim}{'(近似)' if not rec['exact'] else ''}] {oid}")
+                    matched = True
                     break
             if not matched:
                 print(f"[   ] {oid} sku rows={len(sku_rows)} 未匹配目标尺寸")
