@@ -3072,13 +3072,13 @@
     "created_by": null,
     "last_patched_at": null,
     "last_reused_patch_generation": 0,
-    "last_used_at": "2026-08-26T19:00:12.699770+00:00",
+    "last_used_at": "2026-08-27T19:00:09.663350+00:00",
     "last_viewed_at": "2026-08-26T08:39:09.743087+00:00",
     "patch_count": 0,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 29,
+    "use_count": 30,
     "view_count": 8
   },
   "hermes-skills-management": {
@@ -4015,14 +4015,14 @@
     "created_by": null,
     "last_patched_at": null,
     "last_reused_patch_generation": 0,
-    "last_used_at": null,
-    "last_viewed_at": null,
+    "last_used_at": "2026-08-27T19:02:54.244657+00:00",
+    "last_viewed_at": "2026-08-27T19:02:54.239428+00:00",
     "patch_count": 0,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 0,
-    "view_count": 0
+    "use_count": 1,
+    "view_count": 1
   },
   "self-learning-methodology": {
     "archived_at": null,
