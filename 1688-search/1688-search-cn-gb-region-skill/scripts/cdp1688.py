@@ -12,7 +12,7 @@ Usage:
     --cat "牛皮纸手提袋" "牛皮纸袋" "纸袋" "手提袋" "牛皮纸" \
     --pages 3 --gap 3 --maxverify 120
 """
-import sys, os, json, time, argparse, urllib.parse, re, base64, threading
+import sys, os, json, time, argparse, urllib.parse, re, base64, threading, subprocess
 import random
 import websocket
 
@@ -172,8 +172,9 @@ def parse_dims_cross_segment(text):
     return set()
 
 # 品类硬卡：锁定纸包装/手提袋类目，避免"电器+牛皮纸包装描述"误中（2026-08-27 实战：搜出电器）
-# 去掉过宽的 '牛皮纸' 单字与 '包装盒|纸盒'（纸箱任务仍由 纸箱|瓦楞|飞机盒 等词覆盖）
-CARTON_SIG = re.compile(r"纸箱|瓦楞|快递箱|邮政箱|飞机盒|牛皮纸盒|牛皮纸袋|牛皮纸手提袋|搬家箱|收纳箱|手提袋|纸袋|购物袋|包装袋|牛皮纸袋手提")
+# 扩展词集（2026-08-28 固化）：补白卡纸盒/卡纸盒/彩盒/纸盒/天地盖/翻盖盒，覆盖白卡纸盒类目
+CARTON_DEFAULT = "纸箱|瓦楞|快递箱|邮政箱|飞机盒|牛皮纸盒|牛皮纸袋|牛皮纸手提袋|搬家箱|收纳箱|手提袋|纸袋|购物袋|包装袋|牛皮纸袋手提|白卡纸盒|卡纸盒|纸盒|彩盒|天地盖|翻盖盒"
+CARTON_SIG = re.compile(CARTON_DEFAULT)
 # 反向排除：详情页若主打这些品类，即便含纸包装描述也跳过（电器/数码/五金等借"牛皮纸包装"蹭词）
 EXCLUDE_SIG = re.compile(r"电器|数码|数据线|充电器|适配器|电源|插座|灯具|LED|五金|工具|机械|电机|水泵|开关|插头|电池|耳机|音箱|手机|平板|电脑|键盘|鼠标|服装|鞋|袜|玩具|文具|家具")
 GIFT_SIG = re.compile(r"礼盒|礼品盒|礼品包装|开窗|烫金|巧克力|糖果|食品|蛋糕|首饰|珠宝|化妆品|护肤品|伴手礼")
@@ -403,10 +404,34 @@ def ascii_unescape(s):
         return s
 
 
+def reauth_cookies(port=9222):
+    """登录态静默丢失时自动重注默认 Chrome 的 cookie（不落盘明文）。
+    复用 inject_cookies.py：读默认 Chrome 的 1688/taobao cookie 注入后台 CDP 实例。"""
+    try:
+        r = subprocess.run([sys.executable, os.path.join(HERE, "inject_cookies.py"), str(port)],
+                           timeout=90, capture_output=True, text=True)
+        return r.returncode == 0 and "注入成功" in (r.stdout or "")
+    except Exception:
+        return False
+
+
+def clean_title(s):
+    """CDP 通道返回的是真实 UTF-8 文本，切勿再走 ascii_unescape（会把正常中文变 mojibake）。
+    仅做 latin-1 误读还原兜底（极少数 CDP 桥回传被标错编码的情况）。"""
+    if not isinstance(s, str):
+        return s
+    try:
+        s.encode("latin-1").decode("utf-8")
+        return s.encode("latin-1").decode("utf-8")
+    except Exception:
+        return s
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dims", nargs="+", required=True)
     ap.add_argument("--cat", nargs="+", required=True)
+    ap.add_argument("--cat-sign", default="", help="品类硬卡信号词(逗号分隔)，空则用默认纸包装词集(纸箱/白卡纸盒/彩盒/纸盒等)")
     ap.add_argument("--pages", type=int, default=3)
     ap.add_argument("--gap", type=float, default=3.0)
     ap.add_argument("--maxverify", type=int, default=120)
@@ -418,6 +443,11 @@ def main():
     ap.add_argument("--resume", default="", help="从已保存的 .ids.json 加载候选ID，跳过搜索阶段（被中断后续跑）")
     ap.add_argument("--start", type=int, default=0, help="核验起点索引（跳过前N个已验候选，分片续跑）")
     args = ap.parse_args()
+
+    # 品类硬卡信号词参数化（坑4固化）：--cat-sign 覆盖默认纸包装词集，避免每换类目改源码
+    if args.cat_sign:
+        global CARTON_SIG
+        CARTON_SIG = re.compile(args.cat_sign)
 
     os.makedirs(os.path.dirname(args.out), exist_ok=True)
     c = CDP(args.cdp)
@@ -538,13 +568,23 @@ def main():
                         print(f"[CAPTCHA] {oid} 仍被拦, 跳过")
                         captcha_flag = "detail_captcha"; time.sleep(human_gap(args.gap)); continue
             # 登录态丢失检测（单个登录墙商品不应终止整个核验）
-            ttl = ascii_unescape(c.evaluate(vs, "document.title", await_promise=False) or "")
+            ttl = clean_title(c.evaluate(vs, "document.title", await_promise=False) or "")
             href = c.evaluate(vs, "location.href", await_promise=False) or ""
             if "淘宝网" in ttl or "taobao" in href:
                 login_lost_streak += 1
-                print(f"[LOGIN-WALL] {oid} 登录墙商品, 跳过 (连续{login_lost_streak})")
+                print(f"[LOGIN-WALL] {oid} 登录墙商品 (连续{login_lost_streak})")
+                # 连续 2 个登录墙即尝试自动重注默认 Chrome cookie（坑2：避免尾部候选被整段跳过）
+                if login_lost_streak == 2:
+                    cport = int(args.cdp.split(":")[-1]) if ":" in args.cdp else 9222
+                    print(f"[REAUTH] 连续2个登录墙, 自动重注 cookie (port={cport})")
+                    if reauth_cookies(cport):
+                        login_lost_streak = 0
+                        print(f"[REAUTH] 重注成功, 继续核验")
+                        time.sleep(human_gap(args.gap)); continue
+                    else:
+                        print(f"[REAUTH] 重注失败, 继续计数")
                 if login_lost_streak >= 5:
-                    print(f"[LOGIN-LOST] 连续5个登录墙, 判定会话失效停止")
+                    print(f"[LOGIN-LOST] 连续5个登录墙(重注无效), 判定会话失效停止")
                     captcha_flag = "login_lost"; break
                 time.sleep(human_gap(args.gap)); continue
             login_lost_streak = 0
@@ -562,19 +602,28 @@ def main():
                         if "长" in seg or "宽" in seg or "高" in seg or re.search(r"[0-9][0-9.]*[xX×*][0-9]", seg):
                             connected, lw, heights = extract_sizes_from_spec(seg)
                             if any(p in connected for p in perms):
-                                rec = {"id": oid, "dim": dim, "title": "", "price": None,
-                                       "stock": None, "moq": None, "url": url, "spec": seg[:40], "source": "page"}
+                                # 整页兜底命中也尝试抠价（坑3：否则 price/stock 恒 None）
+                                praw = c.evaluate(vs, PRICE_JS, await_promise=False)
+                                p = json.loads(ascii_unescape(praw)) if praw else {}
+                                rec = {"id": oid, "dim": dim, "title": "",
+                                       "price": p.get("targetPrice"),
+                                       "stock": p.get("targetStock"),
+                                       "moq": p.get("moq"), "url": url, "spec": seg[:40], "source": "page"}
                                 hits[dim].append(rec)
-                                print(f"[HIT(page) {dim}] {oid} | {seg[:40]}")
+                                print(f"[HIT(page) {dim}] {oid} | {seg[:40]} | {rec['price']}")
                                 full_hit = True; break
                     # 跨段组合串兜底：整页一次性拼三轴（覆盖被 ; 切碎的轴名串）
                     if not full_hit:
                         cross = parse_dims_cross_segment(page_html)
                         if any(p in cross for p in perms):
-                            rec = {"id": oid, "dim": dim, "title": "", "price": None,
-                                   "stock": None, "moq": None, "url": url, "spec": "cross-segment", "source": "page-cross"}
+                            praw = c.evaluate(vs, PRICE_JS, await_promise=False)
+                            p = json.loads(ascii_unescape(praw)) if praw else {}
+                            rec = {"id": oid, "dim": dim, "title": "",
+                                   "price": p.get("targetPrice"),
+                                   "stock": p.get("targetStock"),
+                                   "moq": p.get("moq"), "url": url, "spec": "cross-segment", "source": "page-cross"}
                             hits[dim].append(rec)
-                            print(f"[HIT(page-cross) {dim}] {oid}")
+                            print(f"[HIT(page-cross) {dim}] {oid} | {rec['price']}")
                             full_hit = True
                 if full_hit:
                     time.sleep(human_gap(args.gap)); continue

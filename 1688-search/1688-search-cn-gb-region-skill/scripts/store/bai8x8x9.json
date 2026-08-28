@@ -1,0 +1,199 @@
+{
+  "dims": [
+    "8*8*9"
+  ],
+  "cat": [
+    "8*8*9cm白卡纸盒",
+    "白卡纸盒",
+    "8*8*9cm卡纸盒",
+    "白卡纸盒定制",
+    "8*8*9纸盒"
+  ],
+  "prov": "%E6%B1%9F%E8%8B%8F,%E6%B5%99%E6%B1%9F,%E4%B8%8A%E6%B5%BD",
+  "candidates": 296,
+  "hits": {
+    "8*8*9": [
+      {
+        "id": "677701816838",
+        "dim": "8*8*9",
+        "title": "ç°è´§å°ç½çæ¹åå åç½è²æ",
+        "price": "¥0.19",
+        "stock": 786648,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/677701816838.html",
+        "spec": "8x8（长宽）;9cm（高）",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "1076136817835",
+        "dim": "8*8*9",
+        "title": "ç½å¡çº¸çå®å¶æ­£æ¹å½¢å°ç½ç",
+        "price": "¥0.22",
+        "stock": 999999,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/1076136817835.html",
+        "spec": "8*8（长宽）;9cm高;白卡纸盒",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "1048466362962",
+        "dim": "8*8*9",
+        "title": "ç½å¡åè£çå®å¶å½©å°çº¸çæ½",
+        "price": null,
+        "stock": null,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/1048466362962.html",
+        "spec": "高9CM\",\"price\":\"0.14\",\"skuId\":60793188978",
+        "source": "page",
+        "exact": true
+      },
+      {
+        "id": "679471077829",
+        "dim": "8*8*9",
+        "title": "éç¨å°ç½çç©ºçç½è²çº¸çå",
+        "price": "¥0.29",
+        "stock": 9999799,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/679471077829.html",
+        "spec": "高9cm;长8cm*宽8cm",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "1077381776152",
+        "dim": "8*8*9",
+        "title": "ç°è´§ç½å¡çº¸çç½è²åææ£åº",
+        "price": "¥0.19",
+        "stock": 687646,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/1077381776152.html",
+        "spec": "8x8(长宽);9cm（高）",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "632793728897",
+        "dim": "8*8*9",
+        "title": "ç°è´§ç½å¡çº¸çé¿æ¹å½¢å°ç½ç",
+        "price": "¥0.26",
+        "stock": 99999,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/632793728897.html",
+        "spec": "白卡纸350克 长8*宽8 CM;高9CM",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "758537032455",
+        "dim": "8*8*9",
+        "title": "äºé©¬éç½å¡çº¸çåè£çç°è´§",
+        "price": "¥0.23",
+        "stock": 97873,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/758537032455.html",
+        "spec": "8x8（长宽）;9cm（高）",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "784320267112",
+        "dim": "8*8*9",
+        "title": "ç°è´§ç½å¡çº¸çå åå°ç½ççº¸",
+        "price": "¥0.22",
+        "stock": 666915,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/784320267112.html",
+        "spec": "8x8（长宽）;9cm（高）;白卡纸",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "747890959016",
+        "dim": "8*8*9",
+        "title": "ç°è´§å åå°ç½çç²çåå¦å",
+        "price": "¥0.22",
+        "stock": 69824,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/747890959016.html",
+        "spec": "8*8（长宽）;9cm高",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "1072131451165",
+        "dim": "8*8*9",
+        "title": "ç°è´§å åç½å¡çº¸çç²çåå¦",
+        "price": "¥0.26",
+        "stock": 10000,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/1072131451165.html",
+        "spec": "白卡纸350克 长8*宽8 CM;高9CM;白卡",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "1052745573184",
+        "dim": "8*8*9",
+        "title": "åå®¶ç½å¡çº¸çé¿æ¹å½¢å°ç½ç",
+        "price": "¥0.26",
+        "stock": 99999,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/1052745573184.html",
+        "spec": "白卡纸350克 长8*宽8 CM;高9CM",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "1048753810765",
+        "dim": "8*8*9",
+        "title": "å°ç½çå åç°è´§æ¹åç½å¡çº¸",
+        "price": "¥0.20",
+        "stock": 999999,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/1048753810765.html",
+        "spec": "8x8（长宽）;9cm（高）",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "1072952802922",
+        "dim": "8*8*9",
+        "title": "ç½å¡çº¸çå®å¶æ­£æ¹å½¢å°ç½ç",
+        "price": "¥0.22",
+        "stock": 999999,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/1072952802922.html",
+        "spec": "8*8（长宽）;9cm高;白卡纸盒",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "1067266279499",
+        "dim": "8*8*9",
+        "title": "ç°è´§ç½å¡çº¸çåè£çå®å¶è",
+        "price": "¥0.28",
+        "stock": 100000,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/1067266279499.html",
+        "spec": "白卡纸盒;8*8*9",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "643599708830",
+        "dim": "8*8*9",
+        "title": "ç°è´§éç¨ç½å¡çº¸çå°ç½çç©º",
+        "price": "¥0.22",
+        "stock": 999577,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/643599708830.html",
+        "spec": "白卡纸350克 长8*宽8 CM;高9CM",
+        "source": "skujson",
+        "exact": true
+      }
+    ]
+  },
+  "captcha_flag": "login_lost"
+}

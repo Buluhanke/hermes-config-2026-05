@@ -111,6 +111,14 @@ end tell
 ### Step 5：批量循环（AppleScript，降速防验证码）
 见 `scripts/check_batch.scpt`。要点：`delay 8`、每个 ID 写一行结果到文件、try/on error 容错。
 
+## 复盘闭环 SOP（找品跑通后必做，2026-08-28 用户固化）
+
+- **用户范式（最高优先，固化）**：「很完美的一次找品，剩下的我定夺采购，你复盘一下刚跑过的流程还有哪些坑」→「修复后固化」。即：**一次成功找品 ≠ 结束**，必须再走一轮 复盘→修复→固化 才收工。
+- **复盘四问（逐候选/逐分支查）**：① 输出有无乱码/None 盲区（本次 title mojibake + page 命中无价）；② 流程有无提前终止/静默跳过（本次尾部登录墙连 5 触发 break 整段跳）；③ 新类目是否被硬卡漏检（本次白卡纸盒类目词缺失）；④ 同店多链接/地域未复核等脏数据。
+- **修复落地**：直接在 `cdp1688.py` 修函数（不清零状态、不推翻架构），先 `python3 -m py_compile` + 纯函数断言单元验证，再视为可信。
+- **固化（两步缺一不可）**：① 每个 bug 写成 `## NN.` 坑位（翻车实录 + 修复 + 铁律）；② 在「已验证样例」补一条实战命令与结果。只修脚本不写坑位 = 下次同坑重踩；跨模型可移植靠的是 SKILL.md 不是脚本注释。
+- **铁律**：用户说「修复后固化」= 改完脚本还要把教训写进 SKILL.md。
+
 ## 验证清单（每步确认）
 - [ ] URL 是 `offer_search.htm` 端点（非 `s/1688search`）；用户若给过 URL 直接复用
 - [ ] 关键词是 GBK 编码（非 UTF-8 百分号）
@@ -198,6 +206,13 @@ end tell
   3. `783582821059` 温州瀚拓包装 ✗ 同上（高度轴最低350cm）
   4. `786814474290` 温州瀚拓包装 ✗ 同上
   → **修正认知**：温州瀚拓 3 家是超高立柱盒专用（高350cm+），**不做常规矮盒**；只有盒骏做全尺寸常规纸盒。9×9×10 实际在售仅盒骏 1 家。
+
+**任务：8×8×9cm 白卡纸盒（江浙沪）—— cdp1688.py 主驱动 + 5类尺寸写法全覆盖（2026-08-28 实战，坑57/58/59/60 修复后）**
+- 命令：`cd scripts && python3 cdp1688.py --dims "8*8*9" --cat "8*8*9cm白卡纸盒" "白卡纸盒" "8*8*9cm卡纸盒" "白卡纸盒定制" "8*8*9纸盒" --prov "%E6%B1%9F%E8%8B%8F,%E6%B5%99%E6%B1%9F,%E4%B8%8A%E6%B5%BD" --pages 4 --gap 2.5 --maxverify 240 --out store/bai8x8x9.json`
+- 296 候选 → 精确 8×8×9 真命中 **15 家**（全部江浙沪，价格 ¥0.19–0.29，白卡纸盒/卡纸盒类目）。尺寸写法覆盖：矩阵 `8x8（长宽）;9cm（高）`、轴名 `高9cm;长8cm*宽8cm`、连写 `8*8*9`、全角组合串。
+- 最低价：`677701816838` ¥0.19 库存78万、`1077381776152` ¥0.19 库存68万（义乌盒骏系）；主力 ¥0.19–0.26。
+- 关键修复验证：① 坑57 `clean_title` 后 title 正常中文、GIFT_SIG 正常挡化妆品盒；② 坑58 尾部连 5 登录墙自动重注 cookie 续验（本次重注后继续出命中）；③ 坑59 page/page-cross 命中补抠价，不再有 None 盲区；④ 坑60 `CARTON_DEFAULT` 已含白卡纸盒，无需 `--cat-sign` 即命中整类。
+- 新类目可直接加 `--cat-sign "信号词|信号词"` 覆盖，不必改源码。
 - 教训：① 矩阵式卖家**只在「彩盒定制」池**，尺寸词搜不到（坑31）；② `9cm（高）` 是全角左括号 `（`（坑30 已修）；③ 搜结果 JSON 不能直接当 ID 喂详情页（坑32）；④ 矩阵卖家 SKU 轴范围不同（盒骏高3-22cm常规，瀚拓高350cm+立柱），命中 ID ≠ 该尺寸有货，须用 `price_mtop_capture.py` 验证具体尺寸组合真存在。
 
 33. **环节⑦价格/SKU提取：Playwright 抠内联 skuMapOriginal 可行，但路径脆弱（2026-08-21 实测+复盘）**：`price_mtop_capture.py` 用 Playwright `connect_over_cdp('http://127.0.0.1:9333')` 接管独立实例、抠 `skuMapOriginal` 能拿到全 SKU 真实价+库存（677701816838 的 8×8×9=¥0.19/78万、9×9×10=¥0.23/54万）。**但本会话复盘证明这路脆弱**：① 9333 实例易死（进程退了 CDP 连不上）；② 重生要先 `rm -f` 残留 `SingletonLock/Cookie/Socket` 否则 Chrome 看锁即退；③ **快速批量开详情页（每页~1.5s）直接触发 1688 Captcha 墙**，整实例进验证码后全 False。④ 独立实例跨 profile 复制默认 Chrome 的 Cookie 因 Keychain 加密**失效**，须手动扫码登录一次。结论：**优先用 AppleScript 驱动默认登录 Chrome + price_clean3.js**；Playwright/9333 仅作脆弱备选，且批量时必须降速（每页 6-8s + Captcha 检测）。`alibaba_1688_scraper` MCP 硬绑 127.0.0.1:9222，与默认 Chrome 僵尸 9222 冲突，弃用。
@@ -452,6 +467,26 @@ PC 搜页 `s.1688.com/selloffer` 被验证码拦截时，**不要干等 10–30 
   2. 新增 `EXCLUDE_SIG = re.compile(r"电器|数码|数据线|充电器|适配器|电源|插座|灯具|LED|五金|工具|机械|电机|水泵|开关|插头|电池|耳机|音箱|手机|平板|电脑|键盘|鼠标|服装|鞋|袜|玩具|文具|家具")`，详情页 `title_text` 命中即 `exclude=电器/数码等非纸袋类目, 跳过`。
   3. `page_title`/`title_text` 全部 `str()` 化，杜绝 Pyright 误报导致的类型隐患。
 - **铁律**：任何非纸箱任务（手提袋/自封袋/牛皮纸袋等）跑前，先确认 `CARTON_SIG` 不含会误中其他大类的宽词，且必须有 `EXCLUDE_SIG` 反向排除。纸箱任务同理：`CARTON_SIG` 只留 `纸箱|瓦楞|飞机盒` 等，避免礼盒/食品盒混入（坑17）。**搜词越宽，排除词越要严**。
+
+## 57. CDP 通道 title 严禁再走 ascii_unescape（2026-08-28 实战翻车 + 修复）
+- **翻车实录**：`cdp1688.py` 原 `page_title = ascii_unescape(document.title)` —— CDP `Runtime.evaluate` 返回的是**真实 UTF-8 字符串**，再 `unicode_escape` 解码就把正常中文变 mojibake（`ç°è´§å°...`）。连带危害：`GIFT_SIG`（礼盒/化妆品信号）只扫 `page_title`，title 乱码→信号匹配不到→漏杀礼盒/化妆品盒（本次靠 `page_html[:20000]` 兜底才挡住 #6/#11）。注意：DOM 兜底 JS（`verify_carton.js`/`price_clean3.js`）**本身带 esc 把中文转 `\uXXXX`**，所以那两处 `ascii_unescape(vraw)` 是对的；坑只出在 `document.title`/纯 CDP 文本字段。
+- **修复（已落地 cdp1688.py）**：新增 `clean_title(s)`——直接返回 CDP 原串（真实 UTF-8 保真），仅做 latin-1 误读还原兜底；登录墙检测处的 `ascii_unescape(document.title)` 改为 `clean_title(...)`。GIFT_SIG 现在能正常匹配中文 title。
+- **铁律**：凡 CDP `evaluate` 拿到的纯文本/title，**绝不**再 `ascii_unescape`；只有调了自带 esc 的 JS（`verify_carton.js`/`price_clean3.js`）返回才解。
+
+## 58. 登录墙连续命中须自动重注 cookie，否则尾部候选整段被跳（2026-08-28 实战 + 修复）
+- **翻车实录**：本次 296 候选验到尾部，连 5 个登录墙触发 `LOGIN-LOST` 提前 break —— 后面可能还有好货被整段跳过。`cdp1688_bag.py` 早有 `reauth_cookies()` 自动重注，主脚本没有。
+- **修复（已落地 cdp1688.py）**：新增 `reauth_cookies(port)` 复用 `inject_cookies.py`（读默认 Chrome 的 1688/taobao cookie 注入 9222 实例，不落盘明文）；登录墙 streak==2 时自动重注，成功则清零 streak 续验；连续 5 次重注仍失败才判会话失效停止。
+- **铁律**：登录态静默丢失是头号假阴性，主驱动必须带自动重注；单次商品登录墙 `continue` 不终止整个核验。
+
+## 59. 整页兜底命中(page/page-cross)必须补抠价，否则 price/stock 恒 None（2026-08-28 实战 + 修复）
+- **翻车实录**：`source=page` / `page-cross` 分支只 `continue`，没调 `PRICE_JS` 抠价 → 第 15 家 `1048466362962` 的 price/stock 全是 None，展示只能标"待核价"。
+- **修复（已落地 cdp1688.py）**：两处 page/page-cross 命中后均调 `PRICE_JS`（自带 esc，用 `ascii_unescape` 解）取 `targetPrice/targetStock/moq`，拿不到留 None 但标注已尝试。现在整页兜底命中也能出价。
+- **铁律**：凡是命中分支（skujson / dom / page / page-cross）都应尽量抠价，不留 None 盲区。
+
+## 60. 品类硬卡信号词参数化（2026-08-28 固化，避免每换类目改源码）
+- **翻车实录**：`CARTON_SIG` 原不含 `白卡纸盒|卡纸盒|彩盒|纸盒|天地盖|翻盖盒`，本次白卡纸盒任务整类漏检，只能手动改源码补词。
+- **修复（已落地 cdp1688.py）**：① `CARTON_DEFAULT` 已固化扩展纸包装词集（含白卡纸盒类目）；② 新增 `--cat-sign "词|词"` 参数，调用方按需覆盖，不必再动源码。
+- **铁律**：新类目（彩盒/白卡/牛皮纸袋等）优先用 `--cat-sign` 传信号词；通用纸包装词已默认覆盖，多数任务不用传。
 
 ## 2026 更优方案参考（全网调研 2026-08）
 第三方 1688-cli（superjack2050, MIT）复用真实 Chrome 登录态、输出结构化 JSON，可作补充；
