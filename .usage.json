@@ -1917,6 +1917,21 @@
     "use_count": 32,
     "view_count": 32
   },
+  "agent-landscape-2026": {
+    "archived_at": null,
+    "created_at": "2026-08-29T19:04:20.970070+00:00",
+    "created_by": null,
+    "last_patched_at": null,
+    "last_reused_patch_generation": 0,
+    "last_used_at": null,
+    "last_viewed_at": null,
+    "patch_count": 0,
+    "patch_generation": 0,
+    "pinned": false,
+    "state": "active",
+    "use_count": 0,
+    "view_count": 0
+  },
   "agent-reach": {
     "archived_at": null,
     "created_at": "2026-07-27T06:38:30.454296+00:00",
@@ -3117,13 +3132,13 @@
     "created_by": null,
     "last_patched_at": null,
     "last_reused_patch_generation": 0,
-    "last_used_at": "2026-08-28T19:00:04.453968+00:00",
+    "last_used_at": "2026-08-29T19:00:03.992653+00:00",
     "last_viewed_at": "2026-08-26T08:39:09.743087+00:00",
     "patch_count": 0,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 31,
+    "use_count": 32,
     "view_count": 8
   },
   "hermes-skills-management": {
