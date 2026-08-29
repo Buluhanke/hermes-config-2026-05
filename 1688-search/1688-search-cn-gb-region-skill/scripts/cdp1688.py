@@ -39,9 +39,16 @@ EXTRACT = r"""
   while((m=re1.exec(h))!==null) ids.add(m[1]);
   const re2=/[?&]offerId=([0-9]+)/g;
   while((m=re2.exec(h))!==null) ids.add(m[1]);
-  const re3=/offerId["']?\s*[:=]\s*["']?([0-9]+)/g;
-  while((m=re3.exec(h))!==null) ids.add(m[1]);
-  return JSON.stringify({ids:[...ids].filter(id=>id.length>=9&&id.length<=14)});
+  // 排除「趋势商机/跟风热卖」推荐挂件(opportunity.CardItem / pages-fast.1688.com)
+  const RECS=[/opportunity\.CardItem/, /pages-fast\.1688\.com/];
+  const ids2=new Set();
+  for(const id of ids){
+    // 在原始HTML中定位该id，附近含推荐标记则丢弃
+    const idx=h.indexOf(id);
+    const s=Math.max(0,idx-400), e=Math.min(h.length, idx+400);
+    if(!RECS.some(r=>r.test(h.slice(s,e)))) ids2.add(id);
+  }
+  return JSON.stringify({ids:[...ids2].filter(id=>id.length>=9&&id.length<=14)});
 })();
 """
 
@@ -176,7 +183,7 @@ def parse_dims_cross_segment(text):
 CARTON_DEFAULT = "纸箱|瓦楞|快递箱|邮政箱|飞机盒|牛皮纸盒|牛皮纸袋|牛皮纸手提袋|搬家箱|收纳箱|手提袋|纸袋|购物袋|包装袋|牛皮纸袋手提|白卡纸盒|卡纸盒|纸盒|彩盒|天地盖|翻盖盒"
 CARTON_SIG = re.compile(CARTON_DEFAULT)
 # 反向排除：详情页若主打这些品类，即便含纸包装描述也跳过（电器/数码/五金等借"牛皮纸包装"蹭词）
-EXCLUDE_SIG = re.compile(r"电器|数码|数据线|充电器|适配器|电源|插座|灯具|LED|五金|工具|机械|电机|水泵|开关|插头|电池|耳机|音箱|手机|平板|电脑|键盘|鼠标|服装|鞋|袜|玩具|文具|家具")
+EXCLUDE_SIG = re.compile(r"电器|数码|数据线|充电器|适配器|电源|插座|灯具|LED|五金|工具|机械|电机|水泵|开关|插头|电池|耳机|音箱|手机|平板|电脑|键盘|鼠标|服装|鞋|袜|玩具|文具|家具|表板蜡|清洁上光|还原剂|仪表盘|内饰护理|车用|汽车用品|皮革护理|上光剂")
 GIFT_SIG = re.compile(r"礼盒|礼品盒|礼品包装|开窗|烫金|巧克力|糖果|食品|蛋糕|首饰|珠宝|化妆品|护肤品|伴手礼")
 
 def parse_sku_json(body):
@@ -648,18 +655,14 @@ def main():
                 time.sleep(human_gap(args.gap)); continue
 
             sku_rows = parse_sku_json(body)
-            # 品类词：用页面 title + SKU specAttrs + 整页文本
-            page_title = str(ascii_unescape(c.evaluate(vs, "document.title", await_promise=False) or ""))
+            # 品类词：只用 页面title + 真实SKU specAttrs（不含整页sidebar，避免相关推荐蹭词误中）
+            page_title = clean_title(c.evaluate(vs, "document.title", await_promise=False) or "")
             specs_blob = " ".join(s for s, _, _ in sku_rows)
-            title_text = str(page_title) + " " + str(specs_blob) + " " + str(page_html[:20000])
+            title_text = str(page_title) + " " + str(specs_blob)
             carton = bool(CARTON_SIG.search(title_text))
             exclude = bool(EXCLUDE_SIG.search(title_text))
             if exclude:
-                print(f"[   ] {oid} exclude=电器/数码等非纸袋类目, 跳过")
-                time.sleep(human_gap(args.gap)); continue
-            gift = bool(GIFT_SIG.search(page_title))
-            if gift:
-                print(f"[   ] {oid} gift=True skipped (sku rows={len(sku_rows)})")
+                print(f"[   ] {oid} exclude=非纸盒类目, 跳过")
                 time.sleep(human_gap(args.gap)); continue
             if not carton:
                 print(f"[   ] {oid} carton=False(非纸包装类目), 跳过")
