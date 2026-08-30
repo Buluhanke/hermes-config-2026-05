@@ -5,6 +5,7 @@ evaluating-llms-harness:ac24cf5202db5b024b3079023797a0f6
 humanizer:b3fa12781b41b4008fba21073632e3d0
 llama-cpp:0991055ce47146735f0ed02d7658a254
 manim-video:2ad3d68c3eb5d2675c05138100d3e48b
+ocr-and-documents:a3d7bd2b14249af91b7f5b9eed78915d
 p5js:5f09fa1cb8494c93bc2f5bcbd34a2ead
 powerpoint:00a6eb2ad4b7be22c1eabf6c19158836
 serving-llms-vllm:92d66ae1f1112924634fcdcff2f86bc7
