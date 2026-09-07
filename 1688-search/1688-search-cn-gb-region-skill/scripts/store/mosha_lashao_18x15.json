@@ -1,0 +1,51 @@
+{
+  "dims": [
+    "18*15"
+  ],
+  "cat": [
+    "磨砂拉链袋",
+    "磨砂自封袋",
+    "磨砂密封袋",
+    "拉链自封袋"
+  ],
+  "prov": "%D5%E3%BD%AD",
+  "city": "义乌",
+  "candidates": 490,
+  "hits": {
+    "18*15": [
+      {
+        "id": "870217552832",
+        "dim": "18*15",
+        "title": "现货批发pe透明cpe磨砂横装竖装收纳服装袜子内衣内裤印刷拉链袋 - 阿里巴巴",
+        "price": "¥0.10",
+        "stock": 999300,
+        "url": "https://detail.1688.com/offer/870217552832.html",
+        "spec": "&12丝透明标准厚度&;18*15横装",
+        "location": "浙江省金华市",
+        "company": "义乌市捷佳包装有限公司",
+        "region_jzh": true,
+        "yiwu_jh": true,
+        "white_edge": null,
+        "thick_12si": true,
+        "exact_target": false
+      },
+      {
+        "id": "857804998271",
+        "dim": "18*15",
+        "title": "磨砂拉链袋透明服装包装袋内衣袜子收纳打包袋童装pe塑料自封袋子 - 阿里巴巴",
+        "price": "¥0.12",
+        "stock": 991949,
+        "url": "https://detail.1688.com/offer/857804998271.html",
+        "spec": "14丝磨砂;横版18*15cm;EVA",
+        "location": "浙江省金华市",
+        "company": "金华市丫丫包装材料有限公司",
+        "region_jzh": true,
+        "yiwu_jh": true,
+        "white_edge": null,
+        "thick_12si": true,
+        "exact_target": false
+      }
+    ]
+  },
+  "captcha_flag": false
+}

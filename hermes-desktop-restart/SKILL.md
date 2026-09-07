@@ -1,7 +1,7 @@
 ---
 name: hermes-desktop-restart
 description: "桌面app假死重启法 白屏无响应修复。Use when Hermes桌面聊天没反应"
-version: 1.0.0
+version: 1.1.0
 platforms:
 - macos
 metadata:
@@ -14,16 +14,18 @@ metadata:
     - macos
 triggers:
 - Use when hermes desktop restart
+- Use when hermes桌面图标
 trigger_type: general
 ---
 
 # Restart Hermes Desktop App (macOS)
 
 ## When to use
-User says the Hermes desktop app "can't chat", "went blank", "froze", or "打不开/不能对话了".
-Most common root cause on kk's machine: the app triggered a self-update, the updater
-told the app to quit to release the venv shim, and the auto-relaunch ("detached
-relauncher / mac bundle swap") failed — leaving an empty shell with a dead backend.
+User says the Hermes desktop app "can't chat", "went blank", "froze", "打不开/不能对话了",
+or "Dock里出现两个Hermes图标".
+Most common root cause on this machine: the app triggered a self-update, the updater
+ told the app to quit to release the venv shim, and the auto-relaunch ("detached
+ relauncher / mac bundle swap") failed — leaving an empty shell with a dead backend.
 The underlying model/creds/network are usually fine (verify with a CLI chat).
 
 ## Fast diagnosis
@@ -41,7 +43,7 @@ The underlying model/creds/network are usually fine (verify with a CLI chat).
 
 ## Fix — one command
 ```bash
-open /Users/kk/.hermes/hermes-agent/apps/desktop/release/mac-arm64/Hermes.app
+open ~/.hermes/hermes-agent/apps/desktop/release/mac-arm64/Hermes.app
 ```
 Then wait ~8s and confirm the backend came up:
 ```bash
@@ -51,11 +53,26 @@ Look for: `Hermes backend is ready. Finalizing desktop startup` and a `HERMES_BA
 
 If a stale blank window is still open, tell the user to Cmd+Q it first, then relaunch.
 
+## Symptom: Two Hermes icons in the Dock
+
+The Dock shows two Hermes entries: `Hermes.app` (main) and `Hermes Helper (Renderer)` (Electron renderer helper). Both Helper plists already have `LSUIElement=true`, but Launch Services cached the app registration without that key.
+
+### Fix — reregister the helper, then restart Dock
+```bash
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister \
+  -f "~/.hermes/hermes-agent/apps/desktop/release/mac-arm64/Hermes.app/Contents/Frameworks/Hermes Helper (Renderer).app"
+killall Dock
+```
+The app will now show one Dock icon. Relaunch Hermes to verify.
+
+### Root cause
+`Hermes Helper (Renderer).app` is an Electron renderer process helper. Even with `LSUIElement=true` in its `Info.plist`, Launch Services had cached an earlier registration without that key. Running `lsregister -f` forces it to re-read the plist and update the Dock registration.
+
 ## Stuck / hung GUI updater (`hermes-setup --update`) — marker present but PID is DEAD
 
 Different failure mode from "self-update failed to auto-relaunch". Here the app
 *does* quit to release the venv shim (by design), but the updater binary
-`/Users/kk/.hermes/hermes-setup --update --branch main --target-app .../Hermes.app`
+`~/.hermes/hermes-setup --update --branch main --target-app ~/.hermes/hermes-agent/apps/desktop/release/mac-arm64/Hermes.app`
 itself **hung** — it never downloads or rebuilds, it just sits in its Cocoa event
 loop forever. Seen 2026-07-17: ran 40+ min at 0% CPU, never finished, app never
 relaunched, and the watchdog skipped relaunch because the in-progress marker was
@@ -89,7 +106,7 @@ sample <PID> 3 -mayDie 2>&1 | grep -E 'NSApplication run|mach_msg|ReceiveNextEve
 ```bash
 kill -9 <PID>                                   # terminate the hung GUI updater
 rm -f ~/.hermes/.hermes-update-in-progress      # clear the stale "in progress" flag
-open /Users/kk/.hermes/hermes-agent/apps/desktop/release/mac-arm64/Hermes.app
+open ~/.hermes/hermes-agent/apps/desktop/release/mac-arm64/Hermes.app
 sleep 8
 pgrep -f "hermes-setup --update" >/dev/null && echo "WARN: respawned" || echo "OK: no updater"
 ```
@@ -116,7 +133,7 @@ then no real update was pending — the hang was a no-op updater that never
 terminated. Just relaunch; do NOT rebuild.
 
 ### Avoid the GUI updater next time
-On kk's machine the in-app "Check for Updates" → `hermes-setup --update` path can
+On this machine the in-app "Check for Updates" → `hermes-setup --update` path can
 hang. To actually update, prefer the CLI:
 ```bash
 hermes update        # same git+deps+desktop steps, no Cocoa GUI to freeze

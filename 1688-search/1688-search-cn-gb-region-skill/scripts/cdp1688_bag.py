@@ -72,8 +72,8 @@ def extract_thickness(spec):
 
 # 塑料自封袋品类硬卡：必须含「塑料/PE/opp」且是「自封袋」，排除茶叶/铝箔/牛皮纸/食品袋
 # （这些是广义自封袋但不是用户要的"塑料自封袋"，搜页登录掉时会被误收）
-BAG_SIG = re.compile(r"自封袋|封口袋|拉链袋|骨袋")
-BAG_PLASTIC = re.compile(r"塑料|PE|opp|OPP|pvc|PVC|复合")
+BAG_SIG = re.compile(r"自封袋|封口袋|拉链袋|骨袋|拉环袋|拉环")
+BAG_PLASTIC = re.compile(r"塑料|PE|opp|OPP|pvc|PVC|复合|EVA|eva|CPE|cpe")
 BAG_EXCLUDE = re.compile(r"茶叶|铝箔|牛皮纸|食品|干货|花茶|狗粮|坚果|农药|化肥|宠物|中药")
 # 礼盒信号仅在 SKU spec 明确出现时才排除（不用标题，自封袋标题常含"包装"误伤）
 GIFT_SIG = re.compile(r"礼盒|礼品盒|开窗|烫金|巧克力|糖果|蛋糕|首饰|珠宝|伴手礼")

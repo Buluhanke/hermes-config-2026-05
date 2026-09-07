@@ -291,8 +291,40 @@ adb disconnect <USB设备ID>
 adb devices -l  # 确认只剩无线 IP
 ```
 
-### 8. 设备重启后无线调试失效
+### 9. 华为平板 MRX-W29 无无线调试开关（老版本 Android）
+
+部分华为/旧版 Android 设备系统设置里没有「无线调试」开关，无法直接点开。正确流程：
+
+```bash
+# Step 1 — USB 有线连接平板（确保平板已授权 USB 调试）
+adb devices -l
+# 输出: S8M6R20A27000680 device ... model:MRX_W29
+
+# Step 2 — 通过 USB 开启 TCP 调试模式（无需平板操作）
+adb tcpip 5555
+# 输出: restarting in TCP mode port: 5555
+
+# Step 3 — 等待 3 秒后无线连接
+sleep 3 && adb connect 192.168.8.248:5555
+# 输出: connected to 192.168.8.248:5555
+
+# Step 4 — 验证
+adb -s 192.168.8.248:5555 shell echo "wireless OK"
+# 输出: wireless OK ✅
+```
+
+**之后 USB 线可拔掉**，无线连接持续有效。设备重启后需重新走 Step 1-3。
+
+### 10. 设备重启后无线调试失效
+
 无 Root 时 `adb tcpip 5555` 在锁屏待机/休眠时不丢，只有关机重启才失效。日常使用只需每次重启后 USB 开一次。
+
+### 11. 排查平板无线调试是否开启
+
+平板无线调试已开启但端口不通（`adb connect` 报 `Connection refused`）：
+- 平板可能切换了 IP → 去设置里查当前 IP
+- 无线调试端口可能变了 → 去设置 → 开发者选项 → 无线调试查看当前端口
+- 平板和 Mac 不在同一网段 → 确认都在 192.168.8.x
 
 ---
 

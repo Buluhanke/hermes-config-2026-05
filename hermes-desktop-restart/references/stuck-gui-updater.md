@@ -8,8 +8,8 @@ The failure is the **updater itself freezing**, not the app or your model/creds.
 1. App self-triggers update (user clicked "Check for Updates" / update overlay).
    `apps/desktop/electron/main.ts` `applyUpdates()` spawns:
    ```
-   /Users/kk/.hermes/hermes-setup --update --branch main \
-     --target-app /Users/kk/.hermes/hermes-agent/apps/desktop/release/mac-arm64/Hermes.app
+   ~/.hermes/hermes-setup --update --branch main \
+     --target-app ~/.hermes/hermes-agent/apps/desktop/release/mac-arm64/Hermes.app
    ```
    ...then quits after a dwell to release the venv shim. Updater is supposed to
    rebuild + relaunch the app when done.
@@ -36,7 +36,7 @@ pgrep -f "mac-arm64/Hermes.app" >/dev/null && echo UP || echo DOWN
 PID=$(head -1 ~/.hermes/.hermes-update-in-progress)
 kill -9 "$PID"
 rm -f ~/.hermes/.hermes-update-in-progress
-open /Users/kk/.hermes/hermes-agent/apps/desktop/release/mac-arm64/Hermes.app
+open ~/.hermes/hermes-agent/apps/desktop/release/mac-arm64/Hermes.app
 sleep 8
 pgrep -f "hermes-setup --update" >/dev/null && echo "WARN respawned" || echo "OK no updater"
 tail -6 ~/.hermes/logs/desktop.log   # expect: "Hermes backend is ready. Finalizing desktop startup"

@@ -1,6 +1,6 @@
 # Stale composer.model → desktop App 404 (model name mismatch)
 
-Reproduced 2026-07-16 on kk's machine. Desktop App threw
+Reproduced 2026-07-16 on this machine. Desktop App threw
 `HTTP 404: Model 'tencent/hy3' requires available credits` while the CLI
 (`hermes chat`) worked and `~/.hermes/config.yaml` already had
 `default: tencent/hy3:free`.

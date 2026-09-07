@@ -1,0 +1,14 @@
+{
+  "dims": [
+    "15*15*40"
+  ],
+  "cat": [
+    "15*15*40cm纸箱"
+  ],
+  "prov": "%E6%B1%9F%E8%8B%8F,%E6%B5%99%E6%B1%9F,%E4%B8%8A%E6%B5%B7",
+  "candidates": 132,
+  "hits": {
+    "15*15*40": []
+  },
+  "captcha_flag": false
+}

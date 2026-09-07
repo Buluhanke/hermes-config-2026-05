@@ -1,0 +1,14 @@
+{
+  "dims": [
+    "18*15"
+  ],
+  "cat": [
+    "磨砂拉环袋"
+  ],
+  "prov": "%E6%B1%9F%E8%8B%8F,%E6%B5%99%E6%B1%9F,%E4%B8%8A%E6%B5%BD",
+  "candidates": 111,
+  "hits": {
+    "18*15": []
+  },
+  "captcha_flag": false
+}
