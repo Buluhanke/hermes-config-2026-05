@@ -134,10 +134,27 @@ computer_use(action="capture", app="Chrome", mode="ax")
 
 ---
 
+## 67. `browser_exec` 是 `cdp1688.py` 超时后的快速 reverify 备选（2026-09-08 实战）
+`cdp1688.py` 在大批量搜索时（>150 候选）容易超时（420s），此时**不等结果文件，直接用 `browser_exec` 核验已知 ID 池**：
+- `browser_exec` 内部走 CDP 到 9222 的 Chrome，可直接 `goto_url(url)` + `wait_for_load()` + `js("document.documentElement.outerHTML")` 读完整 DOM；
+- 对已知 ID（用户给的 / 历史已验证的）逐个 navigate + `wait 4s` + outerHTML，regex 抠 skuMapOriginal 拿规格+价格。
+- **价格提取关键规则**：数组元素结构 `{"specId":...,"discountPrice":"X","canBookCount":N,"specAttrs":"DIM;grade",...}`，其中 **`discountPrice` 和 `canBookCount` 出现在 `specAttrs` 前面**，搜索方向是从 specAttrs 位置向前（`max(0, dim_pos-500)`）找最近的 `discountPrice`，距离 <250 字符即属同一 SKU 条目。详见 `references/sku_price_extraction.md`。
+- `browser_exec` 的 `js()` 函数内用 Python `re`（已内置），逻辑与 Python 脚本等价。
+- 适用场景：主驱动超时后不重跑，用已知 ID 快速出结果；主驱动跑通时**不需要**多走这一步。
+
+## 68. `curl` 访 1688 详情页必须去掉 `--compressed`（2026-09-08 实战）
+用 `curl` 或 Python `urllib` 访 `detail.1688.com/offer/<id>.html` 时：
+- **带 `--compressed`**：curl/urllib 自动 gzip/decompress，返回截断 HTML（约 4–5KB 壳子，阿里 JS 填充框架），目标尺寸/价格全无；
+- **不带 `--compressed`**：返回完整 HTML（421KB+，含完整 `window.context` JSON 和 `skuMapOriginal`），可直接 grep 抠数据。
+- 正确 curl 命令：`curl -s -A "$UA" -H "Accept: text/html,application/xhtml+xml" -H "Accept-Language: zh-CN,zh;q=0.9" -o /tmp/detail_<id>.html`（无 `--compressed`，无 `Accept-Encoding: gzip,deflate,br`）。
+- **根本原因**：1688 对 Accept-Encoding: gzip,deflate,br 返回 chunked 压缩流；若 client 读了 chunked 却按固定 buffer 截断，只拿到 JS 框架壳不完整内容。浏览器因内置解压感知完整内容所以没问题。
+- 本 skill 所有脚本凡涉及 curl/urllib 抓 1688 详情页，一律**不加压缩参数**。
+
 ## Support Files
 
-- `references/1688-script.md` — 油猴脚本完整源码（搜索页翻页提取 + 详情页 JS 提取）
-- `references/chrome-ax-tree-extract.md` — 从 computer_use AX capture 元素文件解析商品数据的坐标定位法
+- `references/1688-dom-driver.md` — AppleScript/JS DOM 驱动 1688（搜索框/地区筛选/翻页/提取，已过时，保留参考）
+- `references/chrome-ax-tree-extract.md` — AX 树元素解析法（已过时）
+- `references/sku_price_extraction.md` — **`skuMapOriginal` 价格精准提取规则**：discountPrice 在 specAttrs 前、距离限制 250 字符、双记号变体。**新驱动必读**。
 
 ---
 
