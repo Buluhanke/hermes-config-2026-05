@@ -65,14 +65,14 @@
     "created_by": null,
     "last_patched_at": "2026-08-26T01:57:55.899954+00:00",
     "last_reused_patch_generation": 1,
-    "last_used_at": "2026-09-08T06:22:07.939555+00:00",
-    "last_viewed_at": "2026-09-08T06:22:07.937339+00:00",
+    "last_used_at": "2026-09-10T07:12:32.908891+00:00",
+    "last_viewed_at": "2026-09-10T07:12:32.906703+00:00",
     "patch_count": 1,
     "patch_generation": 1,
     "pinned": false,
     "state": "active",
-    "use_count": 33,
-    "view_count": 33
+    "use_count": 34,
+    "view_count": 34
   },
   "1688-search/1688-search-cn-gb-region-skill": {
     "archived_at": null,
@@ -80,14 +80,14 @@
     "created_by": null,
     "last_patched_at": null,
     "last_reused_patch_generation": 0,
-    "last_used_at": "2026-08-27T09:38:14.790880+00:00",
-    "last_viewed_at": "2026-08-27T09:38:14.787502+00:00",
+    "last_used_at": "2026-09-10T07:12:56.618147+00:00",
+    "last_viewed_at": "2026-09-10T07:12:56.615293+00:00",
     "patch_count": 0,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 5,
-    "view_count": 5
+    "use_count": 6,
+    "view_count": 6
   },
   "1688-sourcing": {
     "archived_at": null,
