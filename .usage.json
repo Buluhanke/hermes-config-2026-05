@@ -20,29 +20,29 @@
     "created_by": "agent",
     "last_patched_at": null,
     "last_reused_patch_generation": 0,
-    "last_used_at": "2026-08-27T02:49:27.299115+00:00",
-    "last_viewed_at": "2026-08-27T02:49:27.287149+00:00",
+    "last_used_at": "2026-09-14T02:14:01.168331+00:00",
+    "last_viewed_at": "2026-09-14T02:14:01.161245+00:00",
     "patch_count": 0,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 3,
-    "view_count": 3
+    "use_count": 4,
+    "view_count": 4
   },
   "1688-matrix-dimension-sourcing": {
     "archived_at": null,
     "created_at": "2026-08-22T05:03:29.218093+00:00",
     "created_by": "agent",
     "last_patched_at": "2026-09-07T05:00:22.420620+00:00",
-    "last_reused_patch_generation": 0,
-    "last_used_at": "2026-09-07T04:58:46.329097+00:00",
-    "last_viewed_at": "2026-09-07T04:58:46.326425+00:00",
+    "last_reused_patch_generation": 1,
+    "last_used_at": "2026-09-14T02:14:01.163228+00:00",
+    "last_viewed_at": "2026-09-14T02:14:01.154545+00:00",
     "patch_count": 1,
     "patch_generation": 1,
     "pinned": false,
     "state": "active",
-    "use_count": 4,
-    "view_count": 4
+    "use_count": 5,
+    "view_count": 5
   },
   "1688-price-extraction": {
     "archived_at": null,
@@ -50,14 +50,14 @@
     "created_by": null,
     "last_patched_at": null,
     "last_reused_patch_generation": 0,
-    "last_used_at": "2026-08-27T02:49:27.301851+00:00",
-    "last_viewed_at": "2026-08-27T02:49:27.289716+00:00",
+    "last_used_at": "2026-09-14T02:14:01.165567+00:00",
+    "last_viewed_at": "2026-09-14T02:14:01.159228+00:00",
     "patch_count": 0,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 3,
-    "view_count": 3
+    "use_count": 4,
+    "view_count": 4
   },
   "1688-search-cn-gb-region-skill": {
     "archived_at": null,
@@ -65,14 +65,14 @@
     "created_by": null,
     "last_patched_at": "2026-08-26T01:57:55.899954+00:00",
     "last_reused_patch_generation": 1,
-    "last_used_at": "2026-09-10T07:12:32.908891+00:00",
-    "last_viewed_at": "2026-09-10T07:12:32.906703+00:00",
+    "last_used_at": "2026-09-14T00:39:43.781505+00:00",
+    "last_viewed_at": "2026-09-14T00:39:43.778355+00:00",
     "patch_count": 1,
     "patch_generation": 1,
     "pinned": false,
     "state": "active",
-    "use_count": 34,
-    "view_count": 34
+    "use_count": 35,
+    "view_count": 35
   },
   "1688-search/1688-search-cn-gb-region-skill": {
     "archived_at": null,
@@ -110,14 +110,14 @@
     "created_by": null,
     "last_patched_at": null,
     "last_reused_patch_generation": 0,
-    "last_used_at": "2026-09-01T10:46:21.980268+00:00",
-    "last_viewed_at": "2026-09-01T10:46:21.977529+00:00",
+    "last_used_at": "2026-09-14T02:12:07.229270+00:00",
+    "last_viewed_at": "2026-09-14T02:12:07.226213+00:00",
     "patch_count": 0,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 3,
-    "view_count": 3
+    "use_count": 5,
+    "view_count": 5
   },
   "1password": {
     "archived_at": null,
@@ -1986,7 +1986,7 @@
     "patch_count": 4,
     "patch_generation": 4,
     "pinned": false,
-    "state": "active",
+    "state": "stale",
     "use_count": 3,
     "view_count": 3
   },
@@ -2001,7 +2001,7 @@
     "patch_count": 18,
     "patch_generation": 0,
     "pinned": false,
-    "state": "active",
+    "state": "stale",
     "use_count": 10,
     "view_count": 10
   },
@@ -3177,13 +3177,13 @@
     "created_by": null,
     "last_patched_at": null,
     "last_reused_patch_generation": 0,
-    "last_used_at": "2026-09-10T19:00:03.182974+00:00",
+    "last_used_at": "2026-09-14T00:19:29.353812+00:00",
     "last_viewed_at": "2026-08-26T08:39:09.743087+00:00",
     "patch_count": 0,
     "patch_generation": 0,
     "pinned": false,
     "state": "active",
-    "use_count": 39,
+    "use_count": 40,
     "view_count": 8
   },
   "hermes-skills-management": {
@@ -3324,7 +3324,7 @@
     "patch_count": 10,
     "patch_generation": 7,
     "pinned": false,
-    "state": "active",
+    "state": "stale",
     "use_count": 22,
     "view_count": 22
   },

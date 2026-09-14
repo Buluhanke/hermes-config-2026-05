@@ -1,0 +1,30 @@
+{
+  "dims": [
+    "35*35*10"
+  ],
+  "cat": [
+    "35*35*10cm纸箱",
+    "纸箱",
+    "瓦楞纸箱",
+    "快递纸箱"
+  ],
+  "prov": "%E6%B1%9F%E8%8B%8F,%E6%B5%99%E6%B1%9F,%E4%B8%8A%E6%B5%B7",
+  "candidates": 272,
+  "hits": {
+    "35*35*10": [
+      {
+        "id": "925967183696",
+        "dim": "35*35*10",
+        "title": "五层加厚纸箱现货邮政快递扁纸箱电商半高纸箱子批发打包盒小纸箱 - 阿里巴",
+        "price": "¥2.88",
+        "stock": 112737,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/925967183696.html",
+        "spec": "长35cm;宽35cm;高10cm",
+        "source": "skujson",
+        "exact": true
+      }
+    ]
+  },
+  "captcha_flag": false
+}
