@@ -7,14 +7,14 @@
 ## 搜索命令速查
 
 ```bash
-# 1. 搜索含 SKILL.md 的仓库（按星标）
-gh search repo --json name,description,stargazersCount --sort stars --limit 20 "skill finder OR skill discovery OR agent skills"
+# 1. 搜索含 SKILL.md 的仓库（按星标，注意是 repos 复数）
+gh search repos --json name,description,stargazersCount --sort stars --limit 20 "agent skills"
 
 # 2. 搜索技能相关仓库（按星标）
-gh search repo "skill hub" --json name,description,stargazersCount --sort stars --limit 20
+gh search repos "skill hub" --json name,description,stargazersCount --sort stars --limit 20
 
 # 3. 搜索特定关键词
-gh search repo "find skills" --json name,description,stargazersCount --sort stars --limit 10
+gh search repos "find skills" --json name,description,stargazersCount --sort stars --limit 10
 
 # 4. 搜索已认证用户的仓库
 gh search repos --limit 20 --sort stars "skill finder" --owner <username>
@@ -46,8 +46,10 @@ git clone https://github.com/<owner>/<repo>.git ~/.hermes/skills/<skill-name>
 # 模式 2：只复制单个技能文件
 cp <repo>/skills/<skill-name>/SKILL.md ~/.hermes/skills/<skill-name>/
 
-# 模式 3：从 Skills Hub 克隆（Rust 项目）
-gh run download -R qufei1993/skills-hub --name skills-hub-*.dmg
+# 模式 3：下载 Skills Hub 桌面安装包（Rust 项目的 release asset，不是 CI artifact）
+# 注意：用 gh release download，不是 gh run download（后者是下载 CI artifacts）。
+# 资产名形如 Skills-Hub-v1.1.1-macOS-aarch64.dmg，用 --pattern 匹配。
+gh release download --repo qufei1993/skills-hub --pattern 'Skills-Hub-*-macOS-aarch64.dmg'
 ```
 
 ---

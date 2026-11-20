@@ -97,14 +97,14 @@ cp -r ~/.openclaw/workspace/skills-marketplace/skills/<skill-folder-name> ~/.her
 `gh` CLI 已在系统中配置（keyring 登录，scopes: gist, read:org, repo, workflow）：
 
 ```bash
-# 1. 搜索包含 SKILL.md 的仓库
-gh search repo --json name,description,stargazersCount --sort stars --limit 20 "skill finder OR skill discovery OR agent skills" 2>/dev/null
+# 1. 搜索包含 SKILL.md 的仓库（注意是 repos 复数，不是 repo）
+gh search repos --json name,description,stargazersCount --sort stars --limit 20 "agent skills" 2>/dev/null
 
 # 2. 搜索技能相关仓库（按星标数）
-gh search repo "skill hub" --json name,description,stargazersCount --sort stars --limit 20 2>/dev/null
+gh search repos "skill hub" --json name,description,stargazersCount --sort stars --limit 20 2>/dev/null
 
 # 3. 搜索特定技能关键词
-gh search repo "find skills" --json name,description,stargazersCount --sort stars --limit 10 2>/dev/null
+gh search repos "find skills" --json name,description,stargazersCount --sort stars --limit 10 2>/dev/null
 ```
 
 > **说明**：`gh` CLI 比 API 更稳定，已通过认证，无需 GITHUB_TOKEN 环境变量。若 `gh` 不可用，降级使用 API 带 `GITHUB_TOKEN` 或匿名仓库搜索。
