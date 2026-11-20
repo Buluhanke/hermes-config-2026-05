@@ -86,3 +86,13 @@ curl -s https://openrouter.ai/api/v1/credits \
 - `~/.hermes/logs/agent.log`
 - `~/.hermes/logs/gateway.log`
 - `~/.hermes/logs/gateway-exit-diag.log`
+
+## 2026-10 更新：NVIDIA NIM 特殊诊断
+- **base_url 必须是 `https://integrate.api.nvidia.com/v1`**，不要用 `https://api.nvidia.com/v1`（会 404）。
+- **模型名必须完全匹配**：`nvidia/nemotron-3.5-super-vl` 已下线 → 404；可用的是 `nvidia/nemotron-3-ultra-550b-a55b`。
+- 请求时偶发 503（服务暂时过载），加重试机制（1 次重试）即可恢复。
+
+## 2026-10 更新：OpenRouter 密钥验证
+- 新密钥必须先通过账户邮箱验证（账户未验证时返回 `401: User not found`）。
+- 验证方法：`curl -s https://openrouter.ai/api/v1/credits -H "Authorization: Bearer $OPENROUTER_API_KEY"`。
+- 若返回 `401 User not found`，密钥有效但账户未验证，请用户去 openrouter.ai 完成验证。

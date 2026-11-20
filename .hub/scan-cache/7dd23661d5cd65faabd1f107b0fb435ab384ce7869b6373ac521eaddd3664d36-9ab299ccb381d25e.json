@@ -1,0 +1,13 @@
+{
+  "bundle_hash": "sha256:7dd23661d5cd65faabd1f107b0fb435ab384ce7869b6373ac521eaddd3664d36",
+  "scanner_version": "skills-guard-v10",
+  "source": "official",
+  "source_url": "official/productivity/memento-flashcards",
+  "verdict": "safe",
+  "trust_level": "builtin",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-10-23T07:59:44.542513+00:00",
+  "summary": "memento-flashcards: clean scan, no threats detected",
+  "fresh": true
+}

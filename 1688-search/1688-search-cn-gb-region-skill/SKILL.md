@@ -269,6 +269,16 @@ end tell
 - 阶梯价/起批量已用 `price_clean2.js` 抠出（见 `references/price_extraction.md`），完整清单存 `~/Desktop/20x20x10_纸箱_江浙沪_找品结果.md`
 - 教训：①首屏只渲染少量，须滚动 8 次再提取，否则漏抓 80% 列表（坑19）；②只验规格不验品类会混入礼盒（坑17），必须 `verify_carton.js` 二次过滤
 
+## 搜索结果呈现铁律（2026-10-21 用户纠正）
+
+用户要求的搜索结果呈现方式，优先于技术流程：
+
+1. **先筛地区，再查尺寸**：用户只关心江浙沪（江苏/浙江/上海），所有非江浙沪结果一律不呈现。先开详情页确认 `location` 字段，非江浙沪直接跳过，不浪费时间核验尺寸。
+2. **仔细查详情页数据，不只靠关键词**：搜索关键词匹配 ≠ 尺寸匹配。商品标题可能不含尺寸词，但 `skuMapOriginal` 的 `specAttrs` 字段包含精确尺寸。必须打开详情页，从 `skuMapOriginal` 提取 `specAttrs` + `discountPrice` + `canBookCount`，确认尺寸匹配后再呈现。
+3. **多翻页找便宜的**：第 1 页常是 expensive/hot items，便宜的可能在第 2-4 页。至少翻 3-4 页，不要只看第 1 页就下结论。
+4. **按价格从低到高排序**：呈现结果时按单价升序排列，最便宜的放第一。
+5. **呈现格式**：`ID | 地区 | 单价 | 库存 | 规格 | 链接` 干净价格表，不要 dump 思考链。
+
 ## 备注
 - 视觉通道（vision_analyze）本机可能 404（venv 污染 PIL）；本 skill 全程依赖 DOM 文字通道，不依赖视觉
 - 用户确认的已知正确商品可先列入清单，再补亲验
@@ -522,3 +532,43 @@ PC 搜页 `s.1688.com/selloffer` 被验证码拦截时，**不要干等 10–30 
 但本机以 CDP 后台 Chrome + mtop skuMapOriginal 监听为主（零风控、零焦点抢），不替换。
 官方 API 仍须企业资质；MTop 签名难度 4/5，本机无住宅代理不通；付费爬虫(ShopAPIS/HioBuy)需花钱。
 开源逆向：QuoVadis86/ai-reverse（1688 MTOP SDK + MCP）。
+
+## 1688-cli 补充工具（2026-10 实战安装）
+- **安装位置**：`/Users/aimac/.hermes/tools/1688-cli/`（npm build，daemon pid 63464）
+- **登录账号**：member 176760586（罗庆富），登录态持久化在 daemon 进程
+- **启动 daemon**：`cd /Users/aimac/.hermes/tools/1688-cli && node dist/cli.js daemon start`
+- **搜索命令**：`node dist/cli.js search "关键词" --province 浙江 --price-min 0.3 --price-max 0.7 --sort price --exclude-ads --max 50`
+- **支持参数**：`--province`（省份筛选）、`--price-min`/`--price-max`（价格区间）、`--sort`（price/sales）、`--exclude-ads`（排除广告）、`--max`（结果数）
+- **Wrapper 脚本**：`/Users/aimac/.hermes/scripts/find_1688.py` — 结合 1688-cli 搜索 + 详情页尺寸验证
+- **适用场景**：搜页被验证码拦截时的补充搜索通道；不替代 CDP 主驱动（skuMapOriginal 监听更准）
+- **局限**：登录态依赖 daemon 进程存活；搜索结果仍需详情页二次验证尺寸
+
+## 67. 规格提取只查 `;` 第一段会漏检维度在后续段的商品（2026-10 实战翻车）
+- **翻车实录**：用户给的 `993803304057`（¥0.32/999945库存）明明有 `12*12*12cm`，脚本报 0 命中。打开详情页发现 specAttrs = `白卡盒;12*12*12cm`，维度在**第二段**；脚本只查 `spec.split(';')[0]`（第一段 `白卡盒`），直接跳过。
+- **根因**：1688 的 specAttrs 可以是 `品类词;尺寸`（维度在后）或 `尺寸;等级`（维度在前），维度位置不固定。
+- **修法**：规格匹配必须**遍历所有 `;` 分隔段**，每段都跑 `extract_sizes_from_spec`，任一段命中即算命中。不得只查第一段。
+- **铁律**：凡 `spec.split(';')` 得到多段，每段都要验；"只验第一段"是漏检的头号原因。
+
+## 69. Python 搜索关键词 GBK 编码：`quote(keyword.encode('gbk'))`（2026-10 实战确认）
+
+- **根因**：1688 搜索引擎只接受 GBK 编码的关键词。Python 的 `urllib.parse.quote()` 默认 UTF-8， produces mojibake（"纸箱"→`绾哥`）。
+- **修法**：所有 Python 脚本构造搜索 URL 时，必须 `quote(keyword.encode('gbk'))`：
+  ```python
+  from urllib.parse import quote
+  gbk_keyword = quote(keyword.encode('gbk'))
+  url = f"https://s.1688.com/selloffer/offer_search.htm?keywords={gbk_keyword}"
+  ```
+- **验证**：`quote('纸箱'.encode('gbk'))` → `%D6%BD%CF%E4`（正确 GBK），`quote('纸箱')` → `%E7%BA%B8%E7%AE%B1`（错误 UTF-8）。
+- **1688-cli** 已内置 GBK 编码（`encodeGbkPercent`），但 daemon 会话过期（NOT_LOGGED_IN），需 `node dist/cli.js daemon reload` + `1688 login` 重新扫码。CDP Chrome 登录态不受 daemon 影响。
+- **find_1688.py**：`/Users/aimac/.hermes/scripts/find_1688.py` — 结合 1688-cli 搜索 + CDP Chrome 详情页验证（spec 检查所有 `;` 段 + GBK 编码 + 地区过滤 + 价格升序）。
+## 68. 关键词污染：尺寸+品类组合词会被 1688 拆词召回无关品（2026-10 实战）
+
+- **翻车实录**：搜 `12*12*12cm纸箱`，1688 把 `*` 和 `cm` 当分隔符，拆成 `12` + `纸箱` 两词，召回所有含"12"和"纸箱"的无关品（鞋柜、风扇等）。用户骂"找的什么乱七八糟的"。
+- **根因**：1688 搜索引擎对 `*`/`x`/`cm` 等符号做分词，"尺寸+品类"组合词无法精确匹配。
+- **修法（宽搜+严筛）**：
+  1. **搜索词只用品类词**（`纸箱`/`纸盒`/`飞机盒`），不带尺寸。尺寸作为筛选维度，不在搜索词里。
+  2. **地区先筛**：先开详情页确认 `location` 字段在江浙沪，非目标地区直接跳过。
+  3. **尺寸后验**：在详情页 `skuMapOriginal.specAttrs` 提取尺寸，确认匹配后再收录。
+  4. **多翻页**：至少翻 3-4 页，便宜的常在后面。
+  5. **价格升序**：呈现时按单价从低到高排序。
+- **铁律**：搜索词越短越准（品类词 alone），尺寸/地区/价格全部在详情页二次过滤，不在搜索词里塞。

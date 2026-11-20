@@ -1,0 +1,13 @@
+{
+  "bundle_hash": "sha256:1f057be30bb5b07fc881a8607ae86ef323a8fb3054992df18eed605fcd76afa3",
+  "scanner_version": "skills-guard-v10",
+  "source": "official",
+  "source_url": "official/devops/setup-wizard-generator",
+  "verdict": "safe",
+  "trust_level": "builtin",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-11-05T14:04:06.704960+00:00",
+  "summary": "setup-wizard-generator: clean scan, no threats detected",
+  "fresh": true
+}

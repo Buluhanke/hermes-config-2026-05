@@ -501,6 +501,15 @@ for g in json.load(sys.stdin):
     print(f\"  {g['id']}  {g['description'] or '(no desc)':40}  {files}\")"
 ```
 
+## 11. Verifying a third-party repo claim
+
+When the user names a repo and attaches a claim (star count, features, "it does X"), check it before recommending or installing. Full procedure: `references/verify-thirdparty-repo.md`.
+
+- Read the canonical record from `GET /repos/OWNER/REPO`; never quote a star count from the search index or a topic list — those lag.
+- Verify feature claims against the raw README and the implementation, not the repo `description` or marketing bullets; those routinely overstate behavior and can invert a safety claim.
+- Resolve install artifacts from `GET /releases/latest`, not from a package-manager formula — casks/taps go stale on both version and owner name.
+- Compare the downloaded byte count with the API asset `size` before installing.
+
 ## Quick Reference Table
 
 | Action | gh | git + curl |

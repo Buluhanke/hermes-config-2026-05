@@ -1,6 +1,6 @@
 ---
 name: yuanbao
-description: "腾讯元宝群 @成员查信息查成员bot操作。Use when 操作腾讯元宝群组"
+description: "Yuanbao (元宝) groups: @mention users, query info/members."
 version: 1.0.0
 author: Teknium (teknium1), Hermes Agent
 license: MIT
@@ -78,7 +78,7 @@ yb_send_dm({
   "group_code": "535168412",
   "name": "用户aea3",
   "message": "Here is the image",
-  "media_files": [{"path": "/tmp/photo.jpg"}]
+  "media_files": [{"path": "/path/to/photo.jpg"}]
 })
 ```
 

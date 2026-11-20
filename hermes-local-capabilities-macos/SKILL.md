@@ -48,11 +48,28 @@ A self-check like the one in this session covers: model/provider, toolsets enabl
 - **agent-reach installs in the Hermes venv, not system Python.** That's correct. Do NOT `pip uninstall agent-reach` if you decide to remove it; instead note that the skill at `~/.agents/skills/agent-reach/` and the venv binary stay coupled.
 - **yt-dlp JS runtime warning is noisy but harmless.** "Only deno is enabled by default" prints every invocation, but yt-dlp still extracts YouTube metadata and 360p video. The warning only matters for subtitle extraction on JS-challenge-protected videos. Don't block on it.
 - **`hermes config set <nested.dotted.key> value` works for scalars but stringifies lists/dicts.** See `chrome-cdp-control` for the python yaml fix that turns a stringified list back into a real list.
-- **SSL interception has a narrow domain whitelist.** This machine's transparent proxy inspects HTTPS and allows: `baidu.com` (HTTP only), `mirrors.tuna.tsinghua.edu.cn` (HTTPS), `pypi.tuna.tsinghua.edu.cn` (HTTPS). It blocks: `pypi.org`, `github.com`, `api.github.com`, `raw.githubusercontent.com`, `dl.google.com`, `mirrors.aliyun.com`, `brew.sh`. When pip/GitHub downloads fail with SSL EOF errors, switch to the Tsinghua mirror for Python packages: `~/.hermes/hermes-agent/venv/bin/pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn <pkg>`. GitHub binary downloads have no mirror workaround on this machine — either proxy access or manual download is required.
+- **SSL interception has a narrow domain whitelist.** This machine's transparent proxy inspects HTTPS and allows: `baidu.com` (HTTP only), `mirrors.tuna.tsinghua.edu.cn` (HTTPS), `pypi.tuna.tsinghua.edu.cn` (HTTPS). It blocks: `pypi.org`, `dl.google.com`, `mirrors.aliyun.com`, `brew.sh`; `github.com` HTML/git clone times out. Reachability varies — `api.github.com` and `raw.githubusercontent.com` often answer even when `github.com` does not. Probe each endpoint before assuming it is blocked. When pip/GitHub downloads fail with SSL EOF errors, switch to the Tsinghua mirror for Python packages: `~/.hermes/hermes-agent/venv/bin/pip install -i https://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn <pkg>`. GitHub binary downloads have a working mirror chain — probe order, prefixes, and resume recipe in `references/github-release-download-under-restricted-egress.md`.
 
 - **`pip install` silently fails under transparent SSL/TLS inspection.** When the machine is behind a proxy that inspects HTTPS certificates, all external pip/PyPI downloads fail with "EOF occurred in violation of protocol" even though the proxy is not actively blocking — it's just inspecting. Symptoms: pip install from PyPI fails; git clone from GitHub fails; direct binary downloads fail. Workaround: if a proxy URL is available, set `https_proxy` env var for git/pip; otherwise use the Tsinghua mirror for Python packages (see above). This is indistinguishable from a network block in the audit — run the HTTP vs HTTPS test to diagnose.
 
-- **PyPI's `gh` package is NOT the GitHub CLI binary.** `pip install gh` installs a small "GitHub URL opener" tool (`gh --home` opens github.com in browser, `gh -p` opens PRs page). The real GitHub CLI is a compiled binary from `github.com/cli/cli/releases`. `gh auth status` fails because this stub doesn't have that command. To install the real GitHub CLI: download from `https://github.com/cli/cli/releases` (macOS ARM64 zip), unzip to `/usr/local/bin/gh`. If GitHub SSL is blocked on this machine, no mirror workaround exists — manual download required.
+- **PyPI's `gh` package is NOT the GitHub CLI binary.** `pip install gh` installs a small "GitHub URL opener" tool (`gh --home` opens github.com in browser, `gh -p` opens PRs page). The real GitHub CLI is a compiled binary from `github.com/cli/cli/releases`. `gh auth status` fails because this stub doesn't have that command. To install the real GitHub CLI: download from `https://github.com/cli/cli/releases` (macOS ARM64 zip), unzip to `/usr/local/bin/gh`. If the direct release URL stalls, prefix the full URL with a reachable mirror and resume with `curl -L -C -` — see `references/github-release-download-under-restricted-egress.md`.
+
+- **`cryptography` build fails on macOS because pkg-config can't find OpenSSL.** Homebrew installs openssl under `/opt/homebrew/opt/openssl@3/` but pkg-config's search path doesn't include it. Symptom: `uv sync` / `pip install` fails with `Could not find openssl via pkg-config` and `maturin failed`. Fix: set `PKG_CONFIG_PATH="/opt/homebrew/opt/openssl@3/lib/pkgconfig:$PKG_CONFIG_PATH"` in `~/.zshrc` (and export it in the current shell) before running `hermes update` or `hermes pm repair`. This is a build-time env var, not a Hermes config key — don't put it in `config.yaml`.
+
+- **Venv shebang path typo in generated executables.** The hermes-agent installer incorrectly generates shebang `#!/Users/mac/.hermes/hermes-agent/.venv2/bin/python3` instead of `.venv/bin/python3`. This causes `bad interpreter: no such file or directory` when running `~/.venv/bin/hermes`. Fix: use this Python one-liner to correct all three executables at once:
+  ```bash
+  python3 << 'SCRIPT'
+  import os
+  for f in ['hermes', 'hermes-agent', 'hermes-acp']:
+      path = f'~/.hermes/hermes-agent/.venv/bin/{f}'
+      path = os.path.expanduser(path)
+      with open(path, 'r') as file: content = file.read()
+      new_content = content.replace('.venv2/', '.venv/')
+      with open(path, 'w') as file: file.write(new_content)
+  SCRIPT
+  ```
+
+- **macOS SSH username is `mac` on macOS machines, not `kk` or `aimac`.** Many macOS machines set the short username as `mac` or the first 3 letters of the account name. `whoami` returns the short username for SSH. Always verify with `ssh mac@<IP>` unless the user specifies a different username.
 
 - **`hermes gateway restart` cannot be called from inside the Gateway process.** Sending `hermes gateway restart` from within a running Gateway session kills the calling process (the Gateway itself), which terminates the agent — the request never completes. Same for `launchctl kickstart -k` — the approval system intercepts it.
 
@@ -164,3 +181,5 @@ In order, additive only:
 - `references/lan-remote-mac-access.md` — LAN Mac 远程操作：Screen Sharing + SSH 快速命令、已确认设备表、常见故障（session end / 辅助功能弹窗 / SSH 超时 / 密码失败）
 - `references/lan-device-discovery.md` — LAN device discovery on macOS: ping sweep, ARP reading, OUI vendor lookup, port scanning, macOS naming confusion (Bonjour hostname vs ComputerName), GL-iNet router DHCP leases, common service ports.
 - `references/lan-skills-sync.md` — pull & curate skills from a sibling LAN Mac running Hermes: reachability probe, macOS sshd keyboard-interactive auth gotcha, pexpect fix, and the "curate before import" rule.
+- `references/github-release-download-under-restricted-egress.md` — install a GitHub-hosted binary when `github.com` times out and the release CDN throttles: API-first asset lookup, mirror prefixes, brew-tap tarball fallback, unsigned dmg install, proof-of-function check.
+- `scripts/fix-venv-shebang.py` — Quick fix for venv shebang path typo (`.venv2/` → `.venv/`). Run this after a failed `hermes update` due to "bad interpreter" errors.

@@ -1,0 +1,41 @@
+{
+  "dims": [
+    "12*12*12"
+  ],
+  "cat": [
+    "12*12*12cm纸箱",
+    "12*12*12纸箱",
+    "12*12*12快递纸箱"
+  ],
+  "prov": "%E6%B1%9F%E8%8B%8F,%E6%B5%99%E6%B1%9F,%E4%B8%8A%E6%B5%B7",
+  "candidates": 213,
+  "hits": {
+    "12*12*12": [
+      {
+        "id": "951903134648",
+        "dim": "12*12*12",
+        "title": "正方形纸箱搬家快递打包箱顺丰快递纸箱手工展览纸箱方形纸盒 - 阿里巴巴",
+        "price": "¥0.65",
+        "stock": 994685,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/951903134648.html",
+        "spec": "12*12*12cm;五层特硬",
+        "source": "skujson",
+        "exact": true
+      },
+      {
+        "id": "758537032455",
+        "dim": "12*12*12",
+        "title": "亚马逊白卡纸盒包装盒现货跨境外贸批发化妆品外包装彩盒小白盒子 - 阿里巴",
+        "price": "¥0.50",
+        "stock": 9998694,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/758537032455.html",
+        "spec": "12x12（长宽）;12cm（高）",
+        "source": "skujson",
+        "exact": true
+      }
+    ]
+  },
+  "captcha_flag": false
+}

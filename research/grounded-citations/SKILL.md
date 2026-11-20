@@ -1,7 +1,8 @@
 ---
 name: grounded-citations
-description: "引用落地 答案文档锚定可验证来源。Use when 输出需要严格引用溯源"
-version: 1.1.0
+description: "引用落地 + 源头可验证：检索→引文台账→证据链→交付前验的全流程技能。Use when 输出需要严格引用溯源、对比/调研/报告要有来源、事实需可核验。"
+
+version: "1.2.0"
 author: Hermes Agent + Teknium
 license: MIT
 platforms: [linux, macos, windows]
@@ -64,7 +65,25 @@ python "$S" add https://example.com/b --title "B"  # prints: [2]
 python "$S" list                                   # ledger table
 python "$S" render                                 # Sources: block
 python "$S" verify draft.md                        # catch bad citations
-```
+
+> **Command ordering quirk:** `--ledger` goes **before** the subcommand:
+>   `python "$S" --ledger "$L" reset`   (correct)
+>   `python "$S" reset --ledger "$L"`   (rejected: "unrecognized arguments")
+
+> **Render vs cited-in quirk:** `render --cited-in` prints to stdout only. To write the
+> Sources block back into the draft, use `render --replace-in <draft>` (idempotent,
+> safe to re-run). Verify after `--replace-in` so the Sources block is present in the file.
+
+> **Fresh-draft Sources quirk:** `render --replace-in <draft>` REWRITES an existing
+> Sources block. On a brand-new (empty) draft it fails with "no sources to render"
+> because there is nothing to replace. The reliable sequence for a new draft is:
+>   1. `sources.py render --style plain >> "$DRAFT"` ─ append the Sources block to the file
+>   2. `sources.py render --replace-in "$DRAFT"`        (idempotent; normalizes on re-run)
+> Do not hand-write the `## Sources` block from memory — always `render`.
+
+> **Quote word count quirk:** `quote` requires at least 3 **space-separated** words
+> (`_normalize_ws(quote).split()`). A phrase without spaces ("密度是标量") is ONE word
+> and is rejected. Use a ≥3 word sentence from the source, e.g. "The density is a scalar".
 
 `add` is idempotent and URL-normalized: the same page always returns the same
 id within a ledger, so ids stay stable across many search/extract rounds.
@@ -73,10 +92,10 @@ id within a ledger, so ids stay stable across many search/extract rounds.
 
 | Action | Command |
 |---|---|
-| Fresh ledger for a new task | `sources.py reset` |
-| Register a source, get its id | `sources.py add <url> [--title T]` |
-| Register several at once | `sources.py add <url1> <url2> ...` |
-| Register from JSON tool output | `sources.py ingest results.json` |
+|| Fresh ledger for a new task (per-task ledger) | `sources.py --ledger $L reset` |
+|| Register a source, get its id | `sources.py --ledger $L add <url> [--title T]` |
+|| Register several at once | `sources.py --ledger $L add <url1> <url2> ...` |
+|| Register from JSON tool output | `sources.py --ledger $L ingest results.json` |
 | Attach verbatim evidence to a source | `sources.py quote <id> --text "exact wording" --from page.txt` |
 | Show ledger | `sources.py list [--json]` |
 | Render the Sources block | `sources.py render [--style markdown\|plain\|footnotes\|bibtex\|evidence] [--only 1,3]` |

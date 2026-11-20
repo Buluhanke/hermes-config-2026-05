@@ -1,0 +1,13 @@
+{
+  "bundle_hash": "sha256:770f9c92617965f64d231219eeb8a64ff43829fa0f1fd187a548a1a3708abe94",
+  "scanner_version": "skills-guard-v10",
+  "source": "official",
+  "source_url": "official/productivity/decision-questionnaire",
+  "verdict": "safe",
+  "trust_level": "builtin",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-11-05T14:04:05.887604+00:00",
+  "summary": "decision-questionnaire: clean scan, no threats detected",
+  "fresh": true
+}

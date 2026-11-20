@@ -16,7 +16,7 @@ metadata:
 For DOCX: see the `docx` skill (create/edit) or use `python-docx` for structured reads.
 For PPTX: see the `powerpoint` skill (full create/read/edit support).
 For PDF manipulation (merge, split, forms, watermarks, creation): see the `pdf` skill.
-This skill covers **text extraction from PDFs and scanned documents**.
+This skill covers **text extraction from PDFs and scanned documents**, including **百度 OCR**、**macOS Vision 并行 OCR** 方案。
 
 > **Coming from a `read_file` EXTRACTION COVERAGE WARNING?** `read_file` auto-converts local PDFs but reads the text layer only; the warning footer lists the pages that yielded no text (scanned images). For a handful of pages, render + vision is fastest: `pdftoppm -jpeg -r 150 -f N -l N file.pdf /tmp/page` then `vision_analyze` each image. For bulk OCR of many pages, use marker-pdf below (Step 2).
 
@@ -173,3 +173,42 @@ No extra dependencies needed — pymupdf covers split, merge, search, and text e
 - marker-pdf downloads ~2.5GB of models to `~/.cache/huggingface/` on first use
 - For Word docs: `pip install python-docx` (better than OCR — parses actual structure)
 - For PowerPoint: see the `powerpoint` skill (uses python-pptx)
+
+---
+
+## 图像 OCR：百度 OCR + macOS Vision 并行
+
+### 为什么需要并行？
+
+| 方案 | 中文准确率 | 速度 | 费用 | 离线 |
+|------|-----------|------|------|------|
+| 百度 OCR | ~95% | 150-300ms | 免费额度1000次/天 | ❌ |
+| macOS Vision | ~97% | 230ms | 0元 | ✅ |
+
+**测试发现**：macOS Vision 误识率更低，尤其是“全/偏”之类的相似字，百度 OCR 常错。
+
+### 使用方法
+
+```bash
+# 并行调用，取准确率更高的结果
+python scripts/parallel_ocr.py <图片路径>
+
+# 或分别调用
+python ~/.hermes/scripts/baidu_ocr.py image.png      # 百度 OCR
+python ~/.hermes/scripts/macos_vision_ocr.swift image.png  # macOS Vision
+```
+
+### 脚本文件
+
+- `scripts/parallel_ocr.py` — 主并行脚本，自动取分数更高的结果
+
+### 脚本依赖
+
+- `baidu_ocr.py`：已配置 BAIDU_API_KEY/BAIDU_SECRET_KEY
+- `macos_vision_ocr.swift`：macOS 10.15+，Swift 5+
+
+### 评分逻辑
+
+1. 中文字符数 × 2 + 总字符数 = 基础分
+2. macOS Vision 结果额外 +10 分（准确率优势）
+3. 分数更高者输出

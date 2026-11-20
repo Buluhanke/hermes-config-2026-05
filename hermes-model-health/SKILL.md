@@ -111,42 +111,42 @@ pgrep -af omniroute
 | 错误码 | 含义 | 解决方案 |
 |--------|------|----------|
 | `HTTP 402` | 余额不足 | 充值或换用 `:free` 模型 |
-| `HTTP 404: unavailable for free` | OpenRouter 端 `:free` 模型下线 | 换用 Nous Portal 的同名 `:free` 模型 |
-| `HTTP 404: requires credits` | Nous Portal 付费版余额不足 | 使用 `hy3:free`（免费版） |
+| `HTTP 404: unavailable for free` | OpenRouter 端 `:free` slug 下线 | 换同名付费 slug（`tencent/hy3`）或链上其他 200 模型 |
+| `HTTP 404: requires credits` | Nous Portal 付费版余额不足 | 换 OpenRouter 付费 slug（Nous 免费档也已结束） |
 | `SSL: CERTIFICATE_VERIFY_FAILED` | 系统 CA 证书问题 | 用 venv Python 而非系统 Python |
 | `HTTP 403 Forbidden` | API key 过期/权限不足 | 更新 provider key |
 | `Connection refused` | Provider 服务挂了 | 换 fallback 或等恢复 |
 
-## 免费模型实测（2026-07-24）
+## 免费/可用模型实测（2026-10-11 复核）
 
-**Nous Portal**（通过 NAS invoke JWT 认证，稳定）：
-- `tencent/hy3:free` ✅ 262K context，零费用
-- `stepfun/step-3.7-flash:free` ✅ 多模态，零费用
-- `poolside/laguna-s-2.1:free` ✅ 编程模型，零费用
+**Nous Portal**：免费档全部结束（`hy3:free`/`solar-pro4:free`/`step-3.7-flash:free` → 404 free period ended）；付费档 404 requires available credits（账户无余额）。**Nous 已不可作 fallback 或 aux 通道。**
 
-**OpenRouter**（余额敏感，免费模型随时下线）：
-- `tencent/hy3:free` ⚠️ 随时可能下线（2026-07-24 已由 Nous Portal 接管）
+**OpenRouter**（CN IP 可用，anthropic/google 系 403 region）：
+- `tencent/hy3`（付费 slug）✅、`deepseek/deepseek-chat` ✅
+- `nvidia/nemotron-3-ultra-550b-a55b:free` ✅（aux 默认 fallback 模型）
 - `nvidia/nemotron-3-super-120b-a12b:free` ✅ 1M context
+- `anthropic/claude-sonnet-4`、`google/gemini-2.5-flash` ❌ 403 region
 
 ## 修复 fallback_providers 路由
 
-当 `hy3:free` 从 OpenRouter 下线时，应路由到 Nous Portal：
+`:free` slug 下线时改**同名付费 slug**（`tencent/hy3:free` → `tencent/hy3`），**不要**改路由到 Nous Portal——付费档 404 requires credits（账户无余额），等于把 fallback 换成死路。落盘前对每个候选真实 POST 验证：
 
 ```python
 import yaml
 with open('~/.hermes/config.yaml') as f:
     cfg = yaml.safe_load(f)
 
-# 替换 fallback 中的 hy3 为 hy3:free via Nous
+# :free 下线 → 同名付费 slug，去掉指向死路的 key_env
 for fb in cfg.get('fallback_providers', []):
-    if fb.get('model') == 'tencent/hy3':
-        fb['model'] = 'tencent/hy3:free'
-        fb['base_url'] = 'https://inference-api.nousresearch.com/v1'
-        fb['api_key_env'] = 'NOUS_API_KEY'
+    if fb.get('model', '').endswith(':free'):
+        fb['model'] = fb['model'][:-len(':free')]
+        fb.pop('api_key_env', None)
 
 with open('~/.hermes/config.yaml', 'w') as f:
     yaml.dump(cfg, f, allow_unicode=True, default_flow_style=False, sort_keys=False)
 ```
+
+**aux 防失联**：给每个 `auxiliary.<task>` 配 `fallback_chain`（每条 `{provider, model, base_url?}`），并设 `auxiliary.free_only: false`——详见 provider-config-verification skill。
 
 ## 验证修复
 
@@ -154,4 +154,148 @@ with open('~/.hermes/config.yaml', 'w') as f:
 
 ```bash
 cd ~/.hermes/hermes-agent && ./venv/bin/python3 -m hermes_cli.main model list 2>&1 | head -20
+```
+
+---
+
+## 自愈系统：实时自动修复（零人工干预）
+
+> **永久规则**：不允许让 Hermes 因模型失效而停止调用。任何模型失效都必须自动切换到下一个可用模型，不得等待人工介入。
+
+### 永久行为铁律
+
+| 规则 | 说明 |
+|---|---|
+| 不要反问 | 用户给指令就执行，不询问/不确认/不汇报过程 |
+| 零人干预 | 模型失效自动切换，恢复自动 rejoin，不要汇报过程 |
+| 禁止安装 Ollama | 用户明确「Ollama的所有目录都删掉，绝不安装Ollama」，永久禁用 |
+| 不要自加限制 | 用户没说就不要加省份/地区/定制等额外过滤 |
+| 全部测试 | 配置好 API 的模型必须逐个测试，不接受「应该可以」 |
+| 官方免费优先 | `gemini/gemini-2.5-flash` 永远是第一个候选，无条件优先 |
+| 关键词锁定 | 用户说「纸箱」就只搜纸箱/瓦楞纸箱/快递纸箱，不混「飞机盒」等相邻品类 |
+
+### 架构
+
+```
+┌─────────────────────────────────────────┐
+│          Hermes 调用层                  │
+│  请求 → 备用1 → 备用2 → 备用3 → 失败   │
+└─────────────────────────────────────────┘
+          ↑          ↑          ↑
+          │          │          │
+    ┌──────────┐  ┌──────────┐  ┌──────────┐
+    │健康监测  │  │配置同步  │  │ 状态存储  │
+    │(3秒轮询) │  │(原子写入)│  │ (JSON)    │
+    └──────────┘  └──────────┘  └──────────┘
+```
+
+### 核心组件
+
+| 文件 | 功能 |
+|---|---|
+| `model_health_daemon.py` | 3秒轮询探测所有模型 |
+| `model_router.py` | 读取缓存，返回当前最佳可用模型 |
+| `start_model_health.sh` | 启动守护进程 |
+
+### 使用方式
+
+```bash
+# 启动守护进程
+/Users/aimac/.hermes/scripts/start_model_health.sh
+
+# 查看当前可用模型
+python3 /Users/aimac/.hermes/scripts/model_router.py --best
+```
+
+### 故障转移规则
+
+| 事件 | 行为 |
+|---|---|
+| 模型连续失败 2 次 | 标记为 `fail_count >= 2`，记录详情 |
+| 模型成功响应 | 从 `failed` 移除，加入 `healthy` |
+| 无任何可用模型 | 路由返回 `no_model`，守护进程持续监控 |
+| 恢复后 | 自动重新加入 `healthy` 列表 |
+
+### 独立测试：逐模型验证
+
+配置新模型后，**必须逐个真实 POST 验证**，不要凭配置假设可用：
+
+```bash
+# 用 execute_code 测试每个模型
+python3 -c "
+import urllib.request, json, ssl
+env = open('/Users/aimac/.hermes/.env').read()
+for line in env.split('\n'):
+    if line.startswith('OPENROUTER_API_KEY='):
+        k = line.split('=',1)[1].strip()
+        url = 'https://openrouter.ai/api/v1/chat/completions'
+        req = urllib.request.Request(url, data=json.dumps({'model':'openai/gpt-4o-mini','messages':[{'role':'user','content':'ping'}],'max_tokens':3}).encode(), headers={'Content-Type':'application/json','Authorization':'Bearer '+k}, method='POST')
+        try:
+            ctx = ssl.create_default_context(); ctx.check_hostname=False; ctx.verify_mode=ssl.CERT_NONE
+            with urllib.request.urlopen(req, timeout=10, context=ctx) as r:
+                data = json.loads(r.read().decode())
+                content = data.get('choices',[{}])[0].get('message',{}).get('content','')
+                print('OPENROUTER:', 'OK' if content else 'empty', content[:40])
+                break
+        except Exception as e:
+            print('OPENROUTER:', e)
+"
+```
+
+**关键点**：
+- 429（速率限制）和 401（认证失败）都是「有 key 但不可用」，不是「缺 key」
+- 关键在 `.env` 文件本身：如果 key 值是 `sk-...` 这种**被遮罩的示例值**，会导致全部失败
+- 检查 `.env` 中各 key 是否为完整值（不是缩写或 `***`）
+
+### 官方免费模型优先级
+
+```python
+# 1. gemini/gemini-2.5-flash（官方免费，默认 fallback）
+# 2. openrouter/openai/gpt-4o-mini
+# 3. nvidia/nemotron-3-ultra-550b-a55b
+# 4. deepseek/deepseek-chat
+# 5. zai/glm-4.7
+# 6. qwen3-32b（通义）
+# 7. llama-3.1-8b-instant（Groq）
+# 8. TinyLlama-1.1B-Chat（HuggingFace）
+```
+
+### 自动轮替与淘汰
+
+- 每次轮询后，健康的模型自动轮替到优先级前列
+- 连续失败的模型被淘汰，进入 `failed` 列表，保留记录
+- 某些模型需要人工恢复（如 OpenRouter 账户未验证）时，保持其在列表中，等待恢复后自动激活
+
+### 状态文件
+
+状态存储在 `/Users/aimac/.hermes/scripts/model_health_cache.json`：
+
+- `healthy`：当前可用模型
+- `failed`：已失效模型及失败详情
+- `fail_count`：每个模型的失败次数累计
+- `last_check`：上次扫描时间戳
+
+### 启动与检查
+
+```bash
+# 启动守护进程
+/Users/aimac/.hermes/scripts/start_model_health.sh
+
+# 查看当前可用模型
+python3 /Users/aimac/.hermes/scripts/model_router.py --best
+
+# 实时查看日志
+tail -f /Users/aimac/.hermes/logs/model_health.log
+
+# 查看完整状态
+cat /Users/aimac/.hermes/scripts/model_health_cache.json
+```
+
+### 验证修复
+
+修改配置后验证：
+
+```bash
+# 检查配置是否被识别
+cd /Users/aimac/.hermes/hermes-agent && ./venv/bin/python3 -m hermes_cli.main model list 2>&1 | head -20
 ```

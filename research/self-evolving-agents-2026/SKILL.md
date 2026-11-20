@@ -1,6 +1,31 @@
 ---
 name: self-evolving-agents-2026
 description: 2026 自演化 agent 技术库 OEO/HSI/Metan/AGP 与 Hermes 进化启示。
+version: "1.0"
+author: Nous Research
+license: MIT
+group: 研究
+metadata:
+  hermes:
+    tags: [self-evolving, agi, agent, oeo, hsi]
+    related_skills:
+      - hermes-evolution
+      - evidence-loop
+      - mempalace
+      - deep-research
+triggers:
+  - "自演化"
+  - "agent 进化"
+  - "skill 改写"
+  - "自动优化"
+l1: 研究
+l2: 自演化
+---
+
+## When to Use
+
+**Use when any task asks for agent self-evolution research, skill improvement pipelines, or automated performance optimization** — the first decision is always: pick the right evolution technique (OEO, HSI, Metan, AGP, etc.) based on optimizer capability, then run the A/B test pipeline to validate before keeping changes.
+
 ---
 
 # Self-Evolving Agents 2026 — 实战结论库
@@ -62,15 +87,42 @@ description: 2026 自演化 agent 技术库 OEO/HSI/Metan/AGP 与 Hermes 进化�
 4. **版本化+审计**：AGP 的 versioned resources + 可回滚 lineage 是 Hermes skill 改写应补的——每次 skill 改写留 diff + 可回滚。
 5. **反馈保真度**：HSI 表明稀疏奖励下演化失效——Hermes 进化需用真实工具实测回报（evidence-loop skill），非模型自评。
 
-## 验证步骤
-- 每次进化循环后：用真实工具调用（非模型自评）验证 skill 是否真可用。
-- 保留外层守卫冻结 ≠ 被改写；内存守卫 free_bytes 等变量必须带 $。
-- 增量写盘防中途被杀（1688 工作流同铁律）。
+## A/B 测试流程（2026 迭代）
 
-## 坑
-- 弱优化器 + OEO 接口 = 死锁（无法产出有用更新）。先测优化器能力再选模式。
-- harness 演化无法突破 frozen backbone 上限（NLE 任务零增益）。别指望演化解决模型硬伤。
-- 处方管线改变路径 > 改变结果；过度 churny 的改写可能破坏可用 skill——保留 last-known-good。
+### 问题
+自演化 agent 的 skill 改写容易产生大量变体，但无法确定哪个变体更好。模型做出的判断（如「这个改写看起来更好」）不等于真实工具实测回报——HSI 已证明稀疏奖励/模型自评会导致演化失效。
+
+### 解决：分三阶段 A/B 测试
+
+#### 阶段 1：生成变体（由弱优化器做，固定管线）
+- 针对同一 skill，生成 3 个变体（v1 原版，v2 改写版，v3 改写版）
+- 每个变体在 `evidence-loop` 中记录：原始行为、改写后行为、工具实测数据
+- 所有变体在同一测试集上运行（不并行，避免环境差异）
+
+#### 阶段 2：工具实测（真实调用，非模型自评）
+- 为每个变体跑 5 个固定测试用例（用例见 `references/ab_test_cases.md`）
+- 记录：通过率、平均步骤数、平均工具调用数、失败原因分类
+- 输出标准化 JSON：`{ variant, test_cases: [{name, pass, steps, errors}], metrics: {}}`
+
+#### 阶段 3：决策与回滚
+- 按「通过率 + 平均步骤数」双维度评分
+- 若 v2/v3 优于 v1：保留变体，写入 `skill_audit.json`（含 diff + 日期）
+- 若 v2/v3 劣于 v1：回滚到 v1，记录失败原因到 `lesson_store`
+- 保留 last-known-good（总是保留原版备份，`cp -r skill skill_backup_$(date +%F)`）
+
+### 测试用例（固定 5 条，不扩展）
+| 编号 | 用例 | 验证内容 |
+|---|---|---|
+| T1 | 相同输入，重复 3 次 | 输出一致性 |
+| T2 | 边界输入（空、超长、特殊字符） | 无崩溃 |
+| T3 | 组合输入（多条件叠加） | 不误判 |
+| T4 | 长程任务（>10 步） | 不丢状态 |
+| T5 | 错误注入（模拟失败） | 恢复机制生效 |
+
+### 坑
+- 变体太多会变成评估噪声：固定 3 个变体、上限 5 条测试用例
+- 不同时间运行的变体环境可能不同：统一快照日期记录
+- 模型自评代替不了工具实测：任何 A/B 决策必须基于工具调用输出，不能依靠「感觉更好」
 
 ## 浏览器智能体基准版图（自演化 agent 的评估参照，2026-08 增补）
 自演化 agent 的"能力可被测"依赖这些长程/安全/跨站基准：
@@ -84,3 +136,26 @@ description: 2026 自演化 agent 技术库 OEO/HSI/Metan/AGP 与 Hermes 进化�
 ## 启示（评估侧）
 - 自演化 agent 的评估不应只看最终 pass rate：长程（BrowserBench）、安全（ST CuP）、跨站（CAP）是三个独立维度，任一塌陷都不算真强。
 - Hermes 进化循环验证时同理：用真实工具实测 + 长程任务 + 策略约束，比单点成功更可信（呼应 evidence-loop）。
+
+## 2026-08-30 自学成果补充（fact_store #1269-#1281）
+
+### 模型/系统突破
+- **NVIDIA AVO**：100% ARC-AGI-3（Claude Opus 5 30%→100%），系统设计 > 模型能力。
+- **Mendel Gödel Machine**：Qwen3.6-35B Polyglot 50.8%→93.3%（~117× 少参数超 GPT-5）。
+- **MARS**：单周期元认知自我改进，~25-30× 省算力超 Gödel Agent。
+- **Mem2Evolve**（已收录）：双记忆协同演化，GAIA +57.84%。
+- **HSI**（已收录）：冻结 LLM 演化自身 harness，BALROG +39.3 BabyAI。
+
+### 浏览器智能体基准
+- **OSWorld 2.0**：108 长程任务均值 318 tool calls，Opus 4.8 仅 20.6%（500 步）。
+- **CAP benchmark**（已收录）：420 跨站任务最优 Manus 仅 8.0%，perception 是比 execution 更重瓶颈。
+- **CUA-HandCrafted**：浏览器 CUA 对 prompt injection 鲁棒（0/140 ASR），但 coding agent 可被 100% skill-injection。
+- **LexBench-Browser**：210 任务/107 站点可复现 browser-agent 评测框架（bubench）。
+- **2026 浏览器 agent 榜**：WebVoyager 饱和（98.5%）、Online-Mind2Web 成 live-web 标准（97.0%）、OSWorld-Verified 桌面 Claude Fable5 85%。
+
+### 多 agent 编排框架（6 个新）
+- open-multi-agent / orxhestra / Orloj / GAIA (Go) / Overseer / OpenHive。
+
+### Hermes 自身
+- **Hermes Agent v0.20.6**（2026-08-27，~525 PRs）：真实 profile 浏览、桌面 Browser 独立窗口+SSH 远程更新、50+ 远程 MCP、web_search/extract TTL 缓存、OS 钥匙串加密、cron durable-incident acks。
+- **Wuying-Browser-Agent-27B**（已收录）：开源 SOTA，WebVoyager 80.6% / Online-Mind2Web 66.7% / BrowserBench 65.1%。

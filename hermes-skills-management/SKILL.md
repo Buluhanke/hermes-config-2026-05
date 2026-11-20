@@ -241,6 +241,27 @@ EOF
 改完全库验证：所有 SKILL.md 的 frontmatter 必须 yaml.safe_load 通过且含 name+description。
 多行旧 description 吞行时留孤儿行会破坏 YAML —— 改后必须全库 yaml 校验。
 
+## 导入外部 agent 生成的 SKILL.md（适配层）
+
+第三方 skill 生成器（如 Microsoft 的录屏造 skill 工具）产出的 `SKILL.md` 与 Hermes 格式**相近但不等价**，直接丢进 `~/.hermes/skills/<name>/` 会静默失效。导入前必须过一遍适配：
+
+| 字段/内容 | 外部生成器 | Hermes 要求 | 处理 |
+|---|---|---|---|
+| `name` | kebab-case，常截到 60 字 | 小写连字符 ≤64 | slugify 后检查 |
+| `description` | 触发词导向长文本，常 60+ 字 | 索引只显示前 57 字，中文触发词须前置 | 压到 ≤60，中文触发词放最前（见「描述触发力工程」） |
+| `allowed-tools` | 权限模式（`Bash(gh *)`、`Glob`） | schema 无此字段 | 丢弃，否则是噪音 |
+| `{{id}}` 值 token | 渲染时替换为字面值 | 同 | 检查残留 token；有则先渲染再导入 |
+| 正文工具名 | 目标 agent 原生工具（`workiq_*` 等） | Hermes 没有这些工具 | 扫描并报告，**人工改写**，不静默替换 |
+
+**规则**：截断/丢弃/改写必须出一份报告（哪个字段被截、哪些工具要改），不能静默改完就装——否则用户以为 skill 可用，实际触发词错位或工具不存在。
+
+用 `scripts/external_skill_adapter.py`（stdlib，零依赖）：
+```bash
+python3 ~/.hermes/skills/hermes-skills-management/scripts/external_skill_adapter.py in.md -o out.md
+python3 ~/.hermes/skills/hermes-skills-management/scripts/external_skill_adapter.py --selftest
+```
+脚本只压缩 description、丢 `allowed-tools`、检查残留 token 和外来工具并报告；外来工具的改写留给人工判断。
+
 ## 免记忆调用层
 - `~/.hermes/skills/skill-router/SKILL.md`：领域→技能名路由表，MUST USE 铁律（说"做不到"前先查表/skills_list/hermes skills search）。
 - 高频组合走 bundle：`~/.hermes/skill-bundles/*.yaml`（deep-debug / ship-pr / scrape-web / fix-hermes），`/<bundle>` 一键载全套。

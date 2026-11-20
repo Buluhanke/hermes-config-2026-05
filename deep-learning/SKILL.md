@@ -1,11 +1,6 @@
 ---
 name: deep-learning
-description: 全能深度阅读工具（All-in-One Deep Reading）。适用于书/长文/研报/论文的深度消化。Use when 用户要深度消化一本书/长文/研报/论文并构建知识网络、产出结构笔记与原子笔记。融合
-  Mortimer Adler（结构）、Feynman（解释）、Luhmann（网络）、Pragmatist（工具化）、Critics（辩论）；强制 High Fidelity
-  案例保留与 Actionable 工具提取。关键词：深度阅读、结构笔记、deep learning、卢曼。
-triggers:
-- Use when deep learning
-trigger_type: general
+description: 全能深度阅读工具（All-in-One Deep Reading）。适用于书/长文/研报/论文的深度消化。Use when 用户要深度消化一本书/长文/研报/论文并构建知识网络、产出结构笔记与原子笔记。融合 Mortimer Adler（结构）、Feynman（解释）、Luhmann（网络）、Pragmatist（工具化）、Critics（辩论）；强制 High Fidelity 案例保留与 Actionable 工具提取。关键词：深度阅读、结构笔记、deep learning、卢曼。
 ---
 
 # 深度阅读 (Deep Reading)
@@ -146,7 +141,7 @@ trigger_type: general
 
 ```markdown
 # Preparation
-- [ ] Pre-game Plan Created (≥6 项 [TODO] + Context；对话内区块或落盘文件)
+- [ ] Pre-game Plan Created (≥6 项 TODO + Context；对话内区块或落盘文件)
 
 # Structure & Index
 - [ ] Structure Note Created (Adler)
@@ -172,7 +167,7 @@ trigger_type: general
 
 ## 质量验收清单 (Definition of Done)
 
-- [ ] **Phase 0**: 执行计划已产出（≥6 项 [TODO] + Context）。
+- [ ] **Phase 0**: 执行计划已产出（≥6 项 TODO + Context）。
 - [ ] **Overview**: 5个问题回答清晰，费曼测试通过。
 - [ ] **Fidelity**: 有原文时案例含数字/专有名词/原话；无原文时已标注来源限制且未编造细节。
 - [ ] **Actionability**: Method Note 包含无模糊词的步骤 + 可复制模板。

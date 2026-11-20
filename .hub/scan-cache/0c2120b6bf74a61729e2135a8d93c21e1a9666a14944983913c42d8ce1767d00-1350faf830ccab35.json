@@ -1,0 +1,13 @@
+{
+  "bundle_hash": "sha256:0c2120b6bf74a61729e2135a8d93c21e1a9666a14944983913c42d8ce1767d00",
+  "scanner_version": "skills-guard-v10",
+  "source": "@mikonos/deep-learning",
+  "source_url": "@mikonos/deep-learning",
+  "verdict": "safe",
+  "trust_level": "community",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-10-23T08:03:02.682021+00:00",
+  "summary": "deep-learning: clean scan, no threats detected",
+  "fresh": true
+}

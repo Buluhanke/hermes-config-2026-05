@@ -1,0 +1,13 @@
+{
+  "bundle_hash": "sha256:1f59583ac9c41d86d0d85f4df63b945ce09786dfac294112b2150e8cc25763fb",
+  "scanner_version": "skills-guard-v10",
+  "source": "official",
+  "source_url": "official/yuanbao",
+  "verdict": "safe",
+  "trust_level": "builtin",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-10-23T07:59:41.052374+00:00",
+  "summary": "yuanbao: clean scan, no threats detected",
+  "fresh": true
+}

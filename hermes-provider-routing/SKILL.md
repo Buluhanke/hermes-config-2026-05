@@ -98,6 +98,73 @@ fallback_providers:
   (free Nous models fall through to OpenRouter under `auto` and 402). Loop recipe + the
   6 free Nous Portal model ids (snapshot 2026-08-27, verify live).
 
+## NVIDIA NIM 特殊注意（本次会话学习）
+- **base_url 必须是 `https://integrate.api.nvidia.com/v1`**，不要用 `https://api.nvidia.com/v1`（会 404）。
+- **模型名必须完全匹配**：`nvidia/nemotron-3.5-super-vl` 已下线 → 404；可用的是 `nvidia/nemotron-3-ultra-550b-a55b`。
+- 请求时偶发 503（服务暂时过载），加重试机制（1 次重试）即可恢复。
+
+## 免费模型路由系统（新会话构建）
+本次会话从头搭建了一套「免费模型智能路由」，目的是让 Hermes 即使开源模型不可用，仍有备用推理链路。
+
+### 文件清单
+```
+~/.hermes/scripts/scan_free_models.py    # 扫描器：每 3 天 cron 执行
+~/.hermes/scripts/free_model_router.py   # 路由器：读取缓存返回可用模型
+~/.hermes/scripts/free_models_cache.json # 扫描结果缓存
+```
+
+### 工作流程
+1. **config.yaml**：在 `providers:` 里注册各提供者的 `base_url`/`api_key_env`/`models`。
+2. **fallback_model**：`provider: <primary>` 写入 `fallback_model:` 顶层，定义默认使用哪个提供者。
+3. **扫描（每 3 天）**：`scan_free_models.py` 向每个模型的 `/chat/completions` 发起一次 ping，用 `max_tokens=5` + 1 次重试。
+4. **结果写入缓存**：`free_models_cache.json` 保存 `available[]`（可用模型按轮替顺序）和 `failed[]`（已淘汰模型）。
+5. **路由选择**：`free_model_router.py` 读取缓存，返回按优先级排序的可用模型列表。
+6. **Hermes 接入**：`fallback_model` 指向首选官方免费模型；当它失败时，自动降级到备用免费模型。
+
+### 配置格式（config.yaml）
+```yaml
+providers:
+  gemini:
+    base_url: https://generativelanguage.googleapis.com/v1beta
+    api_key_env: GEMINI_API_KEY
+    models:
+      - gemini-2.5-flash
+  nvidia:
+    base_url: https://integrate.api.nvidia.com/v1
+    api_key_env: NVIDIA_API_KEY
+    models:
+      - nvidia/nemotron-3-ultra-550b-a55b
+  openrouter:
+    base_url: https://openrouter.ai/api/v1
+    api_key_env: OPENROUTER_API_KEY
+    models:
+      - openai/gpt-4o-mini
+
+fallback_model:
+  provider: gemini
+  model: gemini-2.5-flash
+```
+
+### 路由决策树
+```
+1. 如果 Hermes 官方免费模型可用 → 直接使用
+2. 如果官方免费模型失败 → 跳转备用免费模型（按缓存中的排名顺序）
+3. 备用模型全部不可用 → 降级到上一次有效的缓存（如果有）
+4. 没有有效缓存 → 通知用户检查配置
+```
+
+## 新设备接入（未来会话复用）
+1. 复制本次 `scripts/` 目录到目标机器（含 `scan_free_models.py`、`free_model_router.py`、`free_models_cache.json`）。
+2. 用 `hermes config set` 写入 `providers:` 和 `fallback_model:`。
+3. 跑一次 `python3 ~/.hermes/scripts/scan_free_models.py` 验证。
+4. 把 `hermes config check` 的结果反馈给用户。
+
+## 新设备接入（持续运维）
+- 定期检查 `free_models_cache.json` 中 `available/` 的数量。
+- 若 `available/` 为空，立即人工介入排查。
+- 每次扫描后，均应更新 `free_models_cache.json`。
+
+
 ## Free Nous Portal models — provider pin pitfall (2026-08-27)
 When comparing models, do NOT let `hermes chat -m <free-model>` run under `auto` provider.
 Free-tier Nous models (hy3:free, longcat-2.0, solar-pro-4, step-3.7-flash,

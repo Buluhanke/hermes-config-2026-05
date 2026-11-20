@@ -1,0 +1,35 @@
+{
+  "bundle_hash": "sha256:b260d00fc0dc6524d5802faeb4271b6e1a81fe9904876966433aabbbd6ccab91",
+  "scanner_version": "skills-guard-v9",
+  "source": "official",
+  "source_url": "official/social-media/reddit-reading",
+  "verdict": "dangerous",
+  "trust_level": "builtin",
+  "findings": [
+    {
+      "pattern_id": "hermes_env_access",
+      "severity": "critical",
+      "category": "exfiltration",
+      "file": "SKILL.md",
+      "line": 39,
+      "match": "two values in `~/.hermes/.env`:",
+      "description": "directly references Hermes secrets file"
+    },
+    {
+      "pattern_id": "python_environ_get_secret",
+      "severity": "medium",
+      "category": "exfiltration",
+      "file": "scripts/reddit.py",
+      "line": 91,
+      "match": "cid, secret = os.environ.get(\"REDDIT_CLIENT_ID\"), os.environ.get(\"REDDIT_CLIENT_SECRET\")",
+      "description": "reads secret via os.environ.get() (normal API-key access; informational)"
+    }
+  ],
+  "rules": [
+    "hermes_env_access",
+    "python_environ_get_secret"
+  ],
+  "scanned_at": "2026-10-11T08:59:08.197486+00:00",
+  "summary": "reddit-reading: dangerous \u2014 2 finding(s) in exfiltration",
+  "fresh": true
+}

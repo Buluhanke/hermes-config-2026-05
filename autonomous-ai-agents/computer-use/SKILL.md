@@ -337,7 +337,25 @@ in your conversation context.
 | `blocked pattern in type text` | You tried to `type` a shell command matching the dangerous-pattern block list (`curl ... \| bash`, `sudo rm -rf`, etc.). Break the command up or reconsider |
 | Anything else weird | **First action: ask the user to run `hermes computer-use doctor`.** It runs the cua-driver `health_report` MCP tool and prints a structured per-check matrix. Their output tells you (and them) exactly what's wrong |
 
-## When NOT to use `computer_use`
+## Alternative: agent-desktop (accessibility-tree based, no screenshots)
+
+`agent-desktop` (npm: `agent-desktop`) is an alternative desktop automation tool that reads the OS accessibility tree and returns JSON ref IDs — no screenshots, no pixel matching, lower token cost. It runs headless by default and does not move the cursor.
+
+**Install:** `npm install -g agent-desktop`
+**Authorize:** `agent-desktop permissions --guide` (opens System Settings)
+
+**macOS pitfall — Screen Recording permission required.** Without it, `list-windows` returns windows but `snapshot` fails with `ACTION_NOT_SUPPORTED` / "not exposed through accessibility" for ALL windows. Grant Screen Recording to the app that launches agent-desktop (Terminal, iTerm, etc.) before use.
+
+**When to use agent-desktop vs computer_use (cua-driver):**
+- agent-desktop: precise UI element targeting via ref IDs, low token, no screenshots needed, macOS full support
+- computer_use: vision-based (SOM overlays), broader platform coverage, handles apps without accessibility trees
+
+**Quick test:**
+```bash
+agent-desktop list-apps                    # list running apps
+agent-desktop list-windows --app "Finder"   # list windows
+agent-desktop snapshot --app "Finder" -i    # read accessibility tree
+```
 
 - **Web automation you can do via separate headless `browser_*` tools** — those use a
   real headless Chromium and are more reliable than driving the user's

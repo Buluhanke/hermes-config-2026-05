@@ -119,6 +119,8 @@ chmod +x ~/.local/bin/phone ~/.local/bin/pad
 # 开启设备的 TCP/IP 调试模式
 adb tcpip 5555
 # 拔掉 USB 线
+# 注意：tcpip 打印 "restarting in TCP mode port: 5555" ≠ 端口已监听，
+# 第一次 connect 可能超时，等 2-3 秒重试一次即可
 adb connect 192.168.8.204:5555   # MI 8
 # adb connect 192.168.8.248:5555  # 平板
 ```
@@ -247,6 +249,15 @@ MI8 无线调试未开启。需要 USB 连一次执行 `adb -s <设备ID> tcpip 
 3. 小米额外：开发者选项 → 「USB 调试（安全设置）」已开启
 4. 重新插拔 USB 线，等待授权弹窗 → 点「允许」
 
+**持续 unauthorized（重插 USB、重启 adb 都不弹窗或点了「允许」仍不行）：**
+Mac 侧 ADB RSA 公钥与手机记录不一致（旧 key 残留、对话框曾被误拒绝）时，删掉密钥强制重新生成并触发全新授权弹窗：
+```bash
+rm -f ~/.android/adbkey ~/.android/adbkey.pub
+adb kill-server && adb start-server
+adb devices -l   # 手机上此时弹出「是否允许 USB 调试」→ 点「允许」（勾选「一律允许」）
+```
+删 key 后 adb 下次连接自动生成新 keypair，手机把它当新电脑重新询问，这是唯一能绕开"记住的拒绝状态"的办法。
+
 ### 2. scrcpy 找不到 adb
 scrcpy 硬编码在 `~/.local/bin/adb` 找 adb，PATH 有没有都不行。
 
@@ -322,7 +333,7 @@ adb -s 192.168.8.248:5555 shell echo "wireless OK"
 ### 11. 排查平板无线调试是否开启
 
 平板无线调试已开启但端口不通（`adb connect` 报 `Connection refused`）：
-- 平板可能切换了 IP → 去设置里查当前 IP
+- 平板可能切换了 IP → USB 还连着时用 `adb shell ip route` 直接读当前 IP（输出中 `src <IP>` 即设备地址），免翻手机设置；USB 已拔则去设置 → 关于手机 → 状态信息 → IP 地址
 - 无线调试端口可能变了 → 去设置 → 开发者选项 → 无线调试查看当前端口
 - 平板和 Mac 不在同一网段 → 确认都在 192.168.8.x
 

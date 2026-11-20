@@ -1,13 +1,14 @@
 ---
 name: ascii-video
-description: "ASCII视频 视频音频转彩色ASCII MP4 GIF。Use when 把视频转成ASCII风格动画"
-platforms:
-- linux
-- macos
-- windows
-triggers:
-- Use when ascii video
-trigger_type: general
+description: "ASCII video: convert video/audio to colored ASCII MP4/GIF."
+version: 1.0.0
+author: SHL0MS, Hermes Agent
+license: MIT
+platforms: [linux, macos, windows]
+metadata:
+  hermes:
+    tags: [ASCII, Video, FFmpeg, Terminal-Art]
+    related_skills: []
 ---
 
 # ASCII Video Production Pipeline

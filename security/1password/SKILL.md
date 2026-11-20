@@ -1,6 +1,6 @@
 ---
 name: 1password
-description: "1Password密码管理 op CLI 登录读取注入secret引用。Use when 存取密码/API key或在命令注入凭据"
+description: Set up op CLI, sign in, and read or inject secrets.
 version: 1.0.0
 author: arceus77-7, enhanced by Hermes Agent
 license: MIT
@@ -93,7 +93,7 @@ For reliable `op` use with desktop app integration, run sign-in and secret opera
 Note: This is NOT needed when using `OP_SERVICE_ACCOUNT_TOKEN` — the token persists across terminal calls automatically.
 
 ```bash
-SOCKET_DIR="${TMPDIR:-/tmp}/hermes-tmux-sockets"
+SOCKET_DIR="${TMPDIR:-${HERMES_HOME:-$HOME/.hermes}/cache/scratch}/hermes-tmux-sockets"
 mkdir -p "$SOCKET_DIR"
 SOCKET="$SOCKET_DIR/hermes-op.sock"
 SESSION="op-auth-$(date +%Y%m%d-%H%M%S)"

@@ -19,7 +19,9 @@ python-docx via small CLIs. It handles text, styles, lists, tables,
 images, headers/footers, `{{token}}` templating, tracked changes
 (list/accept/reject), comments (list/add/delete), TOC and page-number
 fields, and package health checks. It does not render documents itself
-(PDF needs LibreOffice — see Converting to PDF) or edit legacy `.doc`.
+(PDF needs LibreOffice — see Converting to PDF). Legacy binary `.doc`
+files are handled through the textutil round-trip documented in
+`references/legacy-doc-macos.md`.
 
 ## When to Use
 
@@ -32,7 +34,12 @@ fields, and package health checks. It does not render documents itself
 - You need to read reviewers' comments, or add/delete comments.
 - A `.docx` won't open or behaves oddly and you need corruption triage.
 - The document needs a table of contents or "Page X of Y" footers.
-- Not for: `.doc` (legacy), `.odt`, or WYSIWYG layout work.
+- Legacy binary `.doc` (WPS/Word 97-2003) fill-in or edit — via the
+  textutil round-trip in `references/legacy-doc-macos.md`.
+- You need only the leading N pages of a long `.doc`/`.docx` package
+  (contract body without its attached chapters) — via the
+  PDF-boundary truncation in `references/legacy-doc-macos.md`.
+- Not for: `.odt` or WYSIWYG layout work.
 
 ## Prerequisites
 
@@ -82,6 +89,8 @@ python scripts/docx_validate.py out.docx
 | List comments (+anchored text) | `docx_comments.py list f.docx` |
 | Add comment anchored to text | `docx_comments.py add f.docx --target "phrase" --text "note" --author You` |
 | Delete comment by id | `docx_comments.py delete f.docx --id 0` |
+| Fill placeholders in legacy `.doc` | textutil round-trip — `references/legacy-doc-macos.md` |
+| Truncate `.doc`/`.docx` to first N pages | PDF-boundary cut — `references/legacy-doc-macos.md` |
 | Health-check the package | `docx_validate.py f.docx` (exit 1 on errors) |
 
 ## Procedure
@@ -137,10 +146,16 @@ No script needed. When LibreOffice is installed, convert headlessly:
 soffice --headless --convert-to pdf --outdir outdir/ file.docx
 ```
 
-Check availability first (`command -v soffice || command -v
-libreoffice`). If neither exists, tell the user PDF conversion is
+Check availability first: `command -v soffice || command -v
+libreoffice` — a brew-cask install on macOS lives at
+`/Applications/LibreOffice.app/Contents/MacOS/soffice` and is often not
+symlinked into PATH, so call it by absolute path. If no LibreOffice
+exists, tell the user PDF conversion is
 unavailable in this environment rather than improvising — python-docx
 cannot render PDFs, and layout fidelity requires a real renderer.
+Rendered PDFs are also how you locate real page boundaries (needed for
+truncation and for verifying formatting like underlines — see
+`references/legacy-doc-macos.md`).
 
 ## Pitfalls
 
@@ -174,6 +189,14 @@ cannot render PDFs, and layout fidelity requires a real renderer.
   instead of restarting. Warn users needing precise multi-list numbering.
 - **Cell writes replace formatting.** `set-cell` uses `cell.text = ...`,
   which resets runs in that cell to plain formatting.
+- **`paragraph.text = ...` resets run formatting.** Assigning to
+  `paragraph.text` (or `cell.text`) discards all existing runs and creates
+  new ones with the style's default font — size, bold, italic, color, and
+  font name are lost. Either edit existing runs in place (`run.text = ...`
+  on the run you want to change), or re-apply `run.font.size` /
+  `run.font.bold` / `run.font.name` after the assignment. This is the
+  most common cause of "font size changed" bugs when filling templates
+  by hand with python-docx instead of using the scripts.
 - **Encoding.** All JSON specs/values files are read as UTF-8 explicitly;
   never rely on locale defaults when writing your own glue code.
 - **Don't unzip-and-sed the XML.** Edit through the scripts (or

@@ -1,6 +1,17 @@
 ---
 name: mempalace
 description: MemPalace v3.6.0 — 57K⭐开源AI记忆系统，完整原文存储+语义搜索，R@5=96.6%（零LLM依赖）。Mac M4用CoreML加速。适合：对话历史存档、项目上下文找回、代码片段记忆。触发：需要记忆检索/历史上下文/长期记忆。
+version: "1.0.0"
+author: Nous Research
+license: MIT
+group: 记忆
+metadata:
+  hermes:
+    tags: [memory, mempalace, fact-store]
+    related_skills:
+      - agent-reach
+      - deep-research
+      - context-compression
 triggers:
   - AI记忆系统
   - 对话历史检索
@@ -8,10 +19,17 @@ triggers:
   - 长程上下文
   - mempalace
   - 找回之前的对话
-version: 1.0.0
+l1: 记忆
+l2: mempalace
 ---
 
-## 安装与初始化
+## When to Use
+
+**Use when the task requires long-term memory, conversation history retrieval, project context recall, or any scenario where information must persist across sessions** — MemPalace is the zero-LLM-write-memory layer; pair it with agent-reach for external search when you need both internal memories and external knowledge.
+
+---
+
+# MemPalace v3.6.0 — 57K⭐开源AI记忆系统
 
 ```bash
 uv tool install mempalace
@@ -131,3 +149,36 @@ with open('/tmp/hermes_all_channels.jsonl', 'w') as f:
 
 ## 参考文档
 - `references/state-db-mine-recipe.md` — state.db 全渠道对话提取脚本、渠道分布数据（2026-07-22实测）、sessions.json 与 request_dump_*.json 的真实含义
+
+## 流式检索与重排（2026 迭代）
+
+### 问题
+MemPalace 当前是纯语义向量检索（chroma 后端），检索到的是「最相关的 N 个原文」，但未经过多源重排。对 100+ 条检索结果，语义相似度最高的 10 条不一定是最终最有价值的 10 条——同一答案可能出现在多个房间，语义相似度高的旧情绪条目会挤压事实类条目。
+
+### 解决：三层检索流水线
+
+```python
+# 1. 检索：BM25（关键词）+ 向量（语义）+ 图谱（实体链接）三管齐下
+bm25_results = palace.bm25_search(query)
+vector_results = palace.vector_search(query)
+graph_results = palace.graph_search(query)   # 实体 → 关联房间
+
+# 2. 归一化：BM25 按 idf 得分，向量按 cosine 得分，图谱按相邻层级
+scores = normalize(bm25_scores) + normalize(vector_scores) + normalize(graph_scores)
+
+# 3. 重排：RRF（Reciprocal Rank Fusion）合并，权重可调
+# rrf = 1 / (k + rank_i)  对每个来源独立排名求和
+rrf_scores = rrf(bm25_results, vector_results, graph_results, k=60)
+
+# 4. 输出：按 rrf 得分排序，取 top-5 做最终展示
+final_results = sort_by_rrf(rrf_scores)[:5]
+```
+
+### 坑
+- BM25 对中文细微差别（如「北向资金」vs「北向资金异常」）不敏感，需用分词器（jieba）预处理
+- 图谱检索容易死循环，如同一个实体出现在多个房间，需要去重
+- RRF 的 k 值（默认 60）需根据检索池规模标定，池太小 k 太大会压扁差异，池太大 k 太小会只返回第一来源
+
+### 替代方案
+- Mem0 / Hindsight 的多策略检索（TEMPR）是成熟参考
+- 若要零 LLM 写路径，BM25+向量+重排仍可行；若要更高召回，考虑在 Chroma 之外叠一个轻量图索引

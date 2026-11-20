@@ -122,3 +122,52 @@ Layer 3: browser_*
 | 进化（自我改进） | 🔄 进行中 |
 
 [^1]: Curator 是 hermes curator 命令，每周六凌晨自动运行
+
+## Jarvis Core 集成（新增 2026-10-17）
+
+### 总体架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    JARVIS CORE (总枢纽)                      │
+│  识别大脑 (state.db + fact_store + mempalace)                │
+│  行动中枢 (browser + shell + app)                            │
+│  知识获取 (web + 研究 + 爬虫)                                │
+│  持续学习 (self-evolution + A/B + 创造)                      │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### 统一入口
+
+用户任何能力请求都经过 `agent-reach` 路由：
+| 请求类型 | 路由到 | 示例 |
+|---|---|---|
+| 查会话/对话 | state.db | "谁提到了 Flask 升级" |
+| 深度研究 | deep-research | "对比 AI agent 框架" |
+| 浏览器操作 | browser-cdp-control | "打开 Chrome 点到 1688" |
+| 命令执行 | hermes_execution.py | "列出所有 .py 文件" |
+| 持续学习 | jarvis_daily_learn.sh | 每日 9:00 自动 |
+
+### 控制面板
+
+Jarvis 启动脚本：`~/.hermes/scripts/jarvis_start.sh`（4 步自检）
+每日闭环：`~/.hermes/scripts/jarvis_daily_learn.sh`（6 步：扫描→固化→分析→更新）
+
+### 每日学习闭环（jarvis_daily_learn.sh）
+
+```
+1. 扫描 state.db → 提取 24 小时对话
+2. 提取核心信息 → 写入 fact_store
+3. 分析失败模式（失败/报错 关键字）
+4. 更新相关 SKILL.md（基于证据）
+5. 运行自动化测试（evidence-loop）
+6. 如通过 → 固化学习；如失败 → lesson_store
+```
+
+### 能力矩阵（Capability Matrix）
+
+见 `jarvis-core/SKILL.md` 章节 8。
+
+### 禁忌（Principles to avoid）
+
+见 `jarvis-core/SKILL.md` 章节 9。

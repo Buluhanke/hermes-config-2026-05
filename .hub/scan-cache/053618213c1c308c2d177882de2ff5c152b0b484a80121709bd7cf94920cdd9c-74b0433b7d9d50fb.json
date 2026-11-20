@@ -1,0 +1,13 @@
+{
+  "bundle_hash": "sha256:053618213c1c308c2d177882de2ff5c152b0b484a80121709bd7cf94920cdd9c",
+  "scanner_version": "skills-guard-v10",
+  "source": "skills-sh/ayghri/i-have-adhd/skills/i-have-adhd",
+  "source_url": "https://github.com/ayghri/i-have-adhd/tree/1ecea1993b7fce257ffbd686c070948b5e07eda6/skills/i-have-adhd",
+  "verdict": "safe",
+  "trust_level": "community",
+  "findings": [],
+  "rules": [],
+  "scanned_at": "2026-10-23T08:01:24.421516+00:00",
+  "summary": "i-have-adhd: clean scan, no threats detected",
+  "fresh": true
+}

@@ -512,7 +512,33 @@ python3 lan_discovery.py
 
 ---
 
-## 9. 验证步骤
+## 9. SSH 访问排障（LAN 设备）
+
+LAN 设备在线但 SSH 连不上时，按以下顺序排查：
+
+1. **确认用户名**：用户口述的用户名可能不对（常见：说 `kk` 实际 `whoami` 是 `mac`）。以设备上 `whoami` / `echo $HOME` 为准，不要按记忆或用户口述。
+2. **密码认证失败**：Mac OpenSSH 默认允许 password，但密码可能与登录密码不一致或被 PAM 拒绝。优先切到公钥认证：
+   - 本机公钥：`cat ~/.ssh/id_ed25519.pub`
+   - 设备上执行：
+     ```bash
+     mkdir -p ~/.ssh && chmod 700 ~/.ssh
+     echo '<pubkey>' >> ~/.ssh/authorized_keys
+     chmod 600 ~/.ssh/authorized_keys
+     ```
+   - 连接时加 `-i ~/.ssh/id_ed25519 -o IdentitiesOnly=yes` 避免 "Too many authentication failures"（客户端尝试所有密钥导致服务器断开）。
+3. **权限检查**：`authorized_keys` 必须 owner 为登录用户、权限 600；`.ssh` 目录 700。owner 不对则公钥不生效。
+4. **事实优先**：记忆/口述与设备实际状态冲突时，以设备上 `whoami`/`ls -la`/`sw_vers` 等实时输出为准，不要按记忆推断。
+
+### SSH 排障坑点
+
+| 坑点 | 说明 | 解决 |
+|------|------|------|
+| 用户名口述 ≠ 实际 | 用户可能记错用户名 | 先 `whoami` 确认 |
+| Too many auth failures | 客户端尝试多个密钥被服务器断开 | `-o IdentitiesOnly=yes -i <key>` |
+| authorized_keys owner 不对 | 文件属主非登录用户 | `chown` + chmod 600 |
+| 密码认证被拒 | Mac PAM/密码策略 | 切公钥认证，不纠结密码 |
+
+## 10. 验证步骤
 
 验证本 skill 是否正常工作。假设网关 = `192.168.8.1`，本机 = `192.168.8.100`。
 

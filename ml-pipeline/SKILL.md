@@ -1,21 +1,20 @@
 ---
 name: ml-pipeline
-description: "ML交易流水线 特征工程回测部署全链。Use when 搭机器学习交易管线"
-version: 2.0.0
+description: >
+  Complete machine learning pipeline for trading: feature engineering, AutoML, deep learning, and financial RL.
+  Use for automated parameter sweeps, feature creation, model training, and anti-leakage validation.
+version: "2.0.0"
 allowed-tools: Read, Write, Edit, Bash, Glob, Grep
 metadata:
   consolidates:
-  - ml-feature-engineering
-  - deep-learning-optimizer-5
-  - pytorch-lightning-2
-  - scikit-learn-ml-framework
-  - automl-pipeline-builder-2
-  - ml-feature-engineering-helper
-  - ml-fundamentals
-  - machine-learning-feature-engineering-toolkit
-triggers:
-- Use when ml pipeline
-trigger_type: general
+    - ml-feature-engineering
+    - deep-learning-optimizer-5
+    - pytorch-lightning-2
+    - scikit-learn-ml-framework
+    - automl-pipeline-builder-2
+    - ml-feature-engineering-helper
+    - ml-fundamentals
+    - machine-learning-feature-engineering-toolkit
 ---
 
 # ML Pipeline

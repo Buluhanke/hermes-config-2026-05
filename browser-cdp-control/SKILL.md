@@ -1,6 +1,19 @@
 ---
 name: browser-cdp-control
 description: Direct CDP browser control — DOM extraction, form submission, AI site interaction. Use this when reading/extracting content from browser-controlled websites (ChatGPT, DeepSeek, Gemini, 豆包, etc.).
+version: "1.0"
+author: Nous Research
+license: MIT
+group: 浏览器
+metadata:
+  hermes:
+    tags: [browser, cdp, ai-site]
+    related_skills:
+      - browser
+      - agent-reach
+      - chrome-cdp-control
+      - chrome-devtools-mcp
+      - agent-browser
 triggers:
   - "read page content from browser"
   - "fetch text from ChatGPT/DeepSeek/豆包"
@@ -10,6 +23,12 @@ triggers:
 l1: 🤖AI站点对话
 l2: browser-cdp
 l3: core
+---
+
+## When to Use
+
+**Use when the task requires reading or extracting content from browser-controlled websites, especially AI chat sites (ChatGPT, DeepSeek, 豆包, 智谱清言, Gemini) where DOM queries may be blocked by shadow DOM, Cloudflare, or other protections.** This skill is the lowest-level browser control layer — it operates directly on the CDP WebSocket, sharing port 9222 with chrome-devtools-mcp and agent-browser.
+
 ---
 
 # Browser CDP Control — Direct DOM Extraction
@@ -455,7 +474,12 @@ ws.close()
 })()
 ```
 
-## Common Pitfalls
+### Tab Hygiene — 关完即关，不留累积
+
+- 每完成一个 tab 的任务后**立即** `Target.closeTarget` / `hermes_tab_switch.py close N`，不要等会话结束再清理；Chrome 75+ tab 时内存/CPU 飙升，频控页更容易触发。
+- 禁止在同一 CDP 会话里反复 `Target.createTarget` 而不 close；创建一个、用完、关掉，再创建下一个。
+- 批量任务（如京东品类计数）必须**增量写盘 + 每 5 个 dump 一次**，进程被杀不丢结果；单 tab 处理完立即 close，不保留打开。
+- 判断"是否还有多余 tab"：`curl 127.0.0.1:9222/json` 数 page 类型；>1 个业务 tab 即视为泄漏，清理。
 
 ### Common Pitfalls
 
@@ -1153,3 +1177,62 @@ for t in tabs:
 - https://gemini.google.com/app  — ✅ 登录（K H账号，Gemini实测发送+接收全流程OK）
 - https://chatglm.cn/            — 待验证
 - https://grok.com/z            — ❌ Cloudflare拦截，无法自动化
+
+## 复用脚本参考：AI 站通用内容提取脚本
+
+以下 JS 脚本可独立保存为 `scripts/ai_site_extract.js`，供 `browser-cdp-control` 中 `Runtime.evaluate` 调用，适配 Chatgpt/豆包/智谱清言/Gemini 等 shadow DOM 站点。
+
+```javascript
+// scripts/ai_site_extract.js
+// 通用 AI 站 shadow DOM 内容提取器
+// 调用: js("(() => { const r = eval(fs.readFileSync('scripts/ai_site_extract.js','utf8')); return r; })()")
+(() => {
+    function extractAllText(node, depth = 0) {
+        if (depth > 10) return '';
+        let texts = [];
+        if (node.nodeType === 3 && node.textContent.trim()) {
+            texts.push(node.textContent.trim());
+        }
+        if (node.shadowRoot) {
+            Array.from(node.shadowRoot.childNodes).forEach(child => {
+                texts.push(extractAllText(child, depth + 1));
+            });
+        } else if (node.nodeType === 1) {
+            Array.from(node.childNodes).forEach(child => {
+                texts.push(extractAllText(child, depth + 1));
+            });
+        }
+        return texts.filter(t => t).join('\n');
+    }
+    const body = document.body || document.documentElement;
+    const main = extractAllText(body);
+    // 去除导航、footer、广告等噪声
+    const noise = ['导航', '菜单', 'footer', '广告', '热门推荐', '相关文章', '留言', '评论'];
+    const clean = main.split('\n')
+        .map(line => line.trim())
+        .filter(line => line && !noise.some(n => line.includes(n)))
+        .join('\n');
+    return clean.length > 50 ? clean : main;
+})();
+```
+
+### 调用方式（browser-cdp-control）
+
+```python
+result = js("""
+    const fs = require('fs');
+    const script = fs.readFileSync('scripts/ai_site_extract.js', 'utf8');
+    eval(script);
+""", return_by_value=True)
+```
+
+### 适配其他 AI 站
+
+| 站点 |  추출합니다 | 备注 |
+|---|---|---|
+| ChatGPT | shadow DOM + iframe 分层 | 用方法A全页递归提取 |
+| 豆包 | shadow DOM | 与 ChatGPT 模式相同 |
+| 智谱清言 | shadow DOM | 与 ChatGPT 模式相同 |
+| Gemini | 常规 DOM | 常规 `querySelector` 即可 |
+
+> 坑：不同 AI 站的 shadow DOM 层级和文本组织方式不同，同一脚本可能需要针对不同站点微调去噪词列表。

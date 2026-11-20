@@ -1,0 +1,27 @@
+{
+  "dims": [
+    "40*10*3"
+  ],
+  "cat": [
+    "纸箱"
+  ],
+  "prov": "%E6%B1%9F%E8%8B%8F,%E6%B5%99%E6%B1%9F,%E4%B8%8A%E6%B5%BD",
+  "candidates": 103,
+  "hits": {
+    "40*10*3": [
+      {
+        "id": "596753423318",
+        "dim": "40*10*3",
+        "title": "长方形纸盒雨伞水杯包装长条纸箱快递打包盒厂家批发 - 阿里巴巴",
+        "price": "¥0.74",
+        "stock": 1525,
+        "moq": null,
+        "url": "https://detail.1688.com/offer/596753423318.html",
+        "spec": "15*5*45cm;三层B瓦特硬0.25cm厚度",
+        "source": "skujson",
+        "exact": false
+      }
+    ]
+  },
+  "captcha_flag": false
+}

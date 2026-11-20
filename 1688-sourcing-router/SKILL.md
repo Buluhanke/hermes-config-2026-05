@@ -2,7 +2,18 @@
 name: 1688-sourcing-router
 description: 1688 找品统一路由——6 个 lineage 归一为「CDP 主驱动 + 品类分流 + 避坑铁律」，消除 lineage 漂移。Use when 任何 1688 找品/比价/选品任务先来判断走哪条路径、用哪个脚本。
 version: "1.0"
-category: 1688
+author: Nous Research
+license: MIT
+group: 1688
+metadata:
+  hermes:
+    tags: [1688, sourcing, router, 1688-cdp]
+    related_skills:
+      - 1688-search-cn-gb-region-skill
+      - 1688-bag-sourcing
+      - 1688-matrix-dimension-sourcing
+      - 1688-cdp-product-fetch
+      - 1688-price-extraction
 triggers:
   - "1688找品"
   - "1688搜索"
@@ -13,6 +24,12 @@ triggers:
 l1: 1688
 l2: router
 l3: core
+---
+
+## When to Use
+
+**Use when any task asks for 1688 product sourcing, price comparison, or candidate selection** — the first decision is always: 3D box/盒/袋 (3D) vs 2D soft packaging (2D), then `cdp1688.py` vs `cdp1688_bag.py`. This skill is the router + single source of truth; the underlying lineage skills are loaded on demand, not re-implemented.
+
 ---
 
 # 1688 找品统一路由（6 lineage 杂交固化）
@@ -102,3 +119,22 @@ python3 cdp1688.py --dims "46*26*10" \
 5. **多尺寸并行**：用户说"也可以找18*15*10的" → `--dims "18*14*10" "18*15*10"` 同时传入并行搜、并行验，一次出对比表。
 6. 出结论表（ID|规格|单价|库存|卖家|链接），不堆分析
 ```
+
+
+## 市场对标与可替代性
+
+本章给 1688 找品的商业/半商业方案建立量化对标，帮助用户做「自建 vs 买服务」决策。
+
+| 方案 | 拉取方式 | 无需代理 | 深度核验 | 登录态要求 | 个人可用性 |
+|---|---|---|---|---|---|
+| **本机 CDP 方案**（cdp1688.py + skuMapOriginal） | 浏览器后台实例 + WebSocket | 否 | 最高（规格多写法 + 顺序无关 + 全页兜底） | 需 1688 登录态 | ✅ 零风控 |
+| 1688-Scraper-MCP（DrissionPage） | 浏览器 CDP / 模拟 | 部分 | 中（DOM 点 chip 抠价，有风控痕迹） | 需 1688 登录态 | ⚠️ 详情页可用 |
+| Accio Work（阿里官方 MCP） | 官方 API + 自然语言 | 部分 | 中（资质审核+多渠道） | 无 | ❌ 企业专用 |
+| AutoDS | 整合多平台 | 部分 | 中（说话重写+下单） | 部分 | ❌ 平台绑定 |
+| Workus | 全链路采购 | 部分 | 中（人工检查） | 部分 | ❌ 团队/企业 |
+| Sorsa | 50+ 平台问答 | 否 | 低（问答式） | 无 | ⚠️ 部分 |
+| Jungle Scout | 亚马逊零售情报 | 否 | 低（亚马逊专属） | 无 | ❌ |
+
+**结论**：本机 CDP 方案是**个人级别最优解**（零签名、零代理、深度核验、规格多写法）。商业方案的优势是「企业级资质审核 + 自动下单」，但需要企业账号、中转、付费；个人做单一批发/自封袋采购时，本机方案更省事、更可控。
+
+**数据来源边界**：本机无住宅代理 → 接口直连（MTOP）仍走不通，维持「真浏览器后台 CDP + skuMapOriginal 监听」为最优解。1688 MTop 签名公式（公开逆向）为：`sign=MD5(_m_h5_tk前半 + & + t毫秒 + & + appKey(12574478) + & + data)`，token TTL~24h 需刷新，但中国住宅代理仍是必需条件。
