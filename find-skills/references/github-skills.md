@@ -22,6 +22,10 @@ gh search repos --limit 20 --sort stars "skill finder" --owner <username>
 
 > **说明**：`gh` CLI 已通过 keyring 认证（scopes: gist, read:org, repo, workflow），无需 GITHUB_TOKEN。若 `gh` 不可用，降级使用 API `curl -s https://api.github.com/search/repositories?q=...`（匿名 60次/小时）。
 
+> **速率边界（2026-11-20 实测）**：`gh api rate_limit` → core 约 5000 次/小时（读 README / SKILL.md / tree 很充裕），但 **search 只有 30 次/分钟**。`gh search repos`（按仓库名/描述搜）一次找技能只花 2–3 次，够用；但 `gh search code`（按正文搜）配额同属 search，连续深挖几分钟就会撞限流。策略：先用 repos 搜候选，code search 只在需要按 SKILL.md 正文精确定位时省着用。
+>
+> **GitHub 不是「技能市场」**：没有结构化目录/评分，技能散落在各仓库里。`gh search repos` 只能按仓库名/描述命中，**搜不到 SKILL.md 正文**；`gh search code` 能搜正文但返回的是代码文件列表，需人工判断哪个是真正的 skill。真正有目录+评分的市场层是 SkillHub / 虾评 / ClawHub——GitHub 层是「开源补充」，不是主市场。
+
 ---
 
 ## 高价值仓库（按星标排序）
