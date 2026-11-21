@@ -113,10 +113,17 @@ gh search repos "find skills" --json name,description,stargazersCount --sort sta
 
 对候选仓库：
 ```bash
-# 获取仓库 README / SKILL.md
+# 获取仓库 README
 gh api repos/<owner>/<repo>/readme 2>/dev/null | base64 -d | head -50
-gh api repos/<owner>/<repo>/contents/SKILL.md 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print(json.dumps(d, indent=2)[:2000])"
+
+# 递归查找所有 SKILL.md 路径（很多仓库放在子目录，如 skills/xxx/SKILL.md、pdf-skill/SKILL.md）
+# 不能只读根目录的 SKILL.md——那会 404 漏掉大多数有效技能。
+gh api "repos/<owner>/<repo>/git/trees/HEAD?recursive=1" 2>/dev/null | python3 -c "import json,sys; d=json.load(sys.stdin); print([x['path'] for x in d.get('tree',[]) if x['path'].endswith('SKILL.md')][:10])"
+
+# 读取找到的 SKILL.md（把 <path> 换成上一步输出的路径；根目录就是 SKILL.md）
+gh api "repos/<owner>/<repo>/contents/<path>" 2>/dev/null | python3 -c "import json,sys,base64; d=json.load(sys.stdin); print(base64.b64decode(d['content']).decode()[:1500])"
 ```
+> 注意：`gh api repos/<owner>/<repo>/contents/SKILL.md`（只读根目录）在 SKILL.md 位于子目录时返回 404，必须先递归列路径再按路径读取。
 
 **第三步：优先安装高评分仓库技能**
 
@@ -163,6 +170,7 @@ curl -s "https://xiaping.coze.com/api/skills/<skill-id>/download"
 
 - 检查 ClawHub 市场（参考 `skills_hub_clawhub.py` 的搜索接口）
 - 按需调用附带的 ClawHub 相关工具
+
 ### 输出规范
 
 - 推荐给用户时，必须包含：**名称 + 一句话用途 + 入口链接**，不只扔 `ID`；让用户可直接复制/点开。
