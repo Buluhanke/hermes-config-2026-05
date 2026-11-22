@@ -128,6 +128,29 @@ Layer 3: browser_*
 7. 收尾四件事：更新相关 SKILL.md、把脚本备份进 `scripts/`（别只留临时目录）、git commit 到技能大本营、fact_store 记一条可检索结论。
 - 呈现给用户：结论 + 对比表 + 落地项 + 验证数字，不要过程流水账。
 
+## 双方向自我进化（2026-11-22 实战定稿）
+
+用户定义：进化 = ①获取新知识 ②清除冗余。两个方向必须都走完，只做一半不算进化。
+
+### 方向一：获取新知识（增量）
+1. 5-8 组全网搜索，覆盖最新研究 / SOTA benchmark / 开源工具 / 自改进机制；只取可验证数字（AUC、延迟、分数、版本、仓库名），不抄摘要。
+2. 写 fact_store 前先 `search`/`probe` 查重；`add` 时必带 `entities` + 3-8 个 `keywords`（含同义词/翻译），否则事实检索不到。
+3. 新知识要落到 skill：能改代码的改代码，不能改的写"第二轮调研"章节，标明已落地/未落地。
+4. 并行用 delegate_task 跑知识线，主线程同时做冗余线，最后合并验证。
+
+### 方向二：清除冗余（存量）—— 铁律是"先断根，再删除"
+1. **盘点**：`find ~/.hermes/skills -name SKILL.md` 分类统计；检测 auto-crystallized 标记、完全重复 hash、极小文件、无描述文件；fact_store 用 `stats` 看 `without_keywords`。
+2. **找源头**：`grep -rI 'Auto-crystallized from fact_store' ~/.hermes/scripts ~/.hermes/cron` → 定位生成器与调用它的 wrapper。只删产物不断根，垃圾必然长回来（本次已重复一次：8月清 257 个，11月又长 49 个）。
+3. **断根改造**：让生成器产物落到 `~/.hermes/knowledge/crystallized/*.md`（知识库），不再写 `skills/*/SKILL.md`；去掉破坏性 sentinel（v2 会把 `retrieval_count=-999` 永久废掉知识召回）；靠产物文件存在性去重。
+4. **恢复损失**：`UPDATE facts SET retrieval_count=1 WHERE retrieval_count=-999` 把被旧机制埋掉的事实恢复检索（本次恢复 44 条）。
+5. **删除**：`git rm` 而不是 `rm`（必须可回滚），只删明确垃圾（auto-crystallized 单条 fact 复述、字节级重复）；工具自身双目录（如 ui-ux-pro-max 的 `.claude/skills` 与 `cli/assets/skills`）**不是冗余**，删了会破坏工具。
+6. **补检索入口**：无关键词的事实批量补 `keywords:`（保留原 tags 到 `orig_tags:`），`without_keywords` 必须归零。
+7. **验证**：重跑生成器确认产物进知识库不进技能库；再跑一次必须 0 新建（幂等）；`git commit` + push。
+
+**本次战果（2026-11-22）**：技能 408→358（删 49 个结晶垃圾 + 1 个重复），断根 `abcd_learner.py` v2→v3，恢复 44 条被埋事实，50 条知识改沉淀到 knowledge/，408 条无关键词事实补齐检索，新知识 12 条入库（fact 422-433）。提交 `d20e349`。
+
+⚠️ 判断冗余时看"有没有可执行内容"：单条 fact 复述 = 垃圾（知识留在 fact_store 即可）；有步骤/脚本/触发器 = 真技能，保留。
+
 ## 持续进化 Checklist
 
 - [x] fact_store 持续写入（目前 238 条）
