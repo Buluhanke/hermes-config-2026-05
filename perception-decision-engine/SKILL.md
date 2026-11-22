@@ -299,6 +299,8 @@ print(json.dumps(de.funnel_stats(days=7), indent=2))
 4. **观测历史 diff 化**：diff-based representation 省 token 且提分；Browser-Use(工具丰富+DOM) 比 AX-tree 还高 4-14pp。
 5. **主动视觉（真人视觉的研究定义）**：LBS/Look Beyond Screens(2026-10) 用 GUI grounding 训练「看哪里/看多少/何时再看」，可迁移非 GUI；FocusUI(CVPR 2026) 只留 30% 视觉 token 性能仅降 3.2%、1.44× 加速。
 
+**已落地（2026-11-22）**：方向 1（per-step 验证）的「最强版」已实现 —— `screen_parser.py`（Vision OCR 文字层 + OpenCV 轮廓结构层 → 结构化元素清单 → 元素级 diff，即 ScreenParse/UIAnchor 的轻量本地版）+ `step_verifier.py`（postcheck_structural）。自检 7/7 + 6/6。详见 `hermes-humanlike-ops`。
+
 诚实边界：VenusBench-Mobile 最强 Gemini-3-Pro 真实手机任务仅 36.9%，环境变化下近零；失败主因是 perception+memory 而非执行。「完全跟真人一样」研究界也没做到。
 
 网页读取 token 实测（RenderScreenshot 2026-10，26页中位）：raw HTML 97,744 / a11y 8,148 / 可见文本 2,066 / 单屏截图 1,334（仅覆盖一屏，中位页高 6,525px）。

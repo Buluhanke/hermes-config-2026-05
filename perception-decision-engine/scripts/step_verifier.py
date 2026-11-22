@@ -49,6 +49,11 @@ try:
 except Exception:
     decision_engine = None
 
+try:
+    import screen_parser
+except Exception:
+    screen_parser = None
+
 TRACE_PATH = Path.home() / ".hermes" / "step_trace.jsonl"
 _TRACE_BUFFER: list = []
 _TRACE_BUFFER_MAX = 50
@@ -194,6 +199,72 @@ class StepVerifier:
                    "latency_ms": result["latency_ms"]})
         return result
 
+    # ---------- 2b. 最强版：结构化元素级 diff 验证 ----------
+    def postcheck_structural(self, expected_spec: Dict[str, Any],
+                             before_screenshot: str = "",
+                             after_screenshot: str = "") -> Dict[str, Any]:
+        """
+        最强验证路径（UIAnchor 式）：不比整图 md5，而是把前后两屏解析成结构化元素清单，
+        做元素级 diff，精确回答"哪个按钮消失/哪个文字出现/哪个框变了"。
+        expected_spec 支持：
+          added_min / removed_min / changed_min : int  — 元素级变化数量下限
+          text_appears / text_gone : list[str]          — 文字（从 diff 的 label 判定）
+          any_change : bool                            — 只要有变化即可
+        screen_parser 不可用时自动降级到普通 postcheck。
+        """
+        t0 = time.time()
+        if not screen_parser or not (before_screenshot and after_screenshot):
+            return self.postcheck(expected_spec, before_screenshot, after_screenshot)
+        try:
+            a = screen_parser.parse_screen(before_screenshot)
+            b = screen_parser.parse_screen(after_screenshot)
+            d = screen_parser.diff_screens(a, b)
+            if not d.get("ok"):
+                return self.postcheck(expected_spec, before_screenshot, after_screenshot)
+            s = d["summary"]
+            checks: Dict[str, Any] = {}
+            # 兼容旧接口：fp_changed 用整图指纹兜底（结构化 diff 之外的快速信号）
+            if "fp_changed" in expected_spec:
+                fb, fa = _fp(before_screenshot), _fp(after_screenshot)
+                got = bool(fb and fa and fb != fa)
+                want = bool(expected_spec["fp_changed"])
+                checks["fp_changed"] = {"want": want, "got": got, "ok": got == want}
+            for key in ("added", "removed", "changed"):
+                want_key = key + "_min"
+                if want_key in expected_spec:
+                    want, got = int(expected_spec[want_key]), s.get(key, 0)
+                    checks[want_key] = {"want_min": want, "got": got, "ok": got >= want}
+            if "any_change" in expected_spec:
+                total = s["added"] + s["removed"] + s["changed"]
+                want, got = bool(expected_spec["any_change"]), total > 0
+                checks["any_change"] = {"want": want, "got": got, "ok": got == want}
+            labels_after = [e.get("label", "") for e in b.get("elements", []) if e.get("label")]
+            labels_before = [e.get("label", "") for e in a.get("elements", []) if e.get("label")]
+            if "text_appears" in expected_spec:
+                wants = expected_spec["text_appears"] or []
+                missing = [w for w in wants if not _text_hit(labels_after, w)]
+                checks["text_appears"] = {"want": wants, "missing": missing, "ok": not missing}
+            if "text_gone" in expected_spec:
+                wants = expected_spec["text_gone"] or []
+                persisted = [w for w in wants if _text_hit(labels_after, w) and _text_hit(labels_before, w)]
+                checks["text_gone"] = {"want": wants, "still_present": persisted, "ok": not persisted}
+            failed = [k for k, v in checks.items() if v.get("ok") is False]
+            ok = not failed and bool(checks)
+            result = {
+                "ok": ok,
+                "reason": "structural_ok" if ok else "structural_mismatch:" + ",".join(failed),
+                "mode": "structural", "diff_summary": s,
+                "focus_regions": d.get("focus_regions", []),
+                "checks": checks, "latency_ms": int((time.time() - t0) * 1000),
+            }
+            self._log({"event": "postcheck_structural", "ok": ok,
+                       "diff": s, "latency_ms": result["latency_ms"]})
+            return result
+        except Exception as e:
+            fb = self.postcheck(expected_spec, before_screenshot, after_screenshot)
+            fb["structural_fallback_reason"] = str(e)[:120]
+            return fb
+
     # ---------- 3. 完整闭环 ----------
     def run_step(self, step_id: str, intent: str,
                  target_spec: Dict[str, Any],
@@ -203,7 +274,8 @@ class StepVerifier:
                  screenshot_after_fn: Optional[Callable[[], str]] = None,
                  ax_elements: Optional[List[Dict]] = None,
                  max_retries: int = 1,
-                 skip_precheck: bool = False) -> Dict[str, Any]:
+                 skip_precheck: bool = False,
+                 structural: bool = True) -> Dict[str, Any]:
         """
         闭环：precheck → action_fn → screenshot_after_fn → postcheck → (失败)retry → recovery。
         返回 {ok, step_id, intent, path, attempts, precheck, postcheck, recovery}
@@ -241,7 +313,13 @@ class StepVerifier:
                     trace["recovery"] = "action_error: " + str(e)[:120]
                     break
                 after_path = screenshot_after_fn() if screenshot_after_fn else ""
-                last_post = self.postcheck(expected_spec, screenshot_before, after_path or "")
+                # structural=True 走元素级 diff（最强），否则走整图指纹（快）
+                if structural:
+                    last_post = self.postcheck_structural(
+                        expected_spec, screenshot_before, after_path or "")
+                else:
+                    last_post = self.postcheck(
+                        expected_spec, screenshot_before, after_path or "")
                 trace["postcheck"] = last_post
                 if last_post.get("ok"):
                     trace.update(ok=True, path="verified",
@@ -357,6 +435,28 @@ def _selftest():
         skip_precheck=True,
     )
     checks.append(("run_step verified via retry", r["ok"] is True and r["path"] == "verified"))
+
+    # 7) 结构化模式：any_change 命中（真实元素级 diff，必须用有结构的图）
+    cur2 = {"path": str(p_before)}
+    struct_a = tmp / "struct_a.png"
+    struct_b = tmp / "struct_b.png"
+    im_a = Image.new("RGB", (300, 200), "white")
+    ImageDraw.Draw(im_a).rectangle([50, 50, 150, 90], fill="red")
+    im_a.save(struct_a)
+    im_b = Image.new("RGB", (300, 200), "white")
+    ImageDraw.Draw(im_b).rectangle([180, 110, 260, 160], fill="green")
+    im_b.save(struct_b)
+    def action3():
+        cur2["path"] = str(struct_b)
+        called["n"] += 1
+    r = v.run_step(
+        "s3", "测试-结构化diff验证",
+        target_spec={}, expected_spec={"any_change": True},
+        action_fn=action3, screenshot_before=str(struct_a),
+        screenshot_after_fn=lambda: cur2["path"],
+        skip_precheck=True, structural=True,
+    )
+    checks.append(("run_step structural diff", r.get("postcheck", {}).get("mode") == "structural" and r["ok"] is True))
 
     # 6) trace 落盘读回
     tr = v.trace()

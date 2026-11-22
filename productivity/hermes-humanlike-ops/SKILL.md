@@ -61,8 +61,15 @@ triggers:
 - `postcheck(expected_spec, before, after)` — 动作后强制重抓，验证期望状态：`text_appears` / `text_gone`（OCR）+ `fp_changed`（整图指纹）。OCR 读不到不误判（标记 inconclusive），由 fp 兜底。
 - `run_step(step_id, intent, target_spec, expected_spec, action_fn, screenshot_before, screenshot_after_fn)` — 完整闭环：前校验失败则**中止不执行动作**；动作后验证失败自动重试一次，仍失败 → escalate_to_human。
 - trace 落盘 `~/.hermes/step_trace.jsonl`（buffer 批量写，防 fd 泄漏），可审计每一步。
-- 自检：`python3 ~/.hermes/scripts/step_verifier.py selftest`（6/6，纯本地不依赖 OCR/屏幕）。
+- 自检：`python3 ~/.hermes/scripts/step_verifier.py selftest`（7/7，纯本地不依赖 OCR/屏幕）。
 - 铁律：**任何状态改变的操作（提交/支付/删除/转发开关）都必须过 run_step**，不能只 find_element 后直接点——这是「模型对了但点错了」的解药。
+
+#### 最强模式：结构化元素级 diff（UIAnchor 式，2026-11-22）
+- `run_step(..., structural=True)`（默认）：事后校验走 `screen_parser.py`，把前后两屏解析成结构化 UI 元素清单（Vision OCR 文字层 + OpenCV 轮廓结构层），做**元素级 diff**，精确回答「哪个按钮消失/哪个文字出现/哪个框变了」——比整图 md5 强一个量级。
+- expected_spec 支持：`any_change` / `added_min` / `removed_min` / `changed_min` / `text_appears` / `text_gone`；`fp_changed` 兼容旧接口（整图兜底）。
+- `screen_parser.py`：`parse_screen(img)` + `diff_screens(a,b)` → `{added,removed,changed,stable,focus_regions,summary}`。三层：L-A OCR、L-B 轮廓、L-C 对变化区域 crop+放大复核（预留 inspect_fn，LBS/FocusUI 主动观察）。
+- 自检：`python3 ~/.hermes/scripts/screen_parser.py selftest`（6/6）。真实两屏 diff 实测通过。
+- 降级链：screen_parser 不可用 / diff 失败 / 异常 → 自动降级到普通 postcheck（整图指纹），绝不影响闭环。
 
 ## 真人化三支柱
 
