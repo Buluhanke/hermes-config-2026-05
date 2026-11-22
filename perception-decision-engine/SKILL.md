@@ -288,6 +288,21 @@ print(json.dumps(de.funnel_stats(days=7), indent=2))
 3. **再下阶段**: 接入 UI-TARS 云端 (按需), 验证 miss 场景下 VLM 能否真正解决
 4. **未来**: 本地 7B+ M4 优化版, 内存压力可承受时再考虑本地化 L3
 
+## 2026-11 全网研究升级方向（备查，未全落地）
+
+调研 2026-11-22。**核心：漏斗方向被研究证实正确**——ComponentBench(COLM 2026) 同一模型只改观测/动作空间成功率差 30%+（GPT-5 mini AX树 83.1%→纯 pixel 48.9%）；Read More Think More(2026-04) 强模型该给 HTML、弱模型该给 a11y（gpt-5.1 a11y 55.8%→HTML 73.3%，但 gpt-oss-20b 反而 -18.8%）。
+
+能补短板的 5 个方向（按 ROI）：
+1. **per-step 验证闭环（最该抄）**：UIAnchor(arXiv 2611.20753) 用 SAM2 分割+OCR 做高召回元素清单（90.57% vs 通用 VLM 16.5%），meta-controller 做 pre-action 校验+post-action 结果感知+状态跟踪，L4 任务 +31.5%、~2s/步接近真人。V-Droid(MobiCom 2026) 同派：LLM 当 verifier 不当 generator，59.5% AndroidWorld、4.3s/步（快 6.1×）。→ 现有 visual_verifier.py 只做单点验证，缺「每步强制重抓+目标校验」状态机。
+2. **L2 密集解析器**：ScreenVLM/ScreenParse(ICML 2026, 316M, 771K屏/21M元素) PageIoU 0.592 vs 大模型 0.294，Mac 跑得动；Screen2UI(2026-07, 端侧 10M, 600ms/屏) 适合手机。
+3. **网页 DOM↔像素对齐**：P2A/Probe to Act(EMNLP 2026) 主动把 DOM handle 渲染回像素验证，VisualWebArena Gemini-3-Pro 54.1→61.2%；WebFovea 专治「模型对了但点错了」。
+4. **观测历史 diff 化**：diff-based representation 省 token 且提分；Browser-Use(工具丰富+DOM) 比 AX-tree 还高 4-14pp。
+5. **主动视觉（真人视觉的研究定义）**：LBS/Look Beyond Screens(2026-10) 用 GUI grounding 训练「看哪里/看多少/何时再看」，可迁移非 GUI；FocusUI(CVPR 2026) 只留 30% 视觉 token 性能仅降 3.2%、1.44× 加速。
+
+诚实边界：VenusBench-Mobile 最强 Gemini-3-Pro 真实手机任务仅 36.9%，环境变化下近零；失败主因是 perception+memory 而非执行。「完全跟真人一样」研究界也没做到。
+
+网页读取 token 实测（RenderScreenshot 2026-10，26页中位）：raw HTML 97,744 / a11y 8,148 / 可见文本 2,066 / 单屏截图 1,334（仅覆盖一屏，中位页高 6,525px）。
+
 ## 相关文件
 
 - **架构决策依据 + UI-TARS 硬件门槛 + 不做的方案对比**: `references/funnel-architecture-decision.md`

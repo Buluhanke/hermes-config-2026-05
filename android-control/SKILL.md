@@ -1,7 +1,14 @@
 ---
 name: android-control
-description: Android投屏与控制 — scrcpy/adb有线无线 + FIRERPA lamda远程 + 小米平板MRX-W29。触发：android、手机控制、scrcpy、adb、MIUI、远程控制手机。
-tags: [android, scrcpy, adb, miui, remote-control, lamda]
+description: 手机控制投屏装App清存储 scrcpy/adb/lamda。Use when 控制安卓手机或清理手机
+version: 1.1.0
+author: Hermes Agent
+license: MIT
+tags: [android, scrcpy, adb, miui, remote-control, lamda, phone-maintenance]
+metadata:
+  hermes:
+    tags: [android, adb, scrcpy, phone-maintenance]
+    related_skills: [hermes-humanlike-ops]
 required_commands: [adb, scrcpy]
 setup_status: user-required
 triggers:
@@ -11,11 +18,18 @@ triggers:
   - adb
   - MIUI
   - 远程控制手机
+  - 刷课时
+  - 答题
+  - 自动化手机App
 ---
 
 # Android Control — Mac 控制 Android 设备
 
 Mac mini M4 (macOS 26.5) 上通过 scrcpy 投屏控制 Android，支持 USB 有线、无线调试、FIRERPA lamda 远程控制两种方案。覆盖小米手机 MI 8 和小米平板 MRX-W29。
+
+## When to Use
+
+控制/投屏安卓手机、开关无线调试、清理手机存储、侧载 App、装官方 APK、远程控制手机。
 
 ---
 
@@ -237,6 +251,22 @@ device.screenshot()               # 截图
 
 ---
 
+## 设备维护（存储清理 / 装 App）
+
+清理和装 App 的完整流程、可删与绝不能删的清单、APK 校验、**升级不丢配置（包名变更判断、adb backup 盲区、用 dex 扫类名定位隐藏迁移入口、离线导出/导入实测流程）**见 `references/device-maintenance.md`。
+铁律：清理前先分类并向用户确认范围；账号数据、刷机备份、lamda 运行时一律不动。
+升级铁律：包名或大版本变了，**不要**直接搬数据目录或改包名 restore，先扫 dex 找 App 自带的迁移 Activity。
+
+## 熄屏 / 锁屏下操作
+
+用户锁屏后 adb 操作不中断；点亮、判定锁屏态、调 PIN 盘解锁的完整命令见 `references/headless-operation.md`。
+铁律：PIN 只在会话内存用，不落盘。
+
+## App 界面自动化（刷课时 / 答题 / 填表）
+
+看页面 → dump 控件拿 bounds → `input tap` 的固定循环、引导页翻页、登录墙处理、输入框与重试次数陷阱见 `references/app-ui-automation.md`。
+铁律：不主动索要密码；用户主动给出自己设备的凭据并要求代填时照做，密码值不落盘、不复述。
+
 ## 坑点汇总
 
 ### 1. ~/scrcpy-phone 选1报 "Could not find ADB device 192.168.8.204:5555"
@@ -326,9 +356,11 @@ adb -s 192.168.8.248:5555 shell echo "wireless OK"
 
 **之后 USB 线可拔掉**，无线连接持续有效。设备重启后需重新走 Step 1-3。
 
-### 10. 设备重启后无线调试失效
+### 10. 设备重启后先查连接，不要假设无线失效
 
-无 Root 时 `adb tcpip 5555` 在锁屏待机/休眠时不丢，只有关机重启才失效。日常使用只需每次重启后 USB 开一次。
+重启后**先** `adb devices -l` 看无线是否还在，再决定要不要 USB：设置过 `persist.adb.tcp.port` 的设备重启后无线会自己回来，没设置的才需要 USB 重开。重启后立刻连也可能短暂未就绪，隔几秒重查一次。
+
+**重启后第一次访问内部存储前必须解锁屏幕**：未解锁时 `/storage/emulated/0` 写文件报 `Required key not available`（FBE 密钥未加载），`/sdcard` 的符号链接链也可能暂时指向不存在的目标。先按 `references/headless-operation.md` 用 PIN 解锁，再 `cp`/`mkdir`。这条不是 adb 断连，命令能跑但文件操作失败，容易误判成 root 或目录问题。
 
 ### 11. 排查平板无线调试是否开启
 
@@ -336,6 +368,20 @@ adb -s 192.168.8.248:5555 shell echo "wireless OK"
 - 平板可能切换了 IP → USB 还连着时用 `adb shell ip route` 直接读当前 IP（输出中 `src <IP>` 即设备地址），免翻手机设置；USB 已拔则去设置 → 关于手机 → 状态信息 → IP 地址
 - 无线调试端口可能变了 → 去设置 → 开发者选项 → 无线调试查看当前端口
 - 平板和 Mac 不在同一网段 → 确认都在 192.168.8.x
+
+### 12. Hermes 终端里 adb 不在 PATH
+Hermes 的 shell 找不到 `adb`，但符号链接 `~/.local/bin/adb` 已存在 → 所有 adb 命令用全路径 `/Users/aimac/.local/bin/adb`，或在命令前 `export PATH="/Users/aimac/.local/bin:$PATH"`。scrcpy 自己硬编码该路径（见坑点2），不受影响。
+
+### 13. 清理把账号或刷机备份删掉
+按 `references/device-maintenance.md` 的三类清单执行。聊天软件的媒体缓存可再生可删，但账号目录、`MicroMsg`、刷机镜像、`/data/local/tmp/server` 删了会导致重新登录或设备变砖。
+
+### 14. `magisk --stop` 会摧毁 root，直到重启
+`magisk --stop` 不是"重启守护进程"——它移除**所有** Magisk 更改：`su` 二进制消失、magiskd 进程消失、magisk 挂载消失，之后 `su` 全路径都报 `inaccessible or not found`，只能重启设备让 init 重新注入才能恢复。
+想让 DenyList 或新配置生效时，正确做法是 `am force-stop <pkg>` 后重新拉起 App，或直接重启设备；**绝不在没有明确目的时执行 `magisk --stop`**，尤其不要在一条组合命令里顺手带上它——它会静默生效，而同一行后面的 `su` 调用才报错，容易被误判成"命令没生效"。
+
+### 15. 根检测 App 闪退 ≠ 包坏了
+银行/政务 App 在 root 设备上由加固库在 `JNI_OnLoad` 主动 `abort`。诊断顺序与 Zygisk DenyList 修复步骤见 `references/device-maintenance.md` 的"Root 设备上的 App 闪退"。
+**不要**因为日志里出现 `ClassNotFoundException` 或 ABI 字样就去换 arm64 包——官方各渠道 MD5 相同时根本没有第二个包。
 
 ---
 

@@ -32,9 +32,10 @@ python3 ~/.hermes/scripts/frontier_sources.py --days 2
 
 三个源（2026-11-22 实测可用）：
 - **arXiv API**（https 端点，双端点重试）：cs.AI/cs.CL/cs.LG 最近论文，命中 agent/memory/harness/self-improv 等关键词高亮
-- **Papers with Code**（paperswithcode.co/api/v1）：最新论文+代码源，替代本机不通的 Hugging Face trending
+- **Papers with Code**（paperswithcode.co/api/v1）：最新论文+代码源
 - **Awesome-AI4AI**（走 `gh api`）：每周更新的 1148 篇策划论文+高引榜单，抓最新条目和高引行
-- Hugging Face trending：本机 SSL 不通，已放弃，不要用
+
+Hugging Face `daily_papers` 若直连报 SSL 握手失败/EOF，直接跳过用它——Papers with Code 已覆盖同类论文+代码信息，不必为它重试。网络恢复后可以再加回来作为第四源。
 
 脚本零依赖（stdlib + gh CLI），输出精简 markdown；加 `--json` 出结构化数据，`--source arxiv|pwc|ai4ai` 单拉。
 从三源里挑有数字/框架名/方法的条目，按下方标准写 fact_store。
