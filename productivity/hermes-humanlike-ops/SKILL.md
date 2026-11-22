@@ -59,9 +59,9 @@ triggers:
 找元素只解决「点哪」，不保证「点到了、生效了」。`step_verifier.py` 补上动作后的结果感知：
 - `precheck(target_spec, screenshot)` — 动作前校验目标还在、还是那个东西（走 4 层漏斗）。
 - `postcheck(expected_spec, before, after)` — 动作后强制重抓，验证期望状态：`text_appears` / `text_gone`（OCR）+ `fp_changed`（整图指纹）。OCR 读不到不误判（标记 inconclusive），由 fp 兜底。
-- `run_step(step_id, intent, target_spec, expected_spec, action_fn, screenshot_before, screenshot_after_fn)` — 完整闭环：前校验失败则**中止不执行动作**；动作后验证失败自动重试一次，仍失败 → escalate_to_human。
-- trace 落盘 `~/.hermes/step_trace.jsonl`（buffer 批量写，防 fd 泄漏），可审计每一步。
-- 自检：`python3 ~/.hermes/scripts/step_verifier.py selftest`（7/7，纯本地不依赖 OCR/屏幕）。
+- `run_step(step_id, intent, target_spec, expected_spec, action_fn, screenshot_before, screenshot_after_fn, guard_spec=..., verify_web_fn=...)` — 完整闭环：前校验失败则**中止不执行动作**；动作后验证失败自动重试一次，仍失败 → escalate_to_human。
+- trace 落盘 `~/.hermes/step_trace.jsonl`（buffer 批量写，防 fd 泄漏），可审计每一步；`evidence` 字段存 focus_regions / inspected / web 结构化证据。
+- 自检：`python3 ~/.hermes/scripts/step_verifier.py selftest`（**12/12**，纯本地不依赖 OCR/屏幕）。
 - 铁律：**任何状态改变的操作（提交/支付/删除/转发开关）都必须过 run_step**，不能只 find_element 后直接点——这是「模型对了但点错了」的解药。
 
 #### 最强模式：结构化元素级 diff（UIAnchor 式，2026-11-22）
@@ -71,6 +71,16 @@ triggers:
 - **OCR 底层修复（2026-11-22）**：`visual_verifier.py` 生成的 Swift 脚本原来写 `r?.results`（macOS 27 SDK 里 `r` 非 optional）→ 编译失败 → OCR 一直静默返回空，所有「允许空结果」的测试都没抓到。已改为 `r.results`，实测大字/小字(12px)/放大3-6x 全部识别成功。⚠️ 改 Swift 模板后必须删 `_vision_ocr_bbox.swift` 让 `_ensure_swift()` 重新生成。
 - 自检：`python3 ~/.hermes/scripts/screen_parser.py selftest`（6/6）。真实两屏 diff 实测通过。
 - 降级链：screen_parser 不可用 / diff 失败 / 异常 → 自动降级到普通 postcheck（整图指纹），绝不影响闭环。
+
+#### v2 三机制（2026-11-22 第二轮全网调研落地，零 LLM 依赖）
+跨过「屏幕变了就算成功」的层次，验证**动作→结果的转移本身**：
+
+1. **陈旧目标拦截（HCU, arXiv 2610.41432）** — `precheck(..., guard_spec={...})` / `run_step(..., guard_spec={...})`。支持 `title` / `box=[x,y,w,h]` / `min_iou`(默认0.45) / `role`。找到元素后二次核验身份：标题变了 / IoU 过低 / role 变了 → `stale_target` 直接拒绝，**绝不找相似元素凑合**。HCU 论文用 action guard 防「同名元素漂移、跨通道陈旧引用」，OSWorld 2.0 最高分。危险操作必须传 guard_spec。
+2. **异常转移检测（LGWM, arXiv 2610.11942）** — `expected_spec["unexpected_appears"] = ["验证码","登录","风控"]`。261M world model 用「预测表示 vs 实际表示」残差判断转移是否异常：0.987 AUC / 17ms，比生成式世界模型快三个数量级。本地近似：出现了不该出现的信号即否决成功，区分「变了」与「变得对」。结构化模式连 `inspected` 放大 OCR 文本一起查。典型：点提交后冒出 captcha → 动作被拦截，不是 verified。
+3. **结构化 web 证据（Tsaagan / structural verification）** — `run_step(..., verify_web_fn=lambda: {...})`。返回 `{url_delta, console_errors, network_failures}`；后两者非空 → 本步判失败并写进 `trace["evidence"]["web"]`。对应 Tsaagan 的 verify block（URL delta / expected text / console errors / failed requests）与 HCU 的 AX diff。网页提交类操作必传。
+
+⚠️ 铁律补充：`unexpected_appears` 只做「禁止信号 veto」，不要用它代替 `text_appears` 做正向确认；OCR 读不到时标记 inconclusive，不硬判失败。
+端到端模拟 4/4：正常成功 / 陈旧目标零执行 / 异常转移上报 / web 证据否决，脚本 `~/.hermes/cache/scratch/v2_sim.py`（临时目录，必要时重建）。
 
 ## 真人化三支柱
 

@@ -75,6 +75,22 @@ def _text_hit(texts: List[str], needle: str) -> bool:
     return any(n in t.lower() for t in texts if t)
 
 
+def _box_iou(a, b) -> float:
+    """两个 [x, y, w, h] 框的交并比；任一非法返回 0。"""
+    try:
+        ax, ay, aw, ah = [float(v) for v in a]
+        bx, by, bw, bh = [float(v) for v in b]
+        if aw <= 0 or ah <= 0 or bw <= 0 or bh <= 0:
+            return 0.0
+        ix = max(0.0, min(ax + aw, bx + bw) - max(ax, bx))
+        iy = max(0.0, min(ay + ah, by + bh) - max(ay, by))
+        inter = ix * iy
+        union = aw * ah + bw * bh - inter
+        return inter / union if union > 0 else 0.0
+    except Exception:
+        return 0.0
+
+
 class StepVerifier:
     """per-step 事前校验 + 事后结果感知 + 状态追踪 + 定向恢复。"""
 
@@ -85,11 +101,14 @@ class StepVerifier:
     # ---------- 1. 事前校验 ----------
     def precheck(self, target_spec: Dict[str, Any],
                  screenshot_path: str = "",
-                 ax_elements: Optional[List[Dict]] = None) -> Dict[str, Any]:
+                 ax_elements: Optional[List[Dict]] = None,
+                 guard_spec: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
         动作前：目标元素当前是否还在预期位置、还是那个东西。
-        走 4 层漏斗找元素；找到即 ok（L0 命中自带 region_fp 一致性校验）。
-        返回 {ok, reason, element, path, latency_ms}
+        走 4 层漏斗找元素；找到后若给 guard_spec 再做一次陈旧目标核验
+        （HCU 的 action guard：身份不符直接拒绝，绝不"找相似元素"凑合）。
+        guard_spec 支持：title / box=[x,y,w,h] / min_iou=0.45 / role
+        返回 {ok, reason, element, path, latency_ms, guard_violations}
         """
         t0 = time.time()
         result: Dict[str, Any] = {
@@ -126,6 +145,29 @@ class StepVerifier:
                         )
                     except Exception:
                         pass
+                # HCU 式 action guard：重新核验目标身份，失效直接拒绝（绝不找相似元素凑合）
+                violations: List[str] = []
+                if guard_spec:
+                    want_title = guard_spec.get("title")
+                    if want_title:
+                        labels = [str(v) for k, v in el.items()
+                                  if k in ("title", "label", "text", "name") and v]
+                        if labels and not _text_hit(labels, want_title):
+                            violations.append("identity_changed")
+                    want_box = guard_spec.get("box")
+                    if want_box and all(k in el for k in ("x", "y", "w", "h")):
+                        iou = _box_iou(want_box, [el["x"], el["y"], el["w"], el["h"]])
+                        result["guard_iou"] = round(iou, 3)
+                        if iou < float(guard_spec.get("min_iou", 0.45)):
+                            violations.append("moved")
+                    want_role = guard_spec.get("role")
+                    if want_role and el.get("role") and \
+                            str(el["role"]).lower() != str(want_role).lower():
+                        violations.append("role_changed")
+                if violations:
+                    result["ok"] = False
+                    result["reason"] = "stale_target:" + ",".join(violations)
+                    result["guard_violations"] = violations
             else:
                 result["reason"] = "target_not_found"
             self._log({"event": "precheck", "path": result["path"],
@@ -184,6 +226,19 @@ class StepVerifier:
                     reasons.append("text_not_gone")
             else:
                 checks["text_gone"] = {"want": wants, "status": "inconclusive_no_ocr"}
+        # LGWM 式异常转移检测：变化本身不算成功，冒出禁止信号即判可疑。
+        # 例：点"提交订单"后出现"验证码/登录/风控"→ 动作被拦截，不能算 verified。
+        if "unexpected_appears" in expected_spec:
+            bads = expected_spec["unexpected_appears"] or []
+            hits = [b for b in bads if _text_hit(texts_after, b)]
+            if ocr_available or not bads:
+                checks["unexpected_appears"] = {"blocked": bads, "hits": hits,
+                                                "ok": not hits}
+                if hits:
+                    reasons.append("unexpected_appeared")
+            else:
+                checks["unexpected_appears"] = {"blocked": bads,
+                                                "status": "inconclusive_no_ocr"}
 
         # 综合：所有明确判定为 False 的 check 都算失败；inconclusive 不阻塞
         failed = [k for k, v in checks.items() if v.get("ok") is False]
@@ -248,11 +303,22 @@ class StepVerifier:
                 wants = expected_spec["text_gone"] or []
                 persisted = [w for w in wants if _text_hit(labels_after, w) and _text_hit(labels_before, w)]
                 checks["text_gone"] = {"want": wants, "still_present": persisted, "ok": not persisted}
+            if "unexpected_appears" in expected_spec:
+                bads = expected_spec["unexpected_appears"] or []
+                evidence_labels = list(labels_after)
+                for ins in (d.get("inspected") or []):
+                    if isinstance(ins, dict) and ins.get("text"):
+                        evidence_labels.append(str(ins["text"]))
+                hits = [b for b in bads if _text_hit(evidence_labels, b)]
+                checks["unexpected_appears"] = {"blocked": bads, "hits": hits,
+                                                "ok": not hits}
+                if hits:
+                    reasons.append("unexpected_appeared")
             failed = [k for k, v in checks.items() if v.get("ok") is False]
             ok = not failed and bool(checks)
             result = {
                 "ok": ok,
-                "reason": "structural_ok" if ok else "structural_mismatch:" + ",".join(failed),
+                "reason": "structural_ok" if ok else "structural_mismatch:" + ",".join(failed + reasons),
                 "mode": "structural", "diff_summary": s,
                 "focus_regions": d.get("focus_regions", []),
                 "inspected": d.get("inspected", []),
@@ -276,24 +342,32 @@ class StepVerifier:
                  ax_elements: Optional[List[Dict]] = None,
                  max_retries: int = 1,
                  skip_precheck: bool = False,
-                 structural: bool = True) -> Dict[str, Any]:
+                 structural: bool = True,
+                 guard_spec: Optional[Dict[str, Any]] = None,
+                 verify_web_fn: Optional[Callable[[], Dict[str, Any]]] = None) -> Dict[str, Any]:
         """
-        闭环：precheck → action_fn → screenshot_after_fn → postcheck → (失败)retry → recovery。
-        返回 {ok, step_id, intent, path, attempts, precheck, postcheck, recovery}
+        闭环：precheck → (guard) → action_fn → screenshot_after_fn → postcheck
+              → (web evidence) → (失败)retry → recovery。
+        guard_spec: HCU 式陈旧目标拦截，传给 precheck。
+        verify_web_fn: Tsaagan 式结构化证据块，返回 {url_delta, console_errors,
+                       network_failures}；后两者非空即判本步失败。
+        返回 {ok, step_id, intent, path, attempts, precheck, postcheck, evidence, recovery}
         """
         t0 = time.time()
         trace: Dict[str, Any] = {
             "step_id": step_id, "intent": intent, "ok": False,
             "path": "none", "attempts": 0, "precheck": None,
             "postcheck": None, "recovery": "", "latency_ms": 0,
+            "evidence": {"focus_regions": [], "inspected": [], "web": None},
         }
         try:
-            # precheck
+            # precheck（含 HCU 式陈旧目标 guard）
             if skip_precheck:
                 pre = {"ok": True, "reason": "skipped", "path": "skip",
                        "element": None, "latency_ms": 0}
             else:
-                pre = self.precheck(target_spec, screenshot_before, ax_elements)
+                pre = self.precheck(target_spec, screenshot_before, ax_elements,
+                                    guard_spec=guard_spec)
             trace["precheck"] = pre
             if not pre.get("ok"):
                 trace.update(path="precheck_failed", recovery="aborted_before_action",
@@ -322,6 +396,27 @@ class StepVerifier:
                     last_post = self.postcheck(
                         expected_spec, screenshot_before, after_path or "")
                 trace["postcheck"] = last_post
+                trace["evidence"]["focus_regions"] = last_post.get("focus_regions", [])
+                trace["evidence"]["inspected"] = last_post.get("inspected", [])
+                # Tsaagan 式结构化证据：console 错误 / 失败网络请求直接否决成功
+                if verify_web_fn:
+                    try:
+                        web = verify_web_fn() or {}
+                    except Exception as e:
+                        web = {"error": str(e)[:120]}
+                    trace["evidence"]["web"] = web
+                    wchecks: Dict[str, Any] = {}
+                    for key in ("console_errors", "network_failures"):
+                        if key in web:
+                            items = web.get(key) or []
+                            wchecks[key] = {"count": len(items), "ok": not items}
+                    if wchecks:
+                        last_post.setdefault("checks", {}).update(wchecks)
+                        bad = [k for k, v in wchecks.items() if v.get("ok") is False]
+                        if bad:
+                            last_post["ok"] = False
+                            last_post["reason"] = \
+                                str(last_post.get("reason", "")) + ",web_evidence:" + ",".join(bad)
                 if last_post.get("ok"):
                     trace.update(ok=True, path="verified",
                                  recovery="none" if attempts == 1 else "recovered_by_retry")
@@ -459,9 +554,68 @@ def _selftest():
     )
     checks.append(("run_step structural diff", r.get("postcheck", {}).get("mode") == "structural" and r["ok"] is True))
 
+    # 8) HCU guard：陈旧目标直接拦截（mock find_element，纯本地）
+    orig_find = decision_engine.find_element if decision_engine else None
+    if decision_engine:
+        decision_engine.find_element = lambda **kw: {
+            "found": True, "path": "l0",
+            "element": {"title": "Submit", "role": "button",
+                        "x": 10, "y": 20, "w": 100, "h": 40}}
+    try:
+        g = v.precheck({"title": "Submit"},
+                       guard_spec={"title": "Submit", "box": [10, 20, 100, 40]})
+        checks.append(("guard accepts same target", g["ok"] is True))
+        g2 = v.precheck({"title": "Submit"},
+                        guard_spec={"title": "Cancel", "box": [10, 20, 100, 40]})
+        checks.append(("guard rejects changed identity",
+                       g2["ok"] is False and
+                       "identity_changed" in (g2.get("guard_violations") or [])))
+        g3 = v.precheck({"title": "Submit"},
+                        guard_spec={"title": "Submit", "box": [500, 500, 100, 40]})
+        checks.append(("guard rejects moved target",
+                       g3["ok"] is False and
+                       "moved" in (g3.get("guard_violations") or [])))
+    finally:
+        if decision_engine and orig_find:
+            decision_engine.find_element = orig_find
+
+    # 9) LGWM 式异常转移：禁止信号出现即否决（mock OCR）
+    orig_ocr = visual_verifier._ocr
+    visual_verifier._ocr = lambda p: [{"text": "Success"}, {"text": "captcha blocked"}]
+    try:
+        r = v.postcheck({"text_appears": ["Success"],
+                         "unexpected_appears": ["captcha"]},
+                        str(p_before), str(p_after))
+        checks.append(("unexpected signal vetoes success",
+                       r["ok"] is False and
+                       r["checks"]["unexpected_appears"]["ok"] is False))
+    finally:
+        visual_verifier._ocr = orig_ocr
+
+    # 10) Tsaagan 式 web 证据：失败网络请求否决成功 + trace 留证
+    def bad_web_fn():
+        return {"url_delta": "/checkout -> /login", "console_errors": [],
+                "network_failures": [{"url": "POST /pay", "status": 500}]}
+    cur3 = {"path": str(p_before)}
+    def action4():
+        newp = tmp / f"web_{called['n']}.png"
+        Image.new("RGB", (200, 80), "black").save(newp)
+        cur3["path"] = str(newp)
+        called["n"] += 1
+    r = v.run_step(
+        "s4", "测试-web证据否决",
+        target_spec={}, expected_spec={"fp_changed": True},
+        action_fn=action4, screenshot_before=str(p_before),
+        screenshot_after_fn=lambda: cur3["path"],
+        skip_precheck=True, verify_web_fn=bad_web_fn, max_retries=1,
+    )
+    checks.append(("web evidence vetoes + recorded",
+                   r["ok"] is False and
+                   bool((r.get("evidence", {}).get("web") or {}).get("network_failures"))))
+
     # 6) trace 落盘读回
     tr = v.trace()
-    checks.append(("trace persisted", len(tr) >= 5))
+    checks.append(("trace persisted", len(tr) >= 9))
 
     ok = sum(1 for _, p in checks if p)
     for name, passed in checks:

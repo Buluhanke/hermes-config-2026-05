@@ -299,7 +299,18 @@ print(json.dumps(de.funnel_stats(days=7), indent=2))
 4. **观测历史 diff 化**：diff-based representation 省 token 且提分；Browser-Use(工具丰富+DOM) 比 AX-tree 还高 4-14pp。
 5. **主动视觉（真人视觉的研究定义）**：LBS/Look Beyond Screens(2026-10) 用 GUI grounding 训练「看哪里/看多少/何时再看」，可迁移非 GUI；FocusUI(CVPR 2026) 只留 30% 视觉 token 性能仅降 3.2%、1.44× 加速。
 
-**已落地（2026-11-22）**：方向 1（per-step 验证）的「最强版」已实现 —— `screen_parser.py`（Vision OCR 文字层 + OpenCV 轮廓结构层 → 结构化元素清单 → 元素级 diff，即 ScreenParse/UIAnchor 的轻量本地版）+ `step_verifier.py`（postcheck_structural）。自检 7/7 + 6/6。详见 `hermes-humanlike-ops`。
+**已落地（2026-11-22）**：方向 1（per-step 验证）的「最强版」已实现 —— `screen_parser.py`（Vision OCR 文字层 + OpenCV 轮廓结构层 → 结构化元素清单 → 元素级 diff，即 ScreenParse/UIAnchor 的轻量本地版）+ `step_verifier.py`（postcheck_structural）。自检 12/12 + 8/8，端到端模拟 4/4。详见 `hermes-humanlike-ops`。
+
+### 第二轮调研（2026-11-22）：从「看屏幕」升级到「验转移」
+
+核心结论：**安全/正确性属于 transition（动作→结果），不属于 screen**。只看结果画面会被「复用合法界面」骗过。
+
+1. **世界模型当 verifier，不当模拟器**：LGWM(arXiv 2610.11942) 261M、decoder-free、在表示空间预测下一屏，残差向量比较 → 0.987 AUC / 17ms / 1.09GB，比生成式 GUI world model（gWorld/SAWM/Code2World 8B，113 秒或 1 秒级）快三个数量级；residual **direction** 区分 harmful vs benign 0.953 AUC（单纯 magnitude 只有 0.513）。→ 已本地近似为 `unexpected_appears` veto。
+2. **行动前 guard 比事后判断更值**：HCU(Hybrid Computer Use, 2610.41432) 统一 programmatic+AX+visual 三通道，AX target guard 执行前重解析目标、失效直接拒绝；GUI layout guard 比较窗口栈/焦点/布局，变了就阻断坐标输入；AX diff + batched wait step 把执行和验证合进一次调用。OSWorld 2.0 最高 Partial/Binary。ASIL(EMNLP 2026) 更极端：结构化 JSON 观测 + 语义动作，80+ 分且 <5 动作/任务，截图点击只有 6.6/26.6。→ 已落地 `guard_spec`。
+3. **反直觉：别迷信 world model 的预测保真度**：DAR(2610.24372) 证明 lookahead 增益来自 evaluator 而非预测本身；固定候选与预测，只改评价呈现方式增益就变。直接动作排序(DAR) 无预测反而 AndroidWorld +5.8~16.4pp，零样本迁移也更好。→ 投入应放 evaluator（我们的 postcheck），不是造屏幕预测器。
+4. **P2A 完整机制（我们只做了 Element Focus）**：4 个探针 = Element Focus / Region Focus / Visual Registration（canvas 幽灵元素给伪 ID）/ Memory Commit（把「价格已核对」绑到元素）。只保留 probed/acted/committed 元素的 evidence memory：1.2× context vs 全历史 3×，VisualWebArena Gemini-3-Pro 54.1→61.2%。
+5. **记忆与自进化（下一步，未落地）**：MementoGUI 事件门控工作记忆（ROI crop + 文本摘要）、TAM 用「已验证的任务进展」当状态（+17.6%，token -38.7%）、Solo(2609.34321) 无 ground truth、每次任务仅一次尝试也能靠 judge+proposer/verifier 自蒸馏涨 3~6pp。→ 可映射到 `step_trace.jsonl` → 经验沉淀，但当前 trace 量不足，先攒数据。
+6. **开源工具盘点（决定不自研重复造）**：`vercel-labs/agent-browser` 53.2k★（Rust CLI，snapshot→@e1→click→check，daemon+CDP）、`browser-use/browser-use` 121.7k★（REPL+raw CDP）、`TencentCloud/octop-browser`（直连 CDP、稳定 ref、Record & Replay）、`michaelolmos/tsaagan`（AX ref 自愈 + structural verify + 域名选择器记忆 + isTrusted 输入）、`lautrek/scout`（连已登录浏览器 + SoM + 人工接管 + state healer）。我们已有 CDP 直连 + 结构化闭环，装新工具只会碎片化；**抄设计，不换栈**。
 
 诚实边界：VenusBench-Mobile 最强 Gemini-3-Pro 真实手机任务仅 36.9%，环境变化下近零；失败主因是 perception+memory 而非执行。「完全跟真人一样」研究界也没做到。
 
