@@ -135,6 +135,7 @@ Layer 3: browser_exec
 - **不绑定任何模型是用户铁律**：cron 任务不 pin、config 不设 `fallback_model` / `fallback_providers` 锁定，给什么模型就用什么模型、跟随当前主模型。模型失效时手动切换，不做自动轮替，也不要自动恢复 fallback 链——旧版"fallback 为空就恢复三链"的自检已废弃，它会违背这条铁律。
 - 失效进化任务的正确修法是 `cronjob_manage(action='update', pinned=false)` 取消 pin + `hermes config unset fallback_model` 清隐藏绑定，而不是换一个模型 pin 上。**pin 免费模型必翻车**：免费额度到期就 404、地区受限就 403，cron 静默停摆且用户看不到 last_status。
 - 不要用直接编辑 config.yaml 的方式改配置（安全护栏会拒绝），用 `hermes config set/unset`；cron 上下文 fact_store 只读，决策写入本 skill 或报告。
+- **本机 git 必须走 `/usr/bin/git`**：PATH 里的 `/usr/local/bin/git` 是 x86 二进制，在 ARM Mac 上报 `Bad CPU type in executable`，所有 `git add/commit/status` 都会失败。技能大本营 `~/.hermes/skills` 的提交统一用绝对路径。
 - 验证进化任务是否真跑：`cronjob_manage(action='run')` 手动触发一次并读输出文件，别只看 `last_status`。
 - 给 `no_agent=true` 的 cron 写脚本时，stdout 会被原样投递为消息：凡输出 JSON 必须给**合法且完整**的精简摘要，明细另写报告文件。**严禁用 `json.dumps(payload)[:N]` 截断**——截断后的 JSON 在消费端 `json.loads` 直接失败，而这类错误只会在下一次手动触发时才暴露。脚本写完必须立刻手动跑一次 wrapper，确认 stdout 可被解析。
 
