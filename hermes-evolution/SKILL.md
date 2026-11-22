@@ -59,9 +59,9 @@ Layer 2: cua_browser
   → 精确绑定真实 Chrome 标签页
   → 需要授权一次（cua-driver browser-approve）
 
-Layer 3: browser_*
-  → Hermes 镜子 Chrome（备用）
-  → 动态页/登录态用 Layer 1+2
+Layer 3: browser_exec
+  → Hermes 唯一的浏览器自动化工具（旧 browser_* 工具集已移除，勿再引用）
+  → 需要真实登录态时用镜像 CDP Chrome；动态页仍优先 Layer 1+2
 
 截图策略：
 - 普通操作 → AX 树（极低 token）
@@ -110,22 +110,33 @@ Layer 3: browser_*
 
 **Benchmark 现状**（避免引用过时论文数）：OSWorld 2.0 v2.1 官方榜首 44.33% binary / 77.67% partial（论文时 20.6% 已过时）；OSWorld-Verified 榜首 90.19%、通用模型 claude-fable-5 85.96%（人类基线 ~72%）；WebArena-Pro（2611.17955，300 任务/20 站点/多模态音视频）最强 Codex+GPT-6.1-Sol 与 Claude Code+Opus-5.5 均 62.3%；WebArena 榜首 86.1%（Narada AI Code）、最佳开源 74.3%（DeepSeek v3.2）。
 
-## 2026-11-22 新知识增量（并行知识线，fact 1385–1396）
+## 2026-11-22 23:00 自学增量（cron 只读，固化于此）
 
-- **Hermes v0.23.0 Hearth（11-05，~1950 PR）**：Webapp + 单 gateway 统一会话、`/rewind`；**旧 `browser_*` 工具全删，浏览器自动化只剩 `browser_exec`**；内置技能 58→44、插件 600→1050；默认模型 GLM-5.3。→ 行动项：清理技能库里残留的 `browser_navigate`/`browser_click`/`browser_snapshot` 引用（本次已盘点，见下方迁移清单）。
-- **WebMCP 2026-11 格局（用户长期追踪项）**：Brave Leo 在 Nightly 1.102.2 默认开启（PR #40616 于 11-12 合并）；ChatGPT 桌面 8-25 起首个主流默认开启 site tools；WebKit 反对、Firefox 仍用旧 `navigator`。→ 仍未到替代 browser_exec/CDP 的切换点，继续跟踪。
-- **guard 机制得到实证**：MetaAct（2611.20655，github BaiCubed/MetaAct）把自进化编译成 GEAR 可执行动作 guard，ScienceWorld 违规 70%→0%、WebShop 40%→1%。印证本轮 `step_verifier.guard_spec` 方向正确。
-- **记忆要门控，不能全记**：ARISE（2611.23588）留出集准确率门控自进化记忆，SOP-Bench +10.9pp、τ²-bench +5.8pp，超 GEPA 4.5pp 且调用少 4.0%；Anchor（2611.10382）重放源决策筛选记忆，ALFWorld 96.27%（+19.9%）且少留 41% 记忆卡。→ 本轮补了 408 条关键词，下一步应给 fact_store 加写入门控而非无限累积。
-- **诚实边界**：UI-Venus-2（蚂蚁 11-13）WebVoyager 90.8/93.4，但 OSWorld 2.0 binary 仅 0.0%/2.8%——网页强 ≠ 长程桌面强。自进化技能泛化研究（2609.39148）：21 个训练提升技能仅 5 个完整迁移，LLM judge 一致率 86% 却难预测单次编辑。→ 印证"删单条 fact 复述垃圾"是对的：那种技能本就迁移不了。
-- 其余：Pro² Agent（MLE-Bench 24h 70.7%/48h 76.0%）、Mage-VL-Cowork 4B（OSWorld-Verified 66.0%）、TokenEconomizer（成本 -18.4~30.9%）、MemoWM（-53.9% 经历专属信息）、TT-MBRL（R2I 42→54.1 SOTA）。
+**写门验证（FGSE，2611.14326）**：把每条经验当结构化假设——precondition / behavior change / expected effect / verifier——先临时应用，再过 target-transfer、falsification、archived-regression 三类探针才提交进持久记忆；WebArena 39.8、AppWorld 78.8，falsification failure 5.0%、regression damage 1.3%、有害提交 3.6%。→ 给 fact_gate 写前 check 和 skill "patch 后先自测，失败丢弃" 提供了论文级背书；下一步可加"回归探针"（不仅看新收益，也确认旧能力没坏）。
 
-**旧 browser_* 引用迁移清单（2026-11-22 盘点，活跃技能）**：`research/grounded-citations`、`web-search-default`、`web/crawl4ai`、`3-statement-model`、`dcf-model`、`creative/sketch`、`software-development/dogfood`（表格仍是旧名）、`hermes-browser-local-login`、`humanization-engine`、`chrome-cdp-control`（部分为 fallback 语义，勿盲替）。统一改为 `browser_exec` 或 `mcp__chrome_devtools_mcp__*`（CDP），参见 `research/agent-landscape-2026` 已记录的破坏性变更。
+**评估可靠性才是瓶颈（Resolution Hypothesis，2611.23068）**：7 种进化方法、6 个模型、1000 万+ LLM calls——候选层"选择"区分有益/有害 artifact 的能力不比随机好，错误跨轮累积；方法层几个百分点的差距小于同方法两次独立运行的差异，很多排行榜名次靠运气。→ 进化报告只写可复现实测数字；skill 变体对比必须同条件多跑，别信单次分数；也印证"archive 对比升华"要配稳定 verifier 才有意义。
+
+**验证器共进化（Verify by Doing，2611.15276）**：Actor 与 Evaluator 双 harness 在单任务内共进化、不需要外部反馈；用工具检查 artifact 和环境状态产生证据，Evaluator 采纳与 Actor 保留分开决策。→ 对应"先验证再宣布完成"，且验证逻辑本身也要能被更新。
+
+**NorthCUA（2611.02102）**：开源 CUA 家族 Nano 9B / Mini 35B / Pro 397B（基座 Qwen3.5），Pro 在 OSWorld-Verified 88.64%、WebArena-Verified 73.89%，Mini 85.30% 超 Kimi-K3；Experience Flywheel 用可执行任务→已验证轨迹→递归自改进演化可复用 skill，Ultrafast 变体 2.3× 提速。→ "技能飞轮"路线拿到开源 SOTA 验证，方向与 L3/L4 一致。
+
+**WebMCP（用户长期追踪项，更新上一轮判断）**：origin trial 已从 Chrome 149–156 延长到 149–162（最晚 2027-03-30 结束），11-04 API owners 把 usage 上限 0.5% 放宽到 2%；11-14 实测 Browser Use 目录 60 个头部站点，开 flag 时 47 站注册 213 工具，stock Chrome 156 仅 13 站暴露工具（21.7%），ChatGPT/IKEA/Cloudflare/Vercel 等 34 站无 token 导致 `document.modelContext` 不存在；API 定稿在 `document.modelContext`，declarative 表单属性 2026-10-08 移出规范；Edge 158（11-19）跟进 OT，Firefox 中立、WebKit 反对。→ 站点覆盖仍极低，远未到替代 CDP/Browser Use 的时候，继续按周期跟踪。
+
+**Hermes 版本线补**：v0.23.0（11-05 "Hearth"，~1,950 PRs）新增 `hermes curator lock`（手工整理的 skill 可锁，任何工具含 `--yolo` 都改不动）、`hermes cron cancel` + per-job `--catch-up`、compaction 摘要 `UNVERIFIED:` 行、同一 cron 任务共享 prompt cache；v0.23.1（11-10，~618 PRs）。→ 用户自有且不该被 agent 改的 skill 可主动 lock；compaction 的 UNVERIFIED 标记对"不编造"有用；cron 缓存共享对每天多 job 的这台机器直接省 token。
+
+**Benchmark 补充**：OSWorld-Verified 另一来源榜（2026-11-08）Kimi K3 84.8%、Gemini 3.6 Flash 83%、MiMo-V2.6-Pro 82%，全部厂商自报、无独立复现；同一模型 step budget 从 9.1%→23.0%，引用分数必须带 step cap 和 release。
+
+## 版本迁移与技术增量（指针）
+
+- Hermes v0.23.0 起旧 `browser_*` 工具全删、只剩 `browser_exec`；盘点迁移清单与 WebMCP / UI-Venus / ARISE / Anchor / MetaAct 等 2026-11 研究结论见 `references/browser-agent-research-2026.md`。写自动化 skill 时勿再引用旧工具名。
+- 新工具可用性（browser-use / Camofox / cua-driver 等）与自改进框架细节见 `references/self-improvement-frameworks-2026.md` 和 `references/browser-agent-research-2026.md`，SKILL.md 不重复流水账。
 
 ## 每日进化前置自检
 - **不绑定任何模型是用户铁律**：cron 任务不 pin、config 不设 `fallback_model` / `fallback_providers` 锁定，给什么模型就用什么模型、跟随当前主模型。模型失效时手动切换，不做自动轮替，也不要自动恢复 fallback 链——旧版"fallback 为空就恢复三链"的自检已废弃，它会违背这条铁律。
 - 失效进化任务的正确修法是 `cronjob_manage(action='update', pinned=false)` 取消 pin + `hermes config unset fallback_model` 清隐藏绑定，而不是换一个模型 pin 上。**pin 免费模型必翻车**：免费额度到期就 404、地区受限就 403，cron 静默停摆且用户看不到 last_status。
 - 不要用直接编辑 config.yaml 的方式改配置（安全护栏会拒绝），用 `hermes config set/unset`；cron 上下文 fact_store 只读，决策写入本 skill 或报告。
 - 验证进化任务是否真跑：`cronjob_manage(action='run')` 手动触发一次并读输出文件，别只看 `last_status`。
+- 给 `no_agent=true` 的 cron 写脚本时，stdout 会被原样投递为消息：凡输出 JSON 必须给**合法且完整**的精简摘要，明细另写报告文件。**严禁用 `json.dumps(payload)[:N]` 截断**——截断后的 JSON 在消费端 `json.loads` 直接失败，而这类错误只会在下一次手动触发时才暴露。脚本写完必须立刻手动跑一次 wrapper，确认 stdout 可被解析。
 
 ## 调研驱动进化（用户说「找更强方案进化」时走这条）
 
@@ -147,15 +158,15 @@ Layer 3: browser_*
 1. 5-8 组全网搜索，覆盖最新研究 / SOTA benchmark / 开源工具 / 自改进机制；只取可验证数字（AUC、延迟、分数、版本、仓库名），不抄摘要。
 2. 写 fact_store 前先 `search`/`probe` 查重；`add` 时必带 `entities` + 3-8 个 `keywords`（含同义词/翻译），否则事实检索不到。
 3. 新知识要落到 skill：能改代码的改代码，不能改的写"第二轮调研"章节，标明已落地/未落地。
-4. 并行用 delegate_task 跑知识线，主线程同时做冗余线，最后合并验证。
+4. 并行用 delegate_task 跑知识线，主线程同时做冗余线，最后合并验证。**别用 fork 前的 stats 快照报新增 fact ID**——子 agent 仍在写入时快照是过期的，ID 段会报错；等 delegation 回报里的 `fact_ids` 数组为准，再写进 skill 和最终结论。
 
 ### 方向二：清除冗余（存量）—— 铁律是"先断根，再删除"
 1. **盘点**：先跑 `python3 <本 skill>/scripts/redundancy_audit.py` 一次拿全量数字（活跃技能数、结晶垃圾、完全重复组、极小/无描述文件、`without_keywords`、埋藏事实数），再决定是否动手；脚本不可用时用 `find ~/.hermes/skills -name SKILL.md` 兜底。
 2. **找源头**：`grep -rI 'Auto-crystallized from fact_store' ~/.hermes/scripts ~/.hermes/cron` → 定位生成器与调用它的 wrapper。**只删产物不断根，垃圾必然长回来**——结晶型技能会随每晚学习循环重新繁殖。
 3. **断根改造**：让生成器产物落到 `~/.hermes/knowledge/crystallized/*.md`（知识库），不再写 `skills/*/SKILL.md`；去掉破坏性 sentinel（v2 会把 `retrieval_count=-999` 永久废掉知识召回）；靠产物文件存在性去重。
-4. **恢复损失**：`UPDATE facts SET retrieval_count=1 WHERE retrieval_count=-999` 把被旧机制埋掉的事实恢复检索（本次恢复 44 条）。
+4. **恢复损失**：`UPDATE facts SET retrieval_count=1 WHERE retrieval_count=-999` 把被旧机制埋掉的事实恢复检索；也可直接跑 `python3 <本 skill>/scripts/fact_gate.py restore`。
 5. **删除**：`git rm` 而不是 `rm`（必须可回滚），只删明确垃圾（auto-crystallized 单条 fact 复述、字节级重复）；工具自身双目录（如 ui-ux-pro-max 的 `.claude/skills` 与 `cli/assets/skills`）**不是冗余**，删了会破坏工具。
-6. **补检索入口**：关键词存在 `facts.tags` 列的 `keywords: ` 前缀里，**没有独立的 keywords 列**（查 `keywords` 列会报 no such column）。无该前缀的事实检索不到：批量写 `keywords: k1, k2, ...` 到 tags，原 tags 挪到 `orig_tags:` 保留，`without_keywords` 必须归零。
+6. **补检索入口**：关键词存在 `facts.tags` 列的 `keywords: ` 前缀里，**没有独立的 keywords 列**（查 `keywords` 列会报 no such column）。`fact_store enrich` 只列出待补事实、不自动写入，批量补齐要么逐条 `update`、要么直接改 `facts.tags`（后者快，但必须把原 tags 挪到 `orig_tags:` 保留）。`without_keywords` 必须归零。
 7. **验证**：重跑生成器确认产物进知识库不进技能库；再跑一次必须 0 新建（幂等）；`git commit` + push。
 
 **完成判定（全部满足才算进化完）**：auto-crystallized 技能数=0；`without_keywords`=0；`retrieval_count=-999` 的埋藏事实数=0；生成器二次运行新建数=0；产物落在 knowledge/ 而非 skills/；`git status` 干净。
@@ -178,7 +189,7 @@ Layer 3: browser_*
 3. **周期调度**：cron `b5568e72bddf` = `fact-gate-weekly`，每周日 04:00（错开 03:00 净化），`no_agent=true` 纯脚本、不调用任何模型、deliver=local。用户铁律：不绑定任何模型 —— 门控天生不需要模型。
 4. **恢复被埋事实**：`python3 fact_gate.py restore` 把旧机制留下的 `retrieval_count=-999` 恢复为 1。
 
-**本次战果**：434 条事实 → KEEP 289 / WATCH 33 / 归档候选 112（96 条 arXiv 自动摘要 + 16 条测试/空泛记录），112 条已打标记、内容零改动；写前门控实测：有效事实 review、噪声 `测试` 与空泛标签均 reject 且命中 near_duplicate。
+**验收标准**：`audit` 报 KEEP/WATCH/ARCHIVE 三档，归档候选只含明确噪声（自动摘要、测试记录、空泛标签），打标记后 content 零改动；写前 `check` 对有效事实给 review/accept、对 `测试` 类噪声与空泛标签必须 reject 并命中 near_duplicate。具体条数现场查，不写死。
 
 ## 持续进化 Checklist
 

@@ -178,10 +178,11 @@ fact_store add:
 
 ## 进化经验（实战沉淀）
 
-### 配置持久化（fallback 链）
-- `~/.hermes/config.yaml` 会被上层进程周期性重写（实测一天内被重写清空 fallback）。每次夜间进化先跑 `hermes fallback list`：若显示 `No fallback providers configured`，用 `hermes config set fallback_providers '[{"provider":"gemini","model":"gemini-2.5-flash-lite"},{"provider":"deepseek","model":"deepseek-chat"},{"provider":"zai","model":"glm-4.5-flash"}]'` 恢复。直接编辑 config.yaml 会被安全护栏拒绝，必须用 `hermes config set`。
-- 恢复后必须 `hermes fallback check --live` 且 exit 0 才算落实；静态 check 只验凭据不验推理。免费层模型会过期限（beams 类曾 404），优先用真实 API key 的 gemini/deepseek/zai。
-- cron 只读上下文无法写 fact_store，进化决策改写入本 skill 或当次报告。
+### 模型配置：用户铁律 = 零绑定 / 零自动切换（2026-11-22 定稿，覆盖旧版 fallback 恢复逻辑）
+- 用户明确要求：不绑定任何模型、cron 不 pin 模型、不设 `fallback_model`、**不建 fallback_providers 自动切换链**、不跑 model_health 自动轮替守护脚本。原话「不要绑定任何模型，给什么模型就用什么模型」「模型失效时手动切换，不做自动绑定/自动切模型」。
+- 因此夜间进化**禁止**执行 `hermes fallback add/set` 恢复链；若 `hermes fallback list` 显示链非空（历史遗留违规配置），一律 `hermes fallback clear` 清掉并复验为空。模型失效时不自动兜底，只报告，由用户手动切换。
+- 不要再引用旧的「fallback 链持久化 / check --live 恢复」做法 —— 那条与用户铁律冲突，已废弃。
+- `fact_store` 在 cron 上下文只读（subagent/cron/flush 均拒绝写入）；进化决策写入本 skill 或当次报告即可，不要在 cron 里 attempt fact_store add。
 
 ### Hermes 更新
 - `hermes update` 可能耗时 >3 分钟（git pull + 依赖安装），前台会超时。**必须用 `background=true` + `notify_on_complete=true` 运行**。

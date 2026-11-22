@@ -73,6 +73,22 @@ Agent读取DOM（整洁）→ 规划点击位置 → 页面更新 → 点击到�
 
 ---
 
+## 2026-11 格局更新（过渡验证 / 能力边界）
+
+**WebMCP（用户长期追踪项）**：Brave Leo 在 Nightly 1.102.2 默认开启（PR #40616 合并）；ChatGPT 桌面起首个主流默认开启 site tools；WebKit 反对、Firefox 仍用旧 `navigator`。→ 站点覆盖与无头支持仍不足，**未到替代 browser_exec/CDP 的切换点**，继续跟踪。
+
+**网页强 ≠ 桌面长程强**：UI-Venus-2 WebVoyager 90.8/93.4，但 OSWorld 2.0 binary 仅 0.0%/2.8%。→ 网页导航分数不能外推到真实桌面操作；评测看 OSWorld 类长程任务而非 WebVoyager。
+
+**动作 guard 得到实证**：MetaAct 把自进化编译成可执行动作 guard，ScienceWorld 违规 70%→0%、WebShop 40%→1%。→ 印证执行前 guard（陈旧目标拦截）比事后判断更值。
+
+**记忆门控与筛选**：ARISE 留出集准确率门控 +10.9pp 且调用更少；Anchor 重放源决策筛选，+19.9% 且少留 41% 记忆卡。→ 记忆只记被决策真正用过的，别无限累积。
+
+**自进化技能泛化有限**：21 个训练提升技能仅 5 个完整迁移，LLM judge 一致率 86% 却难预测单次编辑。→ 单条事实复述型技能本就迁移不了，删它们不是损失。
+
+**Benchmark 现状**（避免引用过时论文数）：OSWorld 2.0 v2.1 官方榜首 44.33% binary / 77.67% partial；OSWorld-Verified 榜首 90.19%、通用模型 claude-fable-5 85.96%（人类基线 ~72%）；WebArena 榜首 86.1%、最佳开源 74.3%（DeepSeek v3.2）。
+
+---
+
 ## 2026-08-17 实测补充
 
 ### GitHub Top工具星标（生态影响力）
