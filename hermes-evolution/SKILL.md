@@ -162,6 +162,24 @@ Layer 3: browser_*
 
 ⚠️ 判断冗余时看"有没有可执行内容"：单条 fact 复述 = 垃圾（知识留在 fact_store 即可）；有步骤/脚本/触发器 = 真技能，保留。
 
+### 配套：fact_store 写入门控（2026-11-22）
+
+清除冗余之后必须给入口装门，否则噪声很快又累积回来。实现：`~/.hermes/scripts/fact_gate.py`（纯 stdlib，零 LLM）。
+
+1. **写前门控（每次 add 前必跑）**：`python3 fact_gate.py check --content "..." --category "..."` → `verdict=accept|review|reject`。
+   - 重复门（ARISE 2611.23588 的本地近似）：候选与**已被召回过**的高质量 fact 做中英 token Jaccard，≥0.78 直接 reject。
+   - 噪声门：`测试` / `[标签]+空泛句` / 裸论文标题 / arXiv 自动摘要，短且无可验证信号 → reject。
+   - 可验证信号加分：数字、百分比、路径、仓库名、版本号、模型名、named entity。
+   - `reject` 就不要写；`review` 要补数字/出处后再写。
+2. **留存审计（周期）**：`python3 fact_gate.py audit [--apply]`。Anchor（2611.10382）的本地近似：用 `retrieval_count` / `helpful_count` 判断记忆是否真被决策用过。三档 KEEP / WATCH / ARCHIVE_CANDIDATE。
+   - **铁律：`--apply` 只在 tags 追加 `gate:archive-candidate`，绝不删除、绝不改 content**，可回滚；幂等（第二次 0 新建）。
+   - 完整明细报告在 `~/.hermes/fact_gate_report.md`。
+   - 专门收窄过归档规则：无数字但有实质内容的框架名/基准名不能被误伤。
+3. **周期调度**：cron `b5568e72bddf` = `fact-gate-weekly`，每周日 04:00（错开 03:00 净化），`no_agent=true` 纯脚本、不调用任何模型、deliver=local。用户铁律：不绑定任何模型 —— 门控天生不需要模型。
+4. **恢复被埋事实**：`python3 fact_gate.py restore` 把旧机制留下的 `retrieval_count=-999` 恢复为 1。
+
+**本次战果**：434 条事实 → KEEP 289 / WATCH 33 / 归档候选 112（96 条 arXiv 自动摘要 + 16 条测试/空泛记录），112 条已打标记、内容零改动；写前门控实测：有效事实 review、噪声 `测试` 与空泛标签均 reject 且命中 near_duplicate。
+
 ## 持续进化 Checklist
 
 - [x] fact_store 持续写入（条数用 `fact_store stats` 现场查，不写死）
