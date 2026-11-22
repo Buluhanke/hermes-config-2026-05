@@ -36,7 +36,7 @@ web_search_plus(provider=serper)      # 备选
 ```
 web_search_plus(depth=deep-reasoning, provider=firecrawl)
 → web_extract_plus(provider=firecrawl)
-→ browser_navigate（兜底）
+→ browser_exec（CDP 兜底）
 ```
 
 ### 路径D（提取页面内容）

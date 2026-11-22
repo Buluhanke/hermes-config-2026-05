@@ -140,17 +140,13 @@ Save the report to `{output_dir}/report.md`.
 
 ## Tools Reference
 
-| Tool | Purpose |
+| `browser_exec` helper | Purpose |
 |------|---------|
-| `browser_navigate` | Go to a URL |
-| `browser_snapshot` | Get DOM text snapshot (accessibility tree) |
-| `browser_click` | Click an element by ref (`@eN`) or text |
-| `browser_type` | Type into an input field |
-| `browser_scroll` | Scroll up/down on the page |
-| `browser_back` | Go back in browser history |
-| `browser_press` | Press a keyboard key |
-| `browser_vision` | Screenshot + AI analysis; use `annotate=true` for element labels |
-| `browser_console` | Get JS console output and errors |
+| `new_tab(url)` / `goto_url(url)` / `wait_for_load()` | Open and load a page |
+| `js("document.body.innerText")` / `page_info()` | Read DOM/text state (prefer over screenshots) |
+| `fill_input(sel, text)` / `click_at_xy(x,y)` / `js("el.click()")` | Interact |
+| `cdp("Runtime.evaluate", params)` | Raw CDP when helpers are insufficient |
+| `capture_screenshot()` | Screenshot evidence (save path, inspect via vision when needed) |
 
 ## Tips
 

@@ -110,6 +110,17 @@ Layer 3: browser_*
 
 **Benchmark 现状**（避免引用过时论文数）：OSWorld 2.0 v2.1 官方榜首 44.33% binary / 77.67% partial（论文时 20.6% 已过时）；OSWorld-Verified 榜首 90.19%、通用模型 claude-fable-5 85.96%（人类基线 ~72%）；WebArena-Pro（2611.17955，300 任务/20 站点/多模态音视频）最强 Codex+GPT-6.1-Sol 与 Claude Code+Opus-5.5 均 62.3%；WebArena 榜首 86.1%（Narada AI Code）、最佳开源 74.3%（DeepSeek v3.2）。
 
+## 2026-11-22 新知识增量（并行知识线，fact 1385–1396）
+
+- **Hermes v0.23.0 Hearth（11-05，~1950 PR）**：Webapp + 单 gateway 统一会话、`/rewind`；**旧 `browser_*` 工具全删，浏览器自动化只剩 `browser_exec`**；内置技能 58→44、插件 600→1050；默认模型 GLM-5.3。→ 行动项：清理技能库里残留的 `browser_navigate`/`browser_click`/`browser_snapshot` 引用（本次已盘点，见下方迁移清单）。
+- **WebMCP 2026-11 格局（用户长期追踪项）**：Brave Leo 在 Nightly 1.102.2 默认开启（PR #40616 于 11-12 合并）；ChatGPT 桌面 8-25 起首个主流默认开启 site tools；WebKit 反对、Firefox 仍用旧 `navigator`。→ 仍未到替代 browser_exec/CDP 的切换点，继续跟踪。
+- **guard 机制得到实证**：MetaAct（2611.20655，github BaiCubed/MetaAct）把自进化编译成 GEAR 可执行动作 guard，ScienceWorld 违规 70%→0%、WebShop 40%→1%。印证本轮 `step_verifier.guard_spec` 方向正确。
+- **记忆要门控，不能全记**：ARISE（2611.23588）留出集准确率门控自进化记忆，SOP-Bench +10.9pp、τ²-bench +5.8pp，超 GEPA 4.5pp 且调用少 4.0%；Anchor（2611.10382）重放源决策筛选记忆，ALFWorld 96.27%（+19.9%）且少留 41% 记忆卡。→ 本轮补了 408 条关键词，下一步应给 fact_store 加写入门控而非无限累积。
+- **诚实边界**：UI-Venus-2（蚂蚁 11-13）WebVoyager 90.8/93.4，但 OSWorld 2.0 binary 仅 0.0%/2.8%——网页强 ≠ 长程桌面强。自进化技能泛化研究（2609.39148）：21 个训练提升技能仅 5 个完整迁移，LLM judge 一致率 86% 却难预测单次编辑。→ 印证"删单条 fact 复述垃圾"是对的：那种技能本就迁移不了。
+- 其余：Pro² Agent（MLE-Bench 24h 70.7%/48h 76.0%）、Mage-VL-Cowork 4B（OSWorld-Verified 66.0%）、TokenEconomizer（成本 -18.4~30.9%）、MemoWM（-53.9% 经历专属信息）、TT-MBRL（R2I 42→54.1 SOTA）。
+
+**旧 browser_* 引用迁移清单（2026-11-22 盘点，活跃技能）**：`research/grounded-citations`、`web-search-default`、`web/crawl4ai`、`3-statement-model`、`dcf-model`、`creative/sketch`、`software-development/dogfood`（表格仍是旧名）、`hermes-browser-local-login`、`humanization-engine`、`chrome-cdp-control`（部分为 fallback 语义，勿盲替）。统一改为 `browser_exec` 或 `mcp__chrome_devtools_mcp__*`（CDP），参见 `research/agent-landscape-2026` 已记录的破坏性变更。
+
 ## 每日进化前置自检
 - **不绑定任何模型是用户铁律**：cron 任务不 pin、config 不设 `fallback_model` / `fallback_providers` 锁定，给什么模型就用什么模型、跟随当前主模型。模型失效时手动切换，不做自动轮替，也不要自动恢复 fallback 链——旧版"fallback 为空就恢复三链"的自检已废弃，它会违背这条铁律。
 - 失效进化任务的正确修法是 `cronjob_manage(action='update', pinned=false)` 取消 pin + `hermes config unset fallback_model` 清隐藏绑定，而不是换一个模型 pin 上。**pin 免费模型必翻车**：免费额度到期就 404、地区受限就 403，cron 静默停摆且用户看不到 last_status。
@@ -128,7 +139,7 @@ Layer 3: browser_*
 7. 收尾四件事：更新相关 SKILL.md、把脚本备份进 `scripts/`（别只留临时目录）、git commit 到技能大本营、fact_store 记一条可检索结论。
 - 呈现给用户：结论 + 对比表 + 落地项 + 验证数字，不要过程流水账。
 
-## 双方向自我进化（2026-11-22 实战定稿）
+## 双方向自我进化
 
 用户定义：进化 = ①获取新知识 ②清除冗余。两个方向必须都走完，只做一半不算进化。
 
@@ -139,21 +150,21 @@ Layer 3: browser_*
 4. 并行用 delegate_task 跑知识线，主线程同时做冗余线，最后合并验证。
 
 ### 方向二：清除冗余（存量）—— 铁律是"先断根，再删除"
-1. **盘点**：`find ~/.hermes/skills -name SKILL.md` 分类统计；检测 auto-crystallized 标记、完全重复 hash、极小文件、无描述文件；fact_store 用 `stats` 看 `without_keywords`。
-2. **找源头**：`grep -rI 'Auto-crystallized from fact_store' ~/.hermes/scripts ~/.hermes/cron` → 定位生成器与调用它的 wrapper。只删产物不断根，垃圾必然长回来（本次已重复一次：8月清 257 个，11月又长 49 个）。
+1. **盘点**：先跑 `python3 <本 skill>/scripts/redundancy_audit.py` 一次拿全量数字（活跃技能数、结晶垃圾、完全重复组、极小/无描述文件、`without_keywords`、埋藏事实数），再决定是否动手；脚本不可用时用 `find ~/.hermes/skills -name SKILL.md` 兜底。
+2. **找源头**：`grep -rI 'Auto-crystallized from fact_store' ~/.hermes/scripts ~/.hermes/cron` → 定位生成器与调用它的 wrapper。**只删产物不断根，垃圾必然长回来**——结晶型技能会随每晚学习循环重新繁殖。
 3. **断根改造**：让生成器产物落到 `~/.hermes/knowledge/crystallized/*.md`（知识库），不再写 `skills/*/SKILL.md`；去掉破坏性 sentinel（v2 会把 `retrieval_count=-999` 永久废掉知识召回）；靠产物文件存在性去重。
 4. **恢复损失**：`UPDATE facts SET retrieval_count=1 WHERE retrieval_count=-999` 把被旧机制埋掉的事实恢复检索（本次恢复 44 条）。
 5. **删除**：`git rm` 而不是 `rm`（必须可回滚），只删明确垃圾（auto-crystallized 单条 fact 复述、字节级重复）；工具自身双目录（如 ui-ux-pro-max 的 `.claude/skills` 与 `cli/assets/skills`）**不是冗余**，删了会破坏工具。
-6. **补检索入口**：无关键词的事实批量补 `keywords:`（保留原 tags 到 `orig_tags:`），`without_keywords` 必须归零。
+6. **补检索入口**：关键词存在 `facts.tags` 列的 `keywords: ` 前缀里，**没有独立的 keywords 列**（查 `keywords` 列会报 no such column）。无该前缀的事实检索不到：批量写 `keywords: k1, k2, ...` 到 tags，原 tags 挪到 `orig_tags:` 保留，`without_keywords` 必须归零。
 7. **验证**：重跑生成器确认产物进知识库不进技能库；再跑一次必须 0 新建（幂等）；`git commit` + push。
 
-**本次战果（2026-11-22）**：技能 408→358（删 49 个结晶垃圾 + 1 个重复），断根 `abcd_learner.py` v2→v3，恢复 44 条被埋事实，50 条知识改沉淀到 knowledge/，408 条无关键词事实补齐检索，新知识 12 条入库（fact 422-433）。提交 `d20e349`。
+**完成判定（全部满足才算进化完）**：auto-crystallized 技能数=0；`without_keywords`=0；`retrieval_count=-999` 的埋藏事实数=0；生成器二次运行新建数=0；产物落在 knowledge/ 而非 skills/；`git status` 干净。
 
 ⚠️ 判断冗余时看"有没有可执行内容"：单条 fact 复述 = 垃圾（知识留在 fact_store 即可）；有步骤/脚本/触发器 = 真技能，保留。
 
 ## 持续进化 Checklist
 
-- [x] fact_store 持续写入（目前 238 条）
+- [x] fact_store 持续写入（条数用 `fact_store stats` 现场查，不写死）
 - [x] 每日自学新知识
 - [x] Skill Bundle（一条命令加载多个 skill）
 - [x] 渐进披露（50 skills ≈ 630 tokens）
@@ -173,7 +184,7 @@ Layer 3: browser_*
 | 感知（AX树+截图） | ✅ computer_use 已通 |
 | 行动（浏览器控制） | ✅ 真实Chrome已控 |
 | 知识（持续自学） | ✅ 每日全网搜索 |
-| 记忆（fact_store） | ✅ 238 条 fact |
+| 记忆（fact_store） | ✅ 持续写入，条数现场查 |
 | 技能（skill 系统） | ✅ 自写自优化 |
 | 规划（多层循环） | ✅ 8 层已理解 |
 | 进化（自我改进） | 🔄 进行中 |
