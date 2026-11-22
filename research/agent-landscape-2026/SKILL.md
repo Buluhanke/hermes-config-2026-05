@@ -52,9 +52,44 @@ triggers:
 - **v0.20.6 (2026-08-27)**：~525 PRs。真实 profile 浏览(同意门控)、桌面 Browser 独立窗口+SSH 远程更新引擎、50+ 远程 MCP(Cloudflare/Grafana/Better Stack/Railway)、web_search/extract TTL 缓存、lean-tail 压缩默认、OS 钥匙串加密密钥、cron durable-incident acks、不支持不安全原地更新。
 - 历史：v0.20.0(2026-08-03, "Herald" 语音/A2A v1.0/签名 webhooks/桌面平台) → v0.20.3(Bot Mode 捆绑默认开) → v0.20.5(keyless web tier / opencode-free)。
 
+## 5. Hermes Agent v0.23.x（2026-11，重大更新）
+
+- **v0.23.0 "The Hearth Release" (11-05)**：自 v0.22.0 ~10080 commits / ~1950 PRs / 666贡献者 / ~850 issues closed。核心：①**单 gateway 拥有所有会话**——CLI/TUI/Desktop/editor/bots/cron 全部 attach 到同一个 gateway，同一 chat 不再重复/丢消息；②**Webapp** 把整个 Desktop 工作区开在浏览器标签（`webapp.enabled` 默认关）；③终端内联图片(kitty/Ghostty/iTerm2/VSCode)；④`/rewind` 对话回退+fork；⑤插件自动更新，catalog 600→1050+；⑥内置 skill 58→44（Word/PPT/Excel 合并为 `microsoft-office`）；⑦`hermes curator lock` 锁手工 skill。默认模型 GLM-5.3（1M 上下文）。
+- **破坏性变更**：旧 `browser_*` 工具(agent-browser/browser_navigate/browser_click…)全删，浏览器自动化只剩 `browser_exec`；`hermes mcp serve`→`hermes mcp-serve`；Desktop 需 macOS 13+/64位 Windows。写自动化 skill 时勿再引用旧工具名。
+- **v0.23.2 (11-16)**：~1989 PRs，durable subagents(跨 gateway 重启存活)、`hermes fallback check`、CVE-2026-130164(env 文件 allowlist)安全修复。
+- **v0.23.3 (11-19/20)**：~370 PRs，prompt-cache lifecycle controller(长工具运行预热/闲置压缩)、GPT-6.2 Astra+Sol 上 OpenRouter/Nous Portal、可配置 skill 索引描述宽度(`skills.index_desc_limit`)。
+- **Hermes Enterprise (11-18, Nous×Microsoft)**：进 Microsoft Teams/Microsoft Store/Azure Container Apps Sandboxes；Collective Wisdom 把员工成功做法沉淀为可共享 skill；日处理近 2 万亿 token，OpenRouter 公共 agent 排名 #1。
+
+## 6. WebMCP 追踪（用户重点要求持续关注）
+
+- **2026-11-19**：Web Machine Learning Community Group 发布 Draft Community Group Report（**非 W3C 标准**，无标准轨道）。
+- **API 已稳定为命令式 `document.modelContext.registerTool()`**；`navigator.modelContext` 于 5-27 废弃迁移到 Document，旧 `provideContext()`/`clearContext()` 3-05 删除；**声明式 API 10-08 从规范移除**（当前只用 Imperative API）。特征检测用 `'modelContext' in document`。
+- Chrome 演进：origin trial Chrome 149→162；Chrome 153+ 支持 abort() 注销工具而不中断 in-flight 执行；Chrome 155 弃用 executeTool 的 JSON 字符串入参（改对象）；Chrome 156 成 stable(10-20)，157 于 11-03。
+- **替代 CDP 判断**：站点覆盖率仍极低，主要是 origin trial + `chrome://flags/#enable-webmcp-testing`；无头环境支持有限。**结论：尚不能替代 browser_exec/CDP，继续按「观察、未到切换点」跟踪**，等站点覆盖与无头支持成熟再评估。
+
+## 7. Browser-Agent 新基准（2026-11 增补）
+
+- **WebArena-Pro**（arXiv 2611.17955）：300 任务/20 自托管应用/6 域，多模态(音/视频为一等观测)。50 步预算最强 Codex+GPT-6.1 Sol 与 Claude Code+Opus 5.5 并列 **62.3%**，OpenCode+Kimi 3.1 Pro 60.7%；通用 agent 最强仅 30.3%。仍 38% 任务无成功记录。
+- **BU Bench V2.1**：200 真实 web 任务，judge `gpt-5.6-luna` xhigh，含 9-25 CAPTCHA/Reuters 修订；BrowserCode runner。
+- **ClawBench V2**（Findings EMNLP 2026）：281 任务/163 live 站点/15 类。**Hermes harness 官方榜**：claude-opus-4-7 54.6% intercepted / 44.6% lenient / 24.6% strict；gpt-5.5 45.4%；glm-5.1 48.5%。两次同模型复现 ±2pp。
+- **WARC-Bench**（ICLR 2026）：438 GUI 子任务(WAR 归档)，最强 CUA 64.8%；7B SFT 48.8%→RLVR 52.8%，72B RLVR 达 84.31%。
+- **Odysseys2**：100 live-web 任务(≤60min)，GPT-6 Astra 47/100，Opus 5.5 仅 18，5 个模型为 0——长程 live-web 仍是硬骨头。
+- **Stagehand evals**：claude-fable-5-2(claude code) 92.0%/378s/$1.242 居首。
+
+## 8. Multi-Agent 编排新框架（2026-11）
+
+- **Swarms v17 "InterLink"**：comms channels(6 种：文件/queue/SQLite/HTTP/SMTP/AgentMail)、`PhasedFanOutWorkflow`(lead 规划跨数百 agent)；import 1.91s→0.28s；100 节点 fan-out 0.21s(LangGraph 1.44s)。`AgentRearrange` 两运算符编排 8-512 agent。
+- **Vercel Board (11-18)**：headless 共享 message board 原语(harness agnostic)，channels+threads+labels+任务依赖；v0 software factory 用它后 50%+ PR 合并。\`npx skills add vercel/board\`。
+- **eve 1.0 (Vercel, 11-17)**：开源生产级 agent 框架，Workflow SDK 崩溃后从最后完成步恢复，多人会话+agent-to-agent 内置。
+- **Microsoft Agent Framework GA (11-19)**：C#/Python 正式可用，durable task extension。
+
+## 9. 2026-11-22 自学新增自演化论文（详见 self-evolving-agents-2026 skill）
+
+TokenEconomizer(会话经验降本 18.4-30.9%)、MEMCON(自适应记忆 ALFWorld 67.9%)、Exo(运行时 harness 自改降本 12-53%)、Pro²Agent(MLE-Bench 76%)、RSIFlow(SOTA+3.42%)、Predictive-IDM(+46%) 等，均已沉淀到 `self-evolving-agents-2026`。
+
 ## 验证 / 使用
 
-- 写 agent 相关 skill 前先 `skill_view(name='agent-landscape-2026')` 取最新数值，勿凭记忆硬编码旧基准。
+- 写 agent 相关 skill 前 `skill_view(name='agent-landscape-2026')` 取最新数值，勿凭记忆硬编码旧基准。
 - 评估 browser agent 时按「WebVoyager(饱和,参考) → Online-Mind2Web(live标准) → OSWorld 2.0(长程真实) → CAP(跨站感知瓶颈)」分层，单一榜无意义。
 - 自演化方向优先复用 MGM/Mem2Evolve/HSI 的 harness-evolution 思路，而非从头写递归优化。
 - 新事实继续写 fact_store 并补进本 skill；Hermes 跨小版本(如 v0.20.x→v0.21.0)更新时刷新第 4 节。

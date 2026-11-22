@@ -159,3 +159,27 @@ l2: 自演化
 ### Hermes 自身
 - **Hermes Agent v0.20.6**（2026-08-27，~525 PRs）：真实 profile 浏览、桌面 Browser 独立窗口+SSH 远程更新、50+ 远程 MCP、web_search/extract TTL 缓存、OS 钥匙串加密、cron durable-incident acks。
 - **Wuying-Browser-Agent-27B**（已收录）：开源 SOTA，WebVoyager 80.6% / Online-Mind2Web 66.7% / BrowserBench 65.1%。
+
+## 2026-11-22 自学成果补充（新论文，均带数字）
+
+> 主题「自改进 harness / 记忆管理 / 经验复用」本轮积累 8+ 条，触发 skill 升华，已并入本库。fact_store 在 cron 上下文只读，故直接固化于此。
+
+### 成本与经验复用（黑盒、不改模型）
+- **TokenEconomizer**（UC Berkeley×MSR×MS Security，11-16，开源）：从仓库历史会话学习。三机制=micro-skills(仓库事实单行笔记)/tool pruning(每轮23工具16未用→裁剪)/failure-loop intervention。277 个 SWE-Bench 任务降本 **18.4-30.9%**，Pass@1 在 4/5 组合上升；第 6 个任务起累计成本低于默认。Web-Bench 降 16-21.2%。**启示：Hermes skill 的 few-shot 笔记+工具裁剪可直接借鉴**。
+- **MEMCON**（UCLA/Wash/Northwestern，11-20）：记忆管理作可控过程，控制器按任务类型学「检索/改写重查/取成功轨迹/合并/删除/跳过」策略。ALFWorld **67.9%** vs G-Memory 59.7%，输入 token 45k→39k(-13%)；GAIA 22.4% vs 21.2%。**启示：记忆策略应随任务类型自适应，非全局固定 top-k**。
+
+### Harness 自改写（运行时）
+- **Self-Improving Harnesses 统一框架**（arXiv 2611.22299）：4 可编辑组件(context/state、agent control、action interface、verification&recovery) × 4 阶段循环(诊断失败→提代码补丁→验证候选→部署)。结论：模块化更新+验证门(gated modular evolution)优于整体重写(后者过拟合/跨模块崩)，SWE-bench Lite 验证且 token 成本更低；防御 prompt bloat/benchmark gaming/evaluator tampering。
+- **Exo**（arXiv 2611.00463）：运行时自改进架构，受保护机制层存历史+管策略激活，harness 以可检视代码变更演化。开放世界游戏成本降 12-53%(standalone)/45-82%(transfer)；AppWorld/SREGym held-out 成本降 35-61%，AppWorld 均时 -13%。
+- **AgentEvolver**（arXiv 2610.11613）：任务执行中演化，8 类实体(versioned lifecycle)。SWE-bench Pro Public 解出率 **82.08%**（超无演化基线）。
+- **RSIFlow**（arXiv 2610.21791）：自适应工作流编排 + meta-agent 把结果蒸馏为组件 skill 并演化自身 harness。6 基准 SOTA 均值 **+3.42%**，12 个 benchmark-backbone 设置中 11 领先；Qwen3-8B 达 59.95%。
+- **Predictive self-evolution / IDM**（arXiv 2610.13991）：可编辑 Improvement Dynamics Model 在昂贵评估前预测修改效果并指导修订。4 域全超 HyperAgents，Polyglot 中位 AUBC 0.306 vs 0.210，最高 +46%，预测知识可跨域迁移。
+
+### 问题表征与形式化验证
+- **Pro² Agent**（arXiv 2611.25357）：把自主研究主状态从 codebase 改为显式 **Problem State**(什么阻碍成功+哪些方案可能解决)，受控假设检验更新权重。完整 MLE-Bench 24h **70.7%**、48h **76.0%**(该榜最高)。**启示：卡住时先显式化「问题状态」而非盲改代码**。
+- **AlphaProof Nexus**（Nature Comput Sci 11-19）：多 prover 子 agent 生成-验证 Lean 形式化证明，进化 agent 用共享 population+rating 协调，解决悬置 50+ 年难题。**启示：可验证领域用编译器/求解器做 verifier 消除幻觉**。
+- **Salesforce「Self-Evolution Ladder」**：三级 Toolmaker(造缺失工具)→Learner(改进自身推理)→Architect(设计后继)；RSI=改进「改进能力本身」的速率。SFR-AutoR&D 3 天完成团队数周的 embedding 优化。建议治理：工具可演化、推理可改进、架构仅在人判定安全处改，价值观固定。
+
+### 横向对照（与库内早期技术）
+- 硬件/模型冻结前提不变：本轮 Exo/HSI/TokenEconomizer 均不训模型权重，改进全在 harness/记忆/策略层——再次印证「系统/scaffold 设计 > 单模型能力」。
+- 演化安全性共识：gated validation + 受保护机制层 + 回滚，是本轮 Exo/Self-Improving-Harnesses/AGP 的共同底座，Hermes 进化循环应保留冻结外层守卫。

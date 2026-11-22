@@ -9,6 +9,9 @@ triggers:
   - 主动发现并解决问题
 pitfalls:
   - 两套cron系统必须同时查：crontab -l（系统层）和 cronjob list（Hermes应用层）是两套独立定时任务，极易混淆导致漏查。crontab在root的cron进程执行，Hermes cron在gateway调度器执行，日志路径完全不同。诊断「定时任务是否正常」时必须同时跑这两条命令
+  - 脚本存在≠还在跑：脚本头注释声明的 launchd plist 可能根本不存在（cleanup 脚本声称由 ai.hermes.cleanup-logs 调度，实际 plist 丢失数月无人发现）。核查必须 `launchctl list | grep <label>` 确认已加载，并看脚本自己的日志文件是否存在且有近期时间戳；只 `ls 脚本` 会漏判。重建 plist 后 launchctl load + 手动跑一次验证，不要等调度日。
+  - arm64 Mac 上 /usr/local/bin/git 是 x86 版且无 Rosetta 时，任何调 git 的 cron 脚本报 `Bad CPU type in executable`，配合 set -e + 2>/dev/null 会静默退出、日志 0 字节（git 备份连停数月即此）。修法：脚本顶部 `export PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"` 强制 arm git 优先。验证要用干净 cron PATH 跑一次，并看远端 pushed_at 是否更新，不能只看脚本 EXIT=0。
+  - cron job last_status=error 且 last_error 是模型 HTTP 404 free period ended / 403 region not available，是 job pinned 到已失效模型。修法 `cronjob_manage update pinned=false` 让它跟随当前主模型，再 `cronjob_manage run` 后台验证。用户看不到 last_status，必须主动 `cronjob_manage action=list` 查；同批往往多个 job 一起中招，逐个查 pinned。
   - Gateway 随机端口陷阱：gateway 用 `--port 0` 每次随机分配端口，但 Hermes App 缓存了旧端口。症状是 App 提示"提示词发送失败"，gateway 进程实际在跑但连接被-refused。必须用固定端口（`--port 18281`）并验证 `netstat -an | grep <port>` 确认 LISTEN（lsof 可能因权限漏看，fuser 更可靠）
   - Gateway 无法从内部重启：从 Gateway 进程内部执行 `hermes gateway restart` 是架构性限制，Gateway 会把正在运行的所有 agent（包括执行命令的自己）一起关掉，launchd 会拒绝拉起。正确做法：从外部对 Gateway 进程发 SIGTERM，让 launchd 自动拉起
   - QQ Bot "不在线"诊断（2026-11-18）：先分清 gateway 挂没挂——`curl 127.0.0.1:8642`(共享监听，旧记忆里的18789已失效)、`cat ~/.hermes/gateway_state.json` 看 `platforms.qqbot.state`。若 state=retrying 且 error=`qqbot connect timed out after 30s`，是 wss/api 的 TLS 握手间歇性超时(非凭据/配置错)：`POST bots.qq.com` 正常但 `GET api.sgroup.qq.com/gateway` 用 Python httpx/aiohttp 偶发30s握手超时，curl 同端点却通。这类抖动通常随 gateway 自带的 reconnect watcher 退避(30/60/120s)自愈，勿急着重启 gateway；盯日志 `✓ qqbot reconnected successfully` 即恢复

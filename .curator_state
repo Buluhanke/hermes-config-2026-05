@@ -1,9 +1,9 @@
 {
-  "last_report_path": "/Users/aimac/.hermes/logs/curator/20261114-102928",
-  "last_run_at": "2026-11-14T10:29:28.952268+00:00",
-  "last_run_duration_seconds": 1.432736,
-  "last_run_summary": "auto: 2 marked stale, 2 archived, 1 reactivated; llm: skipped (consolidation off)",
+  "last_report_path": "/Users/aimac/.hermes/logs/curator/20261121-110423",
+  "last_run_at": "2026-11-21T11:04:23.463270+00:00",
+  "last_run_duration_seconds": 1.271506,
+  "last_run_summary": "auto: 3 marked stale, 2 archived; llm: skipped (consolidation off)",
   "last_run_summary_shown_at": "2026-11-14T10:29:28.952268+00:00",
   "paused": false,
-  "run_count": 14
+  "run_count": 15
 }

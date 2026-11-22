@@ -28,6 +28,8 @@ triggers:
 4. fallback_providers 路由是否正确
 ```
 
+**配置读写铁律**：`~/.hermes/config.yaml` 是受保护的安全配置，`patch`/`write_file` 会直接拒绝写入（"Agent cannot modify security-sensitive configuration"）。改模型绑定一律走官方 CLI：`hermes config set <key> <value>` / `hermes config unset <key>`，改完用 `search_files` 复核字段 + `hermes config check` 校验。
+
 ## Step 1：检查 custom_providers YAML 结构（致命陷阱）
 
 `custom_providers` 必须是 dict，list 会导致**全部 provider 静默失效**。
@@ -96,6 +98,8 @@ curl -s https://inference-api.nousresearch.com/v1/chat/completions \
 # 有 content 字段 = 可用；返回 404/error = 不可用
 ```
 
+**探针铁律（防误判）**：reasoning 模型在 `max_tokens` 太小时把 token 全花在思考上，`message.content` 会是 `null`、正文落在 `reasoning_content`/`reasoning_details`——按「content 空=失败」判定会把**可用模型误判成失效**。验证 reasoning 模型必须给足 `max_tokens`（≥200），或改判 `content`/`reasoning_content` 任一非空即成功。HTTP 200 却解析出 `NoneType` 时，先打印原始响应体再下结论，不要立刻标红。
+
 ## Step 4：OmniRoute 服务状态
 
 OmniRoute 挂了不影响 Hermes 主程序运行，但模型路由会失败。
@@ -112,14 +116,17 @@ pgrep -af omniroute
 |--------|------|----------|
 | `HTTP 402` | 余额不足 | 充值或换用 `:free` 模型 |
 | `HTTP 404: unavailable for free` | OpenRouter 端 `:free` slug 下线 | 换同名付费 slug（`tencent/hy3`）或链上其他 200 模型 |
-| `HTTP 404: requires credits` | Nous Portal 付费版余额不足 | 换 OpenRouter 付费 slug（Nous 免费档也已结束） |
+| `HTTP 404: requires credits` | Nous Portal 付费版余额不足 | 换免费池里的 `:free` slug 或 OpenRouter 付费 slug——免费池实时拉，勿据旧清单判定「已结束」 |
+| `HTTP 400: missing tags` | Nous 免费 slug 需特殊参数，普通 chat 请求不可用 | 换其他免费 slug，不为该 slug 硬凑参数 |
 | `SSL: CERTIFICATE_VERIFY_FAILED` | 系统 CA 证书问题 | 用 venv Python 而非系统 Python |
 | `HTTP 403 Forbidden` | API key 过期/权限不足 | 更新 provider key |
 | `Connection refused` | Provider 服务挂了 | 换 fallback 或等恢复 |
 
-## 免费/可用模型实测（2026-10-11 复核）
+## 免费/可用模型探测（以实时结果为准，勿信静态清单）
 
-**Nous Portal**：免费档全部结束（`hy3:free`/`solar-pro4:free`/`step-3.7-flash:free` → 404 free period ended）；付费档 404 requires available credits（账户无余额）。**Nous 已不可作 fallback 或 aux 通道。**
+**Nous 免费池会变动**：旧的 `hy3:free`/`solar-pro4:free` 等 slug 可能已下线，但新的 `:free` slug 会持续上架——不要据旧结论断言「免费档全部结束」。判定唯一标准是**实时拉 `https://inference-api.nousresearch.com/v1/models` 列出 slug 后逐个 POST 验证**，不是记忆中的清单；付费档 `requires available credits` 只说明余额不足，与免费池无关。
+
+探测配方：从 `.env` 读 `NOUS_API_KEY`（勿打印 key 值）→ GET `/v1/models` 取 `data[].id` 过滤 `:free` → 逐个 POST `/v1/chat/completions`（`max_tokens≥200`，注意上面的探针铁律）→ 记录 HTTP 状态、耗时、回答文本。
 
 **OpenRouter**（CN IP 可用，anthropic/google 系 403 region）：
 - `tencent/hy3`（付费 slug）✅、`deepseek/deepseek-chat` ✅
@@ -171,6 +178,7 @@ cd ~/.hermes/hermes-agent && ./venv/bin/python3 -m hermes_cli.main model list 2>
 | 禁止安装 Ollama | 用户明确「Ollama的所有目录都删掉，绝不安装Ollama」，永久禁用 |
 | 不要自加限制 | 用户没说就不要加省份/地区/定制等额外过滤 |
 | 全部测试 | 配置好 API 的模型必须逐个测试，不接受「应该可以」 |
+| 不绑定模型 | 用户铁律「给什么模型就用什么模型」：cron 任务一律 `pinned=false`，config 不设 `fallback_model` 固定绑定；换模型只切主链，不逐个任务改 |
 | 官方免费优先 | `gemini/gemini-2.5-flash` 永远是第一个候选，无条件优先 |
 | 关键词锁定 | 用户说「纸箱」就只搜纸箱/瓦楞纸箱/快递纸箱，不混「飞机盒」等相邻品类 |
 
@@ -196,6 +204,8 @@ cd ~/.hermes/hermes-agent && ./venv/bin/python3 -m hermes_cli.main model list 2>
 | `model_health_daemon.py` | 3秒轮询探测所有模型 |
 | `model_router.py` | 读取缓存，返回当前最佳可用模型 |
 | `start_model_health.sh` | 启动守护进程 |
+
+**启动前先验证实体**：本节组件是「应然架构」，不保证文件仍在。`.pyc` 编译残骸和 0 字节日志**不是**脚本存在的证据。先 `ls` 确认 `.py` 源码 + `pgrep -af model_health` 确认进程，两者缺一则该自愈链路实际未运行，按上文手动验证模型可用性，不要假设自动轮替在生效。
 
 ### 使用方式
 

@@ -94,6 +94,26 @@ Layer 3: browser_*
 **本轮进化动作**：把"单 trajectory 升华"升级为"archive 对比升华"——同主题积累 3+ fact 时对比多个 skill 变体再固化，而非逐条照抄。
 详细研究笔记（含 arXiv 链接、完整指标、Hermes 映射）见 `references/self-improvement-frameworks-2026.md`。
 
+## 2026-11-21 自学增量（cron 只读，固化于此）
+
+**Hermes 版本线**（cron 不可写 fact_store，记录在此供下次检索）：
+- v0.23.2（11-16）：~1,989 PRs；durable subagents 可跨 gateway 重启存活并续聊；`hermes fallback check`；`hermes update --force`；per-job cron 选项（wrap_response / fresh thread）；plugin APIs `ctx.fork_session` / `ctx.redact_text()` / `ctx.register_idle_task`；Gemini Interactions API 默认用于 Gemini 3+；安全修复 CVE-2026-130164。
+- v0.23.3（11-19，补丁版）：**rolls up ~370 PRs（是聚合不是回滚**，上一轮报告误写"回滚"已纠正）；prompt-cache 生命周期控制器（闲置对话在 1h 缓存到期前压缩、缓存工具结果归档、cache_ttl=auto）；主动 tool-result prune 默认开启；GPT-6.2 Astra/Sol 上 OpenRouter+Nous Portal；存储层拆到 persistence interface + SQLite 后端。
+
+**自改进框架 2026-11 集群**（对 L3/L4 的直接启示）：
+- Harnesses That Improve Themselves（2611.22299）：4 可编辑组件（context/state、control、action、verify/recover）+ 4 阶段循环（诊断→提议补丁→验证过滤→部署/路由）；结论 **modular updates + validation gate 胜过 full-harness rewrite**，需防 prompt bloat / benchmark gaming / evaluator tampering。→ Hermes L3 patch 保守更新 + 先自测正是这条。
+- GUARD（2611.23476）：无 grader RSI，directional regret 区分"新破坏的"与"未解决的"，Soft-HURT gate 只在收益>回归时晋升 → 对应 skill 的"先自测失败丢弃"规则，可加"非回归缓冲"。
+- RSI-Env（2611.01736）：Host Controller 把评估/版本记录设为 Improver 只读 → 强化"evaluator 必须在沙箱外"铁律。Open-General Self GPQA 65.2→73.2、SimpleQA 82→85→88。
+- SIM / Self-Improvement Memory（2611.18856）：给优化器（非策略）按"重复出现的问题"分组存 edit 的 rationale + 预测/实测结果，10 次独立运行平均 +2.36 分（p=0.003）→ 印证 skill 已写的"archive 对比升华"，fact_store 应记 edit 的 why+预测vs实测，不只记结论。
+- Evolver（2611.07595）：结构化 Gene 资产把探索经验变持久能力，成功率 +4.38pp、token -24.24%。
+- Elite（2611.21056）：explore-then-integrate，合并互补机制而非选单一子代；SWE-bench Pro 60→85.6%，零候选任务评估、比 DGM 快 8.8x → 支撑跨 lineage 杂交，优先于单 trajectory 升华。
+
+**Benchmark 现状**（避免引用过时论文数）：OSWorld 2.0 v2.1 官方榜首 44.33% binary / 77.67% partial（论文时 20.6% 已过时）；OSWorld-Verified 榜首 90.19%、通用模型 claude-fable-5 85.96%（人类基线 ~72%）；WebArena-Pro（2611.17955，300 任务/20 站点/多模态音视频）最强 Codex+GPT-6.1-Sol 与 Claude Code+Opus-5.5 均 62.3%；WebArena 榜首 86.1%（Narada AI Code）、最佳开源 74.3%（DeepSeek v3.2）。
+
+## 每日进化前置自检（2026-11-21 加入）
+- 进化开始前先跑 `hermes fallback list`：若为空（`No fallback providers configured`），用 `hermes config set fallback_providers '[...]'` 恢复 gemini/deepseek/zai 三链，再 `hermes fallback check --live` 确认 exit 0。config.yaml 会被周期性重写清空 fallback，曾导致 cron 连续 12 次失败。
+- 不要用直接编辑 config.yaml 的方式恢复（安全护栏会拒绝）；cron 上下文 fact_store 只读，决策写入本 skill 或报告。
+
 ## 持续进化 Checklist
 
 - [x] fact_store 持续写入（目前 238 条）
