@@ -59,6 +59,7 @@ python3 ~/.hermes/scripts/gh_download.py --list
 - Komi 目录实时状态：direct 101ms / fastly_jsdelivr 48ms / ghfast_top 1032ms 可用；moeyy / gh-proxy / ghps / 99988866 全 down。
 - raw README 测试 → fastly_jsdelivr 一击命中，内容正确。
 - release checksums.txt 测试 → ghfast_top 命中，1971 bytes / 21 行完整。
+- **大文件对比（15MB tar.gz）**：裸 curl 直连 CDN 15 秒仅下 3MB（200KB/s，超时中断）；本工具走 ghfast_top **11.6 秒下完整个 15,050,573 bytes**，tar tzf 校验通过。提速约 6 倍且不超时。
 
 ## 何时用
 
