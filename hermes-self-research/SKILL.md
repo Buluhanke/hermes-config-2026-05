@@ -22,6 +22,23 @@ C (Code)     → 分析提取的知识片段
 D (Deduce)   → 写 fact_store，升华 skill
 ```
 
+## 权威源直取（第一步必做，先于 web_search）
+
+每天自学**先跑结构化拉取脚本**，直接吃全网最前沿，再用 web_search 补充。不要只靠关键词碰运气。
+
+```bash
+python3 ~/.hermes/scripts/frontier_sources.py --days 2
+```
+
+三个源（2026-11-22 实测可用）：
+- **arXiv API**（https 端点，双端点重试）：cs.AI/cs.CL/cs.LG 最近论文，命中 agent/memory/harness/self-improv 等关键词高亮
+- **Papers with Code**（paperswithcode.co/api/v1）：最新论文+代码源，替代本机不通的 Hugging Face trending
+- **Awesome-AI4AI**（走 `gh api`）：每周更新的 1148 篇策划论文+高引榜单，抓最新条目和高引行
+- Hugging Face trending：本机 SSL 不通，已放弃，不要用
+
+脚本零依赖（stdlib + gh CLI），输出精简 markdown；加 `--json` 出结构化数据，`--source arxiv|pwc|ai4ai` 单拉。
+从三源里挑有数字/框架名/方法的条目，按下方标准写 fact_store。
+
 ## 搜索策略
 
 ### 必搜主题（每周轮一遍）
