@@ -55,6 +55,17 @@ triggers:
 2. **分层感知**：95% 走 L0/L1，VLM 只兜底 0.1%；token/延迟省 10-100×。
 3. **终身学习**：L1 成功写 L0，miss 后人工操作一次即记住 → 下次 0ms 命中。
 
+## 自检（多轮实测，2026-11-22）
+
+测试脚本：`~/.hermes/cache/scratch/smoke_humanlike.py`（临时目录会被清理，必要时重建）
+
+三遍运行结果：**11/11 通过（100%）**
+- 感知：L0 缓存写入→读回命中 3 轮（x=10/20/30）、指纹稳定性、颜色块检测、引擎 stats 均 ✅
+- 办公：python-docx 写入→读回 3 轮 ✅（注：openpyxl/pptx 系统 python 未装，Excel/PPT 走 WPS MCP 或其他 venv）
+- 网页：read_url.py 真实读 example.com 3 轮全走 curl 层（577 chars）✅
+
+环境事实：系统 python 有 `docx`/`PIL`，无 `openpyxl`/`pptx`；`cua-driver` 在 `~/.local/bin/cua-driver`（不在 PATH）；`decision_engine.py` 修复后可正常运行。
+
 ## 避坑
 
 - 技能文档状态会过期：用前实测（文件是否存在、命令是否在 PATH），不凭记忆。
