@@ -66,6 +66,21 @@ triggers:
 
 环境事实：系统 python 有 `docx`/`PIL`，无 `openpyxl`/`pptx`；`cua-driver` 在 `~/.local/bin/cua-driver`（不在 PATH）；`decision_engine.py` 修复后可正常运行。
 
+## 操作电脑链路实测（2026-11-22，真点击）
+
+崩溃根因 + 修复：`computer_use` 报 `session setup failed (TaskGroup)` → `hermes computer-use doctor` 显示 `incompatible daemon: contract version 0.8.0 does not match SDK 0.7.0`。根因是 `~/.local/bin/cua-driver`(v0.26, contract 0.8) 占着 socket，而 Hermes pinned 的是 `~/.hermes/tools/cua-driver-0.21.0-darwin-arm64/`(v0.21, SDK 0.7)。
+- 修复：`~/.local/bin/cua-driver stop` 停掉 v0.26 serve → 用 pinned 0.21 二进制 `serve --no-overlay` 后台启动 → doctor 全绿（session active / AX trusted / TCC granted）。
+- ⚠️ 别用 ~/.local/bin 的 0.26 启动 serve，必和插件 SDK 版本冲突；版本必须匹配 pinned。
+
+真实操作闭环（全 background 不抢焦点）：
+1. `computer_use list_windows` → 拿到目标 pid/window_id
+2. `capture(mode='ax', pid, window_id)` → 106+ 元素全拿到
+3. 文本框：`set_value(element, value, delivery_mode='background')` → `effect: confirmed` + value_readback（文本框不要点，AXPress 返回 -25206）
+4. 文本区：`click(coordinate, background)` 投递 → `type(text, background)` → `effect: confirmed`
+5. 再 `capture` 读回 → 元素 label 变成输入内容 = 验证成功
+- 坐标是 native 空间（元素 bounds 直接可用），不是截图像素。
+- osascript 开窗口会卡 TCC 弹窗，改用已存在窗口或 computer_use 自身。
+
 ## 避坑
 
 - 技能文档状态会过期：用前实测（文件是否存在、命令是否在 PATH），不凭记忆。
