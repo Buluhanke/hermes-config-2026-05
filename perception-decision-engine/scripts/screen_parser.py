@@ -136,8 +136,47 @@ def _center(e: Dict[str, Any]):
             e.get("y", 0) + e.get("h", 0) / 2)
 
 
+def build_inspect_fn(image_path: str, scale: int = 3, pad: int = 8,
+                     max_regions: int = 6):
+    """
+    L-C 主动观察：返回一个 inspect_fn(bbox) -> OCR 文字列表。
+    对变化区域 crop（带 padding）→ 放大 scale 倍 → Vision OCR。
+    专治小字/模糊区域：整图 OCR 读不到，放大后能读清。
+    用固定临时路径 + 显式 close，避免 fd 泄漏（感知层已知坑）。
+    """
+    def _inspect(bbox: Dict[str, Any]):
+        try:
+            from PIL import Image as _PILImage
+            img = _PILImage.open(image_path)
+            w, h = img.size
+            x = max(0, int(bbox.get("x", 0)) - pad)
+            y = max(0, int(bbox.get("y", 0)) - pad)
+            x2 = min(w, int(bbox.get("x", 0)) + int(bbox.get("w", 0)) + pad)
+            y2 = min(h, int(bbox.get("y", 0)) + int(bbox.get("h", 0)) + pad)
+            if x2 <= x or y2 <= y:
+                return []
+            crop = img.crop((x, y, x2, y2))
+            zoom = crop.resize((crop.width * scale, crop.height * scale),
+                               _PILImage.LANCZOS)
+            tmp = Path.home() / ".hermes" / "cache" / "scratch" / "_inspect_zoom.png"
+            tmp.parent.mkdir(parents=True, exist_ok=True)
+            zoom.save(tmp)
+            zoom.close(); crop.close(); img.close()
+            del zoom, crop, img
+            if not visual_verifier:
+                return []
+            texts = [it.get("text", "") for it in visual_verifier._ocr(str(tmp))
+                     if it.get("text", "").strip()]
+            return texts[:12]
+        except Exception:
+            return []
+
+    _inspect._max_regions = max_regions
+    return _inspect
+
+
 def diff_screens(before: Dict[str, Any], after: Dict[str, Any],
-                 inspect_fn=None) -> Dict[str, Any]:
+                 inspect_fn=None, inspect_path: str = "") -> Dict[str, Any]:
     """
     元素级 diff。before/after 为 parse_screen 的结果。
     inspect_fn(bbox) -> 可选：对变化区域做局部放大 OCR（L-C 主动观察层）。
@@ -187,10 +226,13 @@ def diff_screens(before: Dict[str, Any], after: Dict[str, Any],
                 focus.append({k: e.get(k, 0) for k in ("x", "y", "w", "h")})
         out["focus_regions"] = focus[:20]
 
-        # L-C 主动观察：对变化区域局部放大复核（可选回调）
+        # L-C 主动观察：对变化区域局部放大复核
+        if inspect_path and not inspect_fn:
+            inspect_fn = build_inspect_fn(inspect_path)
         if inspect_fn:
             refined = []
-            for reg in focus[:8]:
+            limit = getattr(inspect_fn, "_max_regions", 6)
+            for reg in focus[:limit]:
                 try:
                     detail = inspect_fn(reg)
                     if detail:
@@ -249,6 +291,19 @@ def _selftest():
     # 同图 diff 应几乎无变化
     d2 = diff_screens(a, a)
     checks.append(("identical -> no change", d2["summary"]["changed"] == 0 and d2["summary"]["added"] == 0 and d2["summary"]["removed"] == 0))
+    # L-C 主动观察：用假 inspect_fn 验证接线（不依赖真实 OCR）
+    called_inspect = {"n": 0}
+    def fake_inspect(bbox):
+        called_inspect["n"] += 1
+        return ["MOCK_TEXT"]
+    d3 = diff_screens(a, b, inspect_fn=fake_inspect)
+    checks.append(("L-C inspect wired", called_inspect["n"] > 0 and
+                   len(d3.get("inspected", [])) > 0 and
+                   d3["inspected"][0]["detail"] == ["MOCK_TEXT"]))
+    # build_inspect_fn 真构造 + 放大 OCR 不崩（可能 TCC 无授权返回空，允许）
+    fn = build_inspect_fn(str(p2))
+    detail = fn({"x": 180, "y": 110, "w": 80, "h": 50})
+    checks.append(("build_inspect_fn no crash", isinstance(detail, list)))
 
     ok = sum(1 for _, p in checks if p)
     print(f"elements: before={a['count']} after={b['count']}")

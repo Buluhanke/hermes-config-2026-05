@@ -67,7 +67,8 @@ triggers:
 #### 最强模式：结构化元素级 diff（UIAnchor 式，2026-11-22）
 - `run_step(..., structural=True)`（默认）：事后校验走 `screen_parser.py`，把前后两屏解析成结构化 UI 元素清单（Vision OCR 文字层 + OpenCV 轮廓结构层），做**元素级 diff**，精确回答「哪个按钮消失/哪个文字出现/哪个框变了」——比整图 md5 强一个量级。
 - expected_spec 支持：`any_change` / `added_min` / `removed_min` / `changed_min` / `text_appears` / `text_gone`；`fp_changed` 兼容旧接口（整图兜底）。
-- `screen_parser.py`：`parse_screen(img)` + `diff_screens(a,b)` → `{added,removed,changed,stable,focus_regions,summary}`。三层：L-A OCR、L-B 轮廓、L-C 对变化区域 crop+放大复核（预留 inspect_fn，LBS/FocusUI 主动观察）。
+- `screen_parser.py`：`parse_screen(img)` + `diff_screens(a,b, inspect_path=...)` → `{added,removed,changed,stable,focus_regions,summary,inspected}`。三层：L-A OCR、L-B 轮廓、L-C **已接线**：`diff_screens(inspect_path=after图)` 自动对变化区域 crop+放大3x+OCR（`build_inspect_fn`），`step_verifier.postcheck_structural` 默认传 after 图启用；结果在返回值的 `inspected` 字段。
+- **OCR 底层修复（2026-11-22）**：`visual_verifier.py` 生成的 Swift 脚本原来写 `r?.results`（macOS 27 SDK 里 `r` 非 optional）→ 编译失败 → OCR 一直静默返回空，所有「允许空结果」的测试都没抓到。已改为 `r.results`，实测大字/小字(12px)/放大3-6x 全部识别成功。⚠️ 改 Swift 模板后必须删 `_vision_ocr_bbox.swift` 让 `_ensure_swift()` 重新生成。
 - 自检：`python3 ~/.hermes/scripts/screen_parser.py selftest`（6/6）。真实两屏 diff 实测通过。
 - 降级链：screen_parser 不可用 / diff 失败 / 异常 → 自动降级到普通 postcheck（整图指纹），绝不影响闭环。
 
@@ -86,7 +87,7 @@ triggers:
 - 办公：python-docx 写入→读回 3 轮 ✅（注：openpyxl/pptx 系统 python 未装，Excel/PPT 走 WPS MCP 或其他 venv）
 - 网页：read_url.py 真实读 example.com 3 轮全走 curl 层（577 chars）✅
 
-环境事实：系统 python 有 `docx`/`PIL`，无 `openpyxl`/`pptx`；`cua-driver` 在 `~/.local/bin/cua-driver`（不在 PATH）；`decision_engine.py` 修复后可正常运行。
+环境事实：系统 python3 有 `docx`/`PIL` 12.1.1、`cv2` 4.13.0、`numpy` 2.4.4，无 `openpyxl`/`pptx`/`scipy`/`skimage`（2026-11-22 实测）；`cua-driver` 在 `~/.local/bin/cua-driver`（不在 PATH）；`decision_engine.py` 修复后可正常运行。cv2+numpy+PIL 齐备 = 本地 OpenCV 感知（screen_parser.py 元素级 diff）零额外依赖可跑，不需装本地 VLM。
 
 ## 操作电脑链路实测（2026-11-22，真点击）
 

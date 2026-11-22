@@ -218,7 +218,7 @@ class StepVerifier:
         try:
             a = screen_parser.parse_screen(before_screenshot)
             b = screen_parser.parse_screen(after_screenshot)
-            d = screen_parser.diff_screens(a, b)
+            d = screen_parser.diff_screens(a, b, inspect_path=after_screenshot)
             if not d.get("ok"):
                 return self.postcheck(expected_spec, before_screenshot, after_screenshot)
             s = d["summary"]
@@ -255,6 +255,7 @@ class StepVerifier:
                 "reason": "structural_ok" if ok else "structural_mismatch:" + ",".join(failed),
                 "mode": "structural", "diff_summary": s,
                 "focus_regions": d.get("focus_regions", []),
+                "inspected": d.get("inspected", []),
                 "checks": checks, "latency_ms": int((time.time() - t0) * 1000),
             }
             self._log({"event": "postcheck_structural", "ok": ok,
