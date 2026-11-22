@@ -52,18 +52,15 @@ grep -A5 "auxiliary:" ~/.hermes/config.yaml | grep vision  # 应为 auto 或具�
 ls ~/.hermes/perception_memory.db 2>/dev/null || echo "❌ perception_memory.db 不存在"
 ```
 
-**当前实测状态（2026-07-04）**：
-- L0 spatial_memory: ✅ `~/.hermes/spatial_memory/` 存在
-- L1 cua-driver: ✅ `cua-driver 0.6.8`
-- L2/L3 脚本: ⚠️ 未逐一验证，文档可能过期
-- 本地 Ollama/LLaVA: ❌ 已删除，vision 走云端 fallback（OpenRouter → Nous Portal → Anthropic）
-- `perception_memory.db`: ❌ 不存在
-- `fact_store.db`: ❌ 0字节，表结构丢失
+**当前实测状态（2026-11-22 复核，修复后）**：
+- L0 spatial_memory: ✅ `~/.hermes/spatial_memory/cache/` 已重建 + `perception_memory.db` 存在（L0 缓存写入/读回命中已实测）
+- L1 cua-driver: ✅ `~/.local/bin/cua-driver`（不在 PATH，用全路径），进程在跑
+- L2 脚本: ✅ 已补齐 `visual_verifier.py`（Vision OCR 带bbox）+ `local_detector.py`（颜色检测）
+- L3: ✅ `vlm_bridge.py` 已建，默认禁用
+- `decision_engine.py`: ✅ 修复后可正常运行 `python3 ~/.hermes/scripts/decision_engine.py stats`
+- 本地 Ollama/LLaVA: ❌ 已删除（用户铁律），vision 走云端，L3 默认关
 
-**修复优先级**：
-1. fact_store.db 重建（学习历史全部丢失）
-2. vision 配置改为 `provider: auto`（删掉指向已死 ollama 的硬编码）
-3. perception_memory.db 重建（感知决策无历史积累）
+**统一入口**：用 `hermes-humanlike-ops` 总路由选工具链。
 
 ## 已知坑 (踩过验证)
 
