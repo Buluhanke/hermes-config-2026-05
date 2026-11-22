@@ -320,3 +320,4 @@ print(json.dumps(de.funnel_stats(days=7), indent=2))
 
 - **架构决策依据 + UI-TARS 硬件门槛 + 不做的方案对比**: `references/funnel-architecture-decision.md`
 - **4 层漏斗烟雾测试模板 (复制改 find_element 调用即可)**: `templates/funnel_smoke_test.py`
+- **step_verifier v2 端到端模拟器 (4 场景，纯本地零依赖)**: `scripts/step_verifier_v2_sim.py`；改完 step_verifier 必须跑它，输出 4/4 才算回归通过。

@@ -110,9 +110,23 @@ Layer 3: browser_*
 
 **Benchmark 现状**（避免引用过时论文数）：OSWorld 2.0 v2.1 官方榜首 44.33% binary / 77.67% partial（论文时 20.6% 已过时）；OSWorld-Verified 榜首 90.19%、通用模型 claude-fable-5 85.96%（人类基线 ~72%）；WebArena-Pro（2611.17955，300 任务/20 站点/多模态音视频）最强 Codex+GPT-6.1-Sol 与 Claude Code+Opus-5.5 均 62.3%；WebArena 榜首 86.1%（Narada AI Code）、最佳开源 74.3%（DeepSeek v3.2）。
 
-## 每日进化前置自检（2026-11-21 加入）
-- 进化开始前先跑 `hermes fallback list`：若为空（`No fallback providers configured`），用 `hermes config set fallback_providers '[...]'` 恢复 gemini/deepseek/zai 三链，再 `hermes fallback check --live` 确认 exit 0。config.yaml 会被周期性重写清空 fallback，曾导致 cron 连续 12 次失败。
-- 不要用直接编辑 config.yaml 的方式恢复（安全护栏会拒绝）；cron 上下文 fact_store 只读，决策写入本 skill 或报告。
+## 每日进化前置自检
+- **不绑定任何模型是用户铁律**：cron 任务不 pin、config 不设 `fallback_model` / `fallback_providers` 锁定，给什么模型就用什么模型、跟随当前主模型。模型失效时手动切换，不做自动轮替，也不要自动恢复 fallback 链——旧版"fallback 为空就恢复三链"的自检已废弃，它会违背这条铁律。
+- 失效进化任务的正确修法是 `cronjob_manage(action='update', pinned=false)` 取消 pin + `hermes config unset fallback_model` 清隐藏绑定，而不是换一个模型 pin 上。**pin 免费模型必翻车**：免费额度到期就 404、地区受限就 403，cron 静默停摆且用户看不到 last_status。
+- 不要用直接编辑 config.yaml 的方式改配置（安全护栏会拒绝），用 `hermes config set/unset`；cron 上下文 fact_store 只读，决策写入本 skill 或报告。
+- 验证进化任务是否真跑：`cronjob_manage(action='run')` 手动触发一次并读输出文件，别只看 `last_status`。
+
+## 调研驱动进化（用户说「找更强方案进化」时走这条）
+
+不是出一份报告，必须走完「清点→调研→对比→落地→验证→固化」闭环：
+1. 清点家底：`find ~/.hermes/skills -name SKILL.md` 统计总数/顶层分组，读核心脚本现状，先确认自己已有什么。
+2. 四路并行搜：最新研究 / SOTA benchmark / 开源工具 / 自改进机制。每路取 5-10 条，只记可量化的关键数字，别抄摘要。
+3. 对比现状分三类：已覆盖 / 部分覆盖 / 未覆盖。只落地「未覆盖且 ROI 最高」的 1-3 个，不贪多。
+4. 新工具决策：已有等价能力就**抄设计不换栈**（装新工具只会碎片化）；只有确实无等价物才装。
+5. 落地必须零 LLM 依赖、纯本地可跑，跨模型可移植优先于模型特定行为。
+6. 验证两道门：模块自检（如 `step_verifier.py selftest`）+ 端到端模拟（如 `perception-decision-engine/scripts/step_verifier_v2_sim.py` 4/4）。模拟必须覆盖成功 / 静默失败 / 前置拦截 / 外部证据否决四类。
+7. 收尾四件事：更新相关 SKILL.md、把脚本备份进 `scripts/`（别只留临时目录）、git commit 到技能大本营、fact_store 记一条可检索结论。
+- 呈现给用户：结论 + 对比表 + 落地项 + 验证数字，不要过程流水账。
 
 ## 持续进化 Checklist
 

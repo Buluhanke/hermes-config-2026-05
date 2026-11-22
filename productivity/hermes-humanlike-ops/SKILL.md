@@ -80,7 +80,7 @@ triggers:
 3. **结构化 web 证据（Tsaagan / structural verification）** — `run_step(..., verify_web_fn=lambda: {...})`。返回 `{url_delta, console_errors, network_failures}`；后两者非空 → 本步判失败并写进 `trace["evidence"]["web"]`。对应 Tsaagan 的 verify block（URL delta / expected text / console errors / failed requests）与 HCU 的 AX diff。网页提交类操作必传。
 
 ⚠️ 铁律补充：`unexpected_appears` 只做「禁止信号 veto」，不要用它代替 `text_appears` 做正向确认；OCR 读不到时标记 inconclusive，不硬判失败。
-端到端模拟 4/4：正常成功 / 陈旧目标零执行 / 异常转移上报 / web 证据否决，脚本 `~/.hermes/cache/scratch/v2_sim.py`（临时目录，必要时重建）。
+端到端模拟 4/4：正常成功 / 陈旧目标零执行 / 异常转移上报 / web 证据否决，脚本 `perception-decision-engine/scripts/step_verifier_v2_sim.py`（已固化，可直接重复运行；输出 4/4 才算回归通过）。
 
 ## 真人化三支柱
 
