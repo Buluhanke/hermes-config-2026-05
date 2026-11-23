@@ -217,6 +217,15 @@ fact_store add:
 
 ---
 
+### 夜间进化 cron 检查清单（每次按序跑，已实测）
+1. `hermes --version` + `hermes update --check` 确认版本差；`hermes fallback list` 与 `hermes config get fallback_providers` 必须为空 / `[]`。非空先 `printf 'y\n' | hermes fallback clear`（交互命令，直接跑会被 `[y/N]` 取消），再复验。
+2. 查残留自动切换三处：`ps aux | grep -Ei 'model_health|model_router|fallback'`、`~/.hermes/scripts/`、cron 列表——都必须为空。发现即删除，禁止重建。
+3. 网关健康探针端口是 **8642**（`curl 127.0.0.1:8642/health`）；18789 是错端口，别再试。
+4. `hermes cron list` 的 ⚠ 项：`HTTP 404 free period has ended` / `HTTP 403 not available in your region` 属模型侧瞬态，带 `recovered since` 即无需处理；禁止因此加 fallback 或 pin 模型（违反零绑定铁律）。
+5. `hermes skills check` 的 `update_available` 不等于要升：源失效、非必需技能跳过；本地改过的技能永不用 `--force` 覆盖。
+6. `fact_store add` 在 cron 上下文恒被拒（read-only in this context），进化决策写入本 skill 或当次报告，不在 cron 里重试。
+7. 升级判断：patch 版若含存储层 / persistence 接口重构，无人值守 cron 暂缓；等完整发布说明版（如 v0.24.0）再评估。
+
 ## 版本历史
 
 - v1.0.0 (2026-10-23): 初始版本，定义 Search-First 进化协议
