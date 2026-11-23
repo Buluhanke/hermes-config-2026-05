@@ -41,6 +41,20 @@ curl -L -C - --retry 8 --retry-delay 3 --connect-timeout 20 \
 
 Verify with `stat -f%z <asset>` against the API `size`, then `shasum -a 256` if the project publishes a digest (many publish only an APK signing certificate, which authenticates the app itself, not a downloadable asset).
 
+## 3b. Fetch repo files without git or urllib
+
+When you need a few files from a repo (a SKILL.md, a config example) rather than a full clone, and `git clone` is unavailable or the interpreter's TLS trust store rejects the proxy, go through the contents API with `curl` and decode locally:
+
+```bash
+# curl uses the system trust store; urllib may fail CERTIFICATE_VERIFY_FAILED under a transparent proxy
+curl -s -m 15 \
+  https://api.github.com/repos/<owner>/<repo>/contents/<path> > /tmp/gh_file.json
+python3 -c "import json,base64; d=json.load(open('/tmp/gh_file.json')); \
+  open('/tmp/out','w').write(base64.b64decode(d['content']).decode('utf-8'))"
+```
+
+List a directory with `contents/<dir>` and read each item's `type`/`name`/`download_url` before fetching. This path also sidesteps a broken git binary — check `file $(which git)` if clone fails with an architecture error, and do not spend time repairing it when only a handful of files are needed.
+
 ## 4. When `brew tap` is the blocker
 
 `brew tap` clones from `github.com`. If that hangs, lay the tap down from codeload instead:

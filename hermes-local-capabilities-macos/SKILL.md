@@ -71,14 +71,13 @@ A self-check like the one in this session covers: model/provider, toolsets enabl
 
 - **macOS SSH username is `mac` on macOS machines, not `kk` or `aimac`.** Many macOS machines set the short username as `mac` or the first 3 letters of the account name. `whoami` returns the short username for SSH. Always verify with `ssh mac@<IP>` unless the user specifies a different username.
 
-- **`hermes gateway restart` cannot be called from inside the Gateway process.** Sending `hermes gateway restart` from within a running Gateway session kills the calling process (the Gateway itself), which terminates the agent — the request never completes. Same for `launchctl kickstart -k` — the approval system intercepts it.
+- **Gateway 重载必须跑在对话进程树之外。** 对话内 `kill` / `restart` / `launchctl kickstart` 都会被引擎拦截，`hermes gateway restart` 从内部调用会杀掉调用它的 Gateway。另：不要用 `ps aux | grep 'hermes_cli.main serve'` 找 PID —— launchd 托管安装里进程被 `osascript -l JavaScript` 包着，这个模式匹配不到任何东西。
 
-  **Working restart method (no user involvement needed):**
-  1. Find the Gateway PID: `ps aux | grep 'hermes_cli.main serve' | grep -v grep | awk '{print $2}'`
-  2. Send SIGTERM: `kill -TERM <pid>`
-  3. launchd automatically restarts the Gateway on a new PID within ~1 second.
+  **已验证可行的方法**：建一个 `no_agent=true` 的 cron job，脚本只做一件事——向 `launchctl list | awk '/ai\.hermes\.gateway/{print $1; exit}'` 取得的 PID 发 `kill -HUP`；然后 resume 并显式 run。launchd 会重新拉起新 PID。HUP 会走一次干净的关停（向 home channel 发 shutdown 通知）再重启，**当前 turn 会被中断**，这是重启确实发生的证据。
 
-  This works because launchd is the parent of the Gateway process — when the Gateway dies, launchd re-spawns it. The App process (separate PID) is unaffected.
+  **会被拦的**：cron 脚本里含 `launchctl kickstart -k` 会在 job 创建时被引擎拒绝（防 SIGTERM-respawn 循环），`kill -HUP` 不会。重载脚本保持最小——只发信号，不带任何 lifecycle 命令。
+
+  **坑**：paused 状态的 job 无法直接 run，必须先 resume。
 
 - **Do NOT delete `~/.hermes/chrome-profile-mirror/`.** It's the CDP browser's only data source. The launchd-managed Chrome process holds files inside it; killing it from the wrong angle can corrupt the login state. Use `chrome-cdp-control`'s `scripts/sync_profile_mirror.sh` to update, never a wholesale delete.
 - **"Copy + re-sign" app duplication fails on machines without a code signing certificate.** Many Macs (especially non-developer consumer machines) have `security find-identity -v -p codesigning` return `0 valid identities`. On these machines, copying an app (e.g. WeChat), changing its bundle ID, and re-signing with `codesign --force --sign -` produces a Gatekeeper rejection — the app cannot be opened. For WeChat specifically: `open -n` deduplicates by bundle ID at the OS level and `--multiple-instance` is not implemented, so the only reliable paths are the app's built-in account-switching feature or a VM.

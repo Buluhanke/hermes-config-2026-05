@@ -55,7 +55,7 @@ triggers:
 ## 5. Hermes Agent v0.23.x（2026-11，重大更新）
 
 - **v0.23.0 "The Hearth Release" (11-05)**：自 v0.22.0 ~10080 commits / ~1950 PRs / 666贡献者 / ~850 issues closed。核心：①**单 gateway 拥有所有会话**——CLI/TUI/Desktop/editor/bots/cron 全部 attach 到同一个 gateway，同一 chat 不再重复/丢消息；②**Webapp** 把整个 Desktop 工作区开在浏览器标签（`webapp.enabled` 默认关）；③终端内联图片(kitty/Ghostty/iTerm2/VSCode)；④`/rewind` 对话回退+fork；⑤插件自动更新，catalog 600→1050+；⑥内置 skill 58→44（Word/PPT/Excel 合并为 `microsoft-office`）；⑦`hermes curator lock` 锁手工 skill。默认模型 GLM-5.3（1M 上下文）。
-- **破坏性变更**：旧 `browser_*` 工具(agent-browser/browser_navigate/browser_click…)全删，浏览器自动化只剩 `browser_exec`；`hermes mcp serve`→`hermes mcp-serve`；Desktop 需 macOS 13+/64位 Windows。写自动化 skill 时勿再引用旧工具名。
+- **破坏性变更**：旧 `browser_*` 工具(agent-browser/browser_exec/browser_exec…)全删，浏览器自动化只剩 `browser_exec`；`hermes mcp serve`→`hermes mcp-serve`；Desktop 需 macOS 13+/64位 Windows。写自动化 skill 时勿再引用旧工具名。
 - **v0.23.2 (11-16)**：~1989 PRs，durable subagents(跨 gateway 重启存活)、`hermes fallback check`、CVE-2026-130164(env 文件 allowlist)安全修复。
 - **v0.23.3 (11-19/20)**：~370 PRs，prompt-cache lifecycle controller(长工具运行预热/闲置压缩)、GPT-6.2 Astra+Sol 上 OpenRouter/Nous Portal、可配置 skill 索引描述宽度(`skills.index_desc_limit`)。
 - **Hermes Enterprise (11-18, Nous×Microsoft)**：进 Microsoft Teams/Microsoft Store/Azure Container Apps Sandboxes；Collective Wisdom 把员工成功做法沉淀为可共享 skill；日处理近 2 万亿 token，OpenRouter 公共 agent 排名 #1。

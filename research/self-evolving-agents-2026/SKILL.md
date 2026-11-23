@@ -183,3 +183,35 @@ l2: 自演化
 ### 横向对照（与库内早期技术）
 - 硬件/模型冻结前提不变：本轮 Exo/HSI/TokenEconomizer 均不训模型权重，改进全在 harness/记忆/策略层——再次印证「系统/scaffold 设计 > 单模型能力」。
 - 演化安全性共识：gated validation + 受保护机制层 + 回滚，是本轮 Exo/Self-Improving-Harnesses/AGP 的共同底座，Hermes 进化循环应保留冻结外层守卫。
+
+## 2026-11-23 自学成果补充（fact_store cron 只读，直接固化于此）
+
+### 头号发现：瓶颈是「评估分辨率」，不是「提案质量」
+- **Resolution Hypothesis**（arXiv 2611.23068，7 种演化方法 × 6 模型 × >10M LLM calls）：agent 演化停滞不是因为提不出好 artifact，而是噪声评估分不出好坏——候选选择「与随机无异」，错误逐轮累积；方法间几个百分点的差距小于同一方法两次独立运行的波动，论文排名常靠运气。**行动：先投资评估可靠性（重复采样/统计门/held-out），再投资新提案生成器。**
+- **TRUST**（2611.10787）：在线多重假设检验门控 RSI，HotpotQA/DROP/APPS + DeepSeek-V4-Flash/Qwen-3.8-Flash 上把「接受劣化更新」比例从贪心门 45.59% 压到 2.78%，最终分数还高于 SOTA 统计门。
+- **SelfImprove-Bench**（2611.02797）：G0–G4 泛化阶梯证明 RSI 增益不稳定——18 个方法-任务对里 8 个在已见实例回放分数反低于历史；训练难度上的提升未必迁移到更难/其他任务。
+- **Flex-RSI**（2611.08946，24 任务/18 模型/177 runs）：85% 的 run 有提升、中位 +10.4 分；闭源 94% runs +14.9 中位 vs 开源 76% +8.5；收益主要来自 agent 自建方案 + 改写 harness，简单单一答案任务 0 增益。
+
+### 可落地的新方法（均带数字）
+- **Elite**（2611.21056）：Explore-then-Integrate，不用下游任务评估也能自改进。SWE-bench Pro 60.0%→85.6%（DGM 86.7%/HGM 88.3%），零候选任务评估、演化时间比 DGM 快 8.8×；跨基准 73.3% Verified / 69.3% Polyglot。适合评估费用高的场景。
+- **GUARD**（2611.23476）：无评分器 RSI，方向性 regret + Soft-HURT 非退化门，专治局部退化/技能遗忘/记忆膨胀，测试时单 pass 冻结 harness，还降部署 token。
+- **SIM / Self-Improvement Memory**（2611.18856）：给 harness 优化器记「每次编辑的动机+预测/实测结果+评估上下文」，跨 benchmark/跨模型续训时 coding 平均 +2.36 分（p=0.003）。**对应 Hermes：skill 改写应留 diff + 理由 + 实测结果，而非只留最终版。**
+- **Skill∞**（2610.35434）：meta-agent 按 meta-skill 优化任务 skill，同时用同一流程改写 meta-skill 自身；83 SkillsBench 任务 60.7% > 人工策展 56.4% > SkillEvolver 54.5%。meta-skill 与任务 skill 解耦、走原生 skill discovery——与 Hermes skill 架构同构。
+- **MAPE**（2611.17068，github ash-ding/MAPE）：从最小种子演化整个记忆程序，LoCoMo/LongMemEval 比人工设计 +12% 绝对准确率、仅 35% serving 成本；两条可移植模式：①保留原始对话作可检索证据 ②按查询意图组合检索证据（移植到 5 个记忆系统全部涨点）。
+- **ModHarness-RL**（2611.18533）：harness 变成可学习程序——State 类型块 + Compression/Steering 两个程序，RL 中从轨迹提候选、执行验证、在历史轨迹回放；1.5B–8B 上 CodeSearch/ALFWorld/BIRD SQL 多数设置超固定 harness。
+- **AIDE²**（2609.26457）：8 天自主 RSI，100 节点轨迹 7 次接受改进，grade 0.703→0.778，迁移到 4 个 held-out 基准并追平/超过人工生产 agent；reward hacking 55%→32%（比人工 39% 还低），该行为从未被显式优化。
+
+### Hermes 本体与生态（影响自家技术栈）
+- **v0.23.3**（11-19/20，v0.23.2 以来 370 PR）；**v0.23.0「Hearth」**（11-05，~1950 PR/850 issues/666 贡献者）：Webapp 从自有 gateway 在浏览器标签开整台工作区；**单 gateway 拥有所有会话**（CLI/TUI/Desktop/bot/cron 降级为客户端，解决重复写/丢消息）；终端内联图片；`/rewind` 回退分叉会话；多机同窗 Desktop；Group Chats 自路由；插件自动更新（catalog 600→1050+）；`hermes curator lock` 锁手工 skill；内置 skill 58→44；付费 MCP 可设 spend 上限；cron 共享 prompt cache/每次调用省 ~1570 tokens。**破坏性变更：旧 browser_* 工具全删，浏览器自动化只剩 `browser_exec`；`hermes mcp serve`→`hermes mcp-serve`；Desktop 需 macOS 13+。**
+- **Hermes Enterprise**（11-18 与微软）：进 Microsoft Store/Teams/Azure Container Apps Sandboxes；Collective Wisdom 把成功做法沉淀为可共享 skill；Foundry autonomous agents 给每个 agent 独立 Entra 工作账号；OpenRouter 公共 agent 榜第一、日均近 2T tokens。
+- **浏览器基准 2026-11 现状**：OSWorld-Verified 顶层 90.19%@100 步（Intelligence-Indeed）、无插件最强模型 85.96%（claude-fable-5）；OSWorld 2.0 v2.1（推荐版，108 长程/均值 318 tool calls）顶层 Claude Opus 5 max 44.33% binary/77.67% partial@500 步（论文时仅 20.6%）；WebVoyager 顶层 99.19%（browser-control/Fable 5 的 shell-native CDP harness）。**步数预算是一等混淆变量：同一模型仅因 step cap 从 9.1%→23.0%，引用分数必须带 release+step cap。**
+- **WebArena-Pro**（2611.17955）：300 任务/20 自托管应用/6 域，音视频与文本视觉同为观测；最高 62.3%（Codex GPT-6.1 Sol & Claude Code Opus 5.5），OpenCode Kimi 3.1 Pro 60.7%，通用 agent 仅 30.3%。
+- **成本对照**（Auto Browser，WebVoyager-mini 105 任务）：DeepSeek V4.1 Flash 82.8%、$0.026/任务（后续 92.7%）；Claude Sonnet 5.5 79.3%、$0.87/任务——33× 差价而准确率在噪声内。**低成本模型 + 好 harness 已够用，支持 Hermes 不锁模型策略。**
+- **多 agent 编排 11 月新原语**：Vercel Board（实验性 headless 消息板，CLI/SDK，跨 harness，v0 安全 swarm + v0 software factory 已合并 >50% PR）；eve 1.0 GA（开源 harness + Workflow SDK 崩溃续跑 + Slack multiplayer）；Swarms v17 InterLink（6 类 comms channel、import 1.91s→0.28s、100 节点 fan-out 0.21s vs LangGraph 1.44s）；Chorus v0.24（product/dev/review/lead 四角色 + review 独立 session 锚，避免「换 agent 但同一脑袋」）；Microsoft Agent Framework Durable Task 扩展 GA。
+
+### 对 Hermes 进化循环的更新启示
+1. **评估优先于提案**：现有 A/B 流程（3 变体 × 5 用例）应补「重复运行取方差 + held-out 集」，因为方法间典型差距小于同方法两次运行波动（Resolution Hypothesis）。
+2. **统计门替代贪心门**：skill 改写采纳参考 TRUST 多重检验（把劣化接受率压到 ~3%），而非单次分数高就保留。
+3. **skill 留可迁移记忆**：每次改写记录 diff + 动机 + 预测/实测结果（SIM），跨模型/跨 benchmark 续训才有依据。
+4. **不锁模型有实证**：Auto Browser 数据显示廉价模型 + 好 harness 即可逼近昂贵模型，呼应「不给模型自动绑定」的用户铁律。
+5. **工具链迁移提醒**：本机若升级到 v0.23+，所有指向旧 `browser_*` 工具的 skill/cron 提示须改 `browser_exec`，否则自动化静默失效。

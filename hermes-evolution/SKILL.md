@@ -16,6 +16,17 @@ triggers:
 
 让 Hermes 长成 Friday/Jarvis 那样——能自主学习、能控制电脑和浏览器、能持续进化，不需要用户反复教同一件事。
 
+### 旧 browser_* 工具引用迁移（2026-11-23）
+
+Hermes v0.23+ 只保留 `browser_exec`(Python code + helpers)，旧 `browser_navigate/click/type/snapshot/vision/console/scroll/press` 全部移除。**迁移规则**：
+
+- 脚本 `~/.hermes/scripts/migrate_browser_exec.py`（默认 dry-run，`--apply` 才写入），备份在 `~/.hermes/cache/scratch/browser-refs-backup-*/`。
+- **语义改写而非机械改名**：`browser_navigate(url=...)` → `browser_exec(code="new_tab(...)")`;`browser_click(ref=...)` → `browser_exec(code="js('...click()')")`;`browser_type` → `fill_input(selector, ...)`;`browser_snapshot()` → `page_info()`;`browser_vision` → `capture_screenshot()` + vision_analyze;`browser_press` → `cdp('Input.dispatchKeyEvent', ...)`;`browser_scroll` → `js('window.scrollBy(...)')`。
+- 裸 `browser_navigate https://url` 必须先于裸词替换处理，否则会被改成语法错的 `browser_exec https://url`。
+- `browser_vision(question="...)")` 的正则必须整行匹配(`^...$` + MULTILINE)，否则引号内 `)` 会截断替换留下垃圾尾巴。
+- **只改活跃 SKILL.md 的调用指令**；`references/`、`references/日期文件`、`.archive/` 是历史纪实，保留原文。历史架构描述行(如 `browser_click() → _run_browser_command()`)用 KEEP_LINES 白名单跳过。
+- 迁移后抽检：grep `browser_exec (https|file|--)`、残留 `annotate=true`/`@eN` 等旧机制描述，手动修干净。
+
 ## 8 层时间循环（已内置）
 
 | 层级 | 频率 | 作用 |

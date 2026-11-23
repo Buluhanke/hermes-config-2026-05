@@ -62,7 +62,7 @@ l3: core
 
 ## 黄金铁律（跨 lineage 通用）
 - 截图是信息最差层（有损/慢/常失败），看懂网页=拿文字/结构化数据，不是拿像素。
-- `vision_analyze` / `browser_vision` 失败 1 次即降级，绝不重试 2-3 次。
+- `vision_analyze` / `capture_screenshot()` 失败 1 次即降级，绝不重试 2-3 次。
 - 写用户真实在线数据（企微表/真实库）前先报"写 X 到 Y"，不可逆操作必须确认。
 - CDP WS 帧**不加 `jsonrpc` 字段**（否则 -32600）；Chrome 150+ 用 page-level WS，不用 `attachToTarget`。
 - 镜像 Chrome 启动必须 `--user-data-dir` 指向**隔离副本**（Chrome 148+ 拒绝默认 profile 开调试端口），且 `--remote-allow-origins=*`（zsh 下必须引号包裹 `*`）。

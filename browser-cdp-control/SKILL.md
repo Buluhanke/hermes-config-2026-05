@@ -69,7 +69,7 @@ Priority order:
 1. `web_extract` — fastest, for static/lightweight pages
 2. `browser_get_web_content` — for structured page content
 3. **CDP Runtime.evaluate** — direct DOM query via WebSocket, most reliable for complex/SPA pages
-4. `browser_vision` / `computer_use` — last resort only (dynamic rendering, CAPTCHA, rich text that resists text extraction)
+4. `capture_screenshot()` / `computer_use` — last resort only (dynamic rendering, CAPTCHA, rich text that resists text extraction)
 
 ## Architecture
 ## Architecture
@@ -171,13 +171,13 @@ async def cdp_call(ws, mid, method, params=None, timeout=15):
 
 ### `browser.cdp_url` Config — Critical Pitfall
 
-**Symptom**: `browser_navigate` returns "404 Not Found" or "ERR_BLOCKED_BY_CLIENT" even though Chrome is running on the configured port and `curl localhost:<port>/json/version` returns正确.
+**Symptom**: `browser_exec` returns "404 Not Found" or "ERR_BLOCKED_BY_CLIENT" even though Chrome is running on the configured port and `curl localhost:<port>/json/version` returns正确.
 
 **Root cause**: `hermes config set` writes empty-string fields for keys it can't delete. When multiple bad `hermes config set` calls accumulate, the YAML parser or the code that reads `browser.cdp_url` gets confused and the value is never read correctly.
 
 ### CDP port config: 4 drift-prone locations, not just `config.yaml` (2026-06-10)
 
-When the user says "browser tools 全部报错" / "browser_navigate 失败" / `curl 9222 成功` 但 `browser_*` 报 `Connection refused`, **不要只改 `~/.hermes/config.yaml`**。CDP 端口在 4 个地方都可能写错,且相互不一致会让 browser tool 拿错端口。
+When the user says "browser tools 全部报错" / "browser_exec 失败" / `curl 9222 成功` 但 `browser_*` 报 `Connection refused`, **不要只改 `~/.hermes/config.yaml`**。CDP 端口在 4 个地方都可能写错,且相互不一致会让 browser tool 拿错端口。
 
 **优先级链** (browser_tool.py:288 `_get_cdp_override` 决定):
 1. `BROWSER_CDP_URL` 环境变量 (来自 `/browser connect` 或 `~/.bash_profile` / `~/.zshrc` / `~/.hermes/.env`)
@@ -239,7 +239,7 @@ browser:
 curl -s http://127.0.0.1:9222/json/version | python3 -c \
   "import sys,json; d=json.load(sys.stdin); print('OK:', d['Browser'])"
 ```
-然后 `browser_navigate https://www.doubao.com` 应该立即返回完整页面（已登录状态）。
+然后 `browser_exec(code="new_tab(\'https://www.doubao.com`\')") 应该立即返回完整页面（已登录状态）。
 
 ### Foreground Chrome Profile — Direct Connection (2026-06-04)
 
@@ -507,12 +507,12 @@ launchd 启动 Python 脚本时 cwd=/（只读），所有相对路径失效。
 修法: 启动第一时间执行 `os.chdir(Path.home() / '.hermes')` 或所有路径用绝对路径。
 
 ### Tab Discovery
-- `browser_navigate` changes URL but may not switch to that tab — always check `curl http://127.0.0.1:9222/json/list` to find the right tab ID
+- `browser_exec` changes URL but may not switch to that tab — always check `curl http://127.0.0.1:9222/json/list` to find the right tab ID
 - Look for tab by URL pattern: `'chatgpt.com' in tab.get('url','') and 'newtab' not in tab.get('url','')`
 
 ### Slow Page Loads
 - AI sites (ChatGPT, 豆包) load slowly — `sleep 15` before capturing response
-- Always re-check with `browser_snapshot` after waiting
+- Always re-check with `browser_exec(code="page_info()")` after waiting
 
 ### WebSocket Timeout
 - Set `timeout=15` on WebSocket creation
@@ -712,7 +712,7 @@ ChatGPT、豆包、智谱清言等使用 **shadow DOM**，标准 `document.query
 ```
 
 ### 方法C：browser_vision截图（最终兜底）
-在 **方法A/B都返回空或内容不完整** 时，才用 `browser_vision`。
+在 **方法A/B都返回空或内容不完整** 时，才用 `capture_screenshot()`。
 
 ## 批量打开多标签页（纯HTTP）
 
@@ -818,7 +818,7 @@ python3 scripts/pending_tasks.py status
 **判断流程（严格按顺序）**：
 1. `browser_get_web_content` → 有内容？✅ 用
 2. CDP Runtime.evaluate + 方法A/B → 有内容？✅ 用
-3. `browser_vision` → 失败 1 次即降级，**不要重试**
+3. `capture_screenshot()` → 失败 1 次即降级，**不要重试**
 4. CDP Page.captureScreenshot + base64 解码 + Tesseract OCR
 5. 解析 OCR 输出（见 `references/doc-weixin-ocr-read.md`）
 
@@ -827,11 +827,11 @@ python3 scripts/pending_tasks.py status
 ## Workflow
 1. `curl http://127.0.0.1:9222/json/version` — verify Chrome alive
 2. `curl http://127.0.0.1:9222/json/list` — find target tab ID
-3. `browser_navigate` to target URL (or switch to existing tab)
+3. `browser_exec` to target URL (or switch to existing tab)
 4. Wait for page load (`sleep` if needed)
-5. `browser_snapshot` to get element refs for interaction
+5. `browser_exec(code="page_info()")` to get element refs for interaction
 6. **Try方法A/B（CDP Runtime.evaluate）**
-7. On failure → `browser_vision` as last resort
+7. On failure → `capture_screenshot()` as last resort
 
 ## Enhanced Actions (browser-use 对照吸收, 2026-06-14)
 
@@ -890,7 +890,7 @@ Hermes 现在有 **3 层浏览器控制工具**，互补不冲突：
 - `input.bar-label` — 同 .bar-label
 
 **Tab 切换（可靠方法）**：
-1. `browser_snapshot` 或 `Runtime.evaluate` 找到 tab 文字
+1. `browser_exec(code="page_info()")` 或 `Runtime.evaluate` 找到 tab 文字
 2. 用 `Runtime.evaluate` 查坐标：
 ```javascript
 var el = Array.from(document.querySelectorAll('*')).find(function(e){return e.textContent.trim()==='报价表'});
@@ -900,9 +900,9 @@ var r = el.getBoundingClientRect();
 3. CDP `Input.dispatchMouseEvent` 点击（type: mousePressed + mouseReleased，x=r.left+r.width/2, y=r.top+r.height/2）
 4. 等待 3s 切换完成
 
-**为什么不用 element ref**：`browser_click @e13` 在企业微信表格里经常报 "Could not locate element" — tab 是动态渲染的，snapshot 的 ref 在导航后失效。
+**为什么不用 element ref**：`browser_exec @e13` 在企业微信表格里经常报 "Could not locate element" — tab 是动态渲染的，snapshot 的 ref 在导航后失效。
 
-**vision 工具独立性**：`browser_vision` 内部截图，不读 `screencapture` 命令的文件。直接调 `browser_vision question="..."` 分析即可，不需要先 screencapture。
+**vision 工具独立性**：`capture_screenshot()` 内部截图，不读 `screencapture` 命令的文件。直接调 `capture_screenshot() question="..."` 分析即可，不需要先 screencapture。
 
 **读取表格内容**：canvas 渲染无法用 DOM，方法是：
 1. `Runtime.evaluate` 读公式栏（B 列物料名等）
@@ -911,12 +911,12 @@ var r = el.getBoundingClientRect();
 
 **读取 canvas 表格的完整降级链（2026-07-10 新增）**：
 1. `Runtime.evaluate` 读公式栏（快，准，但只能读到当前激活 cell）
-2. `browser_vision` → 失败 1 次即降级，不要重试
+2. `capture_screenshot()` → 失败 1 次即降级，不要重试
 3. `Page.captureScreenshot` + base64 解码 → 写 `/tmp/xxx.png`
 4. `tesseract /tmp/xxx.png stdout -l chi_sim+eng --psm 6` → 提取文字
 5. 解析 OCR 输出（见 `references/doc-weixin-ocr-read.md`）
 
-**⚠️ 铁律：vision 工具失败 1 次即降级**。本机实测 `vision_analyze` 对有效 PNG 反复返回"看不到图片"，`browser_vision` 也有独立截图路径但也返回"没有图片"。遇到这类工具失效 0 思考换方法，不要循环重试。
+**⚠️ 铁律：vision 工具失败 1 次即降级**。本机实测 `vision_analyze` 对有效 PNG 反复返回"看不到图片"，`capture_screenshot()` 也有独立截图路径但也返回"没有图片"。遇到这类工具失效 0 思考换方法，不要循环重试。
 
 ## Canvas-Rendered Enterprise Apps (smartsheet / spreadsheet / 表格类)
 
@@ -1062,7 +1062,7 @@ curl -s http://127.0.0.1:9222/json/version | python3 -c "import sys,json; d=json
 
 **实测 2026-07-06: Gemini 的 AI 回复可以用 AX tree 读取。**
 
-Gemini 页面 `browser_snapshot` 成功读到了：
+Gemini 页面 `browser_exec(code="page_info()")` 成功读到了：
 ```
 heading "You said Reply with just OK"
 paragraph "Reply with just OK"
@@ -1079,7 +1079,7 @@ paragraph "OK"
 | **豆包** | ❌ 可能不可读 | ❌ Shadow DOM 隔离 | 待测 |
 | **DeepSeek** | ❌ 可能不可读 | ❌ Shadow DOM 隔离 | 待测 |
 
-**判断 SOP**：先跑 `browser_snapshot` 看AX tree里有没有回复内容（paragraph/StaticText里有没有AI回复文字），有就用，没有再试Runtime.evaluate。都不行才用 browser_vision 截图。
+**判断 SOP**：先跑 `browser_exec(code="page_info()")` 看AX tree里有没有回复内容（paragraph/StaticText里有没有AI回复文字），有就用，没有再试Runtime.evaluate。都不行才用 capture_screenshot() 截图。
 
 **Workaround for sites where CDP can't read replies**:
 ```
@@ -1115,11 +1115,11 @@ The canonical working script is `scripts/hermes_cdp_bot.py`. It:
 - Reads AX tree for structure confirmation
 - Supports multiple AI sites via command-line: `python3 hermes_cdp_bot.py deepseek`
 
-### vision_analyze / browser_vision / computer_use 截图链全部失效时的降级 (2026-07-10)
+### vision_analyze / capture_screenshot() / computer_use 截图链全部失效时的降级 (2026-07-10)
 
 当 screenshot 工具都失效时，不要反复重试：
 
-1. `browser_vision` — Hermes 内置，走独立截图路径（独立于 `vision_analyze`）
+1. `capture_screenshot()` — Hermes 内置，走独立截图路径（独立于 `vision_analyze`）
 2. `computer_use(action='capture', app='Google Chrome', mode='vision')` — cua-driver（跨应用，但可能返回 0x0）
 3. `agent-browser screenshot` — 若页面**不是** Cloudflare 保护站
 4. **最终降级**：CDP `Runtime.evaluate` 直接读 DOM（企业微信表格的公式栏、cell ref）
@@ -1144,7 +1144,7 @@ screencapture -x /tmp/ai_screenshots/chrome_full.png
 | **9222** | Foreground Chrome real profile (`--user-data-dir=~/Library/Application Support/Google/Chrome/Default`) | ✅ All sites logged in (same Keychain) | User's daily Chrome, use this |
 | **9222** | (was user real Chrome in earlier session) | — | Older approach, superseded |
 
-**2026-06-04 关键发现：`browser.cdp_url` 配置后 browser_navigate 的行为**
+**2026-06-04 关键发现：`browser.cdp_url` 配置后 browser_exec 的行为**
 
 设置 `hermes config set browser.cdp_url ws://127.0.0.1:9222` 后，Hermes browser 工具连接的是**真实 Chrome 当前活跃的 tab**（不是开新 tab）。如果该 tab 是 `chrome://newtab/` 或 `about:blank`，导航到新 URL 会返回 `ERR_BLOCKED_BY_CLIENT`。
 

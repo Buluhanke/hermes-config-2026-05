@@ -19,13 +19,14 @@ triggers:
   - MIUI
   - 远程控制手机
   - 刷课时
+  - 学法减分
   - 答题
   - 自动化手机App
 ---
 
 # Android Control — Mac 控制 Android 设备
 
-Mac mini M4 (macOS 26.5) 上通过 scrcpy 投屏控制 Android，支持 USB 有线、无线调试、FIRERPA lamda 远程控制两种方案。覆盖小米手机 MI 8 和小米平板 MRX-W29。
+Mac mini M4 (macOS 26.5) 上通过 scrcpy 投屏控制 Android，支持 USB 有线、无线调试、FIRERPA lamda 远程控制两种方案。覆盖小米手机 MI 8 和华为平板 MRX-W29。
 
 ## When to Use
 
@@ -38,37 +39,36 @@ Mac mini M4 (macOS 26.5) 上通过 scrcpy 投屏控制 Android，支持 USB 有�
 | 设备 | 型号 | IP | USB调试端口 | scrcpy命令 | 备注 |
 |------|------|-----|------------|-----------|------|
 | 小米 MI 8 | dipper | 192.168.8.204 | 5555 | `~/scrcpy-phone` 选1 | Android 10, MIUI 12, FIRERPA lamda✅ |
-| 华为平板 MRX-W29 | HWMRX | 192.168.8.248 | 5555 | `~/scrcpy-phone` 选2 | Android 12 |
+| 华为平板 MRX-W29 | HWMRX | 动态读取（WiFi 192.168.0.x） | 5555 | `~/scrcpy-phone` 选2 | Android 12 |
 
-> Mac mini M4 有线网段 192.168.8.x，无线网段 192.168.0.x。注意不要混用网段。
+> Mac mini M4 有线网段 192.168.8.x，无线网段 192.168.0.x。无线 adb 走 WiFi 段，设备 IP 由 DHCP 分配、重启或换网就会变——**绝不把 IP 写死在脚本或命令里**：USB 还连着时用 `adb -s <USB序列号> shell ip route` 取 `src <IP>`；已无线连接时用 `adb devices -l` 里 model:MRX_W29 那条 `IP:端口`（解析规则见坑点 11）。
 
 ### 统一入口脚本 ~/scrcpy-phone
 
-两台设备共用一个交互脚本，支持选设备：
+两台设备共用一个交互脚本（选 1=MI8，选 2=MRX-W29）。平板端**动态解析 IP**，不写死：
 
 ```bash
-#!/bin/bash
-echo "请选择要控制的设备："
-echo "  1) 小米 MI8         (192.168.8.204:5555)"
-echo "  2) 华为平板 MRX-W29 (192.168.8.248:5555)"
-printf "输入 1 或 2: "
-read choice
-
-case "$choice" in
-  1)
-    exec scrcpy -m 1024 -b 15M --max-fps=30 --always-on-top -s 192.168.8.204:5555 --window-title "MI8" "$@"
-    ;;
-  2)
-    exec scrcpy -s 192.168.8.248:5555 --always-on-top --window-title "MRX-W29" "$@"
-    ;;
-  *)
-    echo "无效输入"
-    exit 1
-    ;;
-esac
+ADB=/Users/aimac/.local/bin/adb
+find_pad_ip() {
+  $ADB devices -l | awk '/model:MRX_W29/ && $1 ~ /:[0-9]+$/ {print $1; exit}'
+}
+ensure_pad_wireless() {
+  IP=$(find_pad_ip)
+  [ -n "$IP" ] && return 0
+  USB=$($ADB devices -l | awk '/model:MRX_W29/ && $1 !~ /:/ {print $1; exit}')
+  [ -z "$USB" ] && return 1
+  IP=$($ADB -s "$USB" shell ip route 2>/dev/null | grep -o 'src [0-9.]*' | head -1 | awk '{print $2}')
+  [ -z "$IP" ] && return 1
+  $ADB -s "$USB" tcpip 5555 >/dev/null 2>&1
+  sleep 3
+  $ADB connect "$IP:5555" >/dev/null 2>&1
+  find_pad_ip
+}
 ```
 
-> 注意：MI8 需要先用 USB 连一次执行 `adb -s <id> tcpip 5555` 开启无线调试；MRX-W29 同理。日常使用无需重开。
+选 2 时先 `ensure_pad_wireless`，把拿到的 `$IP` 传给 `scrcpy -S -s "$IP" ...`。MI8 同理：IP 变了就 USB 重开 tcpip 后重新 connect。改完用 `bash -n ~/scrcpy-phone` 验证语法。
+
+> 注意：新设备首次都要 USB 连一次执行 `adb -s <id> tcpip 5555`；日常无需重开。
 
 ---
 
@@ -92,10 +92,12 @@ brew install scrcpy
 scrcpy -m 1024 -b 15M --max-fps=30 --always-on-top "$@"
 ```
 
-**pad 脚本** (`~/.local/bin/pad`):
+**pad 脚本** (`~/.local/bin/pad`)：优先用 `~/scrcpy-phone` 选 2（自动解析 IP）；手写时别写死 IP：
 ```bash
 #!/bin/bash
-exec scrcpy -s 192.168.8.248:5555 --always-on-top --window-title "MRX-W29" "$@"
+IP=$(/Users/aimac/.local/bin/adb devices -l | awk '/model:MRX_W29/ && $1 ~ /:[0-9]+$/ {print $1; exit}')
+[ -z "$IP" ] && { echo "平板未连接"; exit 1; }
+exec scrcpy -S -s "$IP" --always-on-top --window-title "MRX-W29" "$@"
 ```
 
 ```bash
@@ -123,7 +125,7 @@ chmod +x ~/.local/bin/phone ~/.local/bin/pad
 4. **启动 scrcpy**
    ```bash
    phone    # 小米 MI 8
-   pad      # 小米平板 MRX-W29
+   pad      # 华为平板 MRX-W29
    ```
 
 ### 无线连接（日常使用）
@@ -136,7 +138,7 @@ adb tcpip 5555
 # 注意：tcpip 打印 "restarting in TCP mode port: 5555" ≠ 端口已监听，
 # 第一次 connect 可能超时，等 2-3 秒重试一次即可
 adb connect 192.168.8.204:5555   # MI 8
-# adb connect 192.168.8.248:5555  # 平板
+# adb connect <动态读到的IP>:5555  # 平板（见坑点 11）
 ```
 
 **日常使用（设备未重启时）:**
@@ -227,27 +229,24 @@ device.screenshot()               # 截图
 
 ---
 
-## 小米平板 MRX-W29 特别说明
+## 华为平板 MRX-W29 特别说明
 
 | 项目 | 值 |
 |------|---|
-| 型号 | Xiaomi Pad (MRX-W29) |
-| IP | 192.168.8.248 |
+| 型号 | 华为平板 MRX-W29（`model:MRX_W29` / `device:HWMRX`，Android 12，华为桌面 `com.huawei.android.launcher`） |
+| IP | 动态读取，WiFi 段 192.168.0.x（见坑点 11） |
 | USB 调试端口 | 5555 |
-| 连接命令 | `adb connect 192.168.8.248:5555` |
-| scrcpy 命令 | `scrcpy -s 192.168.8.248:5555 --always-on-top --window-title "MRX-W29"` |
+| 连接命令 | `adb connect <读到的IP>:5555` |
+| scrcpy 命令 | `scrcpy -S -s <IP> --always-on-top --window-title "MRX-W29"` |
 
 **USB 无线调试配置步骤（每个设备只需一次）:**
 1. USB 有线连接平板
 2. `adb devices` 确认识别
 3. `adb -s <设备ID> tcpip 5555` 开启 TCP 模式
 4. 拔掉 USB 线
-5. `adb connect 192.168.8.248:5555` 无线连接
+5. 从 USB 读 IP 后无线连接：`IP=$(adb -s <设备ID> shell ip route | grep -o 'src [0-9.]*' | head -1 | awk '{print $2}')` → `adb connect "$IP:5555"`（详见坑点 9）
 
-**MIUI 屏幕共享限制：**
-- MIUI 的「屏幕共享」功能需要对方安装小米会议/小米通话 App，和 scrcpy 是不同机制
-- scrcpy 直接读取 framebuffer，不依赖 MIUI 屏幕共享，可正常使用
-- 部分 MIUI 平板有「平板助手」限制后台进程，可能影响长时间投屏
+**机型归属**：MRX-W29 是华为机，不是小米平板——MIUI 专属项（「USB 调试（安全设置）」、MIUI 屏幕共享、平板助手限制）都不适用，别按 MIUI 流程排查。
 
 ---
 
@@ -264,8 +263,10 @@ device.screenshot()               # 截图
 
 ## App 界面自动化（刷课时 / 答题 / 填表）
 
-看页面 → dump 控件拿 bounds → `input tap` 的固定循环、引导页翻页、登录墙处理、输入框与重试次数陷阱见 `references/app-ui-automation.md`。
+看页面 → dump 控件拿 bounds → `input tap` 的固定循环、引导页翻页、登录墙处理、输入框与重试次数陷阱、**H5/WebView 页 dump 拿不到控件时的切片 OCR 定位法**、政务业务审核闸门、长时挂机学习的屏幕常亮/轮询/随机人脸抓拍交接、原生考试页答题与看图题交接见 `references/app-ui-automation.md`。
 铁律：不主动索要密码；用户主动给出自己设备的凭据并要求代填时照做，密码值不落盘、不复述。
+
+**长任务实时盯屏铁律**：挂机学习/答题这类长时任务，禁止用单个长 `sleep 280` 阻塞完再看——脚本早就跑完却迟迟没发现＝浪费时间，用户明确不满过。正确做法：`terminal(background=True, notify=[完成标志性文字])` 事件驱动，完成瞬间就收到通知；或每 15–30 秒短轮询状态/完成标记文件。检测到终态（提交成功 / 去考试 / 学习完成 / 累积学时已满）当轮立刻推进下一步并向用户汇报，不空转、不中途分神做别的。
 
 ## 坑点汇总
 
@@ -316,7 +317,7 @@ scrcpy -s 192.168.8.248:5555
 ```
 
 ### 4. 无线调试需要同一局域网
-`adb connect` 和 scrcpy 无线模式要求 Mac 和手机在同一网段。Mac mini M4 有线网卡 192.168.8.x，无线网卡 192.168.0.x，确保手机和 Mac 在同一网段。
+`adb connect` 和 scrcpy 无线模式要求 Mac 和手机在同一网段。Mac mini M4 有线网卡 192.168.8.x，无线网卡 192.168.0.x；手机/平板走 WiFi 拿到的是 192.168.0.x，无线 adb 必须在该段，不要拿旧的有线段 IP 去 connect。
 
 ### 5. MIUI 屏幕共享限制
 MIUI 的「屏幕共享」需要对方有小米 App，scrcpy 不依赖 MIUI，可正常使用。
@@ -325,12 +326,7 @@ MIUI 的「屏幕共享」需要对方有小米 App，scrcpy 不依赖 MIUI，�
 scrcpy 在 Android 10 上不支持音频（需 Android 11+），投屏无声音属正常现象。
 
 ### 7. 多设备冲突
-USB 和无线同时连接时 `adb devices` 显示两个设备，部分命令报 `more than one device/emulator`。
-```bash
-# 只保留无线，断开 USB
-adb disconnect <USB设备ID>
-adb devices -l  # 确认只剩无线 IP
-```
+USB 和无线同时连接时 `adb devices` 显示两个设备，不带 `-s` 的命令报 `more than one device/emulator`。**优先给每条 adb 命令加 `-s <目标>`，不必拔 USB**——开无线调试时本来就需要 USB 在线读 IP。只有确实要跑不带 `-s` 的批量命令时才 `adb disconnect <USB设备ID>`。
 
 ### 9. 华为平板 MRX-W29 无无线调试开关（老版本 Android）
 
@@ -345,12 +341,15 @@ adb devices -l
 adb tcpip 5555
 # 输出: restarting in TCP mode port: 5555
 
+# Step 2.5 — 从 USB 读当前 IP（DHCP 会变，绝不写死）
+IP=$(adb -s S8M6R20A27000680 shell ip route | grep -o 'src [0-9.]*' | head -1 | awk '{print $2}')
+
 # Step 3 — 等待 3 秒后无线连接
-sleep 3 && adb connect 192.168.8.248:5555
-# 输出: connected to 192.168.8.248:5555
+sleep 3 && adb connect "$IP:5555"
+# 输出: connected to <IP>:5555
 
 # Step 4 — 验证
-adb -s 192.168.8.248:5555 shell echo "wireless OK"
+adb -s "$IP:5555" shell echo "wireless OK"
 # 输出: wireless OK ✅
 ```
 
@@ -365,9 +364,13 @@ adb -s 192.168.8.248:5555 shell echo "wireless OK"
 ### 11. 排查平板无线调试是否开启
 
 平板无线调试已开启但端口不通（`adb connect` 报 `Connection refused`）：
-- 平板可能切换了 IP → USB 还连着时用 `adb shell ip route` 直接读当前 IP（输出中 `src <IP>` 即设备地址），免翻手机设置；USB 已拔则去设置 → 关于手机 → 状态信息 → IP 地址
+- 平板可能切换了 IP → USB 还连着时用 `adb -s <USB序列号> shell ip route` 直接读当前 IP（输出中 `src <IP>` 即设备地址），免翻手机设置；已无线连接则从 `adb devices -l` 解析：
+  ```bash
+  /Users/aimac/.local/bin/adb devices -l | awk '/model:MRX_W29/ && $1 ~ /:[0-9]+$/ {print $1; exit}'
+  ```
+  **解析 `adb devices -l` 必须匹配第一字段 `$1`，不能把 `:端口$` 锚到整行末尾**——`-l` 会在地址后追加 `product:`/`model:`/`transport_id:` 等元数据，行尾根本不是端口。BSD awk 不支持 `{4}` 这类区间量词，用 `+` 或显式重复字符。
 - 无线调试端口可能变了 → 去设置 → 开发者选项 → 无线调试查看当前端口
-- 平板和 Mac 不在同一网段 → 确认都在 192.168.8.x
+- 平板和 Mac 不在同一网段 → 无线 adb 要同在 192.168.0.x（Mac 的 WiFi 段），USB 调试才是 192.168.8.x；别拿有线段的旧 IP 去 connect
 
 ### 12. Hermes 终端里 adb 不在 PATH
 Hermes 的 shell 找不到 `adb`，但符号链接 `~/.local/bin/adb` 已存在 → 所有 adb 命令用全路径 `/Users/aimac/.local/bin/adb`，或在命令前 `export PATH="/Users/aimac/.local/bin:$PATH"`。scrcpy 自己硬编码该路径（见坑点2），不受影响。
@@ -383,7 +386,26 @@ Hermes 的 shell 找不到 `adb`，但符号链接 `~/.local/bin/adb` 已存在 
 银行/政务 App 在 root 设备上由加固库在 `JNI_OnLoad` 主动 `abort`。诊断顺序与 Zygisk DenyList 修复步骤见 `references/device-maintenance.md` 的"Root 设备上的 App 闪退"。
 **不要**因为日志里出现 `ClassNotFoundException` 或 ABI 字样就去换 arm64 包——官方各渠道 MD5 相同时根本没有第二个包。
 
+### 16. 无线 adb 断了先别重连：USB 还在线就直接走 USB
+
+设备熄屏/休眠后无线 `adb connect` 可能报 `Network is unreachable`，但 `adb devices -l` 里 USB 那条往往仍是 `device`。此时别折腾重连或扫网段，直接给每条命令加 `-s <USB序列号>` 继续操作——无线只是通道，USB 一样能注入输入、截图、dump。任务收尾再视需要恢复无线。
+
+### 17. SmsForwarder v3.5.0 换包名后权限全丢（免 root 修复）
+v3.5.0 把包名从 com.idormy.sms.forwarder 改成 cn.ppps.forwarder，Android 运行时权限跟包名走，从旧版迁移后新包名所有权限 granted=false（READ_SMS/RECEIVE_SMS 等还带 AUTO_REVOKED），app 报权限不足——这不是需要 root，重新授权即可。
+修复（USB adb，无需 root）：`pm grant cn.ppps.forwarder android.permission.<PERM>`，PERM 遍历 READ_SMS / RECEIVE_SMS / RECEIVE_MMS / RECEIVE_WAP_PUSH / READ_CALL_LOG / READ_PHONE_STATE / READ_PHONE_NUMBERS / READ_CONTACTS / GET_ACCOUNTS / ACCESS_FINE_LOCATION / READ_EXTERNAL_STORAGE 等 app 请求过的全部运行时权限。
+通知读取（验证码短信关键）：组件 `cn.ppps.forwarder/.service.NotificationService`，追加到 `settings put secure enabled_notification_listeners`（保留原有条目，冒号拼接，不要覆盖）。
+保活：`dumpsys deviceidle whitelist +cn.ppps.forwarder`。
+华为自启动：appops 无 AUTO_START 操作，只能在 app 内「开机启动」跳系统设置手动开。
+验证：`dumpsys package cn.ppps.forwarder` 的 User 0 runtime permissions 全 granted=true；输出里 User 130 那段 granted=false 是副用户，忽略。
+
+### 18. 坐标点击全落空先查屏幕方向
+`input tap` 点首页图标却进资讯、点卡片却跳导航，多半是**横竖屏翻转**导致坐标基准错了，不是控件不可点。同一台设备不同场次会在 `1600x2560`（竖）和 `2560x1600`（横）间切换，视频类页面尤其容易转横屏。每次写死坐标前先用 dump 的 bounds 现取（wrt 当前方向）。同一台设备不同场次会在 `1600x2560` 和 `2560x1600` 间切换，视频类页面尤其容易转横。注意 `wm size` 只报物理尺寸、不随旋转变化，`screencap` PNG 和 dump bounds 才是当前方向——别用 wm size 推断当下是横是竖。`input tap` 点首页图标却进资讯、点卡片却跳导航，都是坐标基准错了而不是控件不可点。
+
 ---
+
+## 交管12123 学法减分
+
+申请→审核→30分钟学习→20题考试→人脸认证→失败补考的完整自动化流程、刷题循环、看图题处理、抓拍应对见 `references/xfjf-exam.md`；解锁/等抓拍/等补考开考/等最终认证的事件驱动等待脚本见 `scripts/xfjf_wait.py`（配合 `terminal(background=True, notify=True)` 落地「长任务实时盯屏铁律」）。看图题视觉方案（免费VLM实测+题库API+像素兜底，含reasoning吃token/主题色污染等坑）见 `references/vision-solution-research.md`，秒答脚本 `scripts/xfjf_vision.py`。
 
 ## 验证步骤
 
@@ -432,6 +454,31 @@ adb connect 192.168.8.204:5555
 adb shell echo "无线调试持久化成功"
 ```
 
+### 验证 D — 能不能操作这台设备（不投屏，Hermes 终端内可做）
+
+用户问「能不能操作这个平板/手机」时用这条链实测，别只回一句「能」：
+
+```bash
+ADB=/Users/aimac/.local/bin/adb
+D="-s <当前实际IP>:5555"
+$ADB $D shell getprop ro.product.model
+$ADB $D shell getprop ro.build.version.release
+$ADB $D shell wm size
+$ADB $D shell dumpsys battery | grep -i level
+$ADB $D shell dumpsys activity activities | grep -E "mResumedActivity|topResumedActivity"
+$ADB $D shell input keyevent KEYCODE_WAKEUP
+sleep 1
+$ADB $D shell dumpsys power | grep -m1 mWakefulness=   # Awake = 输入注入生效
+$ADB $D shell screencap -p /sdcard/t.png
+$ADB $D pull /sdcard/t.png /Users/aimac/.hermes/cache/scratch/t.png
+file /Users/aimac/.hermes/cache/scratch/t.png          # 非空、尺寸与 wm size 一致
+$ADB $D shell rm /sdcard/t.png
+$ADB $D shell input keyevent KEYCODE_SLEEP             # 还原熄屏
+$ADB $D shell dumpsys power | grep -m1 mWakefulness=   # Asleep
+```
+
+**验证成功**：读到机型/分辨率/电量，唤醒后 `mWakefulness=Awake`，截图文件非空且尺寸匹配。收尾把屏幕还原到操作前状态；不需要投屏时保持熄屏，符合用户后台无扰偏好。
+
 ---
 
 ## 快速命令速查
@@ -440,8 +487,9 @@ adb shell echo "无线调试持久化成功"
 # 连接 MI 8
 adb connect 192.168.8.204:5555 && phone
 
-# 连接平板 MRX-W29
-adb connect 192.168.8.248:5555 && pad
+# 连接平板 MRX-W29（IP 动态读，见坑点 11；或 ~/scrcpy-phone 选 2 自动解析）
+IP=$(/Users/aimac/.local/bin/adb devices -l | awk '/model:MRX_W29/ && $1 ~ /:[0-9]+$/ {print $1; exit}')
+adb connect "$IP" && scrcpy -S -s "$IP" --always-on-top --window-title "MRX-W29"
 
 # 查看已连接设备
 adb devices -l

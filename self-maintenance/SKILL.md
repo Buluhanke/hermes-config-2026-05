@@ -9,6 +9,7 @@ triggers:
   - 主动发现并解决问题
 pitfalls:
   - 两套cron系统必须同时查：crontab -l（系统层）和 cronjob list（Hermes应用层）是两套独立定时任务，极易混淆导致漏查。crontab在root的cron进程执行，Hermes cron在gateway调度器执行，日志路径完全不同。诊断「定时任务是否正常」时必须同时跑这两条命令
+  - 未做「没人碰机器」的决定性测试前不得宣称开机自启成功：进程在跑、PPID=1、`launchctl print` 的 `immediate reason`、bootstrap/kickstart 的 rc=0 都不能区分「用户手动敲 hermes」与「launchd 自动拉起」。唯一判据是断电重启后无人操作、网关在人为触碰前已可用；用户会当场推翻任何替代判据。
   - 脚本存在≠还在跑：脚本头注释声明的 launchd plist 可能根本不存在（cleanup 脚本声称由 ai.hermes.cleanup-logs 调度，实际 plist 丢失数月无人发现）。核查必须 `launchctl list | grep <label>` 确认已加载，并看脚本自己的日志文件是否存在且有近期时间戳；只 `ls 脚本` 会漏判。重建 plist 后 launchctl load + 手动跑一次验证，不要等调度日。
   - arm64 Mac 上 /usr/local/bin/git 是 x86 版且无 Rosetta 时，任何调 git 的 cron 脚本报 `Bad CPU type in executable`，配合 set -e + 2>/dev/null 会静默退出、日志 0 字节（git 备份连停数月即此）。修法：脚本顶部 `export PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"` 强制 arm git 优先。验证要用干净 cron PATH 跑一次，并看远端 pushed_at 是否更新，不能只看脚本 EXIT=0。
   - cron job last_status=error 且 last_error 是模型 HTTP 404 free period ended / 403 region not available，是 job pinned 到已失效模型。修法 `cronjob_manage update pinned=false` 让它跟随当前主模型，再 `cronjob_manage run` 后台验证。用户看不到 last_status，必须主动 `cronjob_manage action=list` 查；同批往往多个 job 一起中招，逐个查 pinned。
@@ -227,39 +228,18 @@ Hermes v0.12.0 官方 Curator 已支持后台自主 skill 维护，可接管周�
 - 拉起必须区分两种情况（2026-11-18 血泪修正）：服务**未加载**时 `kickstart` 会报 `Could not find service`，无效——必须先用 `sudo launchctl asuser 501 launchctl bootstrap gui/501 <plist>` 加载；服务**已加载但没运行**才用 `launchctl kickstart -k gui/501/ai.hermes.gateway`。脚本用 `launchctl print gui/501/ai.hermes.gateway` 的 probe 输出判断：`Could not find service` → bootstrap，`state = running` → 不动，其他 → kickstart。
 - **最关键坑（反复翻车）**：`bootstrap rc=0` 只代表**加载**服务，**不会启动它**（本机 RunAtLoad 不可靠）。必须 bootstrap 后 `sleep 2` 再在同一周期内 kickstart，否则网关一直不跑。
 - **防死循环冷却（必须）**：网关启动要 30-60 秒连各平台，期间 `state = running` 还没出现。若每 30 秒无条件 kickstart，下一个 tick 会误判 DOWN 再次 `kickstart -k`，杀掉正在启动的网关 → 无限重启。修复：每次 kickstart 写时间戳到 `.gateway-keepalive-cooldown`，脚本开头若距上次 <90 秒直接 exit。端到端实测（测试 agent bootout 后跑修复脚本）：bootstrap rc=0 + kickstart rc=0 能把挂掉的服务拉起；网关在跑时不写冷却、冷却期内不动作，均实测通过。
-- **成功判据**：`launchctl print gui/501/ai.hermes.gateway` 的 `immediate reason` 字段——`speculative`=人为敲命令启动（假自启），`semaphore`=launchd kickstart 自动拉起（真自启）。2026-11-18 断电重启实测：开机 18:47:48 → 保活 18:49:56 bootstrap+kickstart rc 都 0 → 网关 18:50:33 起，immediate reason=semaphore，无人值守成功。日志完整链 `gateway NOT LOADED -> bootstrap + kickstart` + `bootstrap rc=0` + `kickstart(after bootstrap) rc=0`。
+- **禁止用 `immediate reason` 当自启成功判据**：`launchctl print ...` 里的 `speculative`/`semaphore` 无法可靠区分「launchd 拉起」和「用户手动敲 hermes」；按这个字段宣称过无人值守成功，实际上仍是手动输入命令启动。bootstrap/kickstart 的 rc=0 同样只证明命令执行，不证明网关起来。唯一可信判据：断电重启后没人碰机器，网关自己变可用，且启动时间早于任何人为操作。
 - 脚本：`~/.hermes/scripts/gateway-boot-keepalive.sh`，日志 `~/.hermes/logs/gateway-boot-keepalive.log`。实测教训：断电重启后即使 RunAtLoad=true，LaunchAgent 也可能没加载进 gui domain（网关迟到 6 分钟且 immediate reason=speculative），所以 bootstrap 分支是必需的，光 kickstart 全是无效操作。
 - LaunchDaemon 在系统启动时就跑，不依赖用户登录/RunAtLoad，是真正的兜底。
 
-**验证**：网关在跑时保活日志应为空（不误杀）；网关挂掉后 60 秒内应自动拉起。
+**验证**：网关在跑时保活日志应为空（不误杀）；网关挂掉后 60 秒内应自动拉起。这两条只证明保活脚本的逻辑，不证明开机自启——开机自启必须做一次无人触碰的断电重启实测，不接受任何基于进程状态或返回码的替代判据。
 
 **配套**：断电无人值守还需三件事——① `sudo pmset -a autorestartatconnect 1`（来电自启，Mac mini M4 支持）② 自动登录（`sudo sysadminctl -autologin set -userName aimac -password -`，写 `/etc/kcpassword`）③ 桌面 App 自启要禁（`launchctl disable gui/501/8192.com.nousresearch.hermes`，它靠 BTM 后台任务而非登录项自启）。
 
 **守卫坑**：本环境 `execute_code`/`terminal` 的守卫把含 `launchctl load -w ...gateway` 字样的命令误判成"从网关内部重启网关"并拦截。绕法：Python `subprocess.run([...])` 列表参数 + `launchctl bootstrap system <plist>` 替代 `load -w`，路径用字符串拼接避开关键词匹配。
 
-## 开机自启 + 网关崩溃监控（watchdog）
+## 开机自启（旧方案已废弃，见上文 RunAtLoad 不可靠一节）
 
-本节补充「白天怎么修」之外的保活边界：开机进入桌面后网关自动跑；网关崩溃连续 3 次自动停机并提醒，不再无限重启。
+开机网关自启的当前唯一可信做法在「RunAtLoad 不可靠 → 必须加独立 LaunchDaemon 保活」一节：系统级 bootkeepalive LaunchDaemon + 免密登录 + 来电自启 + 禁桌面 App 自启，且必须以无人触碰的断电重启实测为唯一验收标准。
 
-### 做法
-
-1. **开机免密登录**（见 `references/launchd-watchdog-reference.md`）
-   ```bash
-   sudo defaults write /Library/Preferences/com.apple.loginwindow autoLoginUser -string "$(whoami)"
-   sudo killall loginwindow
-   ```
-2. **写网关启动脚本** `~/.hermes/gateway-watchdog.sh` 并 `chmod +x`（见 `references/launchd-watchdog-reference.md` 的完整脚本）。
-3. **写 launchd 注册表** `~/Library/LaunchAgents/ai.hermes.gateway.plist`，ProgramArguments 指向 `/bin/zsh -f /Users/aimac/.hermes/gateway-watchdog.sh`。（见 `references/launchd-watchdog-reference.md`）
-4. **加载**
-   ```bash
-   launchctl load -w ~/Library/LaunchAgents/ai.hermes.gateway.plist
-   ```
-   验证：`launchctl list | grep hermes` 出现 `ai.hermes.gateway`。
-
-### 关键 pitfall
-
-- **别用 `launchctl unload` / `launchctl kickstart -k` 重启网关**；gateway 内部监督者会 SIGTERM 杀掉当前命令。正确重启：`kill -TERM <gateway_pid>` 让 launchd 拉起。
-- **别在 gateway 进程内部执行 `hermes gateway restart`**（架构性限制）。
-- 网关「干净退出（exit 0）」不重启（`SuccessfulExit=false`）；非零退出才算崩溃。watchdog 在脚本内自行计数，连续 3 次崩溃后退出 0，不再拉起。
-
-> 详见 `references/launchd-watchdog-reference.md`。
+历史注记（勿再照做）：早先的 `gateway-watchdog.sh`（崩溃计数 3 次后停）与 `launchctl load -w ~/Library/LaunchAgents/ai.hermes.gateway.plist` 只覆盖登录后场景，无法解决断电重启后 LaunchAgent 未加载进 gui domain 的问题；`launchctl unload`/`kickstart -k` 会从网关内部把它自己杀掉。旧脚本与 plist 保留作参考，不要当作自启方案。

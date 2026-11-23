@@ -21,6 +21,7 @@ Facts here are about the *shape* of each option, not transient availability.
 | Cloudflare WARP | A privacy/encryption layer in the 1.1.1.1 app, not an anti-censorship tool | Shared Cloudflare IP near your real location; no country selection | Not a reliable primary; availability is intermittent; AI sites can see `warp=on` at `/cdn-cgi/trace` |
 | edgetunnel | VLESS/Trojan/SS proxy implemented as a Cloudflare Worker/Page | Shared Cloudflare edge IP | Backup / video only; free-tier CPU limit causes Error 1101 under load; using it as a proxy sits outside Cloudflare's ToS |
 | Proton VPN Free | Provider VPN; WireGuard config generated from the account web UI | Datacenter IP from a rotating free-country pool | General-purpose backup; not for logged-in AI; router counts as one device with unlimited devices behind it |
+| VPN Gate | Volunteer-run public OpenVPN relay; free `.ovpn` from the provider API | Shared public/datacenter IP | Emergency backup / testing only; never for logged-in services; often unreachable from networks that already have a proxy |
 
 ## Provisioning notes
 
@@ -33,3 +34,8 @@ Facts here are about the *shape* of each option, not transient availability.
   reasoning based only on "WireGuard is blocked" is out of date.
 - A tunnel that connects is not the same as a tunnel that works: verify the exit
   and DNS from a LAN client, and re-check after several minutes.
+- A public relay's `.ovpn` is cheap to fetch but the tunnel is not cheap to prove:
+  a TCP connect to its port says nothing about the TLS handshake. Run a short
+  OpenVPN test from the router first, with no `auth-user-pass` assumption — many
+  public `.ovpn` files are certificate-only. Only import into permanent router
+  config after the handshake and exit IP both pass.

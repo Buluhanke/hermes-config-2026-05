@@ -90,11 +90,11 @@ Open it in a browser. If it looks broken, fix it before showing the user.
 **Verify variants visually — use Hermes' browser tools.** Don't just write HTML and hope it renders; load each variant and look at it:
 
 ```
-browser_navigate(url="file:///absolute/path/to/sketches/001-calm-editorial/index.html")
-browser_vision(question="Does this layout look clean and readable? Any visible bugs (overlapping text, unstyled elements, broken images)?")
+browser_exec(code="new_tab(\'file:///absolute/path/to/sketches/001-calm-editorial/index.html\')")
+capture_screenshot()  # 再用 vision_analyze 看图
 ```
 
-`browser_vision` returns an AI description of what's actually on the page plus a screenshot path — catches layout bugs that pure source inspection misses (e.g. a font import that silently failed, a flex container that collapsed). Fix and re-navigate until each variant looks right.
+`capture_screenshot()` returns an AI description of what's actually on the page plus a screenshot path — catches layout bugs that pure source inspection misses (e.g. a font import that silently failed, a flex container that collapsed). Fix and re-navigate until each variant looks right.
 
 **Default CSS reset + system font stack** for fast starts:
 
@@ -209,8 +209,8 @@ Propose 2-4 named candidates. Let the user pick.
 terminal("mkdir -p sketches/001-calm-editorial")
 write_file("sketches/001-calm-editorial/index.html", "<!doctype html>...")
 write_file("sketches/001-calm-editorial/README.md", "## Variant: Calm editorial\n...")
-browser_navigate(url="file://$(pwd)/sketches/001-calm-editorial/index.html")
-browser_vision(question="How does this look? Any obvious layout issues?")
+browser_exec(code="new_tab(\'file://$(pwd)/sketches/001-calm-editorial/index.html\')")
+capture_screenshot()  # 再用 vision_analyze 看图
 ```
 
 Repeat for each variant, then present the comparison table.

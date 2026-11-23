@@ -1,6 +1,6 @@
 ---
 name: 1688-price-extraction
-description: "1688真实价格 登录态页面价格 CDP browser_console 阶梯价到手价。Use when 要1688商品真实成交价而非展示标价"
+description: "1688真实价格 登录态页面价格 CDP browser_exec(code="cdp(\'Runtime.evaluate\', ...)") 阶梯价到手价。Use when 要1688商品真实成交价而非展示标价"
 trigger: 1688 价格 对比 找品 规格价格
 ---
 
@@ -25,7 +25,7 @@ Two options:
 - **1688-cli**: `python3 findchain.py "keyword" --max 20` (province filter may be inaccurate — verify manually)
 
 ### Step 3: CDP extract precise price (core)
-Use `browser_navigate` to open product page, then `browser_console` with JS:
+Use `browser_exec` to open product page, then `browser_exec(code="cdp(\'Runtime.evaluate\', ...)")` with JS:
 
 ```js
 // Click spec button
@@ -69,7 +69,7 @@ Use `browser_navigate` to open product page, then `browser_console` with JS:
 | Only 3 shops have exact 16×16×16cm spec | Inform user: need custom factory or accept close specs |
 
 ## File locations
-- Precision price script: `~/1688_price_extract.py` (browser_console wrapper)
+- Precision price script: `~/1688_price_extract.py` (browser_exec(code="cdp(\'Runtime.evaluate\', ...)") wrapper)
 - Spec price via 1688-cli: `~/1688_spec_price.py` (CLI API, reference only)
 - Findchain main: `~/findchain.py`
 

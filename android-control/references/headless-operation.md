@@ -18,7 +18,9 @@ $ADB -s $W shell 'dumpsys window | grep -m1 mCurrentFocus'          # 当前前�
 
 `input keyevent`、`input tap/swipe/text`、`monkey` 启动 App 在 `Asleep` 下均生效，无需点亮屏幕。熄屏瞬间 adb 可能短暂显示 offline，重连即可：`adb connect <ip>` 返回 `already connected` 不影响后续命令。
 
-## 点亮与解锁（MIUI）
+## 点亮与解锁
+
+MI8 用下面的 MIUI 步骤；华为平板见下一节。
 
 1. **点亮**：`input keyevent 224`（KEYCODE_WAKEUP）比 `26`（电源键 toggle）可靠——26 在「刚熄屏又立刻点亮」时可能不生效，224 是明确的唤醒。
 2. **确认锁屏界面**：点亮后 `uiautomator dump /sdcard/w.xml >/dev/null 2>&1; grep -oE 'resource-id="[^"]*"' /sdcard/w.xml`，出现 `com.android.systemui:id/keyguard_header` 即锁屏；出现 `com.miui.home` 则已直接进桌面，无需解锁。
@@ -28,6 +30,13 @@ $ADB -s $W shell 'dumpsys window | grep -m1 mCurrentFocus'          # 当前前�
 6. 清理设备上的临时 dump 文件：`rm -f /sdcard/w.xml`。
 
 `uiautomator dump` 在锁屏界面能读出控件文字（如「请用密码或指纹解锁」），比截图 OCR 更准且零成本；vision 模型余额不足时这是首选的界面识别手段。
+
+## 华为平板人脸识别锁屏（MRX-W29）
+
+- 人脸解锁在光线不足时会失败并退回锁屏（提示「光线不足」），别反复触发识别，直接走 PIN。
+- 上滑即可调出 PIN 盘，即使屏幕上还写着「正在识别人脸」：`input swipe 800 2100 800 700 350`（1600x2560，从 `wm size` 换算成底部→中上部）。dump 出现 `com.android.systemui:id/keyguard_fixed_length_pin_view` 后 `input text <PIN>` 即可，`dumpsys trust` 机主那条 `deviceLocked=0` 才是成功。
+- **锁屏上别用 `input keyevent 82`（MENU）**：它会拉下 NotificationShade（`mCurrentFocus=...NotificationShade`），之后 `screencap -p` 会写出 0 字节文件。先 `input keyevent 4`（BACK）收起通知栏再截图。
+- 人脸识别 overlay 激活时 `screencap -p` 也可能写 0 字节（不是 adb 掉线）。`input keyevent 26` 熄屏再点亮一次即可恢复截图，别误判连接失效去折腾重连。
 
 ## 重启后的额外一步：先解锁再碰存储
 

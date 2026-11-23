@@ -66,7 +66,7 @@ result = await crawler.arun(
 | 工具 | 适合场景 | vs Crawl4AI |
 |------|----------|-------------|
 | `web_extract` | 简单页面+PDF | 无JS渲染，快速 |
-| `browser_navigate` | 需交互的页面 | 返回DOM树，非Markdown |
+| `browser_exec` | 需交互的页面 | 返回DOM树，非Markdown |
 | **Crawl4AI** | 干净Markdown+RAG | 去噪+结构化+大模型友好 |
 
 ## 注意事项

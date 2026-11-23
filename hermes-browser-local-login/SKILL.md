@@ -50,11 +50,11 @@ This skill provides step‑by‑step instructions for using Hermes Agent’s bro
    ```
    Note: Chrome 136+ REJECT `--user-data-dir` on the default Chrome profile dir. Use `~/chrome-cdp-profile` (isolated copy of Profile 3) — see `chrome-cdp-control` skill for the mirror recipe. The launchd service name is `com.hermes.chrome-cdp`.
 6. Navigate, interact, and extract data using the browser tools:  
-   - `browser_navigate --url 'https://example.com'`  
-   - `browser_snapshot` → note the ref `@eX`  
-   - `browser_type --ref '@eX' --text 'hello'`  
-   - `browser_click --ref '@eY'`  
-   - `browser_vision --question 'What is the CAPTCHA?'`
+   - `browser_exec(code="new_tab(\'https://example.com\')")`  
+   - `browser_exec(code="page_info()")` → note the ref `@eX`  
+   - `browser_exec(code="fill_input(selector, \'hello\')")`  
+   - `browser_exec(code="js(\'document.querySelector(...).click()\')")  
+   - `capture_screenshot() --question 'What is the CAPTCHA?'`
 7. When finished, detach:  
    ```bash
    /browser disconnect
@@ -70,7 +70,7 @@ This skill provides step‑by‑step instructions for using Hermes Agent’s bro
 
 ### A. Using Hermes‑launched Chromium (no pre‑login)
 
-- After enabling the browser toolset, simply call `browser_navigate` etc.  
+- After enabling the browser toolset, simply call `browser_exec` etc.  
 - Hermes will launch a headful Chromium instance via `agent-browser`.  
 - No cookies or login state persist between sessions.
 
@@ -94,13 +94,13 @@ This skill provides step‑by‑step instructions for using Hermes Agent’s bro
 
 - **Chromium not found** – Ensure `browser.chromium_path` points to the executable.  
 - **Connection refused** – Verify Chrome is launched with `--remote-debugging-port` and the port matches the `/browser connect` argument.  
-- **Page not fully loaded** – After `browser_navigate`, wait a moment (e.g., send a harmless `browser_press --key 'Tab'`) before taking a snapshot.  
-- **Viewport issues** – Use `browser_scroll` to reveal hidden elements before clicking/typing.  
-- **Multiple tabs** – Use `browser_press --key 'Control+t'` to open a new tab, then `browser_navigate` to load a URL in the new tab.
+- **Page not fully loaded** – After `browser_exec`, wait a moment (e.g., send a harmless `browser_exec(code="cdp(\'Input.dispatchKeyEvent\', ...)")`) before taking a snapshot.  
+- **Viewport issues** – Use `browser_exec(code="js(\'window.scrollBy(...)\')")` to reveal hidden elements before clicking/typing.  
+- **Multiple tabs** – Use `browser_exec(code="cdp(\'Input.dispatchKeyEvent\', ...)")` to open a new tab, then `browser_exec` to load a URL in the new tab.
 
 ## MCP Chrome DevTools MCP tools (not agent-browser)
 
-The working control path in this environment is `mcp__chrome_devtools_mcp__*` tools (CDP via the `chrome-devtools-mcp` server), NOT Hermes's built-in `browser_navigate`/`browser_snapshot` (which routes through `agent-browser` and can fail with npm ECONNREFUSED on locked-down networks).
+The working control path in this environment is `mcp__chrome_devtools_mcp__*` tools (CDP via the `chrome-devtools-mcp` server), NOT Hermes's built-in `browser_exec`/`browser_exec(code="page_info()")` (which routes through `agent-browser` and can fail with npm ECONNREFUSED on locked-down networks).
 
 **`new_page` timeout is non-fatal.** `mcp__chrome_devtools_mcp__new_page` may return `Navigation timeout of 10000 ms exceeded` even on a successful navigation — the page loaded fine. Always follow with `take_snapshot` to read content; do NOT treat the timeout as a real failure.
 
@@ -121,7 +121,7 @@ This launches a FRESH independent instance. It does NOT use the user's daily pro
 | Problem | Fix |
 |---|---|
 | `new_page` returns timeout | Follow with `take_snapshot` — page usually loaded fine |
-| `ECONNREFUSED` on `browser_navigate` | Switch to `mcp__chrome_devtools_mcp__*` tools |
+| `ECONNREFUSED` on `browser_exec` | Switch to `mcp__chrome_devtools_mcp__*` tools |
 | Multiple Google accounts in user's Chrome | Use standalone `--user-data-dir` instance (this session: zero ambiguity) |
 | CDP port 9222 not responding | Verify Chrome launched with `--remote-debugging-port=9222`; check `curl -s -m5 http://127.0.0.1:9222/json/version` |
 

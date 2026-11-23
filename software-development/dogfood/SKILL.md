@@ -19,7 +19,7 @@ This skill guides you through systematic exploratory QA testing of web applicati
 
 ## Prerequisites
 
-- Browser toolset must be available (`browser_navigate`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_vision`, `browser_console`, `browser_scroll`, `browser_back`, `browser_press`)
+- Browser toolset must be available: use `browser_exec` (Python code with helpers `new_tab`, `goto_url`, `js`, `fill_input`, `cdp`, `page_info`, `capture_screenshot`); optional `browser` MCP tools if configured
 - A target URL and testing scope from the user
 
 ## Inputs
@@ -55,37 +55,37 @@ For each page or feature in your plan:
 
 1. **Navigate** to the page:
    ```
-   browser_navigate(url="https://example.com/page")
+   browser_exec(code="new_tab(\'https://example.com/page\')")
    ```
 
 2. **Take a snapshot** to understand the DOM structure:
    ```
-   browser_snapshot()
+   browser_exec(code="print(page_info())")
    ```
 
 3. **Check the console** for JavaScript errors:
    ```
-   browser_console(clear=true)
+   browser_exec(code="cdp(\'Runtime.evaluate\', ...)")
    ```
    Do this after every navigation and after every significant interaction. Silent JS errors are high-value findings.
 
 4. **Take an annotated screenshot** to visually assess the page and identify interactive elements:
    ```
-   browser_vision(question="Describe the page layout, identify any visual issues, broken elements, or accessibility concerns", annotate=true)
+   capture_screenshot()  # 保存后用 vision_analyze 看图,识别交互元素与视觉问题
    ```
-   The `annotate=true` flag overlays numbered `[N]` labels on interactive elements. Each `[N]` maps to ref `@eN` for subsequent browser commands.
+   `capture_screenshot()` 返回截图路径;把路径传给 `vision_analyze` 即可获得 AI 描述。
 
 5. **Test interactive elements** systematically:
-   - Click buttons and links: `browser_click(ref="@eN")`
-   - Fill forms: `browser_type(ref="@eN", text="test input")`
-   - Test keyboard navigation: `browser_press(key="Tab")`, `browser_press(key="Enter")`
-   - Scroll through content: `browser_scroll(direction="down")`
+   - Click buttons and links: `browser_exec(code="js(\'document.querySelector(...).click()\')")`
+   - Fill forms: `browser_exec(code="fill_input(selector, \'test input\')")`
+   - Test keyboard navigation: `browser_exec(code="cdp('Input.dispatchKeyEvent', type='keyDown', key='Tab')")` then `keyUp` (same for Enter)
+   - Scroll through content: `browser_exec(code="js(\'window.scrollBy(...)\')")`
    - Test form validation with invalid inputs
    - Test empty submissions
 
 6. **After each interaction**, check for:
-   - Console errors: `browser_console()`
-   - Visual changes: `browser_vision(question="What changed after the interaction?")`
+   - Console errors: `browser_exec(code="cdp(\'Runtime.evaluate\', ...)")`
+   - Visual changes: `capture_screenshot()` + vision_analyze
    - Expected vs actual behavior
 
 ### Phase 3: Collect Evidence
@@ -94,7 +94,7 @@ For every issue found:
 
 1. **Take a screenshot** showing the issue:
    ```
-   browser_vision(question="Capture and describe the issue visible on this page", annotate=false)
+   capture_screenshot()  # 再用 vision_analyze 看图
    ```
    Save the `screenshot_path` from the response — you will reference it in the report.
 
@@ -150,8 +150,8 @@ Save the report to `{output_dir}/report.md`.
 
 ## Tips
 
-- **Always check `browser_console()` after navigating and after significant interactions.** Silent JS errors are among the most valuable findings.
-- **Use `annotate=true` with `browser_vision`** when you need to reason about interactive element positions or when the snapshot refs are unclear.
+- **Always check `browser_exec(code="cdp(\'Runtime.evaluate\', ...)")` after navigating and after significant interactions.** Silent JS errors are among the most valuable findings.
+- **Use `annotate=true` with `capture_screenshot()`** when you need to reason about interactive element positions or when the snapshot refs are unclear.
 - **Test with both valid and invalid inputs** — form validation bugs are common.
 - **Scroll through long pages** — content below the fold may have rendering issues.
 - **Test navigation flows** — click through multi-step processes end-to-end.
