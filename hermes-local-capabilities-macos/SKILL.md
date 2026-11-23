@@ -156,6 +156,14 @@ existing skills + the user's real use cases, then fetch full text for the curate
 only, dedup & merge. Full reachability probe, the macOS sshd keyboard-interactive auth
 gotcha, and the pexpect-based fix live in `references/lan-skills-sync.md`.
 
+## 技能备份与灾难恢复
+
+只有 `~/.hermes/skills/` 被版本化推到 GitHub；`config.yaml` / `.env` / `memory_store.db` / `cron/jobs.json` / `scripts/` / `plugins/` 都不在仓库里。把一份 `RECOVERY-RUNBOOK.md` **写进技能仓库根目录**，它就跟着技能一起同步——换机时按菜单逐项恢复。外部技能集合（anthropics/skills、obra/superpowers 等）是独立 clone，主仓库只有 gitlink；在同目录维护 `EXTERNAL-SKILL-REPOS.md` 记录每个仓库的 URL + 精确 commit。
+
+周期任务里的凭据获取和交互 shell 不同（读不到导出的环境变量），要按各任务脚本的既有约定取用；改完调度配置必须 `plutil -lint` 验语法再 load。**绝不用 `2>/dev/null` 吞掉同步脚本的错误**：认证失败、网络超时都会静默变成"备份成功"的空跑，能持续几个月无人发现。
+
+端到端验证周期任务（不要只看退出码）：造一个无害的小变更 → 手动触发一次任务 → `git log -1` 出现新 commit → 远端 API `commits?per_page=1` 的 SHA 与本地一致，最后删掉验证文件再同步一次。GitHub API 在 push 后有约 5–10 秒缓存延迟，立刻查会看到旧 SHA——重试几次再判定失败，别误报"同步没生效"。
+
 ## Migration checklist (when moving Hermes to a new Mac)
 
 In order, additive only:
