@@ -215,3 +215,25 @@ l2: 自演化
 3. **skill 留可迁移记忆**：每次改写记录 diff + 动机 + 预测/实测结果（SIM），跨模型/跨 benchmark 续训才有依据。
 4. **不锁模型有实证**：Auto Browser 数据显示廉价模型 + 好 harness 即可逼近昂贵模型，呼应「不给模型自动绑定」的用户铁律。
 5. **工具链迁移提醒**：本机若升级到 v0.23+，所有指向旧 `browser_*` 工具的 skill/cron 提示须改 `browser_exec`，否则自动化静默失效。
+
+## 2026-11-24 自学成果补充（fact_store 20 条，cron 只读故直接固化于此）
+
+> 权威源先行：`python3 ~/.hermes/scripts/frontier_sources.py --days 2` 三源（arXiv API / Papers with Code / Awesome-AI4AI）正常；HuggingFace daily_papers 仍跳过。
+
+### 自改进 harness：门控演化已有硬数字
+- **Harnesses That Improve Themselves**（2611.22299）：补上量化对照——模块化门控演化在 SWE-bench Lite held-out **40.0%（8× seed）、零未验证退出、46.7k token/任务**；无约束全量重写 42.5% 却把 turn cap 12→28、成本 **451.6k token**（单次 rollout >2.8M）；迁移到 Gemini 4 Argon 零样本仍 37.5%@64.8k。**行动：Hermes skill 改写坚持逐模块 + 验证门 + 保留 12 步上限，不要整体重写。**
+- **JoMoHa**（2611.11499）：首个 RL 联合训练 harness 生成 policy + 任务执行 policy，解决交替训练的渐进不兼容。ALFWorld 97.0% / WebShop 45.8% / DBBench 68.0%，均值 70.3%（超 Agent SFT+Harness-R1 6.1 分、WHALE 7.2 分）。
+- **BoxBox**（2611.09218）：长跑任务内 agent 自触发 harness 修订 + 内核热重载（保留上下文）。Speedup@4h **1.70×**（HS 1.54× / Frozen 1.442× / 离线 HE 仅 1.281×），$16.43/run，speedup/$ 0.4886。离线优化不可靠——持续任务要在运行中改。
+- **ARC-AGI-3 harness 自建研究**（2610.30499v2）：27 条 lineage 两次全代码库修订只把 held-out RHAE 提高 **2.80 分（CI 含负值）**，无一修订保留父版本；事后按开发分数在已有快照里挑可提到 **4.53 分**。**行动：生成修订与决定部署必须分离，永远保留快照。**
+- **Multi-Task Self-Evolving Harnesses**（2609.38372v2）：同一冻结模型同一 harness，先 solver 后 proposer 自己改自己；49 行 seed 起步，GLM-5.3 / GPT-5.6 Sol 演化后 +约 5 分追平 Claude Code 与 Codex，5 个 OOD benchmark 上 Codex 级；涌现机制=输出截断/历史压缩/完成检查/独立复核/视觉检视。
+- **Embodied-Harness**（2611.27689）：Actor/Reflector 双 agent + 分层记忆，不改权重。RoboTwin 2.0 82.4% / RoboSPA 76.7% / RMBench 94.4% / 真实世界 96.7%。再次印证「系统 scaffold > 模型权重」。
+
+### 新模型/编排
+- **NorthCUA**（2611.02102，11-01，Apache 2.0）：Qwen3.5 系 Nano 9B / Mini 35B / Pro 397B(A17B)。OSWorld-Verified@100步 88.64/85.30/78.90%，WebArena-Verified 73.89/70.43/67.16%；397B 超万亿参数 Qwen3.8-Max 与 Kimi-K3。Ultrafast Head+LoRA 比全生成快 2.3×。Experience Flywheel 用已验证轨迹 + RSI 演化可复用 skill——与 Hermes skill 循环同构。
+- **AutoSwarm**（HKUDS 11-16）：把一任务并行分发给最多 11 个异构 coding agent（Claude Code/Cursor/Codex），共享上下文 + 自动验证合并，桌面/CLI/IDE 三形态。
+- **Microsoft Durable Task extension for Agent Framework 11-09 GA**；**Agent Hive 11-23 开源**（bee swarm / maid team）；**open-multi-agent v1.25.0 11-22**（内置 venice provider）。
+- **11-20 arXiv 论文波**：MiMo-V2.6（RL scaling 通向自改进）、MemT-1.0（memory-native evolution）、Hy-Memory-30B-A3B（长程记忆写入的归因 RL）、MemOnce、Nemotron 3.5 Super/Lightning（MoE Hybrid Mamba-Transformer）、Gamer（长程实时游戏 VLA）。高引榜 Kimi K3 177.0 / 9114★，AlphaEvolve 103.5，Terminal-Bench 86.3，AI-Scientist-v2 82.4，Meta-Harness 64.3。
+
+### Hermes 本体补充
+- **v0.23.2**（11-16，1989 PR）：durable subagents 可跨 gateway 重启/崩溃续跑；每会话独立 prompt-cache 时钟；`hermes fallback check`、`hermes update --force`；per-job cron 新增 `wrap_response` 与 fresh-thread-per-run；修复高危 CVE-2026-130164。
+- **v0.23.1**（11-09）：plugin catalog 上限 2MiB→16MiB，修复所有安装静默回退旧 catalog 的问题（≤v0.23.0 一直受影响）。
