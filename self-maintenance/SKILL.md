@@ -11,7 +11,7 @@ pitfalls:
   - 两套cron系统必须同时查：crontab -l（系统层）和 cronjob list（Hermes应用层）是两套独立定时任务，极易混淆导致漏查。crontab在root的cron进程执行，Hermes cron在gateway调度器执行，日志路径完全不同。诊断「定时任务是否正常」时必须同时跑这两条命令
   - 未做「没人碰机器」的决定性测试前不得宣称开机自启成功：进程在跑、PPID=1、`launchctl print` 的 `immediate reason`、bootstrap/kickstart 的 rc=0 都不能区分「用户手动敲 hermes」与「launchd 自动拉起」。唯一判据是断电重启后无人操作、网关在人为触碰前已可用；用户会当场推翻任何替代判据。
   - 脚本存在≠还在跑：脚本头注释声明的 launchd plist 可能根本不存在（cleanup 脚本声称由 ai.hermes.cleanup-logs 调度，实际 plist 丢失数月无人发现）。核查必须 `launchctl list | grep <label>` 确认已加载，并看脚本自己的日志文件是否存在且有近期时间戳；只 `ls 脚本` 会漏判。重建 plist 后 launchctl load + 手动跑一次验证，不要等调度日。
-  - arm64 Mac 上 /usr/local/bin/git 是 x86 版且无 Rosetta 时，任何调 git 的 cron 脚本报 `Bad CPU type in executable`，配合 set -e + 2>/dev/null 会静默退出、日志 0 字节（git 备份连停数月即此）。修法：脚本顶部 `export PATH="/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin"` 强制 arm git 优先。验证要用干净 cron PATH 跑一次，并看远端 pushed_at 是否更新，不能只看脚本 EXIT=0。
+  - 定时备份脚本的认证来源必须显式指定：launchd/cron 不继承交互式 shell 的环境变量，脚本若依赖环境中的认证变量则取到空值，配合 `2>/dev/null || ... 2>/dev/null` 双兜底会双双失败却仍走到 `exit 0`，备份静默空跑、远端一直停在旧提交。修法：脚本内显式从配置文件解析所需认证项，取不到就报错退出而不是静默；push 失败不能吞错。验证必须端到端：造一个小变更→跑脚本→等 2-3 秒（API 缓存延迟）→查远端最新 commit SHA 与本地 HEAD 一致；本地 commit 成功和 EXIT=0 都不算证据。
   - cron job last_status=error 且 last_error 是模型 HTTP 404 free period ended / 403 region not available，是 job pinned 到已失效模型。修法 `cronjob_manage update pinned=false` 让它跟随当前主模型，再 `cronjob_manage run` 后台验证。用户看不到 last_status，必须主动 `cronjob_manage action=list` 查；同批往往多个 job 一起中招，逐个查 pinned。
   - Gateway 随机端口陷阱：gateway 用 `--port 0` 每次随机分配端口，但 Hermes App 缓存了旧端口。症状是 App 提示"提示词发送失败"，gateway 进程实际在跑但连接被-refused。必须用固定端口（`--port 18281`）并验证 `netstat -an | grep <port>` 确认 LISTEN（lsof 可能因权限漏看，fuser 更可靠）
   - Gateway 无法从内部重启：从 Gateway 进程内部执行 `hermes gateway restart` 是架构性限制，Gateway 会把正在运行的所有 agent（包括执行命令的自己）一起关掉，launchd 会拒绝拉起。正确做法：从外部对 Gateway 进程发 SIGTERM，让 launchd 自动拉起
@@ -147,6 +147,8 @@ find ~/.hermes/skills -mindepth 3 -name 'SKILL.md' | grep -v '/.hub/' | grep -v 
 - 保留 .archive 中仍被引用的（如 hackintosh-recovery、fluxdown、gateway-restart-technique）
 
 ## Computer Disk Cleanup SOP（2026-10-23）
+
+用户说「清理垃圾/让 Hermes 别超负荷」时，先实测再动手：`ps aux | grep -i hermes | grep -v grep | wc -l`、`memory_pressure | grep 'free percentage'`、`df -h /`、`ps aux | awk '$8 ~ /Z/' | wc -l`。多数时候系统并未超负荷、只是碎垃圾堆积，不必动运行时缓存。只清临时截图/一次性脚本/旧日志归档/损坏的 db 备份；pnpm/uv 依赖缓存、chrome-profile-mirror 登录态、`.ab`/`.tgz` 数据备份、技能的 .git 仓库都有重建或恢复成本，保留。
 
 当磁盘空间不足（<5GB）时，按以下顺序检查并清理：
 
