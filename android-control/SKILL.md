@@ -45,28 +45,33 @@ Mac mini M4 (macOS 26.5) 上通过 scrcpy 投屏控制 Android，支持 USB 有�
 
 ### 统一入口脚本 ~/scrcpy-phone
 
-两台设备共用一个交互脚本（选 1=MI8，选 2=MRX-W29）。平板端**动态解析 IP**，不写死：
+两台设备共用一个交互脚本（选 1=MI8，选 2=MRX-W29）。**两台都动态解析/重连，不写死 IP**。往设备里输入文字走 `~/pad-type`（见坑点 19）；scrcpy 的键盘模式不保证文字注入到定制输入法。核心函数按设备 model 参数化：
 
 ```bash
 ADB=/Users/aimac/.local/bin/adb
-find_pad_ip() {
-  $ADB devices -l | awk '/model:MRX_W29/ && $1 ~ /:[0-9]+$/ {print $1; exit}'
+find_dev_ip() {    # $1 = adb devices -l 里的 model 值，如 MRX_W29 / MI_8
+  $ADB devices -l | awk -v m="$1" '$0 ~ "model:"m && $1 ~ /:[0-9]+$/ {print $1; exit}'
 }
-ensure_pad_wireless() {
-  IP=$(find_pad_ip)
-  [ -n "$IP" ] && return 0
-  USB=$($ADB devices -l | awk '/model:MRX_W29/ && $1 !~ /:/ {print $1; exit}')
-  [ -z "$USB" ] && return 1
-  IP=$($ADB -s "$USB" shell ip route 2>/dev/null | grep -o 'src [0-9.]*' | head -1 | awk '{print $2}')
-  [ -z "$IP" ] && return 1
-  $ADB -s "$USB" tcpip 5555 >/dev/null 2>&1
-  sleep 3
-  $ADB connect "$IP:5555" >/dev/null 2>&1
-  find_pad_ip
+find_dev_usb() {
+  $ADB devices -l | awk -v m="$1" '$0 ~ "model:"m && $1 !~ /:/ {print $1; exit}'
 }
+ensure_wireless() {   # 无线在线直接用；掉线则 USB 读 IP → tcpip 重开 → connect
+  local ip usb
+  ip=$(find_dev_ip "$1"); [ -n "$ip" ] && { echo "$ip"; return 0; }
+  usb=$(find_dev_usb "$1"); [ -z "$usb" ] && return 1
+  ip=$($ADB -s "$usb" shell ip route 2>/dev/null | grep -o 'src [0-9.]*' | head -1 | awk '{print $2}')
+  [ -z "$ip" ] && return 1
+  $ADB -s "$usb" tcpip 5555 >/dev/null 2>&1; sleep 3
+  $ADB connect "$ip:5555" >/dev/null 2>&1
+  find_dev_ip "$1"
+}
+# 每台设备：无线不通再回退 USB 直连，绝不因 IP 掉线就启动失败
+IP=$(ensure_wireless MRX_W29)
+[ -z "$IP" ] && { echo "未连接"; exit 1; }
+scrcpy -S -s "$IP" --always-on-top --keyboard=uhid --window-title "MRX-W29" "$@" &
 ```
 
-选 2 时先 `ensure_pad_wireless`，把拿到的 `$IP` 传给 `scrcpy -S -s "$IP" ...`。MI8 同理：IP 变了就 USB 重开 tcpip 后重新 connect。改完用 `bash -n ~/scrcpy-phone` 验证语法。
+选 1/选 2 都先 `ensure_wireless`（MI8 传 `MI_8`，平板传 `MRX_W29`），拿不到 IP 就用 `find_dev_usb` 回退 USB 序列号。改完用 `bash -n ~/scrcpy-phone` 验证语法，再在终端交互输入选项实测启动（后台起、看日志确认设备型号、测完 kill 掉窗口）。
 
 > 注意：新设备首次都要 USB 连一次执行 `adb -s <id> tcpip 5555`；日常无需重开。
 
@@ -270,8 +275,10 @@ device.screenshot()               # 截图
 
 ## 坑点汇总
 
-### 1. ~/scrcpy-phone 选1报 "Could not find ADB device 192.168.8.204:5555"
-MI8 无线调试未开启。需要 USB 连一次执行 `adb -s <设备ID> tcpip 5555` 后才能无线连接。
+### 1. ~/scrcpy-phone 选1启动不了 / 报 "Could not find ADB device 192.168.8.204:5555"
+**首要根因：脚本把 MI8 无线地址写死了，而无线会掉线**——`adb devices -l` 里只剩 USB 序列号（`d0b859af`）时，写死的地址必然连不上。修法是把两台设备都改成 `ensure_wireless <model>` 动态解析（无线掉了就用 USB 读 IP → `tcpip 5555` 重开 → `connect`），仍拿不到 IP 就回退 USB 序列号直接 `-s <USB>` 启动（见统一入口脚本段）。**绝不在启动脚本里写死任何设备 IP**——IP 由 DHCP 分配，重启/换网/休眠都会变。
+
+若 USB 也不在列表里，才是无线调试未开启或未授权：需要 USB 连一次执行 `adb -s <设备ID> tcpip 5555` 后才能无线连接。
 首次连接 USB 时手机会弹出「允许 USB 调试」，必须点「允许」才能继续，否则 `adb devices` 显示 `unauthorized`。
 
 **排查顺序：**
@@ -400,6 +407,13 @@ v3.5.0 把包名从 com.idormy.sms.forwarder 改成 cn.ppps.forwarder，Android 
 
 ### 18. 坐标点击全落空先查屏幕方向
 `input tap` 点首页图标却进资讯、点卡片却跳导航，多半是**横竖屏翻转**导致坐标基准错了，不是控件不可点。同一台设备不同场次会在 `1600x2560`（竖）和 `2560x1600`（横）间切换，视频类页面尤其容易转横屏。每次写死坐标前先用 dump 的 bounds 现取（wrt 当前方向）。同一台设备不同场次会在 `1600x2560` 和 `2560x1600` 间切换，视频类页面尤其容易转横。注意 `wm size` 只报物理尺寸、不随旋转变化，`screencap` PNG 和 dump bounds 才是当前方向——别用 wm size 推断当下是横是竖。`input tap` 点首页图标却进资讯、点卡片却跳导航，都是坐标基准错了而不是控件不可点。
+
+### 19. scrcpy 投屏后电脑键盘无法在设备上输入文字
+**验证必须落到真实输入框**：scrcpy 进程存活、日志无 keyboard 报错只证明 HID 通道打通，不证明文字进了 App——定制 IME（华为百度输入法）会拒绝注入。所以 `--keyboard=uhid` 不是文字输入的解法，只解决「键盘事件发得出去」。判据是 `input tap` 进一个真实输入框、输入后 dump/OCR 读回内容。
+- 原生/Gboard（MI8）：scrcpy 加 `--prefer-text`（走 `--keyboard=sdk`）即可。
+- 华为/百度等定制 IME：装 ADBKeyboard 并用 `ADB_INPUT_B64` 广播输入，中文只能走 B64——`ADB_INPUT_TEXT` 对非 ASCII 静默失败（返回码仍是 0）。完整装法与启用步骤见 `references/app-ui-automation.md` 的输入框坑一节。
+- 封装成 `~/pad-type "文字"`（自动 reconnect + 切 IME + B64 编码 + 广播）跨电脑复用，与 scrcpy 版本/键盘模式彻底解耦；本机与 Mac Pro 各放一份。
+- 用完把默认 IME 切回原输入法：ADBKeyboard 是空 IME，用户自己在设备上手打会变差。
 
 ---
 

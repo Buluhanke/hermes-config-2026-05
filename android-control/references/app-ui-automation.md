@@ -145,7 +145,15 @@ $ADB -s $W shell 'input swipe 900 1100 150 1100 400'   # 1080x2248 上左滑
 
 ## 输入框坑（代价最高的一类）
 
-- **`input text` 只吃 ASCII**：中文、顿号 `、`、「」等非 ASCII 字符会被**静默丢弃**，命令返回码仍是 0。密码含中文标点时必须换方案（剪贴板粘贴、ADBKeyboard IME），不要当成「输进去了」直接点登录——每次失败都在消耗账号的重试次数。
+- **`input text` 只吃 ASCII**：中文、顿号 `、`、「」等非 ASCII 字符会被**静默丢弃**，命令返回码仍是 0。密码含中文标点时必须换方案，不要当成「输进去了」直接点登录——每次失败都在消耗账号的重试次数。
+- **ADBKeyboard 完整落地（定制 IME 下唯一可靠的电脑输入路径）**：
+  1. 下 `senzhk/ADBKeyBoard` release 的 APK，`adb -s <设备> install -g adbkey.apk`——普通 `install` 在华为上报 `INSTALL_FAILED_ABORTED: User rejected permissions`，`-g` 授予运行时权限才成功。
+  2. 启用：华为禁止 shell 改组件状态（`pm enable` 报 `SecurityException: Shell cannot change component state`）。必须 `am start -a android.settings.INPUT_METHOD_SETTINGS`，在「可用虚拟键盘」页点目标 IME 的 Switch，并在「注意」确认弹窗点「确定」。`ime list -s -a`（带 `-a`）能列出已装但未启用的项。
+  3. 切换：`adb -s <设备> shell ime set com.android.adbkeyboard/.AdbIME`。
+  4. 输入：先 `input tap` 让输入框拿焦点，再 `adb shell am broadcast -a ADB_INPUT_B64 --es msg <base64>`。**中文必须 B64；`ADB_INPUT_TEXT` 只处理 ASCII，中文会静默失败**——发中文后 OCR 读回输入框无内容，改用 B64 则读到正确文字。
+  5. 封装 `~/pad-type "文字"`（自动 reconnect → 检查/切 IME → base64 编码 → 发广播），每台要控制的电脑各放一份，与 scrcpy 版本/键盘模式解耦。
+  6. 验证闭环：输入后 `screencap` + 百度 OCR 读回输入框文字；dump 常读不到 EditText 实际值，截图 OCR 更可靠。
+  7. 用完提醒用户把默认 IME 切回：ADBKeyboard 是空 IME，用户手动打字体验会变差。
 - **清空输入框**：删除键要写成完整命令链 `input keyevent 67; input keyevent 67; ...`。写成 `input keyevent 67 67` 会把 `67` 当独立命令执行（`67: inaccessible or not found`），输入框实际没清，残留会和新内容拼在一起。
 - **`uiautomator dump` 读不到 EditText 的实际内容**（`password="true"` 的框尤其只给空属性）。要确认填了几位，截图 + 百度 OCR 数圆点。
 - 定位输入框后先 `input tap` 拿焦点，再 `input text`；跳光标到末尾用 `input keyevent 123`（MOVE_END）。
