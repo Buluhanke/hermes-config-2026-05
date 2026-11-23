@@ -53,6 +53,8 @@ Hermes v0.23+ 只保留 `browser_exec`(Python code + helpers)，旧 `browser_nav
 - 发现更好方法 → 用 `patch` 不是 `edit`
 - patch 是保守更新，只改需要的行
 - 更新前先自我测试，失败则丢弃
+- **保留父本可回滚**：ARC-AGI-3 harness 研究（2610.30499v2）27 lineages 两次自修订后**无一保留父代能力**——改完必须能退回上一版（git commit 或备份），且"生成修订"与"决定部署"分开：先按 dev/自测分筛选快照，再部署，别改完直接上。
+- **别只改 prompt**：MultiLoop（2611.15754）多 agent 只做 prompt 优化反 -2.65%，编排/结构不动则多 agent 特有问题不会消失。改结构优先于改措辞。
 
 ### Curator 每周检查
 - 30 天未用的 skill → 移到备份目录
@@ -136,6 +138,26 @@ Layer 3: browser_exec
 **Hermes 版本线补**：v0.23.0（11-05 "Hearth"，~1,950 PRs）新增 `hermes curator lock`（手工整理的 skill 可锁，任何工具含 `--yolo` 都改不动）、`hermes cron cancel` + per-job `--catch-up`、compaction 摘要 `UNVERIFIED:` 行、同一 cron 任务共享 prompt cache；v0.23.1（11-10，~618 PRs）。→ 用户自有且不该被 agent 改的 skill 可主动 lock；compaction 的 UNVERIFIED 标记对"不编造"有用；cron 缓存共享对每天多 job 的这台机器直接省 token。
 
 **Benchmark 补充**：OSWorld-Verified 另一来源榜（2026-11-08）Kimi K3 84.8%、Gemini 3.6 Flash 83%、MiMo-V2.6-Pro 82%，全部厂商自报、无独立复现；同一模型 step budget 从 9.1%→23.0%，引用分数必须带 step cap 和 release。
+
+## 2026-11-23 23:00 自学增量（cron 只读，固化于此）
+
+> 13 条新结论全部过 `fact_gate.py check`=accept（score 53–71，max_similarity ≤0.07，无近重复）；fact_store 本轮实测仍只读，故固化于此，待主线程写入。
+
+**工具路线获独立验证（最重要）**：browser-use 1.0（11-10 正式版）把 0.x 的 24 个浏览器动作砍成**单一 `python` 工具**——持久 REPL 内预置 harness helpers + raw CDP（Pydantic AI 驱动）。BU Bench v2.1 上同三个模型比 0.x 高 **14–33 分**、成本低 **2.7–5.2×**；代码 178 个 py 文件→43 个，删 136,905 行、加 29,601 行。→ **与 Hermes v0.23 把 browser_* 全删只留 `browser_exec` 是同一判断的独立复现**："给模型代码而不是动作菜单"能解锁 agent 自解 hung page、直呼私有 API 等菜单外行为。写自动化 skill 时坚定 code-first，勿回退到动作枚举。默认也变了：`llm=bu-fast`、云浏览器、`mode='ultrafast'`(AX-tree id)、`max_steps=100`。
+
+**browser-use 补丁**：1.0.7（11-?）MCP 调用不再 60s 超时——长 `browser_exec` 50s 先回已产输出、空 code 调用取剩余，Cursor 等 60s 限客户端不再断；1.0.8（11-22）judge 作为 run 额外一轮从缓存读不重复计费、无 API key 的 headless/SSH 打设备授权链接、`bu.type` 不打印密码字段、`Browser(cdp_url=...)` **附着已开的那页而非新空白 tab**（对齐本机 CDP 复用习惯）、gateway 预留 token 32,768→16,384。
+
+**Camofox v1.19.0（11-10）**：每个浏览器动作都成 agent 工具，HTTP API 与 MCP/OpenClaw 工具面 build-time parity gate 强制对称；新增 `camofox_upload`、`fullPage` 截图、每调用 `userId/sessionKey`、`evaluate` 的 `timeoutMs` 真生效。低层原语：坐标点击可断言 `expected_role`/`expected_accessible_name`（目标漂移即拒）、raw AX 树、storage state 导入导出、trusted drag、元素级滚轮。容器默认 non-root，缓存迁到 `/opt/camoufox-cache`——**硬编码 `/root/.cache/camoufox` 的部署要 repoint**。
+
+**递归自改进框架集群（对 L3/L4 的方法论校准）**：
+- **Flex-RSI（2611.08946）**：24 任务 18 模型，自改进在 150/177 runs（85%）提升、中位 +10.4 分；闭源中位 +14.9 vs 开源 +8.5——**只记成功/失败的反馈拖累开源模型**，标量评分更友好；编辑 harness 本身确实贡献增益；agent 自建解法的任务收益最大，单答案任务原地踏步。榜 flex-rsi.github.io。
+- **BOXBOX（2611.09218）**：agent 触发式 harness 修订 + 内核热重载保上下文；PerfRace Speedup@4h **1.70×** vs 最强基线 1.54×、Frozen 1.442×；**离线 harness 优化 HE 1.281× 反低于 Frozen**——离线优化不保证泛化，任务内在线改才有持续收益。
+- **生成≠部署**：ARC-AGI-3 harness 研究（2610.30499v2）27 lineages 两次修订仅 +2.80 held-out RHAE（95%CI 跨 0），**无修订保留父代能力**；事后按 dev 分从快照里挑升到 +4.53——印证 skill"patch 后先自测失败丢弃"还需加"保留父本可回滚"。
+- **多 agent harness 共进化**：MAS-Loop（2610.38946）Orchestrator+trajectory-conditioned Refiner 做 bounded patch、同任务重跑测变化，Refiner 可迁移到外部生成的 MAS；HarnessNet（2610.15221）Agentron 单元+本地 optimizer+反馈逐层反传，达全局 optimizer 相当增益而 token 更少、换基座后仍有效；**MultiLoop（2611.15754）只有 10 训练样本即 +4.6%（71.88%），但编排失败大多持续，仅 prompt 优化反 -2.65%——只改 prompt 不动结构是死路**；IAPO（2611.07495）交互项占编排可达增益一半、删掉掉 7–17 分；DualEvolve（2611.04439）外层用 grader 给"过程质量分"更新 harness+skill 规则，64 组全胜 DeepEvolve +7.6%HR@5/+9.0%NDCG@5。
+
+**WebMCP（用户长期追踪项，规范级更新）**：**2026-11-23 发布 Draft Community Group Report**——`ModelContext` 接口定稿为 `registerTool`/`getTools`/`executeTool` + `ontoolchange`/`ontoolactivated`/`ontoolcancel` 事件；Chrome 159 加 `outputSchema`（execute 返回按 schema 校验）、Chrome 153 支持 AbortSignal 注销工具而不打断执行中调用；`getTools({fromOrigins})` 显式列源才可跨源。OT 仍延至 Chrome 162（2027-03-30），状态 **Proposed 无 ship 里程碑**。→ 规范在收敛但站点覆盖仍极低，继续按周期跟踪，未到替代 CDP 时点。
+
+**Benchmark 校准（引用必带 step cap/release）**：OSWorld-Verified（11-23 读）Intelligence-Indeed Agent 90.2%（100 步+coding 动作）居首、通用模型 Claude Fable 5 86%（1M 上下文/100 步）、人类基线 72.4%；OSWorld 2.0 v2.1 榜首 Claude Opus 5 max **44.33% binary / 77.67% partial**（500 步），框架 44.44% binary（450 步）——注意同模型 v2026.08.08 只有 31.43%，**分数不可跨 release 比**；WebArena 86.1%（Narada AI Code）超人类 78.24%，最佳开源 74.3%（DeepSeek v3.2）。
 
 ## 版本迁移与技术增量（指针）
 
