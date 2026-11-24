@@ -245,6 +245,9 @@ adb devices -l                      # ✓ MI8 + 平板
 
 # 8. 脚本
 ls ~/.hermes/scripts | wc -l        # ✓ 263
+
+# 9. 免费模型查询
+python3 ~/.hermes/scripts/free-models.py   # ✓ 列出 12 个免费模型+能力矩阵
 ```
 
 ---
