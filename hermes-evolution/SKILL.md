@@ -159,6 +159,28 @@ Layer 3: browser_exec
 
 **Benchmark 校准（引用必带 step cap/release）**：OSWorld-Verified（11-23 读）Intelligence-Indeed Agent 90.2%（100 步+coding 动作）居首、通用模型 Claude Fable 5 86%（1M 上下文/100 步）、人类基线 72.4%；OSWorld 2.0 v2.1 榜首 Claude Opus 5 max **44.33% binary / 77.67% partial**（500 步），框架 44.44% binary（450 步）——注意同模型 v2026.08.08 只有 31.43%，**分数不可跨 release 比**；WebArena 86.1%（Narada AI Code）超人类 78.24%，最佳开源 74.3%（DeepSeek v3.2）。
 
+## 2026-11-24 23:00 自学增量（cron 只读，固化于此）
+
+> 9 条新知识全过 `fact_gate.py check` = accept（score 71，max_similarity ≤0.133，无近重复）；fact_store 本轮实测只读（`add` 被拒），故固化于此，待主线程写入。
+
+**Hermes 版本线 + 生态（重要）**
+- v0.23.4（11-23 发布，rolls up ~229 PRs since v0.23.3）：`hermes gateway migrate --backends`、`hermes plugins config`、`skills.index_desc_limit`（可配置 skill 索引描述长度）、Desktop 沙箱文件夹/站点审批卡、gateway 客户端自报身份、Gemini 4 Hydrogen/Neon/Carbon 上 Nous Portal/OpenRouter/Vertex。完整 curated notes 留到 v0.24.0。
+- Nous Research × Microsoft（11-18 官宣）：Hermes Desktop 进 Microsoft Store、Microsoft Teams、Azure Container Apps Sandboxes；**Collective Wisdom** 把员工的成功做法变成可分享 skill 供团队复用（组织级 L3）；OpenRouter 全球开放 agent 排名第一、日均近 2 万亿 token。→ 与 skill "archive 对比升华"同向，但组织级共享需 OpenClaw/SkillClaw 侧配合，暂未落地。
+
+**自改进框架（对 L3/L4 的量化校准）**
+- **Harnesses That Improve Themselves（2611.22299，SWE-bench Lite）**：full-harness rewrite 42.5% 准确率但 **451.6k tokens/任务**（单次超 2.8M）；modular gated evolution 12 轮 40.0%（8× seed）仅 **46.7k tokens**（比 seed 少 2.5×、比 rewrite 少近 10×），零未验证退出；零样本迁移 Gemini 4 Argon 37.5%/64.8k。→ "patch 保守更新 + 先自测 + 保留父本"拿到量化背书：大改贵 10× 且泛化更差。
+- **Beneath the Surface（2611.07624）**：16 个进化 agent **全部**"获得新任务的同时丢掉旧任务"；最高分 agent 在 4 个 pool 里**没有一个**产生最大平均改进；更严格的 admission 会丢弃有用备选；迁移只选择性保留增益（general 覆盖常降，coding 目标外层-only harness 覆盖反升）。→ 进化天然伴随遗忘/回退，必须 preservation-aware evaluation + 独立验证数据，别只看单次最高分。
+- **Multi-Task Self-Evolving Harnesses（2609.38372）**：同一 frozen 模型、同一 harness 版本先当 solver 再当 proposer 读完整 run records 直接改 harness；49 行 seed 起步，GLM-5.3/GPT-5.6 Sol +5 分与 Claude Code/Codex 持平，弱模型 GLM-5.3-Flash <2 分、GPT-5.6 Luna 反低于 seed。涌现机制：输出截断/历史压缩/完成检查/独立复核/视觉检查（与 Hermes 现有机制吻合）。
+- **NavRSI（2611.27499）**：VLN 导航 harness RSI，frozen LLM + designer agent 改写 harness 且经验共进化；特权模拟器诊断只给 designer、不给导航 LLM；GPT-6-Astra R2R-CE val-unseen 85.64%（超前最佳 4.13%）。→ 再次印证"评估/诊断信息与执行方隔离"（RSI-Env 同向）。
+- **Self-Evolving Agent Harness（2610.18813）**：continual PAC-learning 给出泛化界 + **以历史回归预算为条件的保留界** + 用新鲜独立验证数据的高概率 admission rule（66 页，github.com/zgcagi/Harness-RSI）。→ 给"回归探针"理论依据：不只看新收益，还要约束旧能力回退预算。
+
+**Benchmark 校准（引用必带 release / step cap，勿信 vendor 自报）**
+- **NorthCUA（2611.02102）独立复核质疑**：OSWorld-Verified 88.6% / WebArena-Verified 73.9% 的开源 SOTA 依赖未声明未审计的训练/评估不相交假设；对最接近对手的优势仅 1.0 / 2.3 分 = 个位数任务数。→ 引用分数必须标口径与任务数。
+- **Qwen-UI-Agent（2607.28227，阿里通义）**：OSWorld-Verified 79.5%（仅次 Claude Opus 4.8）、27B WebArena 73.6% 超 Claude Opus 4.8 的 71.9%；移动端 82.1% MobileWorld / 92.2% MobileWorld-Real / 97.5% AndroidDaily；但 OSWorld-v2 仅 40.0% partial / 13.9% binary。→ 短程已饱和、长程仍是瓶颈。
+- **WebArena-Pro（2611.17955）细节**：300 任务 / 20 站点 / 50 步，Codex+GPT-6.1-Sol 与 Claude Code+Opus-5.5 并列 62.3%，OpenCode+Kimi-3.1-Pro 60.7%，通用 agent 最高仅 30.3%——编码 agent 与通用 agent 差距巨大。
+
+**本轮落地/未落地**：「保留父本可回滚」从经验升级为有量化背书的铁律（上节）；Gateway 判活铁律已写入前置自检。未落地：Collective Wisdom 组织级 skill 共享、SearXNG+Firecrawl 双 backend。
+
 ## 版本迁移与技术增量（指针）
 
 - Hermes v0.23.0 起旧 `browser_*` 工具全删、只剩 `browser_exec`；盘点迁移清单与 WebMCP / UI-Venus / ARISE / Anchor / MetaAct 等 2026-11 研究结论见 `references/browser-agent-research-2026.md`。写自动化 skill 时勿再引用旧工具名。
@@ -171,6 +193,7 @@ Layer 3: browser_exec
 - **本机 git 必须走 `/usr/bin/git`**：PATH 里的 `/usr/local/bin/git` 是 x86 二进制，在 ARM Mac 上报 `Bad CPU type in executable`，所有 `git add/commit/status` 都会失败。技能大本营 `~/.hermes/skills` 的提交统一用绝对路径。
 - 验证进化任务是否真跑：`cronjob_manage(action='run')` 手动触发一次并读输出文件，别只看 `last_status`。
 - 给 `no_agent=true` 的 cron 写脚本时，stdout 会被原样投递为消息：凡输出 JSON 必须给**合法且完整**的精简摘要，明细另写报告文件。**严禁用 `json.dumps(payload)[:N]` 截断**——截断后的 JSON 在消费端 `json.loads` 直接失败，而这类错误只会在下一次手动触发时才暴露。脚本写完必须立刻手动跑一次 wrapper，确认 stdout 可被解析。
+- **Gateway 判活只用 launchctl + 日志时间戳，别用 `pgrep -fl hermes_cli.main`**（2026-11-24 误判踩坑）：launchd plist 经 `osascript -l JavaScript → $.system("exec ... hermes gateway run")` 启动，实际进程命令行是 `/usr/bin/osascript -l JavaScript ...`，**不含 `hermes_cli.main`**，pgrep 该词必然漏报、错判"gateway 挂了"。正确证据三件套：`launchctl print gui/$(id -u)/ai.hermes.gateway` 看 `state = running` + `pid = N`；`ps -p N -o pid=,etime=,command=` 看已运行时长；`tail ~/.hermes/logs/gateway.log` 时间戳与 `date` 对比（wecom ping 每 30s 一条，几分钟内有新行即活）。同理旧记忆里 `curl 127.0.0.1:18789/health` 端点已过时（新版 `--external-supervisor`，inbound callback 在 8642），health 返回 000 不代表 gateway 死。误判后乱调 `hermes gateway start` 会增加无谓 restart，先按这里实测再动手。
 
 ## 调研驱动进化（用户说「找更强方案进化」时走这条）
 
