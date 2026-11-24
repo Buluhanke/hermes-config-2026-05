@@ -120,6 +120,8 @@ l2: 自演化
 | T5 | 错误注入（模拟失败） | 恢复机制生效 |
 
 ### 坑
+- 无反馈改写会退化（2611.25534）：SkillsBench 30 轮平均 -15 分，最先丢的是模型先验之外的专家知识——生成变体时冻结专家知识块，只改可变部分，否则 A/B 比的是「谁退化得少」。
+- 必须记录 detection rate（2611.29807）：自改进系统自带检查漏报 52-89% 的环境变化失败，但被叫到时能修 90%+——T5 错误注入后若系统没自己报警，即使事后修好也记为失败，并单列「自检测是否报警」指标。
 - 变体太多会变成评估噪声：固定 3 个变体、上限 5 条测试用例
 - 不同时间运行的变体环境可能不同：统一快照日期记录
 - 模型自评代替不了工具实测：任何 A/B 决策必须基于工具调用输出，不能依靠「感觉更好」
@@ -237,3 +239,37 @@ l2: 自演化
 ### Hermes 本体补充
 - **v0.23.2**（11-16，1989 PR）：durable subagents 可跨 gateway 重启/崩溃续跑；每会话独立 prompt-cache 时钟；`hermes fallback check`、`hermes update --force`；per-job cron 新增 `wrap_response` 与 fresh-thread-per-run；修复高危 CVE-2026-130164。
 - **v0.23.1**（11-09）：plugin catalog 上限 2MiB→16MiB，修复所有安装静默回退旧 catalog 的问题（≤v0.23.0 一直受影响）。
+
+## 2026-11-25 自学成果补充（fact_store cron 只读，直接固化于此）
+
+> 权威源先行：`python3 ~/.hermes/scripts/frontier_sources.py --days 2` —— Papers with Code 30 篇、Awesome-AI4AI 高引 15 行正常；arXiv API 双端点当日失败（偶发）。web_search 5 组 + WebMCP 定向 1 组。
+
+### 头号发现：skill 无反馈自改会退化（对 Hermes 技能库直接相关）
+- **How Feedback-Free Self-Evolution Reshapes Agent Skills**（2611.25534，11-19，github LitaoGuo/How-Self-Evolution-Reshapes-Skills）：模型逐轮改写专家 skill、不给任务/运行/评判反馈 → **每个模型在每个基准都变差**，SkillsBench 30 轮后平均 **-15 分**。改写把 skill 拉向模型自身先验，最先丢掉的是先验之外的专家知识；把这部分知识补回可恢复大部分 pass rate——说明专家 skill 的价值恰在「模型自己写不出来的部分」。**SkillDiff**：不改 skill 文本、只原地标注这类知识，SkillsBench 平均 **+4.8 分**（零反馈、零文本改动）。**行动：Hermes skill 自改写必须冻结专家知识块，只改可变部分；无实测反馈的改写默认拒绝。**
+
+### 检测差距：自改进系统看不见自己坏在哪
+- **Blind to What They Can Fix**（2611.29807）：RSI 程序自带的运行时检查在环境变化后漏报 **52% Seaquest / 55% Kangaroo / 64% autoscaling / 89% AppWorld** 失败（Codex）；其他模型在 AppWorld 漏 82%。同一 agent 一旦被叫到就修好 90%+（AppWorld 55/55、autoscaling 37/37）。用正常轨迹训练一个 monitor 能在 3/5 域发现大多数失败。**行动：eval 必须同时报 score 与 detection rate（系统自己上报了多大比例的失败）；Hermes 进化验证补一列「自检测是否报警」，未报警=未修复。**
+
+### 权重级自改进（不靠梯度）
+- **Self-Upgrading Embodied Agents**（2611.31117，11-21）：首个工作中自改权重的具身 agent——27B 白天在家居环境干活，夜里读自身记录，发现大量步数浪费在「回复撞 token 上限而不动作」，把该习惯定位到隐藏态一个方向，只重写一个权重 tensor。无训练/梯度/奖励模型/第二模型/test-time scaling/harness 工程。自带 examiner：每个改动先对未改的自己跑 practice task，只保留成立的。held-out 48 新种子/任务：完成任务 **41.6%→45.2%（+3.6pp，p<1e-4）**，无动作步 45.9%→39.5%，token 15.1k→13.9k，多轮稳定不崩；四个规模里只有 27B 出现该能力。
+- **SelfWrite / Recursive Self-Editing**（2611.29513）：Qwen3.8-27B 在持久 Python session 检查自身权重与激活，用白盒原语（奇异方向、对/错答案激活对比、秩一投影、tensor 运算）写下低秩权重编辑程序，无梯度工具；候选只在 hidden gate 上打一次分，只合并严格改进者。5 代：gate **73.95%→76.45%**，从未见过的 held-out avg@4 **76.30%→77.75%**、pass@4 **82.60%→84.80%**。
+- **Do LLM Agents Still Need to Be Told How to Self-Improve?**（2611.23219）：冻结 LLM 只给算力预算 + 收集经验/更新文档的原语，无外部规定循环、无真实数据，自己构造自学习算法。PuzzleScript-t20：Claude Opus-5 **+20%** / GPT 6-Astra +10% / GLM 5.3 +6%，老模型几乎不涨（能力门槛效应）；学到的 context 跨环境迁移 ARC-AGI-L1 **+21%**、MazeBench SPL +0.15。
+
+### 浏览器 agent：code-first 路线拿到硬证据（对 Hermes browser_exec 直接相关）
+- **browser-use 1.0**（11-10）：把 0.x 的 24 个浏览器 action 换成**一个** `python` 工具——持久 REPL + 原生 CDP。BU Bench v2.1 同三模型比 0.x 高 **14-33 分**，成本 **2.7-5.2× 更低**；有代码后 agent 自己解卡死页、调私有 API（原动作集覆盖不到）。**行动：Hermes 的 browser_exec/CDP 路线获独立验证，别回退到像素/菜单式操作。**
+- **karpo-browser**（11-21，开源）：System 2 通用 LLM 拆目标（DeepSeek V4.1 Flash）+ System 1 专用决策模型逐步选动作（Karpo Decision 27B Act，中位 0.95s/步，78% 页面动作由它完成）。Browserbase Benchmark v2 全 102 任务 **89% / 201s / $0.096 每任务**（榜首 claude-fable-5-2 92%/$1.242，第 10 名 $0.51+）；Online-Mind2Web 72.3%/$0.048；配套 KBB 基准 584 站 / 23,075 步。**启示：决策模型与小 LLM 的双速分层，是降本不降准确率的可复制路线。**
+
+### Hermes 本体（截至 11-24）
+- **v0.23.4**（11-23/24）：从 v0.23.3 起 **229 PR / 1,122 non-merge commits / 1,316 文件 / 281 closed issues**。发行说明刻意不列、但对日常有用的改动：Gemini 4 Hydrogen/Neon/Carbon 上 Nous Portal/OpenRouter/Vertex；`hermes gateway migrate --backends`（旧 serve/dashboard 后端迁到 gateway）；`hermes plugins config` 终端改插件设置；Desktop 沙箱文件夹/站点权限审批卡；gateway 客户端自报身份供插件识别；`skills.index_desc_limit` 可配；`hermes dashboard password` 无 TTY。完整 notes 随 v0.24.0 出。
+- 本机若仍在 v0.22.x，升级跨 v0.23.0 必看破坏性变更：旧 `browser_*` 全删→`browser_exec`、`hermes mcp serve`→`mcp-serve`、Desktop 需 macOS 13+、内置 skill 58→44（Word/PPT/Excel 合并成 `microsoft-office`）。
+
+### WebMCP 追踪（用户长期关注，覆盖结论不变）
+- Chrome origin trial 延长到 **Chrome 162、2027-03-30 结束**；仍无 ship date，Chrome Status 标 "Proposed"。本地测试 flag `chrome://flags/#enable-webmcp-testing`。
+- **规范 10-08 移除 declarative / form-based API**（移到单独 explainer）；imperative JS `document.modelContext` 是稳定地面——Chrome 文档与 ChatGPT 仍写 form 属性，写工具一律以 JS 为准。
+- **ChatGPT 桌面内置浏览器默认开 "site tools"**（即 WebMCP），无 flag；仅 GPT-5.6 Sol / GPT-6 Sol（Luna 关闭），只支持主线程 JS 工具，iframe/form 工具与 Enterprise/Edu 工作区不支持；每次调用做安全审查。
+- 站点侧：Shopify 全 Liquid storefront 给 12 个工具（`proceed_to_checkout` 只到结账不付款）；Cloudflare edge bridge 开发者预览（不改站点源码，边缘加一个 bridge script）；Edge 从 150 起 origin trial、Brave Leo 实验支持、Firefox 中立、Safari(WebKit) 反对。**Bright Data 10-31 扫 Tranco top-1000（544 个有效首页）：仅 1 站注册工具**（wyzecam.com，Shopify 12 工具）；11 个大站搜索结果页 0 工具。**结论：覆盖率极低，暂不能替代 CDP/Browser Use；但 ChatGPT+Shopify 已形成首个真实闭环。**
+
+### 多 agent 编排 RSI（补充）
+- **SciMARS / SciMARS+Memory**（2611.12552）：共享 evidence graph + 独立的角色/协调/记忆编辑器。Autonomous Science Bench GPT-6-Astra **8/18→12/18**、GLM-5.3 1/18→2/18；ScienceAgentBench 11/38→14/38、AppWorld 5/20→11/20。共享记忆让角色能取到当前交接之外的证据。
+- **MASS**（2610.12176）：单模型自提/自执/自评多 agent workflow，结构护栏下进化搜索 + SFT 内化，agent/evaluator/optimizer 同一模型。Qwen3.6-27B 两轮：4 个开放式基准每输出 token 性能 **1.2-1.6×**；多 agent 轨迹训出的学生超过单 agent 多 1.4× token 训出的。
+- **R2Orch**（2610.22740，self-play + skill withdrawal 走向零 skill 部署）、**MAS-Loop**（2610.38946，轨迹条件 Refiner 让 orchestrator/refiner 共同进化）、**CollabFlow**（2609.38662，证据门控通信 + CTB 保多个好团队）：12 数据集一致超 baseline。共鸣点：**改进拓扑与通信协议，往往比加 agent 数量更有效**（呼应库内 MANTA）。
