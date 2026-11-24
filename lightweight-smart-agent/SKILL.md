@@ -1,7 +1,7 @@
 ---
 name: lightweight-smart-agent
 description: "轻量聪明智能生命体。搜索先行，找到最优解再落实。Use when 进化、新增技能、修改配置、写脚本。"
-version: 1.1.0
+version: 1.1.1
 author: Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -218,8 +218,8 @@ fact_store add:
 ---
 
 ### 夜间进化 cron 检查清单（每次按序跑，已实测）
-1. `hermes --version` + `hermes update --check` 确认版本差；`hermes fallback list` 与 `hermes config get fallback_providers` 必须为空 / `[]`。非空先 `printf 'y\n' | hermes fallback clear`（交互命令，直接跑会被 `[y/N]` 取消），再复验。
-2. 查残留自动切换三处：`ps aux | grep -Ei 'model_health|model_router|fallback'`、`~/.hermes/scripts/`、cron 列表——都必须为空。发现即删除，禁止重建。
+1. `hermes --version` + `hermes update --check` 确认版本差；`hermes fallback list` 与 `hermes config get fallback_providers` 必须为空 / `[]`。非空先 `printf 'y\n' | hermes fallback clear`（交互命令，直接跑会被 `[y/N]` 取消），再复验。零绑定铁律只针对**主模型** fallback，以下三者不是违规、一律不动别误删：`config.yaml` 的 `auxiliary.{vision,compression,approval,title_generation,web_extract}.fallback_chain`（辅助任务备用模型链，与 `fallback_providers` 是两个不同特性）；名字含 fallback 的脚本如 `broadcast_fallback.py`（Playwright 抓站兜底）/ `hermes_terabox_fallback.md`（备份方案），与模型自动切换无关；`moa` 预设里的 reference_models 只要 `enabled: false` 就不算绑定。判违规只认四样：`hermes fallback list` 非空、`fallback_providers` 非空、cron job 有 `pinned`/`model` 字段、有 model_health/model_router 进程或脚本。
+2. 查残留自动切换三处：`ps aux | grep -Ei 'model_health|model_router|fallback'`、`~/.hermes/scripts/`、cron 列表——命中项按第 1 条的四样判违规标准甄别：只有 model_health/model_router 进程、model_health/model_router/fallback_provider 脚本、cron 里的 fallback/health 任务才删；名字含 fallback 但属抓站/备份的脚本（见第 1 条）保留。发现真违规即删除，禁止重建。
 3. 网关健康探针端口是 **8642**（`curl 127.0.0.1:8642/health`）；18789 是错端口，别再试。
 4. `hermes cron list` 的 ⚠ 项：`HTTP 404 free period has ended` / `HTTP 403 not available in your region` 属模型侧瞬态，带 `recovered since` 即无需处理；禁止因此加 fallback 或 pin 模型（违反零绑定铁律）。
 5. `hermes skills check` 的 `update_available` 不等于要升：源失效、非必需技能跳过；本地改过的技能永不用 `--force` 覆盖。
@@ -229,3 +229,4 @@ fact_store add:
 ## 版本历史
 
 - v1.0.0 (2026-10-23): 初始版本，定义 Search-First 进化协议
+- v1.1.1 (2026-11-24): 零绑定排查补防误判细则——auxiliary.fallback_chain、名字含 fallback 的非模型脚本、disabled 的 moa 预设均不在清理范围；判违规只认四样（fallback list / fallback_providers / cron pin / 自动切换进程脚本）。实测确认当前主模型零绑定全链路干净。
