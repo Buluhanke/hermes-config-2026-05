@@ -268,6 +268,14 @@ Layer 3: browser_exec
 ### 判定
 真教训才写：用户纠正（最高优先）、排障弯路根因、长期铁律。不写：任务流水账、助手排障原文、系统注入、已存在 fact（先 search 查重）。没有就明确报「今日无新经验」，不硬造。
 
+### 首跑实测（2026-11-25 18:27）
+端到端实跑 `cronjob_manage action=run`：脚本提取 0 条（24h 真人消息全是任务指令，无强信号——正确行为），**LLM 语义复盘补出 4 条**脚本抓不到的根因经验（Gatekeeper=com.apple.quarantine / 跨机克隆三处必改 / cron fact_store 只读 / Air 环境事实），4/4 过 fact_gate（score 71、相似度 0），直连 SQLite 落库 fact_id 1429-1432，库 465→469，SQLite 直查确认可读。任务还自愈了 `fact_id` 字符串 ID bug（列是 INTEGER PRIMARY KEY，旧写法 `datatype mismatch` 被吞→每天假成功落库 0 条）。**结论：光靠关键词脚本不够，agent 模式 LLM 复盘是关键补位**，两者组合才真正学得到东西。
+
+### 真人化技能补齐（2026-11-25）
+- 装 `proactive-agent` v3.1.0（源自 LeoYeAI/agent-master-skills 的 alexey-proactive-agent，653 星技能）：WAL 协议 + Working Buffer + 主动反问 + 10 次尝试不放弃 + 自主 cron 区分。与主动学习 cron 互补——它管"反应时怎么固化纠正"，cron 管"每天复盘学什么"。装前已安全审计（只读脚本，无 curl|sh / rm -rf / eval），清理了历史草稿 SKILL-v2.3/SKILL-v3。
+- 社区候选 live GitHub API 核验：ECC 310426★（与现有技能大量重叠，只挑模块不整包）、ruflo 82394★（完整 swarm 运行时非 SKILL.md，跳过）、elevenlabs/skills 587★（需 API key 本地未配，跳过）、agentbrain 108★（OpenClaw 情绪人格插件，观察项）。
+- 官方策展库 `hermes skills install official/<category>/<skill>`（117+ 技能，内置信任）是补短板首选可信源。
+
 ## 持续进化 Checklist
 
 - [x] fact_store 持续写入（条数用 `fact_store stats` 现场查，不写死）
