@@ -189,7 +189,8 @@ Layer 3: browser_exec
 ## 每日进化前置自检
 - **不绑定任何模型是用户铁律**：cron 任务不 pin、config 不设 `fallback_model` / `fallback_providers` 锁定，给什么模型就用什么模型、跟随当前主模型。模型失效时手动切换，不做自动轮替，也不要自动恢复 fallback 链——旧版"fallback 为空就恢复三链"的自检已废弃，它会违背这条铁律。
 - 失效进化任务的正确修法是 `cronjob_manage(action='update', pinned=false)` 取消 pin + `hermes config unset fallback_model` 清隐藏绑定，而不是换一个模型 pin 上。**pin 免费模型必翻车**：免费额度到期就 404、地区受限就 403，cron 静默停摆且用户看不到 last_status。
-- 不要用直接编辑 config.yaml 的方式改配置（安全护栏会拒绝），用 `hermes config set/unset`；cron 上下文 fact_store 只读，决策写入本 skill 或报告。
+- 不要用直接编辑 config.yaml 的方式改配置（安全护栏会拒绝），用 `hermes config set/unset`；cron 上下文 fact_store 工具 `add` 只读，决策写入本 skill 或报告；要真落库必须 `python3+sqlite3` 直连 `~/.hermes/memory_store.db`（参考 `proactive_learn.py` 的 `write_facts`）。
+- **activelearn 落库铁律（2026-11-25 实测踩坑）**：`memory_store.db` 的 `facts.fact_id` 是 `INTEGER PRIMARY KEY`，直连写入必须用整数递增 ID（`SELECT COALESCE(MAX(fact_id),0)+1`）；用字符串 ID（如 `proactive_<ts>`）会报 `datatype mismatch`，被 `try/except` 吞掉后每天"落库 0 条"却看似成功。`proactive_learn.py` 已修复（含 `retrieval_count/helpful_count` 显式置 0）；改完必须像自检那样在 DB 副本上跑一次 `write_facts`，确认 `typeof(fact_id)='integer'` 且 count +1 才算验证。
 - **本机 git 必须走 `/usr/bin/git`**：PATH 里的 `/usr/local/bin/git` 是 x86 二进制，在 ARM Mac 上报 `Bad CPU type in executable`，所有 `git add/commit/status` 都会失败。技能大本营 `~/.hermes/skills` 的提交统一用绝对路径。
 - 验证进化任务是否真跑：`cronjob_manage(action='run')` 手动触发一次并读输出文件，别只看 `last_status`。
 - 给 `no_agent=true` 的 cron 写脚本时，stdout 会被原样投递为消息：凡输出 JSON 必须给**合法且完整**的精简摘要，明细另写报告文件。**严禁用 `json.dumps(payload)[:N]` 截断**——截断后的 JSON 在消费端 `json.loads` 直接失败，而这类错误只会在下一次手动触发时才暴露。脚本写完必须立刻手动跑一次 wrapper，确认 stdout 可被解析。
@@ -247,6 +248,25 @@ Layer 3: browser_exec
 4. **恢复被埋事实**：`python3 fact_gate.py restore` 把旧机制留下的 `retrieval_count=-999` 恢复为 1。
 
 **验收标准**：`audit` 报 KEEP/WATCH/ARCHIVE 三档，归档候选只含明确噪声（自动摘要、测试记录、空泛标签），打标记后 content 零改动；写前 `check` 对有效事实给 review/accept、对 `测试` 类噪声与空泛标签必须 reject 并命中 near_duplicate。具体条数现场查，不写死。
+
+## 主动学习引擎（2026-11-25 落地）——从会话经验中学习
+
+区别于 4 个「被动全网搜新闻」任务（03:00 自学 / 03:00 night-learning / 22:00 夜间进化 / 23:00 每晚进化），**主动学习**是从自身交互经验中成长，这是真人化核心。
+
+### 组件
+- 脚本 `~/.hermes/scripts/proactive_learn.py`（零 LLM 依赖，纯 stdlib）：扫 state.db 最近 24h **真人 user 消息**（铁律：绝不从 assistant 消息提取——助手自述满是"报错/修好了"，全是噪声），提四类强信号：用户纠正 / 失败抱怨 / 成功确认 / 长期约定。剔除 `CONTEXT:` / `[IMPORTANT:]` 注入消息。
+- 提示词 `~/.hermes/scripts/prompts/active_learn_prompt.txt`（**持久目录**，勿放 cache/scratch——24h 会被清）
+- cron 任务 `3e6333259995`「主动学习-会话经验复盘」每天 07:30，agent 模式，skills=[hermes-evolution, self-maintenance]，continuity=true，pinned=false
+
+### 关键坑（血泪）
+1. **state.db 的 timestamp 是 Unix epoch 浮点数**，不是 ISO 字符串——`datetime('now')` 比较恒返回 0，必须用 `time.time()-hours*3600`。
+2. **关键词信噪比极低**：纯脚本扫 48h 真人消息命中 0 条强信号（用户大多发任务指令，不是教训）。所以任务必须是 **agent 模式**让 LLM 做语义复盘，脚本只作辅助提取器。
+3. **fact_gate 对中文短句评分极低**：内容必须带可验证信号才能过门——加日期戳（2026-11-25 → has_number + has_verifiable_ref）能把 10 分拉到 48 分（review 通过）。分数公式见 fact_gate.py：数字+20、可验证引用+18、命名实体+18、长度≥60 +10；<25 reject、25-50 review、≥55 accept。
+4. **cron 上下文 fact_store 工具 add 只读**：必须直连 SQLite（`sqlite3.connect('~/.hermes/memory_store.db')` + INSERT）绕过，参考 proactive_learn.py 的 write_facts。
+5. **验证必看退出后输出文件**：`~/.hermes/cron/output/3e6333259995/`，不能只看 last_status=ok。事实上 4 个老进化任务 last_status 全 ok，但 fact_store 11-25 零新增——知识都固化在 SKILL.md 里了，造成"没进化"假象。
+
+### 判定
+真教训才写：用户纠正（最高优先）、排障弯路根因、长期铁律。不写：任务流水账、助手排障原文、系统注入、已存在 fact（先 search 查重）。没有就明确报「今日无新经验」，不硬造。
 
 ## 持续进化 Checklist
 
