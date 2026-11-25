@@ -83,3 +83,4 @@ rm -f <install_state_dir>/source-completion-pending
 4. **source-completion-pending**：存在时也会触发修复。修好后删除。
 5. **PYTHONPATH 污染**：运行外部命令前用 `env -i` 清环境。
 6. **预编译 wheel 版本**：pip 安装的 wheel 版本可能低于 pyproject.toml 锁定版本。同步更新锁文件，否则 uv sync 会覆盖。
+7. **跨机迁移别走重建路线**：如果报错来自另一台 Mac 拷来的 `~/.hermes`（CLI 卡死、`no dependency environment is committed`、`sample` 显示停在 `_dyld_start`），先清 `com.apple.quarantine`、改硬编码路径，再直接拷贝已构建的 venv 到目标机自己的 install-state 目录并重写 stamp；完整流程和判定依据见 `hermes-local-capabilities-macos` 技能里的 cross-machine-hermes-clone 参考文档。目标机拉不到包索引时 `hermes pm repair` / `uv sync` 会一直挂着，靠等修不好。
