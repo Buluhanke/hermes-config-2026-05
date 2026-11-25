@@ -182,6 +182,25 @@ find ~/.hermes/logs -name "*.log" -mtime +7 -delete  # 7天前日志
 - 不要动 `chrome-profile-mirror`（登录态镜像）
 - 清理后验证：`df -h /` 确认空间恢复
 
+## MCP stdout 污染刷屏排查（2026-11-25 实战）
+
+症状：`gateway.error.log` 暴涨（单次 19M / 21万行），全是 `pydantic ValidationError: 11 validation errors for union[JSONRPC...]` + `Failed to parse JSONRPC message from server`，几小时内几千次。
+
+根因：某个 stdio MCP server 连不上目标时，把**诊断 JSON**（如 `{'version':'2.5','ok':...}`）打到 stdout，被 MCP 客户端当协议消息解析 → 全部失败刷屏。本机实例：`openclaw mcp serve --url ws://127.0.0.1:18789`，OpenClaw 无进程、18789 无监听，每次连接都吐诊断 JSON。
+
+排查 SOP：
+1. `grep -oE 'validation errors[^:]*' gateway.error.log | sort | uniq -c | sort -rn | head` 看错误类型
+2. 取一条 input_value 样例，识别污染 payload 特征
+3. `grep -n 'ERROR mcp.client.stdio' ... | head -1` 取行号，`sed -n '{},+8p'` 看堆栈定位 server
+4. `grep -n -A2 'mcp_servers\|command:' ~/.hermes/config.yaml` 列出所有 MCP
+5. 逐个验证 server 的端口/进程：`ps aux | grep <server>` + `lsof -iTCP:<port>`
+
+修复：
+- 失效 MCP 直接 `enabled: false`（先备份 config.yaml），不要删配置块以便将来恢复
+- **从 gateway 内部无法 HUP/重启 gateway**：守卫会拦（`cannot restart/stop gateway from inside`），强绕会杀掉当前会话。配置改动等下次网关自然重启生效即可，不要试图立即热重载
+- 清日志：`tail -n 50 error.log > tmp && cat tmp > error.log`（copytruncate 风格，保住进程持有 fd），不要 `> error.log` 直接清
+- 删 `.1`/`.2` 轮转旧日志前用 `stat -f %m` 判断 mtime
+
 ## 失败自愈优先级
 
 1. Gateway 挂了 → `kill -TERM <gateway_pid>`
