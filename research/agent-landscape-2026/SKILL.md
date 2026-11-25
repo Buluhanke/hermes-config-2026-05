@@ -87,6 +87,23 @@ triggers:
 
 TokenEconomizer(会话经验降本 18.4-30.9%)、MEMCON(自适应记忆 ALFWorld 67.9%)、Exo(运行时 harness 自改降本 12-53%)、Pro²Agent(MLE-Bench 76%)、RSIFlow(SOTA+3.42%)、Predictive-IDM(+46%) 等，均已沉淀到 `self-evolving-agents-2026`。
 
+## 10. 2026-11-26 自学新增（浏览器基准 / 编排 / 自改进）
+
+### 浏览器 agent 与基准
+- **Ramain**（ramain.ai 09-24）：严格「全项达成才通过」下 Online-Mind2Web 99.3、WebVoyager 99.2、WorkArena L3 89.4（GPT-5 仅 11.5）、WebArena-Verified Hard 84.2（Fable 5 71.3）。作者明确差距来自 harness（紧凑页面视图 + 精简历史），不是模型——再次印证 code-first/harness-first 路线。
+- **knows**（2609.30604）：文档/表格/幻灯片产物流完整成功率 <3%；即使完成 >50% 其他步骤，视觉步骤一失败产物即不可用。Perplexity Comet Overall SF 64.7 领先，GPT-5.5 多模态 SF 46.7。
+- **Fara1.5**（2606.20785，MIT 权重）：FaraGen1.5 三类 verifier（正确性/效率/关键点）+ Qwen3.5 4B/9B/27B；9B 达 OMW 63.4 / WebVoyager 86.6，27B OMW 72.3。
+- **BrowseComp-V³**（SIGIR 2026，300 题）：GPT-5.2 仅 36.00% SR（Thinking 39.13），人类上限 68.03 SR——多模态深搜远未饱和。
+
+### 多 agent 编排
+- **Agensh**（microsoft/Agensh，1024 agent 自组织，无中央编排器）：ProgramBench 5 个最难任务平均通过率 19.31%（1 agent）→28.78%（128）；Pandoc 33.89%→55.06%（1024），GPT-6.1-sol 下 32 agent 就把 56.19% 推到 79.59%。
+- **HTN-Orchestrate**（2610.22195）：Planner 管层级依赖、Orchestrator 调度叶节点，开源 DeepSeek-V4.1-Flash 达 BrowseComp 89.73%（超 Agent Team 2.45 分）、SUPERChem 73.44%、FSR 43.33%。
+- **WorkflowArena**（2611.12856，145 任务/8 域）：把「模型自己写工作流」当独立能力；Claude+Claude Code 少委派但大组，GPT+Codex 频繁小单元委派；Opus 5.5 写的工作流能提升弱执行器。
+- **SwarmBench**（EMNLP 2026 Findings）：GPT-5.4 为最强最均衡编排器（8 任务中 6 个最佳）；SwarmExp 用经验抽取+回放提升编排。
+
+### Hermes 本体
+- **v0.23.4** 已确认（11-23，229 PR / 1122 commits / 1316 文件）：`hermes gateway migrate --backends`、`hermes plugins config`、Desktop 审批卡、客户端身份广播、`skills.index_desc_limit`；完整 notes 随 v0.24.0 出。
+
 ## 验证 / 使用
 
 - 写 agent 相关 skill 前 `skill_view(name='agent-landscape-2026')` 取最新数值，勿凭记忆硬编码旧基准。

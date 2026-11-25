@@ -273,3 +273,15 @@ l2: 自演化
 - **SciMARS / SciMARS+Memory**（2611.12552）：共享 evidence graph + 独立的角色/协调/记忆编辑器。Autonomous Science Bench GPT-6-Astra **8/18→12/18**、GLM-5.3 1/18→2/18；ScienceAgentBench 11/38→14/38、AppWorld 5/20→11/20。共享记忆让角色能取到当前交接之外的证据。
 - **MASS**（2610.12176）：单模型自提/自执/自评多 agent workflow，结构护栏下进化搜索 + SFT 内化，agent/evaluator/optimizer 同一模型。Qwen3.6-27B 两轮：4 个开放式基准每输出 token 性能 **1.2-1.6×**；多 agent 轨迹训出的学生超过单 agent 多 1.4× token 训出的。
 - **R2Orch**（2610.22740，self-play + skill withdrawal 走向零 skill 部署）、**MAS-Loop**（2610.38946，轨迹条件 Refiner 让 orchestrator/refiner 共同进化）、**CollabFlow**（2609.38662，证据门控通信 + CTB 保多个好团队）：12 数据集一致超 baseline。共鸣点：**改进拓扑与通信协议，往往比加 agent 数量更有效**（呼应库内 MANTA）。
+
+## 2026-11-26 自学成果补充（fact_store 16 条已落盘）
+
+> 权威源先行：`python3 ~/.hermes/scripts/frontier_sources.py --days 2` —— arXiv 40 篇（命中关注 6）、Papers with Code 30 篇、Awesome-AI4AI 高引 15 行，全部正常。cron 内 fact_store 只读，已用 `~/.hermes/cache/scratch/self_research_20261126.py` 直写 SQLite（含 FTS 触发器与 tags 格式对齐，fact_id 1450–1465）。
+
+### Harness 与 policy 联合演化（本轮头号新增）
+- **Self-HPO**（2610.22791）：交替做 H 步（当前 policy 读自身失败当 proposer 改 harness）+ P 步（所选 harness 下 RL 更新 policy，难题进入下一轮搜索集）。Qwen3.5-35B-A3B resolve 57.8%→64.8%；SWE-Verified 69.5%（超 RLVR 2.0 分），跨语言迁移 SWE-Multi 59.7% / SWE-Pro 65.2%。换 Opus 4.8 当 proposer 还能再涨。**行动：Hermes 的 skill 改写与模型选择是耦合的，跨模型迁移时应重新跑 harness 搜索而不是照搬。**
+- **失败轨迹的增益被高估**（2611.11342）：9B 冻结权重 + 教师写 notes，看过 agent 错误的 notes 只比隐藏错误的 notes 高 4.0pp，而「尝试并保留高分 notes」这个流程本身就贡献约 60% 总增益；完整客服对话里无实测增益，146/240 工具用例有缺陷，中性 notes 还高于学到的 lessons。**行动：写 lesson 前先跑「不看错误的同流程」对照，否则会把搜索收益错算成失败轨迹收益。**
+- **HN 高引榜新条目**：CoEvoBench（2611.27116，五领域递归协同演化基准）、Model Carving（2611.27962，模型优化自身拓扑）、Sage-Evolve-Preview（2611.26132，自适应诊断粒度）、Piccolo（2611.24651，0.8B–27B 决策模型与数据协同演化）、CompoundingKernel（2611.19230，235 个 SOL-ExecBench 全对）；HuggingFace 侧 MemT-1.0 / MiMo-V2.6 / Cosmos 3。
+
+### 复用约束（避免重复研究发现）
+- 11-24 / 11-25 已固化 Harnesses That Improve Themselves、Exo、ARC-AGI-3 两次修订、Multi-Task Self-Evolving Harnesses、SIM、GUARD——本轮只做 fact_store 落盘，不再重复写入 skill。
