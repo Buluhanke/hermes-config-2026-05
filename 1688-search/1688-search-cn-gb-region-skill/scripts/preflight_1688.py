@@ -21,7 +21,7 @@ ZHEJIANG = "%D5%E3%BD%AD"  # 浙江 GBK
 
 
 class CDP:
-    def __init__(s, url="http://127.0.0.1:9222"):
+    def __init__(s, url="http://127.0.0.1:9333"):
         import urllib.request
         v = json.loads(urllib.request.urlopen(url + "/json/version", timeout=5).read())
         s.ws = websocket.create_connection(v["webSocketDebuggerUrl"], timeout=60)
@@ -78,7 +78,7 @@ return JSON.stringify({ids:[...ids].filter(id=>id.length>=9&&id.length<=14)});})
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--cdp", default="http://127.0.0.1:9222")
+    ap.add_argument("--cdp", default="http://127.0.0.1:9333")
     ap.add_argument("--probe-id", default="685142110437",
                     help="已知在售 detail 页（默认义乌白边12丝自封袋，2026-08-25 验证存活）")
     ap.add_argument("--kw", default="白边自封袋", help="探搜页用的关键词")
@@ -86,15 +86,15 @@ def main():
     args = ap.parse_args()
 
     print("=== 1688 找品通道前置探针 ===")
-    # 0) 9222 在线？
+    # 0) 9333 常驻实例在线？
     try:
         import urllib.request
         json.loads(urllib.request.urlopen(args.cdp + "/json/version", timeout=5).read())
     except Exception as e:
-        print("[FAIL] 9222 CDP 未在线：", e)
+        print("[FAIL] CDP 未在线：", e)
         print("       执行: bash", os.path.join(HERE, "start_cdp_1688.sh"))
         sys.exit(1)
-    print("[OK] 9222 CDP 在线")
+    print("[OK] CDP 在线")
 
     c = CDP(args.cdp)
     wt, ws = c.np("https://www.1688.com/")

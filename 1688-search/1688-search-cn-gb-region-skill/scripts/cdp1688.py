@@ -218,7 +218,7 @@ def parse_sku_json(body):
 
 
 class CDP:
-    def __init__(self, url="http://127.0.0.1:9222"):
+    def __init__(self, url="http://127.0.0.1:9333"):
         import urllib.request
         ver = json.loads(urllib.request.urlopen(url + "/json/version", timeout=5).read())
         self.wsurl = ver["webSocketDebuggerUrl"]
@@ -411,7 +411,7 @@ def ascii_unescape(s):
         return s
 
 
-def reauth_cookies(port=9222):
+def reauth_cookies(port=9333):
     """登录态静默丢失时自动重注默认 Chrome 的 cookie（不落盘明文）。
     复用 inject_cookies.py：读默认 Chrome 的 1688/taobao cookie 注入后台 CDP 实例。"""
     try:
@@ -443,7 +443,7 @@ def main():
     ap.add_argument("--gap", type=float, default=3.0)
     ap.add_argument("--maxverify", type=int, default=120)
     ap.add_argument("--out", default=os.path.join(SKILL, "store", "result_v2.json"))
-    ap.add_argument("--cdp", default="http://127.0.0.1:9222")
+    ap.add_argument("--cdp", default="http://127.0.0.1:9333")
     ap.add_argument("--prov", default=PROV_DEFAULT, help="省份筛选GBK编码，传空串 '' 关闭地域限制")
     ap.add_argument("--mobile", action="store_true", help="用 m.1688.com 移动端搜页（PC搜页被风控时绕行）")
     ap.add_argument("--tol", type=float, default=0.0, help="容差cm：每维允许+0~tol（如5=每个尺寸网上加5cm内都算命中）")
@@ -580,16 +580,7 @@ def main():
             if "淘宝网" in ttl or "taobao" in href:
                 login_lost_streak += 1
                 print(f"[LOGIN-WALL] {oid} 登录墙商品 (连续{login_lost_streak})")
-                # 连续 2 个登录墙即尝试自动重注默认 Chrome cookie（坑2：避免尾部候选被整段跳过）
-                if login_lost_streak == 2:
-                    cport = int(args.cdp.split(":")[-1]) if ":" in args.cdp else 9222
-                    print(f"[REAUTH] 连续2个登录墙, 自动重注 cookie (port={cport})")
-                    if reauth_cookies(cport):
-                        login_lost_streak = 0
-                        print(f"[REAUTH] 重注成功, 继续核验")
-                        time.sleep(human_gap(args.gap)); continue
-                    else:
-                        print(f"[REAUTH] 重注失败, 继续计数")
+                # 不再自动重注：9333 是用户已登录的常驻实例，注入默认 Chrome cookie 读到0个且会污染干净登录态
                 if login_lost_streak >= 5:
                     print(f"[LOGIN-LOST] 连续5个登录墙(重注无效), 判定会话失效停止")
                     captcha_flag = "login_lost"; break

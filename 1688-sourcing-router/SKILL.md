@@ -99,6 +99,8 @@ python3 cdp1688.py --dims "46*26*10" \
 9. **登录态静默丢失是头号假阴性**：搜出"全是其他品"/0 命中 → 先探 detail 页是否跳 taobao.com。填 `preflight_1688.py` 当探针。`chrome-cdp-profile` 独立实例风控极严，根本解法 = 用户保持默认 Chrome 已登 1688，或 `--reverify` 只验已知 ID 池。
 10. **正则零反斜杠**：写 `.js` 用 `[0-9]`/`[ ]` 替 `\d`/`\s`（write_file/heredoc 会双写反斜杠致语义错）。JS 一律独立文件读入（AppleScript `as «class utf8»`），不内联（会被转义吞）。
 11. **输出铁律**：先给结论+链接+价格表，再补必要说明。不铺原理/坑位/分析墙。
+12. **多词多页必走两段式，禁一次性跑主驱动**：`cdp1688.py` 的 `.ids.json` 在**所有**搜索完成后才落盘；`--cat` 3-4 词 × `--pages` 3-4 时搜索循环常耗满 600s 前台超时且**零落盘**（白跑）。正确做法：① 轻量脚本 `Target.attachToTarget` 复用已开搜页，逐词逐页抓 ID 并**每页增量落盘**到 `<out>.ids.json`（复用 `cdp1688.EXTRACT`）；② `cdp1688.py --dims ... --resume <out>.ids.json` 跳过搜索直接核验。搜索页 `search_page_captcha()` 易误判，先 attach 实测 `outerHTML` 是否真含"验证码"再决定退避。
+13. **核验尾段登录墙早停**：核验后期详情页连续返回 `evaluate -> dict`（登录墙）时，命中已增量落盘，直接 kill 进程用现有结果，别等跑完；此时 `inject_cookies.py` 常读 0 cookie（默认 Chrome 无登录态），重启 CDP 实例也清不掉账号/IP 级风控。地域在 `province=江苏,浙江,上海` 搜页阶段已服务端筛掉，不必再逐条抓详情页 `location`（登录墙下抓不到）。
 
 ## 已验证样例（证明 lineage 有效）
 - `46*26*10cm 加高飞机盒`：用户给 `752445610436` 即命中（全角组合串写法），¥3.81 现货，13 款长 42-54。
@@ -135,6 +137,31 @@ python3 cdp1688.py --dims "46*26*10" \
 | Sorsa | 50+ 平台问答 | 否 | 低（问答式） | 无 | ⚠️ 部分 |
 | Jungle Scout | 亚马逊零售情报 | 否 | 低（亚马逊专属） | 无 | ❌ |
 
-**结论**：本机 CDP 方案是**个人级别最优解**（零签名、零代理、深度核验、规格多写法）。商业方案的优势是「企业级资质审核 + 自动下单」，但需要企业账号、中转、付费；个人做单一批发/自封袋采购时，本机方案更省事、更可控。
+**结论更新（2026-11 全网复调后修正）**：本机自研 CDP 脚本不再是首选。首选开源 `1688-cli`（155 stars / MIT / npm i -g 1688-cli，2026-08 仍活跃），已解决自研踩过的全部坑：`search --deeppro` 搜索即批量抓详情；翻页走「点击下一页」而非 `&beginPage=N`（后者换新 pageId 返回约75%重复，是搜索阶段卡死主因）；mtop 拦截非 DOM；持久 profile 一次登录管数周；punish/x5sec 风控分类；批量 `offer <ids...>`；JSON 输出。命令：`1688 search "15*15*15cm纸箱" --max 100 --deeppro`。彻底免浏览器/免风控走付费 API：silklinedata `/v1/1688/search`（$0.0048/条，一次返回 offerId/price/tierPrices/supplierName/shopUrl/province/city/isAd = 单价+链接+店铺+所在地全字段）；api.sh 1688 search（60条/页，shop.name + shop.url + 月销）；onebound item_search/item_get（area + seller_nick + SKU）；JustOneAPI get-item-detail（companyName + delivery.location + 阶梯价）。官方开放平台 alibaba.product.get 只能查自己产品，不适合找外部货源。反爬新思路（油猴页面端采集）：PageHarvest（5 stars MIT）、CaltonRen/1688Collector（油猴翻页+域名字段）、jiyun/1688（80 stars，SingleFile 存 HTML 后本地解析）。1688-Scraper-MCP（13 stars）DrissionPage + location_filter/only_factory 本地过滤只回前5条省 token。
+
+## 真人模式 SOP（用户定义流程，2026-11 复盘定稿）
+用户定义：搜页推荐出来的条目即真实候选，逐个打开详情页找目标尺寸记录反馈。核心原则：**搜页即真相源，详情页只补尺寸**。
+1. 搜页一次拿全：2-3 个关键词（精确尺寸词如 `15*15*15cm纸箱` + 品类词如 `正方形纸箱`），每个 2 页。从 DOM 卡片 `[data-offer-grid-cell]` 一次性提取 offerId + **店铺名（卡片 innerText 最后一行）** + 卡片价 + 商品链接，每页增量落盘。
+2. 详情页只做一件事：在 SKU 里找目标尺寸，命中记录该 SKU 单价。**不抓 location、不抓 companyName**（搜页已给，且登录墙下必失败）。登录墙跳过，连续5个才停。
+3. 输出表直接拼第1步的店铺名+链接 + 第2步的尺寸单价，无需事后补抓。
+4. 禁加品类硬卡 CARTON_SIG：用户明确「搜页推荐的店铺就是真实的」，额外过滤会误杀。
+5. **异常早停**：连续 evaluate 返回 dict（登录墙）立即 kill，用已落盘结果。
+
+## 真人模式首选脚本 human_mode.py（2026-11 实测通过）
+用户定义真人模式 = 搜页推荐的即真实候选，逐条开详情页找尺寸。`scripts/human_mode.py` 固化此流程：阶段1 从 `[data-offer-grid-cell]` 卡片**一次拿全**（ID+标题+店铺名+卡片价+链接，每页增量落盘）；阶段2 逐条详情页只补目标尺寸 SKU（`cdp1688.CDP.get_sku`），命中即用阶段1的店铺名+价直接出表。默认连 9333 已登录实例，零注入零新建。实测：2词×1页=113候选，核验12条命中4条（¥0.44–1.09），1.5s间隔无验证码。
+```bash
+bash start_cdp_1688.sh   # 9333在线即复用
+python3 human_mode.py --dims "15*15*15" --kw "15*15*15cm纸箱" "正方形纸箱" --pages 2 --maxverify 60 --out store/human_15cube.json
+```
+复杂矩阵/组合串尺寸仍需 `cdp1688.py`（5类写法+容差+品类硬卡更全）；简单目标尺寸优先 `human_mode.py`。
+
+## 浏览器实例铁律（2026-11 用户纠错，最高优先）
+**绝不新建无头/临时实例、绝不注入 cookie。** 用户 1688 登录态在**已登录的常驻实例** `~/.chrome_1688_scraper`（端口 **9333**，headful），Cookies 458KB、登录态长期有效。2026-11 曾误用新建的 `chrome-cdp-profile`（9222）+ `inject_cookies.py`（读到 0 cookie）导致登录态失效、全程验证码/登录墙、结果残缺——根因就是换了实例。
+- 主驱动/探针默认端口统一 **9333**（cdp1688.py、preflight_1688.py 已改）。
+- `start_cdp_1688.sh` 改为：9333 在线直接复用；不在线才用同一 profile 拉起（登录态仍在）。**不注入 cookie、不 headless、不新建 profile**。
+- 详情页遇登录墙直接跳过（连续 5 个才停），**禁止自动重注入**（污染干净会话且读到 0）。
+- 任何任务结束**不关 9333 实例**，保持常驻供下次复用。
+
+本次反例（耗时约40分钟）：搜页只抓ID丢店铺名→事后补抓6分钟；4词×4页→600s超时零落盘；核验抓location→登录墙白费；登录墙尾段等进程自然结束→空转8分钟。按此 SOP 预计 5-8 分钟。
 
 **数据来源边界**：本机无住宅代理 → 接口直连（MTOP）仍走不通，维持「真浏览器后台 CDP + skuMapOriginal 监听」为最优解。1688 MTop 签名公式（公开逆向）为：`sign=MD5(_m_h5_tk前半 + & + t毫秒 + & + appKey(12574478) + & + data)`，token TTL~24h 需刷新，但中国住宅代理仍是必需条件。
