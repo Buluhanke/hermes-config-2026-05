@@ -339,13 +339,26 @@ class CDP:
 
     def human_slide(self, session, max_tries=2):
         """检测滑块并拟人拖动。变速缓动 + 随机抖动 + 终点回弹。
-        返回 True=通过（页面不再含验证码），False=尝试失败（含异常）。"""
+        返回 True=通过（页面不再含验证码），False=尝试失败（含异常）。
+        坑：x5sec/punish 软风控页无"验证码"字样也无可见滑块，必须识别为
+        软风控返回 False（让调用方走降速/等待），绝不假阳性 return True。"""
         for attempt in range(1, max_tries + 1):
             try:
                 h = self.evaluate(session, "document.documentElement.outerHTML", await_promise=False) or ""
-                if "验证码" not in h and "captcha" not in (self.evaluate(
-                        session, "location.href", await_promise=False) or "").lower():
-                    return True  # 已通过/无滑块
+                _href = self.evaluate(session, "location.href", await_promise=False)
+                href = (_href.lower() if isinstance(_href, str) else "")
+                # x5sec/punish 软风控：页面藏 punish?x5secdata=...，无滑块可拖
+                soft_risk = ("x5sec" in h) or ("punish" in href) or ("x5sec" in href)
+                if not soft_risk and "验证码" not in h and "captcha" not in href:
+                    return True  # 真已通过/无滑块
+                if soft_risk:
+                    geo0 = self.evaluate(session, JS_FIND_SLIDER, await_promise=True) or {}
+                    if isinstance(geo0, str):
+                        try: geo0 = json.loads(geo0)
+                        except Exception: geo0 = {}
+                    if not (isinstance(geo0, dict) and geo0.get("ok")):
+                        print("[SLIDE] x5sec/punish 软风控, 无可拖滑块(需降速/等待), 返回False")
+                        return False
                 geo = self.evaluate(session, JS_FIND_SLIDER, await_promise=True) or {}
                 if isinstance(geo, str):
                     try:
