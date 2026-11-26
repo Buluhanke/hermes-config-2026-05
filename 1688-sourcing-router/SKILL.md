@@ -147,7 +147,28 @@ python3 cdp1688.py --dims "46*26*10" \
 4. 禁加品类硬卡 CARTON_SIG：用户明确「搜页推荐的店铺就是真实的」，额外过滤会误杀。
 5. **异常早停**：连续 evaluate 返回 dict（登录墙）立即 kill，用已落盘结果。
 
-## 真人模式首选脚本 human_mode.py（2026-11 实测通过）
+## 【最优方案】1688-cli 已安装且登录态就绪（2026-11 实测，取代所有自研脚本）
+本机已装 `1688-cli@0.1.47`（`/Users/aimac/.local/lib/node_modules/1688-cli`，bin 名是 `1688` 不是 `1688-cli`；调用用 `node "$(npm root -g)/1688-cli/dist/cli.js"`，因 PATH 无软链）。**它的 default profile 已登录**（doctor 显示"罗庆富 memberId 176760586, cached"），有独立 `~/.1688/profiles/default/` + daemon，不依赖 9333、不需重新登录。
+
+**实测一次调用即返回全部所需字段**（单价 text/min/max、店铺 supplier.name + shopUrl、所在地 location.province/city、工厂/回头率/销量/商品链接）：
+```bash
+node "$(npm root -g)/1688-cli/dist/cli.js" search "15*15*15cm纸箱" \
+  --max 20 --province 浙江 --sort price-asc --json
+# 常用：--pick 'offers[*].offerId,offers[*].price.text,offers[*].supplier.name,offers[*].location,offers[*].url'
+# 深抓SKU：--deeppro（搜索后逐条抓详情，重试3次，间隔6-10s）
+# 过滑块：--headed（开窗口手动滑）
+```
+实测 `--province 浙江` 返回 10 条全是浙江（义乌/金华/苍南），`--province 江苏` 返回 4 条全江苏，`--sort price-asc` 价格从 ¥0.06 升序。
+
+**为何是最优**：一次调用拿全字段（无需事后补店铺/所在地）、内置翻页风控（点击下一页避开 beginPage 75% 重复坑）、独立持久 profile（互不污染）、JSON/`--pick` agent 友好、daemon 预热。彻底解决 2026-11 那次全部问题：搜索超时零落盘、登录墙、店铺补抓绕远、x5sec 软风控、self 脚本割裂。
+
+**调用铁律**：
+1. 先 `node ... doctor` 确认 session=ok，否则要重新扫码（不是用 9333）。
+2. 找品默认走 1688-cli；只有需要精确 SKU 矩阵/组合串尺寸核验时才回退 `cdp1688.py`（连 9333）。
+3. `--json` 输出直接 Python json.loads 解析，按 dimension 关键词过滤标题+SKU。
+4. 结果表直接 cli 已含的 price+supplier+location+url，无需开详情页补。
+
+## 真人模式首选脚本 human_mode.py（2026-11 实测通过，已被 1688-cli 取代为兜底）
 用户定义真人模式 = 搜页推荐的即真实候选，逐条开详情页找尺寸。`scripts/human_mode.py` 固化此流程：阶段1 从 `[data-offer-grid-cell]` 卡片**一次拿全**（ID+标题+店铺名+卡片价+链接，每页增量落盘）；阶段2 逐条详情页只补目标尺寸 SKU（`cdp1688.CDP.get_sku`），命中即用阶段1的店铺名+价直接出表。默认连 9333 已登录实例，零注入零新建。实测：2词×1页=113候选，核验12条命中4条（¥0.44–1.09），1.5s间隔无验证码。
 ```bash
 bash start_cdp_1688.sh   # 9333在线即复用
@@ -155,7 +176,14 @@ python3 human_mode.py --dims "15*15*15" --kw "15*15*15cm纸箱" "正方形纸箱
 ```
 复杂矩阵/组合串尺寸仍需 `cdp1688.py`（5类写法+容差+品类硬卡更全）；简单目标尺寸优先 `human_mode.py`。
 
-## 浏览器实例铁律（2026-11 用户纠错，最高优先）
+## 滑块解锁能力：实测通过（2026-11）
+`cdp1688.human_slide()` 用 CDP `Input.dispatchMouseEvent`（isTrusted=true）做拟人拖动：变速缓动 + 随机抖动 + 终点回弹。**真实滑块页实测一次通过**（阿里 nc 文案"请按住滑块，拖动到最右边"，定位 x=833/y=539/dist=258px，拖动后滑块标记消失、页面恢复 47 个商品、会话未封）。触发方式：连续 `navigate` 同一搜页 URL 约 5 次后风控出滑块（高频 1.2s 间隔不一定触发，登录态健康时正常搜索基本不出）。
+- `human_slide()` 前置检测只看 HTML 是否含"验证码"字样，无此字样直接返回 True（不会白拖）。
+- 主驱动 `cdp1688.py` 搜页/详情页检测到验证码已自动调 `human_slide`（2 次尝试），失败才退避 15/30/45/60s。
+- **真人模式 human_mode.py 暂未接 human_slide**：当前用 9333 健康登录态基本不触发，若后续频繁撞滑块再加。
+- **坑：主动高频测滑块会把会话玩进 x5sec 软风控**（2026-11 实测）。搜页 HTML 藏 `punish?x5secdata=...capslide...`，正文空、卡片 0，但详情页完全正常。此时 `human_slide()` 返回 **假阳性 True**（页面无"验证码"字样直接 return，实际没解）。解法：① 别主动压测滑块；② 搜页被 x5sec 封时改走 `--resume` 用已有 ID 池 + 详情页通道（详情页不受影响）；③ 等几小时让 x5sec 自然消退才有新搜页候选。
+
+### 浏览器实例铁律（2026-11 用户纠错，最高优先）
 **绝不新建无头/临时实例、绝不注入 cookie。** 用户 1688 登录态在**已登录的常驻实例** `~/.chrome_1688_scraper`（端口 **9333**，headful），Cookies 458KB、登录态长期有效。2026-11 曾误用新建的 `chrome-cdp-profile`（9222）+ `inject_cookies.py`（读到 0 cookie）导致登录态失效、全程验证码/登录墙、结果残缺——根因就是换了实例。
 - 主驱动/探针默认端口统一 **9333**（cdp1688.py、preflight_1688.py 已改）。
 - `start_cdp_1688.sh` 改为：9333 在线直接复用；不在线才用同一 profile 拉起（登录态仍在）。**不注入 cookie、不 headless、不新建 profile**。
