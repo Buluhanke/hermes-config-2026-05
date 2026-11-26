@@ -45,8 +45,8 @@ for f in perception_memory visual_verifier local_detector vlm_bridge decision_en
   [ -f ~/.hermes/scripts/${f}.py ] && echo "✅ $f" || echo "❌ $f 不存在"
 done
 
-# 验证 L3 VLM 配置（当前走云端，不是本地）
-grep -A5 "auxiliary:" ~/.hermes/config.yaml | grep vision  # 应为 auto 或具体云 provider
+# 验证 L3 路由：auxiliary.vision.model 非空会把原生视觉切成文字描述
+hermes config get auxiliary.vision | head -3   # provider: auto + model: '' 才是原生视觉
 
 # 验证 perception DB
 ls ~/.hermes/perception_memory.db 2>/dev/null || echo "❌ perception_memory.db 不存在"
@@ -321,3 +321,4 @@ print(json.dumps(de.funnel_stats(days=7), indent=2))
 - **架构决策依据 + UI-TARS 硬件门槛 + 不做的方案对比**: `references/funnel-architecture-decision.md`
 - **4 层漏斗烟雾测试模板 (复制改 find_element 调用即可)**: `templates/funnel_smoke_test.py`
 - **step_verifier v2 端到端模拟器 (4 场景，纯本地零依赖)**: `scripts/step_verifier_v2_sim.py`；改完 step_verifier 必须跑它，输出 4/4 才算回归通过。
+- **云视觉选型 / 小字裁图 / 可用性实测**: `references/cloud-vlm-selection.md`

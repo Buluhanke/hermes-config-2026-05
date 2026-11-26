@@ -142,6 +142,14 @@ hermes config get mcp_servers.fluxdown
 2. 新 session 才会加载完整的 config 变更
 3. 用 `hermes config check` 验证 YAML 语法正确
 
+## 视觉路由：`auxiliary.vision` 非空会强制降级成文字描述
+
+- `auto` 路由下，只要 `auxiliary.vision` 有非空 `model`（哪怕 `provider: auto`），`decide_image_input_mode()` 就返回 `text`：图片不送主模型像素，而是让 aux 描述图。主模型本身支持视觉也救不回来。
+- 恢复原生视觉：`hermes config set auxiliary.vision.model ""`，provider 保持 `auto`。必验脚本：`scripts/verify_vision_route.py` 输出 `native`；只看 `hermes config get` 不算验证。
+- aux `fallback_chain` 每项都必须能看图。文本模型兜底遇到图片必失败；OpenRouter 的 Google/Anthropic slug 在 CN IP 返回 403 region，余额不足的付费 slug 返回 404——两者都不要进视觉链。直连 `gemini` provider 的 `gemini-3.1-flash-lite`、`gemini-2.5-flash` 已实测可看图。
+- 路由探针用 `HERMES_DISABLE_LAZY_INSTALLS=1` 前缀启动 venv python；否则 venv_sync 会以 `-I` 重启进程丢掉 site-packages，导入 `ruamel` 失败会伪装成配置损坏。
+- 正在跑的 gateway 不会立刻重载 config；从 gateway 内部 `kill -HUP` 会被生命周期守卫拦截，要在外部终端执行 `hermes gateway restart`。
+
 ## `free_only` 配置位置（关键坑）
 
 `free_only: true` **必须放在 `auxiliary` 段**，顶层写法无效。
