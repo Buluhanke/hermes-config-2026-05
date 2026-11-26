@@ -166,7 +166,9 @@ node "$(npm root -g)/1688-cli/dist/cli.js" search "15*15*15cm纸箱" \
 1. 先 `node ... doctor` 确认 session=ok，否则要重新扫码（不是用 9333）。
 2. 找品默认走 1688-cli；只有需要精确 SKU 矩阵/组合串尺寸核验时才回退 `cdp1688.py`（连 9333）。
 3. `--json` 输出直接 Python json.loads 解析，按 dimension 关键词过滤标题+SKU。
+3. **别密集并发**：一次 6-9 个连续 search 会触发 `DAEMON_PAUSED`（连续失败暂停到某时刻）继而 `NOT_LOGGED_IN`，**且需重新扫码**（违背不重登录铁律）。恢复只能 `daemon reload`，但 session 已失效则救不回。正确节奏：单次 search 间隔 ≥5s，一次最多 3 个词。
 4. 结果表直接 cli 已含的 price+supplier+location+url，无需开详情页补。
+5. **cli 搜页价格是卡片起批价，绝不是目标尺寸价**（2026-11 教训：曾把 ¥0.10 卡片价当 15*15*15 价报出，实际该 SKU 是 ¥0.61——页面默认选中别的尺寸如"13号"）。**必须从详情页 skuMapOriginal 按 specAttrs 精确匹配目标尺寸抠 price**。新版 ant-design 页 `PRICE_JS` 的 targetPrice 返空，别依赖；直接正则 `"specAttrs":"([^"]*)"[^}]{0,400}?"price":"([0-9.]+)"` 扫 skuMapOriginal（price 也可能在 specAttrs 之前，两种顺序都匹配）。实测 7 家都抠到精确价（¥0.48–1.10）。
 
 ## 真人模式首选脚本 human_mode.py（2026-11 实测通过，已被 1688-cli 取代为兜底）
 用户定义真人模式 = 搜页推荐的即真实候选，逐条开详情页找尺寸。`scripts/human_mode.py` 固化此流程：阶段1 从 `[data-offer-grid-cell]` 卡片**一次拿全**（ID+标题+店铺名+卡片价+链接，每页增量落盘）；阶段2 逐条详情页只补目标尺寸 SKU（`cdp1688.CDP.get_sku`），命中即用阶段1的店铺名+价直接出表。默认连 9333 已登录实例，零注入零新建。实测：2词×1页=113候选，核验12条命中4条（¥0.44–1.09），1.5s间隔无验证码。
