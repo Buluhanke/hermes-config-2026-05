@@ -197,6 +197,25 @@ Layer 3: browser_exec
 
 **本轮落地/未落地**：双方向均实测走完并落库；未落地仍是 Collective Wisdom 组织级共享、SearXNG+Firecrawl 双 backend。
 
+## 2026-11-26 23:00 自学增量（cron 实测落库 8 条 + 冗余归零）
+
+> 8 条新知识全过 `fact_gate.py check`（score 71，带 DB probe max_similarity ≤0.042，无近重复），SQLite 直连落库 fact_id 1468–1475，库 504→512，`typeof(fact_id)=integer`、FTS 自动索引可读（1468 检索排第 1）。冗余线：补齐 1466/1467 裸 tags 检索入口，`without_keywords` 2→0；结晶垃圾 0、埋藏事实 0；生成器连跑两次均 0 新建、产物只进 `knowledge/crystallized/`。
+
+**自改进框架集群（对 L3/L4 的直接启示，全部 2026-11 arXiv）**：
+- **TransHarness（2611.33757）**：从同任务成功-失败对比生成干预 policy，跨任务 replay + 独立语义筛选，只保留选择性干预防 benchmark 过拟合；300 条分布外轨迹达 DeepSWE v1.1 76.4%、Terminal-Bench 2.1 95.5%，超 GPT-6 Astra 2.4/5.6pp。→ skill 升华应记"trigger→诊断 guidance 的可迁移 policy"，非死记源任务答案。
+- **AHE-Beta（2611.24924）**：需求中心——模拟用户提 issue→团队式泛化改写→需求验证+review 通过才合并；pass@1 21.9%→33.3%、token -40.8%、真人盲测 48 对胜 31。→ 改 skill 由真实痛点驱动，非只追分数。
+- **Recursa（2611.04035）**：知识库存 instructions/skills/memory 三类组件，并行 learner + 父 learner 去重/调和/泛化 merge + 样本回归验证；Firm Knowledge all-pass DeepSeek-V4.1-Flash 30%→55%。→ 与 Hermes skill+fact_store 同构，印证 Agent Skills 格式即刻生效。
+- **OMCE（2611.01747）**：contextual-bandit 在 DIRECT/EPISODE/GUIDE/DISTILL 四动作路由"是否用经验/用哪种记忆/何时固化"；首试 +20.5pp、token 较 ACE 少 5.7–62.5×。→ skill 加载应按任务路由而非全量注入。
+- **EvoViM（2611.28574）**：冻结多模态模型把经验编译成一个 visual program（记忆+技能同体），追溯失败到丢失证据的操作并改写、跳过已失败改动；较 AutoMem +31.3–47.6 分。
+- **ACE-RL（2611.16409）**：固定 harness 训练单模型兼 act/reflect/curate，用经验交接产物对未来 rollout 的下游影响做反馈。→ skill 固化可引入下游效果反馈，非只靠写时门控。
+- **MDSKILL（2611.05313）**：技能记忆按 state grounding/action planning/execution control 三视图组织 + 动态筛质量再蒸馏；ALFWorld +7.1%、WebShop +8.1%。→ fact_store 经验可按功能视图分层减冲突污染。
+
+**Hermes 版本线**：稳定版仍 v0.23.4 @ 8fc0374；11-25 canary 全 plugin-catalog 条目无核心运行时变更。补核验（betterclaw.io）：默认一台 host 只跑一个 gateway（即便十个 agent），`gateway.multiplex_profiles` 唯一合法值 `true`，设 false 被改写+提示 → 本机多 profile 共享单一 gateway，排障按 host 不按 profile。
+
+**Benchmark 校准（引用必带 release / step cap）**：OSWorld-Verified（11-26 读）Intelligence-Indeed Agent 90.2%（100 步 + coding 动作）居首、Claude Fable 5 86%（1M 上下文/100 步），官方榜未收录 Opus 5（2026-07）之后模型、Qwen3.8 Max 86.1% 为厂商自报；WebArena 86.1%（Narada AI Code，厂商自报）超人类 78.24%，最佳开源 74.3%（DeepSeek v3.2，WebTactix）。
+
+**WebMCP（用户长期追踪项，本轮无规范级变化）**：Draft CG Report 仍 11-24；Chrome 文档 11-26 更新确认 `outputSchema` 从 159、`waitForToolsUntil` 从 160 可用，`Tool` 接口带 `origin`/`source`/`title`，`getTools({fromOrigins})` 需显式列源且仅安全 origin，`exposedTo` 控跨源暴露。OT 延至 162 仍未最终批准，无 ship 里程碑，继续周期跟踪，未到替代 CDP 时点。
+
 ## 版本迁移与技术增量（指针）
 
 - Hermes v0.23.0 起旧 `browser_*` 工具全删、只剩 `browser_exec`；盘点迁移清单与 WebMCP / UI-Venus / ARISE / Anchor / MetaAct 等 2026-11 研究结论见 `references/browser-agent-research-2026.md`。写自动化 skill 时勿再引用旧工具名。
