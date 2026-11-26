@@ -61,24 +61,29 @@ for k, v in (cfg.get('platform_toolsets') or {}).items():
 
 **不是所有“非法”都报警**：`spotify` / `homeassistant` 不在 `TOOLSETS` 里但由 `known_plugin_toolsets` 解析，属正常；`hermes-<platform>` 是插件平台包名，也正常。只有真正无主的名字（如 `stt`）才报警。`known_builtin_toolsets.<platform>` 是缓存副本，清同一项时一起删。
 
-## 陷阱：fallback_chain 存成字符串
+## 陷阱：fallback_chain 存成字符串（仅限 auxiliary；主模型禁用）
 
-`hermes config set model.fallback_chain '["a","b","c"]'` 会把整个值存成 YAML 字符串而非列表，导致后续读取出问题。
+**铁律**：主模型零绑定 —— `model.fallback_chain` / `fallback_providers` / `fallback_model` / cron `pinned` 一律不得配置，历史遗留用 `hermes config unset` / `printf 'y\n' | hermes fallback clear` 清掉。下面的 YAML 形状陷阱**只适用于允许的** `auxiliary.<task>.fallback_chain`（视觉/压缩/标题等辅助任务备用链），别拿它去重建主模型降级链。
 
-**症状**: `hermes config get model` 显示 fallback_chain 被引号包裹。
+`hermes config set auxiliary.vision.fallback_chain '[...]'` 会把整个值存成 YAML 字符串而非列表，导致后续读取出问题。
+
+**症状**: `hermes config get auxiliary` 显示 fallback_chain 被引号包裹。
 
 **修复**:
 
 ```python
-import yaml
-with open('/Users/kk/.hermes/config.yaml', 'r') as f:
+import yaml, os
+p = os.path.expanduser('~/.hermes/config.yaml')
+with open(p, 'r') as f:
     config = yaml.safe_load(f)
-config['model']['fallback_chain'] = ['a', 'b', 'c']
-with open('/Users/kk/.hermes/config.yaml', 'w') as f:
+config['auxiliary']['vision']['fallback_chain'] = [
+    {'provider': 'gemini', 'model': 'gemini-2.5-flash'},
+]
+with open(p, 'w') as f:
     yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 ```
 
-**验证**: `hermes config get model` 应显示标准 YAML 列表格式。
+**验证**: `hermes config get auxiliary` 应显示标准 YAML 列表格式；同时 `hermes fallback list` 必须为空。
 
 ## `.env` Secret Redaction — 读写都被遮蔽
 

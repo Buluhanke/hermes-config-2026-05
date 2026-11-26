@@ -225,9 +225,11 @@ fact_store add:
 5. `hermes skills check` 的 `update_available` 不等于要升：源失效、非必需技能跳过；本地改过的技能永不用 `--force` 覆盖。
 6. `fact_store` 工具 `add` 在 cron 上下文恒被拒，别用工具重试；进化决策要落库就直连 SQLite：`python3 ~/.hermes/scripts/proactive_learn.py`（内部 `gate_check` + `write_facts`）。坑：`gate_check` 曾用 `verdict\s*[=:]` 正则去匹配 `fact_gate` 的 JSON 输出 `{"verdict": "accept"}`，恒为 False 导致主动学习每天扫到候选却 0 落库；2026-11-25 已改为先 `json.loads` 再兼容纯文本，改完实测 gate_check=True、落库成功。
 7. 升级判断：patch 版若含存储层 / persistence 接口重构，无人值守 cron 暂缓；等完整发布说明版（如 v0.24.0）再评估。
+8. 审计「技能层残留违规指令」：配置层清干净还不够，旧技能可能仍教用户已否决的做法。用 `grep -RInE 'fallback_providers|model_health_daemon|fallback_chain|pin 模型' ~/.hermes/skills/*/SKILL.md` 扫一遍：命中的若是在教做（不是明令禁止），整篇重写为符合铁律的版本再回读验证。2026-11-26 发现 `hermes-model-health` v1.0.0 有整整 140 行教「修 fallback 路由 + 启自动轮替守护」，已重写为 v2.0.0 零绑定诊断版（311→92 行）。
 
 ## 版本历史
 
 - v1.0.0 (2026-10-23): 初始版本，定义 Search-First 进化协议
 - v1.1.1 (2026-11-24): 零绑定排查补防误判细则——auxiliary.fallback_chain、名字含 fallback 的非模型脚本、disabled 的 moa 预设均不在清理范围；判违规只认四样（fallback list / fallback_providers / cron pin / 自动切换进程脚本）。实测确认当前主模型零绑定全链路干净。
 - v1.1.2 (2026-11-25): 修正 cron 落库结论——fact_store 工具 add 仍只读，但 proactive_learn.write_facts 直连 SQLite 可用且可召回；修复 gate_check 用正则解析 JSON verdict 导致恒 False、主动学习每天 0 落库的 bug（已实测落库 fact_id=1438）。
+- v1.1.3 (2026-11-26): 检查清单加第 8 条「技能层残留违规指令审计」——配置零绑定巡检过后，还要 grep 技能库里仍在教旧做法的 SKILL.md；本次据此重写 hermes-model-health v2.0.0。
