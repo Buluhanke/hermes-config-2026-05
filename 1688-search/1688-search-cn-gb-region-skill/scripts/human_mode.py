@@ -40,17 +40,30 @@ def parse_card(card):
                 price = a; break
     return {"id": oid, "title": title, "shop": shop, "card_price": price, "url": f"https://detail.1688.com/offer/{oid}.html"}
 
-def target_hit(body, dims):
-    """详情页 SKU 文本是否含目标尺寸（5类写法交给 cdp1688 的匹配；这里先做宽松串匹配）"""
-    if not body: return False
+def sku_exact_price(body, dims):
+    """从 skuMapOriginal 按 specAttrs 精确匹配目标尺寸，返回 (命中?, 真实价, 规格)。
+    绝不用卡片起批价——那是页面默认选中的别的尺寸价。"""
+    if not isinstance(body, str) or "skuMapOriginal" not in body:
+        return False, "", ""
     a, b, c = dims.split("*")
     pats = [f"{a}*{b}*{c}", f"{a}x{b}x{c}", f"{a}×{b}×{c}"]
-    # 顺序无关
     import itertools
     for p in itertools.permutations([a, b, c]):
         pats.append("*".join(p))
-    low = body.replace(" ", "").lower()
-    return any(p.lower() in low for p in pats)
+    seg = body[body.find("skuMapOriginal"):body.find("skuMapOriginal") + 200000]
+    pairs = re.findall(r'"specAttrs":"([^"]*)"[^}]{0,400}?"price":"([0-9.]+)"', seg)
+    pairs2 = re.findall(r'"price":"([0-9.]+)"[^}]{0,400}?"specAttrs":"([^"]*)"', seg)
+    exact = []
+    for spec, price in pairs:
+        if any(p.lower() in spec.replace(" ", "").lower() for p in pats):
+            exact.append((spec, price))
+    for price, spec in pairs2:
+        if any(p.lower() in spec.replace(" ", "").lower() for p in pats):
+            exact.append((spec, price))
+    if not exact:
+        return False, "", ""
+    spec, price = min(exact, key=lambda x: float(x[1]))
+    return True, price, spec
 
 def main():
     ap = argparse.ArgumentParser()
@@ -61,6 +74,8 @@ def main():
     ap.add_argument("--gap", type=float, default=2.0)
     ap.add_argument("--prov", default=PROV)
     ap.add_argument("--out", required=True)
+    ap.add_argument("--skip", type=int, default=0, help="跳过前N条已核验候选（续跑用）")
+    ap.add_argument("--load-cards", default="", help="从已有 .json 加载候选池，跳过搜索阶段")
     args = ap.parse_args()
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
@@ -68,7 +83,12 @@ def main():
     # ---- 阶段1：搜页一次拿全 ----
     seen, cards = set(), []
     _, s = c.new_page("about:blank")
-    for kw in args.kw:
+    if args.load_cards and os.path.exists(args.load_cards):
+        cards = json.load(open(args.load_cards, encoding="utf-8"))
+        seen = {r["id"] for r in cards}
+        print(f"[load-cards] 载入 {len(cards)} 个候选，跳过搜索", flush=True)
+    else:
+      for kw in args.kw:
         for pg in range(1, args.pages + 1):
             c.navigate(s, C.build_search_url(kw, pg, args.prov))
             time.sleep(6)
@@ -88,7 +108,18 @@ def main():
     # ---- 阶段2：逐条详情页只补目标尺寸 ----
     _, vs = c.new_page("about:blank")
     login_streak, hits = 0, []
+    # 续跑：载入已有命中（按 id 去重）
+    _rp = args.out.replace(".json", "_result.json")
+    if os.path.exists(_rp):
+        try:
+            hits = json.load(open(_rp, encoding="utf-8")).get("hits", [])
+            print(f"[resume] 载入已有命中 {len(hits)}", flush=True)
+        except Exception:
+            hits = []
+    _hit_ids = {h["id"] for h in hits}
     for i, rec in enumerate(cards[:args.maxverify]):
+        if i < args.skip:
+            continue
         c.navigate(vs, rec["url"])
         time.sleep(3)
         ttl = c.evaluate(vs, "document.title", await_promise=False) or ""
@@ -101,11 +132,14 @@ def main():
             continue
         login_streak = 0
         body = c.get_sku(vs, rec["id"], timeout=20)
-        if target_hit(body, args.dims):
-            hits.append(rec)
-            print(f"[HIT] {rec['id']} | ¥{rec['card_price']} | {rec['shop']}", flush=True)
+        hit, exact_price, spec = sku_exact_price(body, args.dims)
+        if hit:
+            if rec["id"] not in _hit_ids:
+                rec["exact_price"] = exact_price; rec["spec"] = spec
+                hits.append(rec); _hit_ids.add(rec["id"])
+            print(f"[HIT] {rec['id']} | ¥{exact_price} | {spec[:28]} | {rec['shop']}", flush=True)
         else:
-            print(f"[   ] {rec['id']} 无{args.dims}", flush=True)
+            print(f"[   ] {rec['id']} 无{args.dims}精确SKU", flush=True)
         json.dump({"cards": len(cards), "hits": hits}, open(args.out.replace(".json", "_result.json"), "w", encoding="utf-8"), ensure_ascii=False, indent=2)
         time.sleep(args.gap)
     c.ws.close()
