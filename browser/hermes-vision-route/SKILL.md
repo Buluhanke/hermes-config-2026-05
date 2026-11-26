@@ -34,6 +34,17 @@ triggers:
 - 百度 general_basic：2.2s，CER 0.078，¥→￥、×丢失、10px「重量→五量」、8px 数字缺位；accurate_basic 无权限（error 6）。仅做交叉核对。
 - 结论：干净图上 8px 是原生视觉可靠下限；小字/压缩图先 `vision_analyze(region=...)` 裁切放大再读。
 
+## OCR 交叉核对（macOS Vision + 百度，恢复原并行方案）
+本机仍有 `~/.hermes/scripts/macos_vision_ocr.swift`（Vision 框架，离线）和百度 OCR；`ocr-and-documents` 技能里的 `parallel_ocr.py` 是旧版（顺序调用、按字数+10 评分）。
+
+最优组合：原生 VLM 读语义与精确符号；需要逐字文本时，跑 `scripts/ocr_crosscheck.py <图> --reference <VLM转录>`，两引擎并行、以 VLM 转录为参照选更准者；无参照时回退启发式（Vision +10）。
+
+实测（7 行 40→8px）：原生 VLM CER 0.0；macOS Vision CER 0.043（×→✕、±→土、12px 以下相似字错）；百度 CER 0.078（¥→￥、五量/徵峰、数字缺位）。截图上 Vision 读到正确 PID 33837，百度读成 PD33837。有 VLM 参照时脚本选 Vision（相似度 0.9568 vs 0.9222）。
+
+```bash
+python3 ~/.hermes/skills/hermes-vision-route/scripts/ocr_crosscheck.py <图片> --reference <vlm转录.txt>
+```
+
 ## 修复命令
 ```bash
 hermes config set auxiliary.vision.model ""

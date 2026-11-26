@@ -200,7 +200,8 @@ python ~/.hermes/scripts/macos_vision_ocr.swift image.png  # macOS Vision
 
 ### 脚本文件
 
-- `scripts/parallel_ocr.py` — 主并行脚本，自动取分数更高的结果
+- `scripts/parallel_ocr.py` — 旧版并行脚本（顺序调用、字数评分）
+- 增强版：`~/.hermes/skills/hermes-vision-route/scripts/ocr_crosscheck.py` — 真并行 + `--reference` 传原生 VLM 转录做参照挑更准者，原生视觉优先时为推荐入口
 
 ### 脚本依赖
 
