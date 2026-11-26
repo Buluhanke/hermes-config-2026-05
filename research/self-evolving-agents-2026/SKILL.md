@@ -35,7 +35,21 @@ l2: 自演化
 - 弱优化器无法用 Open-Ended Optimization（OEO）接口，此时固定管线（如 SkillOpt）反而更好。
 - 处方（prescribed pipeline）改变的是"改进路径"而非"最终行为"：OEO 在 8 个配对设置里最大编辑更大、修订更churny，但 pass/fail 一致率 ≥0.78。
 
-## 六种已验证技术（均带数字）
+### 9. Behavior Best-of-N / BJudge (Agent S3, arXiv 2510.02250) — 本机已落地
+- 核心洞察:长程 GUI 任务瓶颈是【高方差】(同 agent 时成时败),不是单次能力。解法 = 并行跑 N 次 rollout,从中择优,而非让单次更强。
+- 关键机制:把信息密集的轨迹压成 **behavior narrative**(只留"每步做了什么+对环境影响"的事实),judge 基于事实对比引用择优,而不是对比原始输出。
+- 数字:S3 单跑 62.6%(100步),+bBoN(10 runs)→ 69.9%,最终 72.6% 超人类基线 72.36%;judge 机器判正确率 78.4%,人工复核 92.8%。
+- **代价**:token × N。只对高风险/关键任务启用,不默认全开。
+- 框架简化经验:S3 去掉 S2 的 manager-worker 层级 + 引入原生 coding agent,单跑 +13%(印证 code-first > 多层编排)。
+- **本机落地**:`~/.hermes/scripts/behavior_judge.py`(纯 stdlib)—— `narrativize` 压轨迹成事实、`select` 确定性打分择优(成功信号+10/错误信号-8/循环-5);已实测。`hermes_reflection.py` 加了 Case1 跑偏/Case2 按计划/Case3 已完成三态判定 + `detect_loop()` 纯代码循环检测。
+- 配套铁律:高 stakes 场景 judge 必须人工复核 top-2(7% 误差)。
+
+### 10. Evolving Agent Interfaces (Agent S4, arXiv 2610.28601)
+- 把 interface(工具+何时用它的知识)本身作为可演化对象:meta-agent 研究 task agent 轨迹→构造/修订接口库→种群演化用验证集筛选(构造证据与选择证据分离防过拟合)。
+- 关键洞察:skill/routine 只能重排【预设动作】,不能扩展动作空间;要真正突破需演化 interface 本身。这与 Hermes skill 自进化(hermes-evolution)同构但更进一步。
+- OSWorld V2: 21.3% binary,同模型固定接口 5.6%(3.8×),超 GPT-5.5 13%/Opus4.8 20.6%,成本仅 1.5-4.3%。
+
+## 六种已验证技术(均带数字)
 
 ### 1. Open-Ended Optimization (OEO) — arXiv 2608.09629
 - 固定目标/权限/预算/评估，让 frontier 优化器在线组合改进过程（无固定模板/编辑语言/停止规则）。
