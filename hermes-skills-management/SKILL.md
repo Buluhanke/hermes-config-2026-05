@@ -1,7 +1,7 @@
 ---
 name: hermes-skills-management
 description: "技能库管理 Hub安装升级check update audit诊断。Use when 装/升/修/审任何技能时"
-version: "1.0"
+version: "1.1"
 metadata:
   hermes:
     tags: [skills, hub, install, management]
@@ -51,6 +51,18 @@ hermes skills search <keyword> --source official
 # 预览再装
 hermes skills inspect <identifier>
 ```
+
+## skill 修改权限：provenance 不是 patch 门（2026-11-27 实测）
+
+**铁律：只有 `hermes curator lock` 会阻止 agent 改 skill；是否 agent-created / 是否 `adopt` 与 patch 权限无关。**
+
+- 实测 `~/.hermes/skills/.usage.json` 里 `locked` / `pinned` 全为空：用户手写的 `hermes-browser-local-login`、`1688-search-cn-gb-region-skill` 等一样可被 `skill_manage patch` 修改。旧笔记「用户自有 / 未 adopt 故无法改」是错误推论，别再据此跳过维护。
+- 三条命令各管一件事：`lock` 冻结内容（skill_manage / write_file / patch / terminal 全拒写，agent 不能自行 unlock）；`pin` 只防删除（patch 仍可，且仅 agent-created skill 可 pin）；`adopt` 只是把手写 skill 交给 curator 做**自动 stale / archive**，不是 patch 许可证——反而会让有价值的旧 skill 30 天后被归档。
+- 动笔前查真实状态，别凭记忆判断：
+  ```bash
+  python3 -c "import json,os; d=json.load(open(os.path.expanduser('~/.hermes/skills/.usage.json'))); s=d.get('skills',d); print('locked:', [k for k,v in s.items() if isinstance(v,dict) and v.get('locked')]); print('pinned:', [k for k,v in s.items() if isinstance(v,dict) and v.get('pinned')])"
+  ```
+- 想让某个手写 skill 永久不被 agent 改：让用户自己 `hermes curator lock <name>`；不要靠 `adopt` 达成。`hermes skills update` 的「本地改过跳过」是 bundled/hub 更新保护，与 lock 无关。
 
 ## 已知问题与应对
 
