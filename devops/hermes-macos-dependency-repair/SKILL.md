@@ -47,8 +47,8 @@ python3 -m pip download cryptography --only-binary :all: --no-deps -d /tmp/crypt
 
 修改 `pyproject.toml` 和 `uv.lock` 中的版本号（两者都要改）：
 ```bash
-# pyproject.toml: cryptography==50.0.1 → cryptography==48.0.1
-# uv.lock: specifier = "==50.0.1" → specifier = "==48.0.1"
+# pyproject.toml: cryptography==<锁定版本> → <目标平台有 wheel 的版本>
+# uv.lock: specifier = "==<锁定版本>" → specifier = "==<新版本>"
 ```
 
 ### 步骤 3：重建 venv
@@ -83,4 +83,6 @@ rm -f <install_state_dir>/source-completion-pending
 4. **source-completion-pending**：存在时也会触发修复。修好后删除。
 5. **PYTHONPATH 污染**：运行外部命令前用 `env -i` 清环境。
 6. **预编译 wheel 版本**：pip 安装的 wheel 版本可能低于 pyproject.toml 锁定版本。同步更新锁文件，否则 uv sync 会覆盖。
-7. **跨机迁移别走重建路线**：如果报错来自另一台 Mac 拷来的 `~/.hermes`（CLI 卡死、`no dependency environment is committed`、`sample` 显示停在 `_dyld_start`），先清 `com.apple.quarantine`、改硬编码路径，再直接拷贝已构建的 venv 到目标机自己的 install-state 目录并重写 stamp；完整流程和判定依据见 `hermes-local-capabilities-macos` 技能里的 cross-machine-hermes-clone 参考文档。目标机拉不到包索引时 `hermes pm repair` / `uv sync` 会一直挂着，靠等修不好。
+7. **跨机迁移别走重建路线**：如果报错来自另一台 Mac 拷来的 `~/.hermes`（CLI 卡死、`no dependency environment is committed`、`sample` 显示停在 `_dyld_start`），先清 `com.apple.quarantine`、改硬编码路径，再直接拷贝已构建的 venv 到目标机自己的 install-state 目录并重写 stamp；完整流程和判定依据见 `hermes-local-capabilities-macos` 技能里的 cross-machine-hermes-clone 参考文档。目标机拉不到包索引时 `hermes pm repair` / `uv sync` 会一直挂着，靠等修不好。此路只适用于同架构；跨架构见参考文档。
+8. **python.org Python 的 SSL 证书**：pip/urllib 报 `UNEXPECTED_EOF_WHILE_READING` / `CERTIFICATE_VERIFY_FAILED` 而 `curl` 正常时，是 python.org 解释器没配 framework 证书，不是网络问题；给 `pip` / `uv` / `hermes pm` 命令加 `SSL_CERT_FILE=/etc/ssl/cert.pem`（需要时再加 `REQUESTS_CA_BUNDLE=/etc/ssl/cert.pem`），别去改代理或关证书校验。
+9. **编译 cryptography 前先查 wheel**：若 uv sync 卡在编译 cryptography，先用 `pip download --only-binary :all: --no-deps cryptography==<版本>` 或 PyPI JSON 确认目标平台有 wheel；部分新版本在 macOS 只发 arm64 wheel，Intel 必须编译，而编译需要 OpenSSL 头文件和 pkg-config，先备齐再动手。

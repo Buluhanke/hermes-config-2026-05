@@ -10,6 +10,16 @@ Use when migrating Hermes to another Mac, or finishing a half-installed copy whe
 - Confirm both trees are the same release: `md5 -q ~/.hermes/hermes-agent/install-stamp.json` on each. If they differ, sync the source tree first (step 3).
 - Confirm SSH key auth non-interactively: `ssh -o BatchMode=yes -o ConnectTimeout=8 <user>@<ip> 'whoami; sw_vers -productVersion; echo $HOME'`. Use the returned home path, never assume the short username.
 
+## Cross-architecture transfers (arm64 ↔ Intel)
+
+If `uname -m` differs between hosts, stop: copying the venv and install state cannot work. A built venv's compiled extensions are architecture-specific (`file <venv>/lib/**/*.so | grep arm64`), and the launcher embeds the source interpreter architecture. Path rewriting alone leaves `bad CPU type in executable` and later `ModuleNotFoundError`. A working `hermes --version` is not proof the install is healthy — verify an import of `ruamel.yaml`, `openai`, and `cryptography`, plus `hermes gateway status`.
+
+- **Rosetta 2 is not an escape hatch from arm64 → Intel.** It translates x86_64 code on Apple Silicon; an Intel Mac cannot execute arm64 binaries. Do not propose installing Rosetta to run the source venv on Intel.
+- **Check that the destination interpreter satisfies the lockfile before rebuilding.** Some releases mark the whole dependency graph `python_full_version >= '3.14'` in `uv.lock`; downgrading the interpreter then installs nothing useful and surfaces unrelated build failures in old packages (e.g. `cannot import name 'msvccompiler' from 'distutils'`). Read `requires-python` and the markers first.
+- **Check wheel availability for the destination platform before choosing a rebuild.** For example, `cryptography==50.0.2` publishes macOS wheels for arm64 only, so Intel must compile it, which needs OpenSSL headers and pkg-config. `pip download --only-binary :all: --no-deps cryptography==<v>` answers this in seconds.
+- **Do not delete and regenerate `uv.lock` to dodge a build error.** Regenerating drops the pinned graph and can surface unrelated metadata-build failures; edit the lock in place or provision the native build dependencies instead.
+- **`uv export --format requirements.txt` + manual `pip install` is not a substitute for `uv sync`.** Stripping platform markers pulls Windows-only packages (e.g. `pywin32`) and drops override-driven conflict resolution (e.g. pillow vs browser-harness), so resolution fails even when every individual wheel exists.
+
 ## 1. Clear quarantine on every copied executable
 
 ```bash
