@@ -178,7 +178,10 @@ python3 human_mode.py --dims "15*15*15" --kw "15*15*15cm纸箱" "正方形纸箱
 ```
 复杂矩阵/组合串尺寸仍需 `cdp1688.py`（5类写法+容差+品类硬卡更全）；简单目标尺寸优先 `human_mode.py`。
 
-## 滑块解锁能力：实测通过（2026-11）
+### ID 池精确抠价脚本 verify_dim_pool.py（2026-11 新增，cli 搜索后必经）
+1688-cli 搜页卡片价是起批价，绝不能当目标尺寸价。先用 cli `search ... --json` 拿 offers 落盘，再跑 `scripts/verify_dim_pool.py --dim "16*16*16" --pool offers.json --out hits.json`：连 9333 常驻实例、逐条详情页从 skuMapOriginal 按 specAttrs 精确匹配（target_perms 顺序无关 + extract_sizes_from_spec 5 类写法）抠 price/stock，店铺/所在地/链接从 cli 结果透传，每 3 条增量落盘、登录墙连续 5 条早停、结束关 tab。实测 28 候选 → 8 命中（¥0.69–0.80），江苏落选品抽查确认 137 个 SKU 全是邮政编号尺寸、真无目标尺寸而非漏检。
+
+### 滑块解锁能力：实测通过（2026-11）
 `cdp1688.human_slide()` 用 CDP `Input.dispatchMouseEvent`（isTrusted=true）做拟人拖动：变速缓动 + 随机抖动 + 终点回弹。**真实滑块页实测一次通过**（阿里 nc 文案"请按住滑块，拖动到最右边"，定位 x=833/y=539/dist=258px，拖动后滑块标记消失、页面恢复 47 个商品、会话未封）。触发方式：连续 `navigate` 同一搜页 URL 约 5 次后风控出滑块（高频 1.2s 间隔不一定触发，登录态健康时正常搜索基本不出）。
 - `human_slide()` 前置检测只看 HTML 是否含"验证码"字样，无此字样直接返回 True（不会白拖）。
 - 主驱动 `cdp1688.py` 搜页/详情页检测到验证码已自动调 `human_slide`（2 次尝试），失败才退避 15/30/45/60s。
