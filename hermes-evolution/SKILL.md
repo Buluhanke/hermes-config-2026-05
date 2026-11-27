@@ -216,6 +216,25 @@ Layer 3: browser_exec
 
 **WebMCP（用户长期追踪项，本轮无规范级变化）**：Draft CG Report 仍 11-24；Chrome 文档 11-26 更新确认 `outputSchema` 从 159、`waitForToolsUntil` 从 160 可用，`Tool` 接口带 `origin`/`source`/`title`，`getTools({fromOrigins})` 需显式列源且仅安全 origin，`exposedTo` 控跨源暴露。OT 延至 162 仍未最终批准，无 ship 里程碑，继续周期跟踪，未到替代 CDP 时点。
 
+## 2026-11-27 23:00 自学增量（cron 实测落库 7 条 + 冗余归零）
+
+> 7 条新知识全过 `fact_gate.py check`（score 71，带 DB probe max_similarity ≤0.075，无近重复），SQLite 直连落库 fact_id 1480–1486，库 516→523，`typeof(fact_id)=integer`、FTS 可读（1481 命中 TRUST、1480 命中 PDEbench）。变更前后备份 `~/.hermes/cache/scratch/memory_store.db.bak-20261127-2300`。前置自检：`fallback_providers: []` 且无 `fallback_model`（零绑定铁律符合）；gateway launchd `state=running` PID 33836 已运行 28h、日志 23:00:35 仍在写。
+
+**自改进框架（对 L3/L4 的量化校准，全部 2026-11）**：
+- **RSI-PDE（2611.14949）**：validation gate 要求宏平均相对 L2 误差降幅>0.5%、类均增幅≤5%、不丢类通过、单案例误差增幅≤25%；public-pass 规则在连续两轮被训练回归守卫挡住后可豁免一轮。1001 cases/42 模板上较单次基线 +106.5–181.9%、较原生 harness +3.0–19.6%，模型调用 -46.9%。→ skill 晋升门要写清"可迁移 policy + 回归守卫 + 有限豁免"，别只写死阈值。
+- **TRUST（2611.10787）**：在线多重假设检验（e-LORD/e-GAI）控制 false evolution rate（q=0.30, ε=0.10, β=0.01），把 greedy gate 的 45.59% 劣质更新接受率压到 2.78%、最大退化 MDD 0.27pp vs greedy 8.48pp。→ "patch 后先自测失败丢弃"升级为统计门控：接受编辑所需证据强度随历史误接受率动态调整。
+- **验证器共进化**：CUA-SEE（2611.30962）从 rollout 共进化任务+可执行 verifier，962 任务平均 4.82 checkpoints/任务、原子要求覆盖 92.5%、人工与 verifier 一致率 84%（κ=0.640），不可观测要求显式标 gap 而非用代理检查；Veritas（2611.13336）用 evidence header（状态比对优先于轨迹自述）、19,603 条领域规则、9 条写作原则自动生成 verifier，32 轮自改进仅保留 4 次编辑。→ 验证逻辑本身要可更新、采纳门要严；"文件存在≠任务完成"。
+- **从用户纠正中学习**：Forge Decision Context（2611.08644）把用户纠正+工具失败编译成带触发节点的祈使规则、决策点渐进注入，DC-Bench 71 场景 9 维 compliance 55%→95%、token 约 10× 更少；LiveAsset（2611.11560）学 intent asset 并在回复前运行时校验、保留先前已满足要求，远迁移 +4.1/+3.9pp。→ 印证用户纠正即铁律 + 主动学习 cron 方向；规则要带 trigger 按决策点注入，别全量塞。
+- **Pro-Memory（2611.05731）**：把"维持未来意图"与"何时兑现"分开，Haiku 4.5 ProactiveBench F1 0.3817→0.6634、Sonnet 4.5 Miss Rate 0.2475→0.0631；传统回顾记忆反而可降主动表现（RAG 0.3636 < No Memory）。→ 长期 cron/目标追踪需要前景记忆与激活条件，不是多存历史。
+
+**WebMCP（用户长期追踪项，本轮新增覆盖实测）**：Draft CG Report 仍 11-24；独立爬 Tranco top 3000（11-25）1650 站点仅 21 个（1.3%）有信号，3 个仍用已移除的 `navigator.modelContext`、8 个双入口兜底，hCaptcha 等第三方脚本也会注册工具；6 个 OT token 全 2027-03-30 到期。Chrome 160.0.8173.0 起 `Tool` 接口生效（`window`→`source`、`JSON.stringify(tool)` 得 `{}`、展开/`structuredClone` 失效），Stable 预计 2027-01-05 移除回退；`waitForToolsUntil` 超时 10s；`outputSchema` 失配是否报错规范未定（issue #92），harness 需自行校验。历史三条 1370（OT 结束日）/1445（PR 规范细节）/1482（覆盖实测）互补，均保留、不 supersede。仍无 ship 里程碑，未到替代 CDP 时点。
+
+**Benchmark 校准（引用必带 release / harness / step cap）**：11-24 官方榜：AndroidWorld 5 条 100% pass@1 自报已归档饱和（人类 80%）、SWE-bench Verified 79.2% 自 2026-02 起无新条目；OSWorld-Verified 90.19%@100 步、WebArena 86.1% 超人类基线（72.36%/78.24%）；同模型极简 harness 与强 scaffold 的 WebArena 分差 20–30 分。AndroidWorld 100% / OSWorld 90% 只说明对应协议近饱和，不代表通用 computer-use 到位。
+
+**Hermes 版本线**：v0.23.4（11-23/24，rolls up ~229 PRs，commit 8fc0374）仍是最新稳定版；11-25 canary 全 plugin-catalog 条目、核心运行时无变化；完整 curated notes 待 v0.24.0。
+
+**本轮落地/未落地**：双方向均走完——7 条真实落库；冗余审计 349 skill、结晶垃圾 0、`without_keywords` 0、埋藏事实 0，沉淀生成器连跑两次 0 新建（52 NOTE.md 不变），产物只进 `knowledge/`；6 组重复全是 ui-ux-pro-max 工具双目录，保留。未落地仍是 Collective Wisdom 组织级共享、SearXNG+Firecrawl 双 backend。
+
 ## 版本迁移与技术增量（指针）
 
 - Hermes v0.23.0 起旧 `browser_*` 工具全删、只剩 `browser_exec`；盘点迁移清单与 WebMCP / UI-Venus / ARISE / Anchor / MetaAct 等 2026-11 研究结论见 `references/browser-agent-research-2026.md`。写自动化 skill 时勿再引用旧工具名。
