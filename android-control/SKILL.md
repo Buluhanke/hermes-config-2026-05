@@ -140,8 +140,10 @@ chmod +x ~/.local/bin/phone ~/.local/bin/pad
 # 开启设备的 TCP/IP 调试模式
 adb tcpip 5555
 # 拔掉 USB 线
-# 注意：tcpip 打印 "restarting in TCP mode port: 5555" ≠ 端口已监听，
-# 第一次 connect 可能超时，等 2-3 秒重试一次即可
+# 注意：tcpip 打印 "restarting in TCP mode port: 5555" ≠ 端口已监听。
+# 先用 nc -z -G 3 <IP> 5555 确认端口 OPEN，再 adb connect。
+# 端口已 OPEN 却报 "No route to host" 时不要反复盲 connect：
+# adb kill-server && adb start-server，再 connect 立即成功（实测）。
 adb connect 192.168.8.204:5555   # MI 8
 # adb connect <动态读到的IP>:5555  # 平板（见坑点 11）
 ```
@@ -255,6 +257,18 @@ device.screenshot()               # 截图
 
 ---
 
+### 无线调试重启持久化（「重启不掉」能不能做到）
+
+回答这类问题按三层判据实测，不要先答应能做到：
+
+1. **`adb tcpip 5555` 不持久**。它只改运行时属性 `service.adb.tcp.port`，设备重启即丢：`adb shell getprop service.adb.tcp.port` 当下有值，重启后为空。
+2. **原生「无线调试」（Android 11+）持久**。`settings get global wireless_debugging` 有值、开发者选项里有开关的设备，配对一次后重启自动回来。华为 EMUI 砍掉了这个开关：MRX-W29（Android 12 / EMUI 14）该键返回 `null`、无菜单项，此路不通。
+3. **root + build.prop 真正持久**，但要解锁 bootloader（华为解锁码基本不发放）、清空数据、丢保修——明确告知代价，绝不擅自做。
+
+判据顺序：`adb shell su -c id`（有没有 root）→ `adb shell settings get global wireless_debugging`（有没有原生开关）→ `adb shell getprop service.adb.tcp.port`（当前是不是临时 tcpip）。三条都不满足就如实告知没有「重启不掉」的办法，重启后 USB 插一次重开约 30 秒。
+
+**别用 Mac 端 launchd/后台守护在开机后自动下发 `adb tcpip` 来伪装持久化**：守护进程环境里 `adb connect` 持续报 `No route to host`，同一条命令在交互终端里却成功——守护进程与交互 shell 的 adb server 会话上下文不同。想靠自动重连绕过设备端限制会白花时间，实测跑不通。
+
 ## 设备维护（存储清理 / 装 App）
 
 清理和装 App 的完整流程、可删与绝不能删的清单、APK 校验、**升级不丢配置（包名变更判断、adb backup 盲区、用 dex 扫类名定位隐藏迁移入口、离线导出/导入实测流程）**见 `references/device-maintenance.md`。
@@ -335,9 +349,9 @@ scrcpy 在 Android 10 上不支持音频（需 Android 11+），投屏无声音�
 ### 7. 多设备冲突
 USB 和无线同时连接时 `adb devices` 显示两个设备，不带 `-s` 的命令报 `more than one device/emulator`。**优先给每条 adb 命令加 `-s <目标>`，不必拔 USB**——开无线调试时本来就需要 USB 在线读 IP。只有确实要跑不带 `-s` 的批量命令时才 `adb disconnect <USB设备ID>`。
 
-### 9. 华为平板 MRX-W29 无无线调试开关（老版本 Android）
+### 9. 华为平板 MRX-W29 无无线调试开关（EMUI 定制，非单纯旧版 Android）
 
-部分华为/旧版 Android 设备系统设置里没有「无线调试」开关，无法直接点开。正确流程：
+部分华为 EMUI / 旧版 Android 设备系统设置里没有「无线调试」开关（MRX-W29 是 Android 12 / EMUI 14，同样没有，`settings get global wireless_debugging` 为 `null`），无法直接点开。正确流程：
 
 ```bash
 # Step 1 — USB 有线连接平板（确保平板已授权 USB 调试）
@@ -360,7 +374,7 @@ adb -s "$IP:5555" shell echo "wireless OK"
 # 输出: wireless OK ✅
 ```
 
-**之后 USB 线可拔掉**，无线连接持续有效。设备重启后需重新走 Step 1-3。
+**之后 USB 线可拔掉**，无线连接持续有效。设备重启后需重新走 Step 1-3——`adb tcpip` 不跨重启，想免 USB 自动恢复的判据见「无线调试重启持久化」一节。
 
 ### 10. 设备重启后先查连接，不要假设无线失效
 
@@ -378,6 +392,7 @@ adb -s "$IP:5555" shell echo "wireless OK"
   **解析 `adb devices -l` 必须匹配第一字段 `$1`，不能把 `:端口$` 锚到整行末尾**——`-l` 会在地址后追加 `product:`/`model:`/`transport_id:` 等元数据，行尾根本不是端口。BSD awk 不支持 `{4}` 这类区间量词，用 `+` 或显式重复字符。
 - 无线调试端口可能变了 → 去设置 → 开发者选项 → 无线调试查看当前端口
 - 平板和 Mac 不在同一网段 → 无线 adb 要同在 192.168.0.x（Mac 的 WiFi 段），USB 调试才是 192.168.8.x；别拿有线段的旧 IP 去 connect
+- `adb connect` 报 `No route to host` 但 `nc -z -G 3 <IP> 5555` 显示端口 OPEN → 不是网络不通，是 adb server 会话卡住：`adb kill-server && adb start-server` 后重连即可（坑点 9 同上）
 
 ### 12. Hermes 终端里 adb 不在 PATH
 Hermes 的 shell 找不到 `adb`，但符号链接 `~/.local/bin/adb` 已存在 → 所有 adb 命令用全路径 `/Users/aimac/.local/bin/adb`，或在命令前 `export PATH="/Users/aimac/.local/bin:$PATH"`。scrcpy 自己硬编码该路径（见坑点2），不受影响。
@@ -467,6 +482,8 @@ adb reboot
 adb connect 192.168.8.204:5555
 adb shell echo "无线调试持久化成功"
 ```
+
+仅适用于有 root、且 ROM 的 init 对 `persist.adb.tcp.port` 有 property 触发的设备；华为 MRX-W29 无 root、又无原生无线调试开关，这条路走不通（判据见「无线调试重启持久化」）。
 
 ### 验证 D — 能不能操作这台设备（不投屏，Hermes 终端内可做）
 
