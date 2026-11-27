@@ -3197,13 +3197,13 @@
     "created_by": null,
     "last_patched_at": "2026-11-25T10:32:02.312893+00:00",
     "last_reused_patch_generation": 23,
-    "last_used_at": "2026-11-26T23:30:06.877464+00:00",
+    "last_used_at": "2026-11-27T15:00:07.266358+00:00",
     "last_viewed_at": "2026-11-25T10:22:37.861473+00:00",
     "patch_count": 23,
     "patch_generation": 23,
     "pinned": false,
     "state": "active",
-    "use_count": 53,
+    "use_count": 54,
     "view_count": 19
   },
   "hermes-evolution-repair": {
@@ -4190,15 +4190,15 @@
     "created_by": "agent",
     "first_seen_at": null,
     "last_patched_at": "2026-11-23T03:08:44.149370+00:00",
-    "last_reused_patch_generation": 11,
-    "last_used_at": "2026-11-23T03:07:50.619621+00:00",
-    "last_viewed_at": "2026-11-23T03:07:50.615843+00:00",
+    "last_reused_patch_generation": 14,
+    "last_used_at": "2026-11-27T15:52:46.353204+00:00",
+    "last_viewed_at": "2026-11-27T15:52:46.349289+00:00",
     "patch_count": 14,
     "patch_generation": 14,
     "pinned": false,
     "state": "active",
-    "use_count": 9,
-    "view_count": 9
+    "use_count": 11,
+    "view_count": 11
   },
   "osascript-chrome-js": {
     "archived_at": "2026-10-17T09:10:36.727203+00:00",
