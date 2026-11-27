@@ -90,12 +90,14 @@ A copied facts.json carries the source machine's stamp, but that stamp hashes th
 import sys, json
 sys.path.insert(0, '/Users/<new>/.hermes/hermes-agent')
 from pm.install import get_package, _carried, _member_inputs
-from pm.lock import Facts
-from pm.paths import facts_path
+from pm.paths import runtime_facts_path
 
-f = Facts(facts_path(), strict=True).get('venv')
+# Read extras from the RUNTIME facts file. facts_path() can resolve to an
+# unrelated empty ~/.hermes/tools/facts.json on a copied tree; Facts(...) then
+# returns None and expected_stamp raises TypeError on a None subscript.
+facts = json.load(open(runtime_facts_path()))
 p = get_package('venv')
-enabled = sorted(set(_carried(p, f['extras'])))
+enabled = sorted(set(_carried(p, facts['packages']['venv']['extras'])))
 print(p.expected_stamp(enabled, **_member_inputs(None)))
 ```
 
@@ -119,8 +121,46 @@ ls -ld ~/.hermes/hermes-agent/.venv   # confirm it resolves to the install venv
 - `find ~/.hermes/skills -name SKILL.md | wc -l` matches the source count.
 - `tail -3 ~/.hermes/logs/gateway.log` — log is still advancing.
 
+## 7. Last resort: manual dependency install when the pinned interpreter cannot be changed
+
+Use only when a wheelless pinned dependency cannot be compiled and the lockfile cannot be regenerated. This restores CLI usability (`hermes --version` with a populated SDK version, core imports OK) but does **not** guarantee gateway/plugin parity — verify plugins separately.
+
+```bash
+uv export --no-emit-project --no-emit-workspace --format requirements.txt > /tmp/req.txt
+# Strip `; marker` suffixes, `--hash` continuation lines and comments; drop
+# Windows-only dists (pywin32, winrt-runtime); pin the wheelless package to a
+# version that has a wheel for this platform.
+python3 parse_script.py   # emit one `name==version` per line
+pip install --no-deps -r /tmp/req-clean.txt
+pip install --no-deps --no-build-isolation -e <project>
+```
+
+`--no-deps` is deliberate: with markers stripped, pip sees mutually exclusive pins (e.g. pillow 13 vs browser-harness 12.3) and refuses to resolve even though every wheel exists. `uv export --format pip` is invalid — the format is `requirements.txt`.
+
+## 8. Resolve bot-channel collisions after cloning
+
+A clone copies `.env` verbatim, so both machines claim the SAME Telegram / Feishu / WeCom / Weixin / QQ tokens. One bot token can be attached to only one gateway; whichever claims it first answers and the other adapter is parked. Verify by comparing token **values** on both hosts before promising an overlap-free setup — a plain clone contains no independent channel to "restore".
+
+Decision order:
+
+1. Second machine needs only local CLI work → uninstall its gateway so it claims no bot at all. `hermes gateway stop` is **insufficient**: launchd `RunAtLoad` / `KeepAlive` relaunches it within seconds. Use `hermes gateway uninstall`, which removes `~/Library/LaunchAgents/ai.hermes.gateway.plist` and the launchd job. Credentials stay in `.env`, so `hermes gateway install && hermes gateway start` restores it.
+2. Second machine must own a channel → it needs genuinely NEW bot credentials supplied by the user. Never reuse or invent tokens.
+3. `profiles/<name>/gateway.parked` (written by `hermes -p <name> gateway stop`) excludes a secondary profile from multiplexing, but the **default** profile cannot be parked — only uninstalling the host gateway stops it.
+
+This is distinct from the same-machine two-profile credential collision in Pitfalls: there, commenting duplicate keys in the secondary profile suffices; here the whole gateway on the secondary machine must go.
+
+Operational notes:
+
+- Stop may refuse with `N live session(s) would be interrupted` — zombie turns hold the service open. Confirm no wanted session is running, then `hermes gateway stop --yes`.
+- `pkill -f gateway` and `launchctl bootout <domain>/ai.hermes.gateway` are blocked by the harness guard (it forbids killing a gateway from within the gateway process tree). Use the official `hermes gateway restart` / `uninstall` subcommands.
+- Verify with `ps aux | grep -c "[g]ateway run"` immediately **and again after ~10s**: zero now but nonzero later means launchd relaunched it. Also confirm the plist is gone.
+- After uninstall, one-shot `hermes -z` no longer completes (it delegates to the gateway) while `hermes --version` still works. Do not claim full CLI chat parity without testing it.
+
 ## Pitfalls
 
+- **Manually assembled wheels must match the ABI of the interpreter that loads them.** Installing cp312 wheels into a venv that the gateway launches with a 3.14 interpreter yields `ImportError: cannot import name <symbol> from <compiled_module> (unknown location)` — the pure-Python package resolves but its compiled extension cannot. Pin every install to the exact interpreter the launcher and launchd will use, and confirm `python -V` inside the venv before declaring success.
+- **Never delete or pop the `stamp` to "let pm recompute it."** An absent stamp makes `venv_is_current()` false; pm starts a background `uv lock`, holds `.install.lock`, and the CLI hangs on `dependency lock still held after 10.0s; continuing without it` instead of repairing. Write the computed stamp immediately. If the loop already began, kill `uv lock --python` and `pm/worker.py`, delete `.install.lock` and `.repair-incomplete`, write the stamp, confirm `venv_is_current()` is `True`, then retest.
+- **A gateway process started before the venv swap keeps stale imports in memory.** After replacing the venv or facts, run `hermes gateway start` to refresh the launchd definition and reload; otherwise the old process raises `ImportError: cannot import name <symbol>` for symbols that exist on disk.
 - **Redirect long-running probes to a log file.** `ssh host 'hermes --version 2>&1 | head -10'` buffers and hides diagnostics; use `cmd > /tmp/probe.log 2>&1; echo EXIT=$? >> /tmp/probe.log` in a background job with a completion notification, then read the file.
 - **The install hash is path-derived.** Identical source trees under `/Users/a` and `/Users/b` produce different SHA16 directories. Never assume the source hash directory exists on the destination.
 - **Do not start `uv sync` on an egress using fake-ip DNS** (`lsof` shows connections to `198.18.0.0/15`). It stalls with no bytes transferred, leaves the install lock held, and produces misleading `dependency lock still held after 10.0s; continuing without it` noise. Copying the venv sidesteps the download entirely.
