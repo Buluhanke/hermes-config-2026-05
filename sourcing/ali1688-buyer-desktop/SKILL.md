@@ -78,7 +78,7 @@ AI 输入框是受控 textarea，需 React 原生 setter + input 事件填值，
 
 mtop 需要签名（appKey=12574478，sign=md5(token&t&appKey&data)，token 来自 `_m_h5_tk` cookie）。可在页面内 `fetch(带签名的完整URL,{credentials:'include'})` 成功调用，返回 `{"result":"fast_search"}` 路由结果。
 
-**完整找货链路（2026-11-28 实测跑通）：**
+**早期探索链路（已弃用，勿照做——实际直接用下方 `scripts/cai_find.py`）：** 以下点按钮/填 textarea/点搜索的路径坐标漂移、提交不可靠，是已证伪的弯路，仅留作理解 mtop 接口用。
 1. `cai.1688.com` → 点「快速搜索」(DIV x≈1175,y≈244)
 2. textarea（宽>100，placeholder 含「精准描述找货源」）用 React 原生 setter 填词 + dispatch input 事件 → 回车
 3. 触发 `deepsearch.router`，随后**自动开新标签页** `cai.1688.com/newOfferSearchResult?q=<词>&intention=deep_search|fast_search`（这就是之前以为"没结果"的原因——结果在另一个 tab，不在原页）
