@@ -76,9 +76,52 @@ AI 输入框是受控 textarea，需 React 原生 setter + input 事件填值，
 - `mtop.alibaba.cbu.ai.native.gateway.ai.chat.scene.history.list` — 助手历史。
 - `mtop.alibaba.cbu.ai.native.gateway.ai.starry.entrance` — 入口/建议，参数 `{"serviceName":"userSuggestionService","params":"{}"}`。
 
-mtop 需要签名，不能无脑直调；**让页面 UI 触发**（填词+提交）再从 CDP 抓 `Network.getResponseBody` 或读渲染 DOM 拿结果，是当前最可行路径。2026-11-28 实测：接口已抓到，但 React 受控输入+提交交互未调通（textarea 用原生 setter 填值后回车/按钮点击未触发 deepsearch 出结果），待继续调试。
+mtop 需要签名（appKey=12574478，sign=md5(token&t&appKey&data)，token 来自 `_m_h5_tk` cookie）。可在页面内 `fetch(带签名的完整URL,{credentials:'include'})` 成功调用，返回 `{"result":"fast_search"}` 路由结果。
+
+**完整找货链路（2026-11-28 实测跑通）：**
+1. `cai.1688.com` → 点「快速搜索」(DIV x≈1175,y≈244)
+2. textarea（宽>100，placeholder 含「精准描述找货源」）用 React 原生 setter 填词 + dispatch input 事件 → 回车
+3. 触发 `deepsearch.router`，随后**自动开新标签页** `cai.1688.com/newOfferSearchResult?q=<词>&intention=deep_search|fast_search`（这就是之前以为"没结果"的原因——结果在另一个 tab，不在原页）
+4. 结果页初为空壳，需再点页面内「搜索」按钮 → 加载出筛选维度（极速发货/一件代发/超级工厂/48h发货等）+ 商品列表表头（起批量/90天销量/核心属性/店铺信息）
+5. 商品行数据异步填充；「帮我搜索」是渐变按钮内文字，非叶子节点，要找父元素点击
+
+**关键**：`intention=deep_se` = AI 深度对比筛选，`fast_se` = 快速列表。搜索词自动进「搜索历史」。
+
+**签名直调模板**（页面内 fetch，credentials:include，token 从 document.cookie 的 `_m_h5_tk` 取 `值.split('_')[0]`）：
+```
+https://h5api.m.1688.com/h5/mtop.alibaba.cbu.ai.yuancai.deepsearch.router/1.0/
+ ?jsv=2.7.5&appKey=12574478&t=<ms时间戳>&sign=<md5(token&t&appKey&data)>
+ &v=1.0&type=originaljson&dataType=json&timeout=30000&showErrorMsg=true
+ &api=mtop.alibaba.cbu.ai.yuancai.deepsearch.router&data=<urlencode(json)>
+```
+注意：`router` 只是路由，真正商品列表接口是结果页再点「搜索」后才发，待继续抓。
+
+## ✅ 已跑通：AI 找货自动化脚本（2026-11-28 定稿）
+
+**首选方案** `scripts/cai_find.py`（自包含、零签名、真人式、稳定）：
+```bash
+python3 ~/.hermes/skills/sourcing/ali1688-buyer-desktop/scripts/cai_find.py "46*26*10cm纸箱" --limit 20
+python3 .../cai_find.py "14*20cm 白边自封袋 12丝" --json   # JSON 输出
+python3 .../cai_find.py "..." --intention deep_search       # AI 深度对比模式
+```
+输出：`offerId | 精确单价 | 店铺 | 标题 | 链接(https://detail.1688.com/offer/<ID>.html)`。
+
+**原理（关键，别再走弯路）**：
+1. 直接打开结果页 `cai.1688.com/newOfferSearchResult?q=<词>&intention=fast_search|deep_search`（URL 编码用 utf-8）。页面**自动加载**商品卡片，不需要点任何按钮。
+2. 轮询 `[class*=offerCardItemMainWrapper]` 卡片出现（约 4-8 秒，AI 慢时更久）。
+3. **从卡片的 React fiber 链**（`__reactFiber$xxx` → 逐层 `memoizedProps`）提取 `offerId`/`title`/`price`——这是唯一能拿到 offerId（=链接）的可靠来源；DOM 兜底店铺/销量/回头率。
+4. DOM 的 class 名带 hash 后缀（如 `offerCardItemTitleText--U6eulQN6`），必须用 `includes` 匹配，不能用精确选择器。
+5. 标题可能含 `<font color=red>` 标签，输出前正则清洗。
+
+**踩过的坑（勿重试）**：
+- ❌ 点主页「搜索」按钮：坐标会漂移（刷新后 y 从 244→206），React 受控输入+回车极不稳定，时而触发时而不触发。
+- ❌ `chat.entrance` SSE 抓包：`acs.m.taobao.com` 域名，`FAIL_SYS_ILLEGAL_ACCESS`，签名直调也不行；SSE body 流未结束取到空，时序难控。
+- ❌ 主页 textarea 填词：受控组件需原生 setter，且提交不可靠。
+- ✅ 正解：直接开结果页 + 等卡片渲染 + React fiber 取数。像真人看页面，不依赖任何接口/签名/点击。
+
+**限制**：返回的是 AI 推荐商品（未必严格匹配所有规格，如尺寸/厚度/白边需自己按标题判断）；要核验精确 SKU 规格价仍用旧 scraper 的 skuMapOriginal。两者互补。
 
 ## 找品策略
 
-- `deepth_search` 与旧 scraper **互补**：AI 返回结构化总结+精确 SKU 价；scraper 适合批量尺寸核验/skuMapOriginal。按任务选。
+- `cai_find.py` 用于 AI 语义找货（模糊描述、找方向、找店铺）；旧 scraper 用于精确尺寸 SKU 核验。
 - 用户铁律不变：不自加未请求筛选（江浙沪等）、结果给「ID|规格|单价|链接」干净表、价格必须目标 SKU 精确价。
