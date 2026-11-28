@@ -157,6 +157,8 @@ $ADB -s $W shell 'input swipe 900 1100 150 1100 400'   # 1080x2248 上左滑
 - **清空输入框**：删除键要写成完整命令链 `input keyevent 67; input keyevent 67; ...`。写成 `input keyevent 67 67` 会把 `67` 当独立命令执行（`67: inaccessible or not found`），输入框实际没清，残留会和新内容拼在一起。
 - **`uiautomator dump` 读不到 EditText 的实际内容**（`password="true"` 的框尤其只给空属性）。要确认填了几位，截图 + 百度 OCR 数圆点。
 - 定位输入框后先 `input tap` 拿焦点，再 `input text`；跳光标到末尾用 `input keyevent 123`（MOVE_END）。
+- **键盘弹起会把整个对话框上移，输入框坐标随之改变**：弹窗未聚焦时输入框可能在 y≈1184，点下去软键盘弹出后同一输入框跑到 y≈400。点完之后不要沿用旧坐标填第二个框——重新 `uiautomator dump` 取当前 bounds。这会造成「文字串进上一个框」或「点了没反应」，看起来像输入法坏了，其实是坐标失效。
+- **长 ASCII URL 的输入**：ADBKeyboard 的 `ADB_INPUT_TEXT` 广播在定制 App 的 EditText 上可能只落地前缀（长 URL 截成 `https://gh`）。把默认 IME 切回系统自带输入法后用 `input text '<完整URL>'`，再 dump 读回全文核对；不要因为广播返回码 0 就认为填完整了。
 
 ## 重试次数与认证冷却
 

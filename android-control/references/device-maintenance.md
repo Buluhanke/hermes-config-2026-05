@@ -40,6 +40,20 @@ Android toybox 的 `sort` 没有 `-h`，用 `du -sk` + `sort -nr`（单位 KB）
 4. `adb -s <device> install -r <file.apk>`；成功用 `pm list packages | grep <pkg>` + `dumpsys package <pkg> | grep versionName` 验证版本。
 5. 装完删除本地 APK，不给刚清理过的手机/本机留垃圾。
 
+### 华为 EMUI 侧载未知来源 APK：必须走锁屏密码闸
+
+华为（MRX-W29 实测）装「安装来源：PC 工具」的第三方 APK 会强制走一条系统确认链，`adb install` 因此**看起来卡死**（后台进程一直不返回），实际是在等设备屏幕上的弹窗：
+
+1. 风险提示 → 「继续安装」
+2. 详情页 → 勾选「已了解此应用未经检测，可能存在风险」→ 「继续安装」（不勾选时按钮 `enabled=false`）
+3. `com.huawei.coauthservice/UnifiedAuthenticationDialogActivity` → 「请输入锁屏密码继续安装」
+
+判断卡在哪一步不要猜：`dumpsys activity activities | grep mResumedActivity` + `uiautomator dump` 读当前弹窗文字，按 `bounds` 中心 `input tap`。密码闸用 `input text <PIN>` 直接可填（用户主动给出自己设备密码时照做，值不落盘不复述）。走完 `adb install` 后台进程才打印 `Success`。
+
+**`pm install -r /data/local/tmp/x.apk` 绕不过这道闸**——它同样落到 `InstallStaging` 并弹同一串确认，别在命令行安装方式上浪费时间。
+
+验证要用 `pm list packages -f --user all | grep <pkg关键字>`：新版本常**换包名**（如 TVboxOSC 旧 `com.mygithub0.tvbox0.osdX` / 新 `com.kukuqi.tvbox.osc`），`install` 报 Success 后两版并存；只查旧包的 `dumpsys package` 会看到 `lastUpdateTime` 仍是几年前，误判成没装上。新包用 `dumpsys package <新包> | grep versionName/firstInstallTime` 确认为当天安装。
+
 ## 升级 App 而不丢配置
 
 先查新版本**是否改了包名**（release notes 或下载页的"程序包名称"）。这一条直接决定方案：

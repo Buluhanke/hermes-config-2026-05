@@ -34,6 +34,10 @@ description: Clash/Mihomo 订阅与客户端配置。Use when 问 Clash 订阅�
 - iOS 的 TUN `stack` 只能用 `gvisor`；去掉 `strict-route`，它在 iOS 下容易破坏局域网访问和 Apple 推送。
 - DNS 用 `enhanced-mode: fake-ip`；蜂窝场景关 `dns.ipv6`，避免 AAAA 查询拖慢解析和 IPv6 绕过隧道。
 - 大量同根随机子域（某某.adobestats.io 之类）用一条 `DOMAIN-SUFFIX,<根域>` 通配替代——覆盖等价且省内存。iOS VPN 扩展有约 50MB 内存上限，超了会「一点连接就秒断」。
+- 精简只压同根随机垃圾子域；`🚀 节点选择`（流媒体解锁）、`☁️ CloudFlareCDN`（CF IP 直连）、`GEOIP,CN` 是功能规则，删了会让流媒体不解锁或 CF 站点异常。`RULE-SET,geoip-ruleset-cn` 只替代国内 IP 直连，不替代流媒体解锁规则。
+- 判断覆盖要按根域实测查 `DOMAIN-SUFFIX,<根域>`，别把 `adobe.com` 当成 `adobestats.io` 的子域；`adobe.com` 只有精确规则时，新的 `*.adobe.com` 子域要单独补。
+- Clash Mi iOS 内置会创建 `Apple Push Notification` 组；配置里再定义同名组会 `LibclashStart failed: ProxyGroup Apple Push Notification: duplicate group name`，App 起不来。删自定义组，把 APN 规则改走直连组。
+- 测速地址两处都要查：`profiles.json` 每 profile 的 `delay_test_url`（可能混进尾随中文句号）和 `setting.json` 全局 `delay_test_url`（可能还是 gstatic）。尾随杂字符会让测速静默失败。
 - 配置一旦贴进聊天或公开渠道，`external-controller` 的 `secret` 必须换新。
 - 改完配置必须 `yaml.safe_load()` 解析并打印 `proxies/groups/rules` 计数，不要凭肉眼判断。
 
@@ -55,8 +59,15 @@ description: Clash/Mihomo 订阅与客户端配置。Use when 问 Clash 订阅�
 
 第三方教程常写「设置→DNS」，实际版本里 DNS/TUN 在「核心设置」，且要先打开该块的 Overwrite 开关才能编辑。菜单路径和覆写机制见 `references/ios-clients.md`。
 
+## 六、用户发备份 zip 要求改配置
+
+**交付格式铁律**：只回改好的成品文件链接（`MEDIA:/绝对路径`），不写长解释、不重复发同一份文件、不 dump 配置内容。用户明确嫌啰嗦过。
+
+完整流程（定位生效 profile、节点一致性、secret 对齐、重打包校验）见 `references/backup-zip-edit.md`。
+
 ## 参考
 
+- `references/backup-zip-edit.md` — Clash Mi 备份 zip 编辑流程：生效 profile 定位、节点校验、功能规则补回、重打包
 - `references/ios-clients.md` — iOS 客户端对比、Clash Mi 真实菜单与覆写机制、50MB 内存坑、Apple 推送
 - `references/subscription-privacy.md` — 订阅隐藏方案对比与中间人风险
 - `references/yaml-rebuild.md` — 从聊天粘贴重建 YAML 的完整 recipe

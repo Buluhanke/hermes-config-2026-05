@@ -423,6 +423,9 @@ v3.5.0 把包名从 com.idormy.sms.forwarder 改成 cn.ppps.forwarder，Android 
 ### 18. 坐标点击全落空先查屏幕方向
 `input tap` 点首页图标却进资讯、点卡片却跳导航，多半是**横竖屏翻转**导致坐标基准错了，不是控件不可点。同一台设备不同场次会在 `1600x2560`（竖）和 `2560x1600`（横）间切换，视频类页面尤其容易转横屏。每次写死坐标前先用 dump 的 bounds 现取（wrt 当前方向）。同一台设备不同场次会在 `1600x2560` 和 `2560x1600` 间切换，视频类页面尤其容易转横。注意 `wm size` 只报物理尺寸、不随旋转变化，`screencap` PNG 和 dump bounds 才是当前方向——别用 wm size 推断当下是横是竖。`input tap` 点首页图标却进资讯、点卡片却跳导航，都是坐标基准错了而不是控件不可点。
 
+### 20. 华为侧载 APK 卡在 `adb install`
+不是 adb 或网络问题，是 EMUI 的「PC 工具安装」强制确认链（风险提示→勾风险→继续安装→锁屏密码）。后台 install 进程一直挂着时先 `dumpsys activity activities | grep mResumedActivity` 看是不是停在 packageinstaller / `coauthservice`，按 dump bounds 点过去、密码闸用 `input text <PIN>`，走完进程才返回 Success。`pm install` 同样过不了这道闸。新版本可能换包名，验证用 `pm list packages -f --user all`。详见 `references/device-maintenance.md`。
+
 ### 19. scrcpy 投屏后电脑键盘无法在设备上输入文字
 **验证必须落到真实输入框**：scrcpy 进程存活、日志无 keyboard 报错只证明 HID 通道打通，不证明文字进了 App——定制 IME（华为百度输入法）会拒绝注入。所以 `--keyboard=uhid` 不是文字输入的解法，只解决「键盘事件发得出去」。判据是 `input tap` 进一个真实输入框、输入后 dump/OCR 读回内容。
 - 原生/Gboard（MI8）：scrcpy 加 `--prefer-text`（走 `--keyboard=sdk`）即可。
