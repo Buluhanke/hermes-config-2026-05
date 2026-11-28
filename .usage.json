@@ -3704,13 +3704,13 @@
     "first_seen_at": null,
     "last_patched_at": "2026-11-26T14:06:30.222899+00:00",
     "last_reused_patch_generation": 19,
-    "last_used_at": "2026-11-27T14:00:07.272021+00:00",
+    "last_used_at": "2026-11-28T14:00:07.871691+00:00",
     "last_viewed_at": "2026-11-25T14:05:36.026321+00:00",
     "patch_count": 19,
     "patch_generation": 19,
     "pinned": false,
     "state": "active",
-    "use_count": 48,
+    "use_count": 49,
     "view_count": 8
   },
   "llama-cpp": {

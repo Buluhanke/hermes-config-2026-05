@@ -1,7 +1,7 @@
 ---
 name: lightweight-smart-agent
 description: "轻量聪明智能生命体。搜索先行，找到最优解再落实。Use when 进化、新增技能、修改配置、写脚本。"
-version: 1.1.2
+version: 1.1.4
 author: Hermes Agent
 license: MIT
 platforms: [linux, macos, windows]
@@ -205,6 +205,7 @@ fact_store add:
 - `hermesatlas.com` — 社区生态
 - `github.com/0xNyk/awesome-hermes-agent` — 社区策管
 - `hermes-agent.ai/changelog` — 变更日志
+- `github.com/modelcontextprotocol/ext-skills` — Skills over MCP 规范（beta）：MCP server 随工具发布 SKILL.md，host 须按清单校验 SHA-256 且无人值守 fail-closed；Hermes 跟进看 PR #160962（`mcp__<server>__list_skills`/`skill_view`），Claude Code 在 2.1.332 已上 beta。与 WebMCP 同属「agent 能力外部化」线，用户跟踪中。
 
 ## 与现有技能的关系
 
@@ -233,3 +234,4 @@ fact_store add:
 - v1.1.1 (2026-11-24): 零绑定排查补防误判细则——auxiliary.fallback_chain、名字含 fallback 的非模型脚本、disabled 的 moa 预设均不在清理范围；判违规只认四样（fallback list / fallback_providers / cron pin / 自动切换进程脚本）。实测确认当前主模型零绑定全链路干净。
 - v1.1.2 (2026-11-25): 修正 cron 落库结论——fact_store 工具 add 仍只读，但 proactive_learn.write_facts 直连 SQLite 可用且可召回；修复 gate_check 用正则解析 JSON verdict 导致恒 False、主动学习每天 0 落库的 bug（已实测落库 fact_id=1438）。
 - v1.1.3 (2026-11-26): 检查清单加第 8 条「技能层残留违规指令审计」——配置零绑定巡检过后，还要 grep 技能库里仍在教旧做法的 SKILL.md；本次据此重写 hermes-model-health v2.0.0。
+- v1.1.4 (2026-11-28): 修正 frontmatter 版本号（历史已记到 v1.1.3 但 frontmatter 停在 1.1.2）；知识源加 Skills over MCP 规范 + Hermes PR #160962 跟踪入口。本次夜间进化走 fact_gate（两条 score 71、sim 0.0）直连 SQLite 落库 fact 1507/1508，库 543→545，FTS 命中验证。
